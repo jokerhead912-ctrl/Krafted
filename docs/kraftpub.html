@@ -1252,7 +1252,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783780053';
+  var HASH='KRAFTED_BUILD_1783781252';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -2148,6 +2148,54 @@ body.dragging-file .media-anno-toolbar {
 }
 .group-border.locked-border { border-style:solid; }
 #draw-layer { position:fixed; top:0; left:0; pointer-events:none; z-index:500; }
+
+/* Relation lines SVG layer — inside #canvas, follows pan/zoom transform.
+   Uses a huge fixed size so lines can span the entire board. */
+#relation-svg {
+  position: absolute; top: 0; left: 0;
+  width: 100000px; height: 100000px;
+  pointer-events: none; z-index: 0;
+  overflow: visible;
+}
+#relation-svg line,
+#relation-svg path,
+#relation-svg polyline {
+  pointer-events: stroke;
+  cursor: pointer;
+  transition: stroke 0.12s ease;
+}
+#relation-svg .rel-line { fill: none; stroke: #00e5ff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#relation-svg .rel-line:hover { stroke-width: 3.5; filter: drop-shadow(0 0 6px rgba(0,229,255,0.5)); }
+#relation-svg .rel-line.selected { stroke-width: 3; stroke: #ffdd44; }
+#relation-svg .rel-line.dashed { stroke-dasharray: 6 4; }
+#relation-svg .rel-arrow { fill: #00e5ff; }
+#relation-svg .rel-line.selected + .rel-arrow { fill: #ffdd44; }
+#relation-svg .rel-label-bg {
+  fill: rgba(0, 0, 0, 0.78);
+  stroke: rgba(0, 229, 255, 0.4);
+  stroke-width: 1;
+  rx: 4;
+}
+#relation-svg .rel-label-text {
+  fill: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  pointer-events: none;
+  user-select: none;
+}
+#relation-svg .rel-anchor {
+  fill: #00e5ff;
+  stroke: #000;
+  stroke-width: 1;
+  cursor: move;
+  pointer-events: all;
+}
+#relation-svg .rel-anchor:hover { fill: #fff; r: 5; }
+/* Relation mode cursor */
+body.relation-mode { cursor: crosshair; }
+body.relation-mode .item { cursor: crosshair; }
+body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline-offset: 2px; border-radius: 4px; }
 
 /* TOOLBAR */
 #toolbar { position:fixed; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:2px; background:var(--toolbar-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:6px 8px; z-index:9999999; box-shadow:var(--shadow-medium); max-width:calc(100vw - 290px); flex-wrap:wrap; justify-content:center; }
@@ -3453,6 +3501,7 @@ self.addEventListener('message', function(event) {
 
 <div id="viewport">
   <div id="canvas" class="grid">
+    <svg id="relation-svg"></svg>
     <div id="canvas-content">
       <div id="paper" style="display:none;"></div>
     </div>
@@ -3470,6 +3519,7 @@ self.addEventListener('message', function(event) {
   <button onclick="setTool('cut')" id="btn-cut" title="Free Shape Cut (X)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="11" r="2"/><circle cx="4" cy="4" r="2"/><path d="M5.5 5L14 12M5.5 10L14 3"/></svg> <span class="tb-label">Cut</span></button>
   <button onclick="setTool('lasso')" id="btn-lasso" title="Lasso Polygon Cut (L)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8C2 5 5 3 8 3s6 2 6 5-3 5-6 5-6-2-6-5z" stroke-dasharray="2,1.5"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/></svg> <span class="tb-label">Lasso</span></button>
   <button onclick="addMindMap()" id="btn-mindmap" title="Mind Map Brainstorm (M)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="1" width="6" height="4" rx="1"/><rect x="1" y="11" width="5" height="4" rx="1"/><rect x="10" y="11" width="5" height="4" rx="1"/><path d="M8 5v3M8 8H3.5v3M8 8h4.5v3"/></svg> <span class="tb-label">Mind</span></button>
+  <button onclick="setTool('relation')" id="btn-relation" title="Relation Line — connect two items (R)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="2" cy="8" r="1.5"/><circle cx="14" cy="8" r="1.5"/><path d="M3.5 8h7"/><path d="M11 5l3 3-3 3"/></svg> <span class="tb-label">Relation</span></button>
   <div class="sep"></div>
   <button onclick="undo()" title="Undo (Ctrl+Z)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h7a4 4 0 010 8H6M3 7l3-3M3 7l3 3"/></svg> <span class="tb-label">Undo</span></button>
   <button onclick="redo()" title="Redo (Ctrl+Y)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7H6a4 4 0 000 8h4M13 7l-3-3M13 7l-3 3"/></svg> <span class="tb-label">Redo</span></button>
@@ -4129,6 +4179,7 @@ function showWelcome() {
           <tr><td style="padding:4px 0;color:#888;">X</td><td style="padding:4px 0;">Free Cut Tool</td></tr>
           <tr><td style="padding:4px 0;color:#888;">L</td><td style="padding:4px 0;">Lasso Cut Tool</td></tr>
           <tr><td style="padding:4px 0;color:#888;">M</td><td style="padding:4px 0;">Mind Map Brainstorm</td></tr>
+          <tr><td style="padding:4px 0;color:#888;">R</td><td style="padding:4px 0;">Relation — connect items</td></tr>
           <tr><td style="padding:4px 0;color:#888;">G</td><td style="padding:4px 0;">Toggle Grid</td></tr>
           <tr><td style="padding:4px 0;color:#888;">H</td><td style="padding:4px 0;">This Help Panel</td></tr>
           <tr><td style="padding:4px 0;color:#888;">F</td><td style="padding:4px 0;">Center / Frame Selection</td></tr>
@@ -4454,6 +4505,8 @@ function updateCanvas() {
   updateAllGroupBorders();
   // Update mind map connectors on pan/zoom
   (state.mindmaps||[]).forEach(mm => mmUpdateConnectors(mm));
+  // Update relation lines on pan/zoom
+  renderRelations();
   updateStatus();
   // Viewport culling: hide/freeze items outside visible area to keep framerate high.
   // Triggered on every pan/zoom. Cheap: just one rectangle-vs-rect test per item.
@@ -16986,6 +17039,9 @@ function clearDraw() {
     }
   });
   drawStrokes = [];
+  state.relations = [];
+  state.selectedRelation = null;
+  renderRelations();
   redrawDrawLayer();
 }
 
@@ -19889,6 +19945,7 @@ function buildManifest() {
     nextGroupId: nextGroupId,
     nextId, nextZ, nextStrokeId,
     pan: state.pan, zoom: state.zoom,
+    relations: (state.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label, style: r.style, color: r.color }; }),
     paper: { enabled: paperState.enabled, autoFit: paperState.autoFit, width: paperState.width, height: paperState.height, color: paperState.color },
     canvasBg: getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim(),
   };
@@ -20836,6 +20893,9 @@ function restoreBoard(data) {
   }
   state.pan = data.pan || { x: 0, y: 0 };
   state.zoom = data.zoom || 1;
+  // Restore relations
+  state.relations = (data.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff' }; });
+  state.selectedRelation = null;
   // Restore groups
   state.groups.forEach(g => g.borderEl.remove());
   state.groups = [];
@@ -20941,7 +21001,7 @@ function setTool(tool) {
 
   state.tool = tool;
   document.querySelectorAll('#toolbar button').forEach(b => b.classList.remove('active'));
-  const btnMap = { select: 'btn-select', text: 'btn-text', draw: 'btn-draw', export: 'btn-export', capture: 'btn-capture', cut: 'btn-cut', lasso: 'btn-lasso', mindmap: 'btn-mindmap' };
+  const btnMap = { select: 'btn-select', text: 'btn-text', draw: 'btn-draw', export: 'btn-export', capture: 'btn-capture', cut: 'btn-cut', lasso: 'btn-lasso', mindmap: 'btn-mindmap', relation: 'btn-relation' };
   if (btnMap[tool]) document.getElementById(btnMap[tool]).classList.add('active');
   document.getElementById('text-toolbar').classList.toggle('active', tool === 'text');
   document.getElementById('draw-toolbar').classList.toggle('active', tool === 'draw');
@@ -20949,6 +21009,7 @@ function setTool(tool) {
   if (tool === 'capture') { toast('Drag to select capture area'); captureHint.style.display = 'block'; }
   if (tool === 'cut') { toast('Click an image to start cutting'); cancelCut(); }
   if (tool === 'lasso') { toast('Click an image to start lasso cutting'); cancelLasso(); }
+  if (tool === 'relation') { _startRelationTool(); }
 
   // Custom cursors per tool — SVG data URI cursors with hotspot
   const cursors = {
@@ -20981,6 +21042,7 @@ function setTool(tool) {
     capture: { icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5V2h3M14 5V2h-3M2 11v3h3M14 11v3h-3"/><circle cx="8" cy="8" r="1.5"/></svg>', name: 'Capture — drag to select' },
     cut: { icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="11" r="2"/><circle cx="4" cy="4" r="2"/><path d="M5.5 5L14 12M5.5 10L14 3"/></svg>', name: 'Free Cut — click an image' },
     lasso: { icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8C2 5 5 3 8 3s6 2 6 5-3 5-6 5-6-2-6-5z" stroke-dasharray="2,1.5"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/></svg>', name: 'Lasso — click an image' },
+    relation: { icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="2" cy="8" r="1.5"/><circle cx="14" cy="8" r="1.5"/><path d="M3.5 8h7"/><path d="M11 5l3 3-3 3"/></svg>', name: 'Relation — click two items to connect' },
   };
   if (badgeData[tool] && tool !== 'select') {
     toolBadge.querySelector('.tb-icon').innerHTML = badgeData[tool].icon;
@@ -21191,6 +21253,7 @@ function showCtx(x, y) {
     html += `<div class="ctx-item" onclick="showHelp();hideCtx()">Help & Shortcuts <kbd>H</kbd></div>`;
     html += `<div class="ctx-sep"></div>`;
     html += `<div class="ctx-item" onclick="toggleAltPan();hideCtx()">${state.altPanEnabled ? '✓' : '○'} Alt+Left Pan (Mac trackpad)</div>`;
+    html += `<div class="ctx-item" onclick="toggleRelations();hideCtx()">🔗 Toggle Relations</div>`;
   }
   ctxMenu.innerHTML = html;
   ctxMenu.style.left = x + 'px';
@@ -21651,6 +21714,12 @@ viewport.addEventListener('mousedown', e => {
 
   hideCtx();
   if (e.target.closest('#toolbar') || e.target.closest('#props') || e.target.closest('#text-toolbar') || e.target.closest('#draw-toolbar') || e.target.closest('#ctx-menu') || e.target.closest('#export-modal') || e.target.closest('#gif-modal') || e.target.closest('#cut-panel') || e.target.closest('#lasso-panel') || e.target.closest('#text-quick-bar')) return;
+
+  // Relation mode: intercept clicks to pick two items
+  if (state.tool === 'relation') {
+    _handleRelationClick(e.target);
+    return;
+  }
 
   // Round 59: Defensive guard for media controls. The seek bar / play
   // button / volume / trim handles all have their own stopPropagation
@@ -23659,6 +23728,411 @@ document.addEventListener('paste', e => {
 });
 
 // ============================================================
+//  RELATION LINES — XMind-style connector lines between items
+// ============================================================
+// Data model:
+//   state.relations = [{
+//     id, fromId, toId, fromAnchor, toAnchor, label, style, color
+//   }]
+// Styles: 'straight' | 'orthogonal' | 'curved' | 'dashed'
+// Anchors: 'auto' | 'top' | 'bottom' | 'left' | 'right' | 'center'
+//
+// The SVG layer #relation-svg sits inside #viewport and follows
+// pan/zoom via its parent transform. Lines are drawn in world
+// coordinates — the SVG viewport matches the canvas size.
+//
+// Endpoints are computed DYNAMICALLY from item positions — no
+// absolute coords stored. This means group moves, zoom, nudge,
+// and tidy all work without any extra code.
+
+const RELATION_STYLES = [
+  { id: 'orthogonal', name: '直角折线', icon: '┗' },
+  { id: 'straight',   name: '直线',     icon: '━' },
+  { id: 'curved',     name: '曲线',     icon: '╰' },
+  { id: 'dashed',     name: '虚线',     icon: '┅' },
+];
+
+// Ensure relations array exists
+function _ensureRelations() {
+  if (!state.relations) state.relations = [];
+}
+
+// Get the bounding rect of an item in world coordinates
+function _getItemWorldRect(item) {
+  return {
+    x: item.x, y: item.y,
+    w: item.w || (item.el ? item.el.offsetWidth : 200),
+    h: item.h || (item.el ? item.el.offsetHeight : 150),
+  };
+}
+
+// Compute anchor point on an item's edge
+function _getAnchorPoint(item, anchor) {
+  var r = _getItemWorldRect(item);
+  if (!anchor || anchor === 'auto') {
+    // auto will be resolved later based on relative positions
+    return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  }
+  switch (anchor) {
+    case 'top':    return { x: r.x + r.w / 2, y: r.y };
+    case 'bottom': return { x: r.x + r.w / 2, y: r.y + r.h };
+    case 'left':   return { x: r.x, y: r.y + r.h / 2 };
+    case 'right':  return { x: r.x + r.w, y: r.y + r.h / 2 };
+    case 'center': return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+    default:       return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  }
+}
+
+// Auto-pick best anchors based on relative positions
+function _autoAnchor(fromItem, toItem) {
+  var fr = _getItemWorldRect(fromItem);
+  var tr = _getItemWorldRect(toItem);
+  var fc = { x: fr.x + fr.w / 2, y: fr.y + fr.h / 2 };
+  var tc = { x: tr.x + tr.w / 2, y: tr.y + tr.h / 2 };
+  var dx = tc.x - fc.x;
+  var dy = tc.y - fc.y;
+  var fromA, toA;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    fromA = dx > 0 ? 'right' : 'left';
+    toA   = dx > 0 ? 'left' : 'right';
+  } else {
+    fromA = dy > 0 ? 'bottom' : 'top';
+    toA   = dy > 0 ? 'top' : 'bottom';
+  }
+  return { from: fromA, to: toA };
+}
+
+// Compute endpoint positions for a relation
+function _getRelationEndpoints(rel) {
+  var fromItem = null, toItem = null;
+  for (var i = 0; i < state.items.length; i++) {
+    if (state.items[i].id === rel.fromId) fromItem = state.items[i];
+    if (state.items[i].id === rel.toId) toItem = state.items[i];
+  }
+  if (!fromItem || !toItem) return null;
+  var fromA = rel.fromAnchor, toA = rel.toAnchor;
+  if (!fromA || fromA === 'auto' || !toA || toA === 'auto') {
+    var auto = _autoAnchor(fromItem, toItem);
+    if (!fromA || fromA === 'auto') fromA = auto.from;
+    if (!toA || toA === 'auto') toA = auto.to;
+  }
+  return {
+    from: _getAnchorPoint(fromItem, fromA),
+    to: _getAnchorPoint(toItem, toA),
+    fromItem: fromItem, toItem: toItem,
+    fromAnchor: fromA, toAnchor: toA,
+  };
+}
+
+// Build orthogonal path (XMind-style right-angle line)
+function _buildOrthogonalPath(p1, p2) {
+  var dx = p2.x - p1.x;
+  var dy = p2.y - p1.y;
+  var mx = p1.x + dx / 2;
+  var my = p1.y + dy / 2;
+  // Decide orientation: horizontal-first or vertical-first
+  if (Math.abs(dx) > Math.abs(dy)) {
+    // Horizontal dominant: go horizontal first
+    return [
+      'M', p1.x, p1.y,
+      'L', mx, p1.y,
+      'L', mx, p2.y,
+      'L', p2.x, p2.y,
+    ].join(' ');
+  } else {
+    // Vertical dominant: go vertical first
+    return [
+      'M', p1.x, p1.y,
+      'L', p1.x, my,
+      'L', p2.x, my,
+      'L', p2.x, p2.y,
+    ].join(' ');
+  }
+}
+
+// Build curved path (simple quadratic bezier)
+function _buildCurvedPath(p1, p2) {
+  var dx = p2.x - p1.x;
+  var dy = p2.y - p1.y;
+  var dist = Math.sqrt(dx * dx + dy * dy);
+  var cpOffset = Math.min(dist * 0.4, 200);
+  var cp1x, cp1y;
+  // Curve direction based on anchor orientation
+  if (Math.abs(dx) > Math.abs(dy)) {
+    cp1x = p1.x + dx / 2;
+    cp1y = p1.y;
+  } else {
+    cp1x = p1.x;
+    cp1y = p1.y + dy / 2;
+  }
+  return 'M ' + p1.x + ' ' + p1.y + ' Q ' + cp1x + ' ' + cp1y + ' ' + p2.x + ' ' + p2.y;
+}
+
+// Build arrowhead triangle path
+function _buildArrowhead(p1, p2, size) {
+  size = size || 8;
+  var dx = p2.x - p1.x;
+  var dy = p2.y - p1.y;
+  var len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1) return '';
+  var ux = dx / len, uy = dy / len;
+  var tipX = p2.x, tipY = p2.y;
+  var baseX = tipX - ux * size;
+  var baseY = tipY - uy * size;
+  var nx = -uy * (size * 0.45);
+  var ny =  ux * (size * 0.45);
+  return (baseX + nx) + ',' + (baseY + ny) + ' ' + tipX + ',' + tipY + ' ' + (baseX - nx) + ',' + (baseY - ny);
+}
+
+// Render all relations into the SVG layer
+// Lines use world coordinates + 50000 offset (matching #canvas OFF)
+function renderRelations() {
+  var svg = document.getElementById('relation-svg');
+  if (!svg) return;
+  _ensureRelations();
+  var OFF = 50000;
+  svg.innerHTML = '';
+  if (!state.relations.length) return;
+
+  // Build a defs section for arrowhead markers
+  var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  var marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+  marker.setAttribute('id', 'rel-arrow-marker');
+  marker.setAttribute('markerWidth', '8');
+  marker.setAttribute('markerHeight', '6');
+  marker.setAttribute('refX', '8');
+  marker.setAttribute('refY', '3');
+  marker.setAttribute('orient', 'auto');
+  var arrowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  arrowPath.setAttribute('d', 'M0,0 L8,3 L0,6 L2,3 Z');
+  arrowPath.setAttribute('fill', '#00e5ff');
+  marker.appendChild(arrowPath);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
+  for (var i = 0; i < state.relations.length; i++) {
+    var rel = state.relations[i];
+    var ep = _getRelationEndpoints(rel);
+    if (!ep) continue;
+    var p1 = { x: ep.from.x + OFF, y: ep.from.y + OFF };
+    var p2 = { x: ep.to.x + OFF, y: ep.to.y + OFF };
+    var isSelected = (state.selectedRelation === rel.id);
+    var style = rel.style || 'orthogonal';
+    var color = rel.color || '#00e5ff';
+
+    // Group for this relation
+    var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('data-rel-id', rel.id);
+    g.setAttribute('class', 'rel-group');
+
+    // Build path based on style
+    var d;
+    switch (style) {
+      case 'curved':  d = _buildCurvedPath(p1, p2); break;
+      case 'straight':
+      case 'dashed':  d = 'M ' + p1.x + ' ' + p1.y + ' L ' + p2.x + ' ' + p2.y; break;
+      default:        d = _buildOrthogonalPath(p1, p2); break;
+    }
+
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('class', 'rel-line' + (style === 'dashed' ? ' dashed' : '') + (isSelected ? ' selected' : ''));
+    path.setAttribute('stroke', color);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-width', isSelected ? '3' : '2');
+    if (style === 'dashed') path.setAttribute('stroke-dasharray', '6 4');
+    path.setAttribute('data-rel-id', rel.id);
+    path.addEventListener('click', function(e) {
+      e.stopPropagation();
+      _selectRelation(this.getAttribute('data-rel-id'));
+    });
+    path.addEventListener('dblclick', function(e) {
+      e.stopPropagation();
+      _editRelationLabel(this.getAttribute('data-rel-id'));
+    });
+    path.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      _showRelationCtxMenu(e, this.getAttribute('data-rel-id'));
+    });
+    g.appendChild(path);
+
+    // Arrowhead polygon at the to-end
+    var arrowPoly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    arrowPoly.setAttribute('points', _buildArrowhead(p1, p2, 10));
+    arrowPoly.setAttribute('class', 'rel-arrow');
+    arrowPoly.setAttribute('fill', color);
+    g.appendChild(arrowPoly);
+
+    // Label (if any)
+    if (rel.label) {
+      var mx = (p1.x + p2.x) / 2;
+      var my = (p1.y + p2.y) / 2;
+      var labelText = rel.label.length > 40 ? rel.label.substring(0, 40) + '…' : rel.label;
+      // Background rect — approximate text width
+      var textW = Math.min(labelText.length * 6.5, 260);
+      var textH = 18;
+      var bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bg.setAttribute('x', mx - textW / 2 - 6);
+      bg.setAttribute('y', my - textH / 2 - 2);
+      bg.setAttribute('width', textW + 12);
+      bg.setAttribute('height', textH);
+      bg.setAttribute('class', 'rel-label-bg');
+      g.appendChild(bg);
+      var txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      txt.setAttribute('x', mx);
+      txt.setAttribute('y', my + 4);
+      txt.setAttribute('text-anchor', 'middle');
+      txt.setAttribute('class', 'rel-label-text');
+      txt.textContent = labelText;
+      g.appendChild(txt);
+    }
+
+    svg.appendChild(g);
+  }
+}
+
+// Select a relation by ID
+function _selectRelation(id) {
+  _ensureRelations();
+  state.selectedRelation = (state.selectedRelation === id) ? null : id;
+  // Deselect items when selecting a relation
+  if (state.selectedRelation) {
+    state.selected.clear();
+    refreshSelection();
+  }
+  renderRelations();
+}
+
+// Show context menu for a relation line
+function _showRelationCtxMenu(e, id) {
+  _selectRelation(id);
+  var menu = document.getElementById('ctx-menu');
+  if (!menu) return;
+  var rel = (state.relations || []).find(function(r) { return r.id === id; });
+  if (!rel) return;
+  var curStyle = rel.style || 'orthogonal';
+  var html = '<div class="ctx-section">Relation Style</div>';
+  for (var i = 0; i < RELATION_STYLES.length; i++) {
+    var s = RELATION_STYLES[i];
+    html += '<div class="ctx-item' + (s.id === curStyle ? ' ctx-checked' : '') + '" onclick="(function(){ _setRelationStyle(\'' + id + '\',\'' + s.id + '\'); hideCtx(); })()">' + s.icon + ' ' + s.name + '</div>';
+  }
+  html += '<div class="ctx-sep"></div>';
+  html += '<div class="ctx-item" onclick="(function(){ _editRelationLabel(\'' + id + '\'); hideCtx(); })()">✏️ Edit Label</div>';
+  html += '<div class="ctx-item ctx-danger" onclick="(function(){ _deleteRelation(\'' + id + '\'); hideCtx(); })()">🗑 Delete Relation</div>';
+  menu.innerHTML = html;
+  menu.style.display = 'block';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.style.zIndex = '99999999';
+}
+
+function _setRelationStyle(id, style) {
+  _ensureRelations();
+  var rel = state.relations.find(function(r) { return r.id === id; });
+  if (rel) { rel.style = style; }
+  renderRelations();
+  scheduleAutoSave();
+}
+
+function _editRelationLabel(id) {
+  _ensureRelations();
+  var rel = state.relations.find(function(r) { return r.id === id; });
+  if (!rel) return;
+  var label = prompt('Relation label:', rel.label || '');
+  if (label === null) return; // cancelled
+  rel.label = label.trim();
+  renderRelations();
+  scheduleAutoSave();
+}
+
+function _deleteRelation(id) {
+  _ensureRelations();
+  state.relations = state.relations.filter(function(r) { return r.id !== id; });
+  if (state.selectedRelation === id) state.selectedRelation = null;
+  renderRelations();
+  scheduleAutoSave();
+  toast('Relation deleted');
+}
+
+// Relation tool state
+var relationTool = { fromId: null, fromItem: null };
+
+function _startRelationTool() {
+  relationTool.fromId = null;
+  relationTool.fromItem = null;
+  state.selectedRelation = null;
+  document.body.classList.add('relation-mode');
+  toast('Click first item, then second item to connect');
+}
+
+function _exitRelationTool() {
+  relationTool.fromId = null;
+  relationTool.fromItem = null;
+  document.body.classList.remove('relation-mode');
+  setTool('select');
+}
+
+// Handle click in relation mode — pick first or second item
+function _handleRelationClick(target) {
+  var itemEl = target.closest('.item');
+  if (!itemEl) return;
+  // Find the item in state
+  var item = null;
+  for (var i = 0; i < state.items.length; i++) {
+    if (state.items[i].el === itemEl) { item = state.items[i]; break; }
+  }
+  if (!item) return;
+
+  if (!relationTool.fromId) {
+    // First click — set source
+    relationTool.fromId = item.id;
+    relationTool.fromItem = item;
+    itemEl.style.outline = '2px solid #00e5ff';
+    itemEl.style.outlineOffset = '3px';
+    toast('Now click the target item');
+  } else if (item.id !== relationTool.fromId) {
+    // Second click — create relation
+    _ensureRelations();
+    var auto = _autoAnchor(relationTool.fromItem, item);
+    var rel = {
+      id: 'rel_' + Date.now(),
+      fromId: relationTool.fromId,
+      toId: item.id,
+      fromAnchor: auto.from,
+      toAnchor: auto.to,
+      label: '',
+      style: 'orthogonal',
+      color: '#00e5ff',
+    };
+    state.relations.push(rel);
+    // Clear outline
+    if (relationTool.fromItem && relationTool.fromItem.el) {
+      relationTool.fromItem.el.style.outline = '';
+    }
+    relationTool.fromId = null;
+    relationTool.fromItem = null;
+    renderRelations();
+    scheduleAutoSave();
+    _exitRelationTool();
+    toast('Relation created — double-click line to add label');
+  }
+}
+
+// Toggle hide/show all relations
+function toggleRelations() {
+  var svg = document.getElementById('relation-svg');
+  if (!svg) return;
+  if (svg.style.display === 'none') {
+    svg.style.display = '';
+    toast('Relations shown');
+  } else {
+    svg.style.display = 'none';
+    toast('Relations hidden');
+  }
+}
+
+// ============================================================
 //  KEYBOARD
 // ============================================================
 document.addEventListener('keydown', e => {
@@ -23732,7 +24206,7 @@ document.addEventListener('keydown', e => {
     return;
   }
 
-  if (e.key === 'Escape') { clearSelection(); hideCtx(); hideHelp(); captureResultPanel.classList.remove('show'); if (state.tool !== 'select') setTool('select'); return; }
+  if (e.key === 'Escape') { clearSelection(); hideCtx(); hideHelp(); captureResultPanel.classList.remove('show'); _exitRelationTool(); if (state.tool !== 'select') setTool('select'); return; }
   // Video frame-step: arrow keys seek frame-by-frame (debounced, non-blocking).
   // Round 56: skip the block when a modifier is held (Ctrl/Cmd/Alt).
   // Without this guard the video handler intercepts Ctrl+Left/Right
@@ -24334,6 +24808,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'x' || e.key === 'X') setTool('cut');
   else if (e.key === 'l' || e.key === 'L') setTool('lasso');
   else if (e.key === 'm' || e.key === 'M') addMindMap();
+  else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); setTool('relation'); }
   else if (e.key === 'g' || e.key === 'G') toggleGrid();
   else if (e.key === 'h' || e.key === 'H') {
     // H = help, Shift+H = frame selection (also available via F)
@@ -24361,7 +24836,10 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     tidySelection();
   }
-  else if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
+  else if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (state.selectedRelation) { _deleteRelation(state.selectedRelation); return; }
+    deleteSelected();
+  }
   // Arrow nudge
   else if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
     e.preventDefault();
