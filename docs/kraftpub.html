@@ -1204,7 +1204,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783742654';
+  var HASH='KRAFTED_BUILD_1783744212';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -2979,23 +2979,30 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
 }
 
 /* ============================================================
-   MOBILE BOTTOM TOOLBAR (compact, always visible)
+   MOBILE SIDE TOOLBARS (compact, always visible)
+   Split into two vertical groups pinned to the left/right edges
+   so the center of the canvas stays unobstructed.
    ============================================================ */
-#mobile-toolbar {
+#mobile-toolbar-left,
+#mobile-toolbar-right {
   display: none;
-  position: fixed; bottom: 8px; left: 50%;
-  transform: translateX(-50%);
+  flex-direction: column;
+  position: fixed; top: 50%;
+  transform: translateY(-50%);
   z-index: 9999999;
   background: var(--panel-bg);
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
-  padding: 6px 8px;
+  padding: 8px 6px;
   gap: 4px;
   box-shadow: var(--shadow-heavy);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 }
-#mobile-toolbar button {
+#mobile-toolbar-left { left: 8px; }
+#mobile-toolbar-right { right: 8px; }
+#mobile-toolbar-left button,
+#mobile-toolbar-right button {
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-dim);
@@ -3011,19 +3018,24 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
   min-height: 36px;
   display: flex; align-items: center; justify-content: center;
 }
-#mobile-toolbar button:active,
-#mobile-toolbar button.active {
+#mobile-toolbar-left button:active,
+#mobile-toolbar-left button.active,
+#mobile-toolbar-right button:active,
+#mobile-toolbar-right button.active {
   background: var(--btn-active-bg);
   border-color: var(--accent);
   color: var(--accent);
 }
-#mobile-toolbar .mt-sep {
-  width: 1px; background: var(--border-subtle);
-  margin: 0 2px; align-self: stretch;
+#mobile-toolbar-left .mt-sep,
+#mobile-toolbar-right .mt-sep {
+  height: 1px; width: 100%;
+  background: var(--border-subtle);
+  margin: 2px 0; align-self: stretch;
 }
-/* Show mobile toolbar only on touch devices */
+/* Show mobile toolbars only on touch devices */
 @media (pointer: coarse) {
-  #mobile-toolbar { display: flex; }
+  #mobile-toolbar-left,
+  #mobile-toolbar-right { display: flex; }
 }
 </style>
 <script>
@@ -3374,14 +3386,16 @@ self.addEventListener('message', function(event) {
 </head>
 <body>
 
-<!-- MOBILE BOTTOM TOOLBAR — iPhone/iPad only, hidden on desktop -->
-<div id="mobile-toolbar">
+<!-- MOBILE SIDE TOOLBARS — iPhone/iPad only, hidden on desktop.
+     Split left (tools) / right (actions) so the canvas center stays clear. -->
+<div id="mobile-toolbar-left">
   <button onclick="setTool('select')" id="mt-select" class="active" title="Select">👆</button>
   <button onclick="setTool('pan')" id="mt-pan" title="Pan">✋</button>
   <span class="mt-sep"></span>
   <button onclick="setTool('text')" id="mt-text" title="Text">T</button>
   <button onclick="setTool('draw')" id="mt-draw" title="Draw">✏️</button>
-  <span class="mt-sep"></span>
+</div>
+<div id="mobile-toolbar-right">
   <button onclick="document.getElementById('file-input').click()" title="Add Image">📷</button>
   <button onclick="document.getElementById('file-input-video').click()" title="Add Video">🎬</button>
   <span class="mt-sep"></span>
@@ -20457,7 +20471,7 @@ function setTool(tool) {
 
   // Update mobile toolbar active state
   if (IS_TOUCH_DEVICE) {
-    document.querySelectorAll('#mobile-toolbar button').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('#mobile-toolbar-left button, #mobile-toolbar-right button').forEach(function(b) { b.classList.remove('active'); });
     var mtMap = { select: 'mt-select', text: 'mt-text', draw: 'mt-draw' };
     var mtBtn = document.getElementById(mtMap[tool]);
     if (mtBtn) mtBtn.classList.add('active');
@@ -20986,12 +21000,45 @@ if (IS_TOUCH_DEVICE) {
   // Prevent default iOS behaviors (rubber-band, zoom, etc.)
   document.body.style.touchAction = 'none';
 
+  // Shared helper — find the item under a touch point and select it.
+  // toggle=true  → flip selection state (used by double-tap)
+  // toggle=false → select-only (used by single-tap), i.e. clears
+  //                any previous selection and selects just this item
+  // Returns true if an item was found and handled, false otherwise
+  // (caller decides what to do on a miss, e.g. clearSelection()).
+  function _selectItemAtTouchPoint(target, toggle) {
+    const itemEl = target && target.closest ? target.closest('.item') : null;
+    if (!itemEl) return false;
+    const item = state.items.find(i => i.el === itemEl);
+    if (!item) return false;
+    if (toggle) {
+      if (state.selected.has(item.id)) {
+        state.selected.delete(item.id);
+      } else {
+        state.selected.clear();
+        state.selected.add(item.id);
+      }
+      refreshSelection();
+      updateTextColorPalette();
+    } else {
+      selectOnly(item.id);
+    }
+    return true;
+  }
+
   viewport.addEventListener('touchstart', function(e) {
+    // Prevent the browser from synthesizing mousedown/mousemove/mouseup
+    // from this touch sequence. Without this, iOS Safari fires a
+    // synthetic mousedown after touchstart, which desktop mouse
+    // handlers (box-select, etc.) pick up and misinterpret as a
+    // real mouse drag — causing the "phantom selection box" bug.
+    if (e.cancelable) e.preventDefault();
     touchState.activeTouches = e.touches.length;
 
     // 2 fingers = pinch zoom
     if (e.touches.length === 2) {
       touchState.panStart = null;
+      clearTimeout(touchState.tapTimeout);
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       touchState.initialPinchDist = Math.sqrt(dx * dx + dy * dy);
@@ -21010,25 +21057,15 @@ if (IS_TOUCH_DEVICE) {
       const tapTarget = e.target;
 
       if (now - touchState.lastTap < 350 && touchState.tapTarget === tapTarget) {
-        // DOUBLE TAP — select item under finger
+        // DOUBLE TAP — select item under finger (toggle).
+        // Cancel any pending single-tap select scheduled by the
+        // previous touchend so it doesn't fire on top of this.
         touchState.isDoubleTap = true;
         touchState.panStart = null; // cancel pan
         clearTimeout(touchState.tapTimeout);
 
-        const itemEl = tapTarget.closest('.item');
-        if (itemEl) {
-          const item = state.items.find(i => i.el === itemEl);
-          if (item) {
-            // Toggle selection
-            if (state.selected.has(item.id)) {
-              state.selected.delete(item.id);
-            } else {
-              state.selected.clear();
-              state.selected.add(item.id);
-            }
-            updateSelection();
-          }
-        }
+        _selectItemAtTouchPoint(tapTarget, true);
+
         touchState.lastTap = 0;
         return;
       }
@@ -21078,6 +21115,25 @@ if (IS_TOUCH_DEVICE) {
   }, { passive: false });
 
   viewport.addEventListener('touchend', function(e) {
+    // Single-tap selection: if this was a single-finger touch that
+    // barely moved (not a pan), and wasn't already handled as a
+    // double-tap or a pinch, treat it as a tap — select the item
+    // under the finger, or clear selection when tapping empty space.
+    if (touchState.panStart && !touchState.isDoubleTap && touchState.activeTouches === 1) {
+      const startX = touchState.panStart.x;
+      const startY = touchState.panStart.y;
+      const endTouch = (e.changedTouches && e.changedTouches[0]) || null;
+      if (endTouch) {
+        const dx = endTouch.clientX - startX;
+        const dy = endTouch.clientY - startY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 10) {
+          const handled = _selectItemAtTouchPoint(touchState.tapTarget || e.target, false);
+          if (!handled) clearSelection();
+        }
+      }
+    }
+
     touchState.panStart = null;
     touchState.pinchStart = null;
     touchState.activeTouches = 0;
@@ -21089,6 +21145,15 @@ if (IS_TOUCH_DEVICE) {
 // ============================================================
 
 viewport.addEventListener('mousedown', e => {
+  // Belt-and-suspenders: on touch devices, real interaction is handled
+  // entirely by the touchstart/touchmove/touchend listeners above (which
+  // call e.preventDefault() to suppress synthetic mouse events). Some
+  // older iOS Safari versions can still dispatch a synthetic mousedown
+  // in edge cases, so bail out early here to guarantee it never reaches
+  // the box-select / drag logic below. Desktop (IS_TOUCH_DEVICE === false)
+  // behavior is completely untouched.
+  if (IS_TOUCH_DEVICE) return;
+
   hideCtx();
   if (e.target.closest('#toolbar') || e.target.closest('#props') || e.target.closest('#text-toolbar') || e.target.closest('#draw-toolbar') || e.target.closest('#ctx-menu') || e.target.closest('#export-modal') || e.target.closest('#gif-modal') || e.target.closest('#cut-panel') || e.target.closest('#lasso-panel') || e.target.closest('#text-quick-bar')) return;
 
@@ -21556,6 +21621,15 @@ viewport.addEventListener('dblclick', e => {
 
 // MOUSEMOVE
 document.addEventListener('mousemove', e => {
+  // Belt-and-suspenders: touch devices handle all gestures via the
+  // touchstart/touchmove/touchend listeners above (which call
+  // e.preventDefault() to suppress synthetic mouse events). This
+  // guard ensures that even if an older iOS Safari version still
+  // dispatches a synthetic mousemove, it can never reach box-select
+  // or any other desktop-only drag logic below. Desktop
+  // (IS_TOUCH_DEVICE === false) behavior is completely untouched.
+  if (IS_TOUCH_DEVICE) return;
+
   lastScreenX = e.clientX;
   lastScreenY = e.clientY;
   state.mouse.x = e.clientX;
@@ -22048,6 +22122,10 @@ document.addEventListener('mousemove', e => {
 
 // MOUSEUP
 document.addEventListener('mouseup', e => {
+  // Belt-and-suspenders: see MOUSEMOVE guard above for rationale.
+  // Desktop (IS_TOUCH_DEVICE === false) behavior is completely untouched.
+  if (IS_TOUCH_DEVICE) return;
+
   // Clear any stale potentialTextDrag state (no longer used for editing text items,
   // but kept as a safety net in case some code path sets it)
   if (potentialTextDrag && !potentialTextDrag.triggered) {
@@ -22495,6 +22573,10 @@ viewport.addEventListener('wheel', e => {
 
 // MIDDLE MOUSE / ALT+LEFT PAN (Mac trackpad fallback)
 viewport.addEventListener('mousedown', e => {
+  // Belt-and-suspenders: see MOUSEMOVE guard above for rationale.
+  // Desktop (IS_TOUCH_DEVICE === false) behavior is completely untouched.
+  if (IS_TOUCH_DEVICE) return;
+
   // Catches middle-button (e.button===1) and Alt+Left (button===0 + altKey, Mac trackpad fallback)
   if (e.button === 1 || (state.altPanEnabled && e.button === 0 && e.altKey)) {
     if (e.cancelable) e.preventDefault();
