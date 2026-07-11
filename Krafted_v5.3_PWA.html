@@ -274,6 +274,46 @@ body.is-dragging .item-handle, body.is-dragging .item-rot { display:none !import
 }
 .item.has-media .media-trim-reset:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
 
+/* Review Mode overlay — brief comment indicator on top of the video when J/K fires */
+.item.has-media .review-mode-overlay {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.78);
+  border: 1px solid rgba(0, 229, 255, 0.6);
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 80%;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0, 229, 255, 0.25);
+  animation: rmo-in 0.18s ease-out;
+}
+.item.has-media .review-mode-overlay.rmo-fading { opacity: 0; transition: opacity 0.3s; }
+.item.has-media .review-mode-overlay .rmo-position {
+  color: #00e5ff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.item.has-media .review-mode-overlay .rmo-text {
+  color: #fff;
+  font-size: 12px;
+  word-wrap: break-word;
+}
+@keyframes rmo-in {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
 /* Play button in controls — sized to match the other utility buttons
    (28px draw / clean / etc.) so the controls bar reads as a balanced row
    instead of one big circle dominating the left edge. Still gradient and
@@ -12782,6 +12822,7 @@ function videoAnnoJumpToNextComment(item) {
   // Toast with position info
   var idx = sorted.indexOf(next) + 1;
   toast('Comment ' + idx + '/' + sorted.length + ' — Frame ' + next.frame);
+  _showReviewOverlay(item, next, idx, sorted.length);
   return true;
 }
 
@@ -12802,7 +12843,31 @@ function videoAnnoJumpToPrevComment(item) {
   // Toast with position info
   var idx = sorted.indexOf(prev) + 1;
   toast('Comment ' + idx + '/' + sorted.length + ' — Frame ' + prev.frame);
+  _showReviewOverlay(item, prev, idx, sorted.length);
   return true;
+}
+
+// Show a brief overlay ON the video (top-center) with the comment text
+// so the user sees the feedback right where they're looking — not just
+// at the page bottom toast. Auto-fades after 1.4s.
+function _showReviewOverlay(item, comment, idx, total) {
+  if (!item || !item.el) return;
+  var host = item.el;
+  // Remove any existing overlay so rapid J/K presses don't stack
+  var existing = host.querySelector('.review-mode-overlay');
+  if (existing) existing.remove();
+  var overlay = document.createElement('div');
+  overlay.className = 'review-mode-overlay';
+  var dispText = (comment && (comment.translation || comment.text)) || '(no text)';
+  var shortText = (dispText.length > 60) ? dispText.substring(0, 60) + '…' : dispText;
+  overlay.innerHTML = '<div class="rmo-position">Comment ' + idx + ' / ' + total + ' — Frame ' + (comment.frame || 0) + '</div><div class="rmo-text">' + shortText.replace(/[<>&]/g, function(c) { return ({'<':'&lt;','>':'&gt;','&':'&amp;'})[c]; }) + '</div>';
+  host.appendChild(overlay);
+  setTimeout(function() {
+    if (overlay && overlay.parentNode) {
+      overlay.classList.add('rmo-fading');
+      setTimeout(function() { if (overlay && overlay.parentNode) overlay.remove(); }, 300);
+    }
+  }, 1400);
 }
 
 // Helper: find the video item under the mouse cursor (used by J/K Review Mode).
