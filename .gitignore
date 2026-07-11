@@ -6,3 +6,7 @@ krafted-v5-integration.js
 *.krafted
 node_modules/
 .DS_Store
+
+# But keep docs/ and .github/ for deploy
+!docs/
+!.github/
