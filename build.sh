@@ -6,7 +6,7 @@
 # ============================================================
 set -e
 
-DEV_FILE="Krafted_v5.2_PWA.html"
+DEV_FILE="Krafted_v5.3_PWA.html"
 PUB_FILE="kraftpub.html"
 BUILD_DIR="docs"
 
@@ -74,7 +74,7 @@ fi
 # STEP 4: Generate version info
 # ============================================================
 BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-BUILD_VER="5.2-build-$(date +%Y%m%d-%H%M%S)"
+BUILD_VER="5.3-build-$(date +%Y%m%d-%H%M%S)"
 
 echo "{
   \"name\": \"Krafted\",

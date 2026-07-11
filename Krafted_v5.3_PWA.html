@@ -2156,20 +2156,20 @@ body.dragging-file .media-anno-toolbar {
   transition: stroke 0.12s ease;
 }
 #relation-svg .rel-line {
-  fill: none; stroke: #00e5ff; stroke-width: 4;
+  fill: none; stroke: #00e5ff; stroke-width: 6;
   stroke-linecap: round; stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
 /* Invisible fat hit area behind the visible line — makes clicking much easier */
 #relation-svg .rel-hit {
-  fill: none; stroke: transparent; stroke-width: 16;
+  fill: none; stroke: transparent; stroke-width: 24;
   stroke-linecap: round; stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
   cursor: pointer;
 }
-#relation-svg .rel-line:hover { stroke-width: 7; filter: drop-shadow(0 0 8px rgba(0,229,255,0.6)); }
-#relation-svg .rel-line.selected { stroke-width: 6; stroke: #ffdd44; }
-#relation-svg .rel-line.dashed { stroke-dasharray: 8 6; }
+#relation-svg .rel-line:hover { stroke-width: 9; filter: drop-shadow(0 0 10px rgba(0,229,255,0.7)); }
+#relation-svg .rel-line.selected { stroke-width: 8; stroke: #ffdd44; }
+#relation-svg .rel-line.dashed { stroke-dasharray: 10 8; }
 #relation-svg .rel-arrow { fill: #00e5ff; }
 #relation-svg .rel-line.selected + .rel-arrow { fill: #ffdd44; }
 #relation-svg .rel-label-bg {
@@ -2181,8 +2181,8 @@ body.dragging-file .media-anno-toolbar {
 #relation-svg .rel-label-text {
   fill: #fff;
   font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 20px;
+  font-weight: 600;
   pointer-events: none;
   user-select: none;
 }
@@ -3271,6 +3271,18 @@ window.JSZip=JSZip;
     var groups = state.groups || [];
     for (var k = 0; k < groups.length; k++) { var g = groups[k]; manifest.groups.push({ id: g.id, color: g.color, memberIds: g.memberIds ? g.memberIds.slice() : [] }); }
     manifest.counter = { nextId: nextId || 1, nextZ: nextZ || 1, nextStrokeId: nextStrokeId || 1, nextGroupId: nextGroupId || 1 };
+    // CRITICAL: serialize relations into the V5 manifest (save path)
+    manifest.relations = (state.relations || []).map(function(r) {
+      return {
+        id: r.id, fromId: r.fromId, toId: r.toId,
+        fromAnchor: r.fromAnchor || 'right', toAnchor: r.toAnchor || 'left',
+        label: r.label || '',
+        style: r.style || 'orthogonal',
+        color: r.color || '#00e5ff',
+        lineWidth: r.lineWidth || 6,
+        labelSize: r.labelSize || 16
+      };
+    });
     return manifest;
   }
 
@@ -3292,40 +3304,46 @@ window.JSZip=JSZip;
     var todos = manifest.todos || []; for (var ti2 = 0; ti2 < todos.length; ti2++) { data.todos = data.todos || []; data.todos.push(todos[ti2]); }
     var mindmaps = manifest.mindmaps || []; for (var ti3 = 0; ti3 < mindmaps.length; ti3++) { data.mindmaps = data.mindmaps || []; data.mindmaps.push(mindmaps[ti3]); }
     var groups = manifest.groups || []; for (var j = 0; j < groups.length; j++) { data.groups.push({ id: groups[j].id, color: groups[j].color, memberIds: groups[j].memberIds ? groups[j].memberIds.slice() : [] }); }
+    // CRITICAL: copy relations across (V5 manifest → V4 restore shape)
+    data.relations = (manifest.relations || []).map(function(r) {
+      return {
+        id: r.id, fromId: r.fromId, toId: r.toId,
+        fromAnchor: r.fromAnchor || 'right', toAnchor: r.toAnchor || 'left',
+        label: r.label || '',
+        style: r.style || 'orthogonal',
+        color: r.color || '#00e5ff',
+        lineWidth: r.lineWidth || 6,
+        labelSize: r.labelSize || 16
+      };
+    });
     return data;
   }
 
   window.saveBoardV5 = async function() {
     var choice = await showSaveLockPrompt(); if (choice === 'cancel') return;
-    var counts = countMediaItems(); var isKpak = (choice === 'kpak' || choice === 'lock');
+    var counts = countMediaItems();
     var prog = document.createElement('div'); prog.className = 'save-progress'; prog.innerHTML = '<div class="pct">Preparing save...</div>'; document.body.appendChild(prog);
     function updateProg(txt) { prog.innerHTML = '<div class="pct">' + txt + '</div>'; }
     try {
-      var fname = isKpak ? 'krafted_' + new Date().toISOString().slice(0, 10) + '.kpak' : 'krafted_' + new Date().toISOString().slice(0, 10) + '.json';
+      var fname = 'krafted_' + new Date().toISOString().slice(0, 10) + '.kpak';
       var fileHandle = null, handleName = null;
       if (window.showSaveFilePicker) { updateProg('Choose where to save...'); var h = await KF.Writer.requestSaveHandle(fname); if (h.cancelled) { toast('Save cancelled'); return; } fileHandle = h.handle; handleName = h.name; }
-      if (isKpak) {
-        var manifest = v4StateToManifest();
-        var mediaFetcher = async function(node) {
-          var item = (state.items || []).find(function(it) { return it.id === node.id; }); if (!item) return null;
-          if (item.src && (item.src.startsWith('blob:') || item.src.startsWith('data:'))) { try { var resp = await fetch(item.src); if (resp.ok) return await resp.blob(); } catch (e) {} }
-          var elSrc = (item.img && item.img.src) || (item.video && item.video.src) || null;
-          if (elSrc && (elSrc.startsWith('blob:') || elSrc.startsWith('data:'))) { try { var resp2 = await fetch(elSrc); if (resp2.ok) return await resp2.blob(); } catch (e) {} }
-          if (item._origBlob) return item._origBlob;
-          if (item.mediaData && typeof item.mediaData === 'string') { try { var arr = item.mediaData.split(','); var mime = (arr[0].match(/:(.*?);/) || [])[1] || 'application/octet-stream'; var bin = atob(arr[1] || arr[0]); var bytes = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); return new Blob([bytes], { type: mime }); } catch (e) {} }
-          return null;
-        };
-        var result = await KF.Writer.buildKpak(manifest, { mediaFetcher: mediaFetcher, compression: 'STORE', onProgress: function(evt) { updateProg(evt.message); } });
-        var zipBlob = result.zipBlob;
-        if (choice === 'lock') { updateProg('Encrypting with password...'); var password = KF.Writer.generatePassword(8); zipBlob = await KF.Writer.encryptWithLock(zipBlob, password); await showPasswordDisplayModal(password); }
-        updateProg('Writing ' + KF.Writer.formatBytes(zipBlob.size) + '...'); await new Promise(function(r) { setTimeout(r, 0); });
-        if (fileHandle) { await KF.Writer.writeToHandle(fileHandle, zipBlob); toast('Saved \u2714 ' + handleName + ' (' + KF.Writer.formatBytes(zipBlob.size) + ')'); }
-        else { await KF.Writer.downloadBlob(zipBlob, fname); toast('Downloaded \u2192 ' + fname); }
-      } else {
-        updateProg('Serializing...'); var manifest2 = v4StateToManifest(); var data = JSON.stringify(manifest2); var blob = new Blob([data], { type: 'application/json' });
-        if (fileHandle) { await KF.Writer.writeToHandle(fileHandle, blob); toast('Saved \u2714 ' + handleName); }
-        else { await KF.Writer.downloadBlob(blob, fname); toast('Downloaded \u2192 ' + fname); }
-      }
+      var manifest = v4StateToManifest();
+      var mediaFetcher = async function(node) {
+        var item = (state.items || []).find(function(it) { return it.id === node.id; }); if (!item) return null;
+        if (item.src && (item.src.startsWith('blob:') || item.src.startsWith('data:'))) { try { var resp = await fetch(item.src); if (resp.ok) return await resp.blob(); } catch (e) {} }
+        var elSrc = (item.img && item.img.src) || (item.video && item.video.src) || null;
+        if (elSrc && (elSrc.startsWith('blob:') || elSrc.startsWith('data:'))) { try { var resp2 = await fetch(elSrc); if (resp2.ok) return await resp2.blob(); } catch (e) {} }
+        if (item._origBlob) return item._origBlob;
+        if (item.mediaData && typeof item.mediaData === 'string') { try { var arr = item.mediaData.split(','); var mime = (arr[0].match(/:(.*?);/) || [])[1] || 'application/octet-stream'; var bin = atob(arr[1] || arr[0]); var bytes = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); return new Blob([bytes], { type: mime }); } catch (e) {} }
+        return null;
+      };
+      var result = await KF.Writer.buildKpak(manifest, { mediaFetcher: mediaFetcher, compression: 'STORE', onProgress: function(evt) { updateProg(evt.message); } });
+      var zipBlob = result.zipBlob;
+      if (choice === 'lock') { updateProg('Encrypting with password...'); var password = KF.Writer.generatePassword(8); zipBlob = await KF.Writer.encryptWithLock(zipBlob, password); await showPasswordDisplayModal(password); }
+      updateProg('Writing ' + KF.Writer.formatBytes(zipBlob.size) + '...'); await new Promise(function(r) { setTimeout(r, 0); });
+      if (fileHandle) { await KF.Writer.writeToHandle(fileHandle, zipBlob); toast('Saved \u2714 ' + handleName + ' (' + KF.Writer.formatBytes(zipBlob.size) + ')'); }
+      else { await KF.Writer.downloadBlob(zipBlob, fname); toast('Downloaded \u2192 ' + fname); }
     } catch (err) { console.error('[KraftedBridge] Save failed:', err); updateProg('Error: ' + (err.message || 'unknown')); toast('Save failed: ' + (err.message || 'unknown error')); await new Promise(function(r) { setTimeout(r, 3000); }); }
     finally { try { prog.remove(); } catch (e) {} }
   };
@@ -3540,7 +3558,7 @@ self.addEventListener('message', function(event) {
     <span class="tb-label">Full</span>
   </button>
   <button onclick="document.getElementById('file-load').click()" class="tb-primary" title="Load Board"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v9h12V5H8L6 3H2z"/></svg> <span class="tb-label">Load</span></button>
-  <input type="file" id="file-load" accept=".json,.kpak" style="display:none" onchange="loadBoardFile(event)">
+  <input type="file" id="file-load" accept=".kpak" style="display:none" onchange="loadBoardFile(event)">
   <input type="file" id="file-audio-input" accept="audio/*,.mp3,.wav,.aiff,.aif,.flac,.ogg,.m4a" style="display:none" onchange="handleAudioUpload(event)">
   <button onclick="newBoard()" title="New Board (clear all)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h10M6 5V3h4v2M5 5l1 9h4l1-9"/></svg> <span class="tb-label">Clear</span></button>
 </div>
@@ -4119,13 +4137,13 @@ function showWelcome() {
   <div class="lock-card">
     <h3 class="lock-title">Save Board</h3>
     <p class="lock-desc">
-      <b>Full Package (.kpak)</b> — ZIP archive with all video/image/audio embedded as original files. No size limits. Share with your team — they can open it on any machine.<br><br>
-      <b>Save Plain (.json)</b> — just the layout. Small file, but media (videos, images) will be lost on reload.<br><br>
-      <em style="opacity:0.5">Chrome/Edge: you'll choose where to save. Other browsers: file downloads to your default Downloads folder.</em>
+      <b>Full Package (.kpak)</b> — ZIP archive with all images/videos/audio embedded. No size limits. Share with your team.<br><br>
+      <b>Lock & Save (.kpak)</b> — Same as above, but encrypted with a password for extra security.<br><br>
+      <em style="opacity:0.5">Chrome/Edge: you'll choose where to save. Other browsers: file downloads automatically.</em>
     </p>
     <div class="lock-actions">
       <button class="danger" onclick="closeSaveLockPrompt('cancel')">Cancel</button>
-      <button onclick="closeSaveLockPrompt('plain')">Save Plain (.json)</button>
+      <button onclick="closeSaveLockPrompt('lock')">🔒 Lock & Save</button>
       <button class="primary" onclick="closeSaveLockPrompt('kpak')">Full Package (.kpak)</button>
     </div>
   </div>
@@ -16263,7 +16281,7 @@ function captureSnapshot() {
       id: g.id, color: g.color, memberIds: [...g.memberIds],
     })),
     drawStrokes: drawStrokes,
-    relations: (state.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 3, labelSize: r.labelSize || 14 }; }),
+    relations: (state.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 6, labelSize: r.labelSize || 16 }; }),
     nextZ, nextId, nextGroupId, nextStrokeId,
   };
   return JSON.stringify(snap);
@@ -16510,7 +16528,7 @@ function restoreSnapshot(snapStr) {
   // Re-render draw strokes (draw item DOMs were rebuilt above)
   redrawDrawLayer();
   // Restore relation lines from snapshot
-  state.relations = (snap.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 3, labelSize: r.labelSize || 14 }; });
+  state.relations = (snap.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 3, labelSize: r.labelSize || 16 }; });
   state.selectedRelation = null;
   renderRelations();
   scheduleAutoSave();
@@ -19952,7 +19970,7 @@ function buildManifest() {
     nextGroupId: nextGroupId,
     nextId, nextZ, nextStrokeId,
     pan: state.pan, zoom: state.zoom,
-    relations: (state.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 3, labelSize: r.labelSize || 14 }; }),
+    relations: (state.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 6, labelSize: r.labelSize || 16 }; }),
     paper: { enabled: paperState.enabled, autoFit: paperState.autoFit, width: paperState.width, height: paperState.height, color: paperState.color },
     canvasBg: getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim(),
   };
@@ -20109,11 +20127,9 @@ async function saveBoard() {
 
   const counts = countMediaItems();
   console.log('[SAVE] media counts:', counts);
-  const isKpak = (choice === 'kpak' || choice === 'lock');
-  console.log('[SAVE] isKpak:', isKpak);
 
   // --- DEBUG: verify JSZip is available ---
-  if (isKpak && typeof JSZip === 'undefined') {
+  if (typeof JSZip === 'undefined') {
     console.error('[SAVE] JSZip is undefined! Check script loading.');
     toast('Save failed: JSZip library not loaded. Please refresh the page.');
     return;
@@ -20130,11 +20146,9 @@ async function saveBoard() {
     // --- STEP 1: Request file handle NOW (while transient user activation is still valid) ---
     // The kpak build can take seconds → minutes. If we call showSaveFilePicker AFTER building,
     // the transient activation from the user's click will have expired and the picker will fail.
-    const fname = isKpak
-      ? 'krafted_' + new Date().toISOString().slice(0, 10) + '.kpak'
-      : 'krafted_' + new Date().toISOString().slice(0, 10) + '.json';
-    const mime = isKpak ? ((choice === 'lock') ? 'application/locked-kpak' : 'application/zip') : 'application/json';
-    const ext = isKpak ? '.kpak' : '.json';
+    const fname = 'krafted_' + new Date().toISOString().slice(0, 10) + '.kpak';
+    const mime = (choice === 'lock') ? 'application/locked-kpak' : 'application/zip';
+    const ext = '.kpak';
 
     let fileHandle = null;
     let handleName = null;
@@ -20154,124 +20168,54 @@ async function saveBoard() {
       console.log('[SAVE] showSaveFilePicker not available — will use download fallback');
     }
 
-    // --- STEP 2: Build content ---
-    if (isKpak) {
-      // === KPACK FULL PACKAGE ===
-      updateProg('Building package' + (handleName ? ' for ' + handleName : '') + '...');
-      const n = counts.total;
-      console.log('[SAVE] Building kpak with', n, 'media files');
-      const result = await buildKpakBlob(updateProg);
-      let zipBlob = result.zipBlob;
-      console.log('[SAVE] kpak built: packed=' + result.packed + ' skipped=' + result.skipped + ' zipSize=' + formatBytes(zipBlob.size));
+    // --- STEP 2: Build kpak ---
+    updateProg('Building package' + (handleName ? ' for ' + handleName : '') + '...');
+    const n = counts.total;
+    console.log('[SAVE] Building kpak with', n, 'media files');
+    const result = await buildKpakBlob(updateProg);
+    let zipBlob = result.zipBlob;
+    console.log('[SAVE] kpak built: packed=' + result.packed + ' skipped=' + result.skipped + ' zipSize=' + formatBytes(zipBlob.size));
 
-      // Warn if media was expected but none were packed
-      if (n > 0 && result.packed === 0) {
-        console.warn('[SAVE] All ' + result.skipped + ' media files skipped — kpak contains layout only');
-      }
-
-      // Lock with password if needed
-      if (choice === 'lock') {
-        console.log('[SAVE] encrypting with lock...');
-        const password = generatePassword(8);
-        const salt = generateSalt(12);
-        const hash = await hashPassword(password, salt);
-        const lockWrapper = {
-          _kraftedLock: { v: 1, hash, salt },
-          _kpakData: await new Promise((resolve, reject) => {
-            const fr = new FileReader();
-            fr.onload = () => resolve(fr.result);
-            fr.onerror = () => reject(fr.error);
-            fr.readAsDataURL(zipBlob);
-          }),
-        };
-        zipBlob = new Blob([JSON.stringify(lockWrapper)], { type: 'application/locked-kpak' });
-        await showPasswordDisplayModal(password);
-      }
-
-      // --- STEP 3: Write to file handle or download ---
-      updateProg('Writing ' + formatBytes(zipBlob.size) + '...');
-      await new Promise(r => setTimeout(r, 0));
-
-      if (fileHandle) {
-        const writable = await fileHandle.createWritable();
-        await writable.write(zipBlob);
-        await writable.close();
-        console.log('[SAVE] Write complete to', handleName);
-        toast('Saved \u2714 ' + handleName + ' (' + formatBytes(zipBlob.size) + ', ' + result.packed + ' media' + (result.skipped > 0 ? ', ' + result.skipped + ' skipped' : '') + ')');
-      } else {
-        await downloadBlob(zipBlob, fname);
-        console.log('[SAVE] Download fallback triggered');
-        toast('Downloaded ' + fname + ' \u2192 Downloads folder (' + formatBytes(zipBlob.size) + ', ' + result.packed + ' media' + (result.skipped > 0 ? ', ' + result.skipped + ' skipped' : '') + ')');
-      }
-      console.log('[SAVE] done!');
-
-    } else {
-      // === PLAIN JSON ===
-      updateProg('Serializing layout...');
-      let data;
-      try { data = buildManifest(); }
-      catch(err) {
-        console.error('[SAVE] buildManifest failed:', err);
-        toast('Save failed: could not serialize layout — ' + err.message);
-        await new Promise(r => setTimeout(r, 3000));
-        return;
-      }
-      // Before stripping blob URLs, try to embed small images as base64 data URLs
-      // so they survive JSON save/load (blob URLs are only valid for the current session).
-      updateProg('Embedding images...');
-      for (const d of data.items) {
-        if (!d.isVideo && d.src && d.src.startsWith('blob:')) {
-          try {
-            const resp = await fetch(d.src);
-            if (resp.ok) {
-              const blob = await resp.blob();
-              // Only embed if under 5MB to keep JSON manageable
-              if (blob.size < 5 * 1024 * 1024) {
-                d.mediaData = await new Promise((resolve) => {
-                  const reader = new FileReader();
-                  reader.onload = () => resolve(reader.result);
-                  reader.onerror = () => resolve(null);
-                  reader.readAsDataURL(blob);
-                });
-              }
-            }
-          } catch (e) {
-            console.warn('Failed to embed image for JSON save:', d.id, e);
-          }
-        }
-      }
-      // Plain save: strip blob URLs so they're clearly marked lost
-      for (const d of data.items) {
-        if (d.isVideo && d.src && d.src.startsWith('blob:')) {
-          d.src = ''; d.videoLost = true;
-        } else if (!d.isVideo && d.src && d.src.startsWith('blob:')) {
-          d.src = '';
-        }
-      }
-
-      updateProg('Saving...');
-      await new Promise(r => setTimeout(r, 0));
-      let json;
-      try { json = JSON.stringify(data); }
-      catch(err) {
-        console.error('[SAVE] JSON.stringify failed:', err);
-        toast('Save failed: could not serialize JSON — ' + err.message);
-        await new Promise(r => setTimeout(r, 3000));
-        return;
-      }
-      console.log('[SAVE] JSON size:', formatBytes(json.length), 'items:', (data.items||[]).length, 'relations:', (data.relations||[]).length);
-      const blob = new Blob([json], { type: 'application/json' });
-
-      if (fileHandle) {
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        toast('Saved \u2714 ' + handleName + ' (layout only, no media)');
-      } else {
-        await downloadBlob(blob, fname);
-        toast('Downloaded ' + fname + ' \u2192 Downloads folder (layout only, ' + formatBytes(blob.size) + ')');
-      }
+    // Warn if media was expected but none were packed
+    if (n > 0 && result.packed === 0) {
+      console.warn('[SAVE] All ' + result.skipped + ' media files skipped — kpak contains layout only');
     }
+
+    // Lock with password if needed
+    if (choice === 'lock') {
+      console.log('[SAVE] encrypting with lock...');
+      const password = generatePassword(8);
+      const salt = generateSalt(12);
+      const hash = await hashPassword(password, salt);
+      const lockWrapper = {
+        _kraftedLock: { v: 1, hash, salt },
+        _kpakData: await new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(fr.result);
+          fr.onerror = () => reject(fr.error);
+          fr.readAsDataURL(zipBlob);
+        }),
+      };
+      zipBlob = new Blob([JSON.stringify(lockWrapper)], { type: 'application/locked-kpak' });
+      await showPasswordDisplayModal(password);
+    }
+
+    // --- STEP 3: Write to file handle or download ---
+    updateProg('Writing ' + formatBytes(zipBlob.size) + '...');
+    await new Promise(r => setTimeout(r, 0));
+
+    if (fileHandle) {
+      const writable = await fileHandle.createWritable();
+      await writable.write(zipBlob);
+      await writable.close();
+      console.log('[SAVE] Write complete to', handleName);
+      toast('Saved \u2714 ' + handleName + ' (' + formatBytes(zipBlob.size) + ', ' + result.packed + ' media' + (result.skipped > 0 ? ', ' + result.skipped + ' skipped' : '') + ')');
+    } else {
+      await downloadBlob(zipBlob, fname);
+      console.log('[SAVE] Download fallback triggered');
+      toast('Downloaded ' + fname + ' \u2192 Downloads folder (' + formatBytes(zipBlob.size) + ', ' + result.packed + ' media' + (result.skipped > 0 ? ', ' + result.skipped + ' skipped' : '') + ')');
+    }
+    console.log('[SAVE] done!');
   } catch (err) {
     console.error('[SAVE] FAILED:', err.name, err.message, err.stack);
     updateProg('Error: ' + (err.message || 'unknown'));
@@ -20931,7 +20875,7 @@ function restoreBoard(data) {
   state.pan = data.pan || { x: 0, y: 0 };
   state.zoom = data.zoom || 1;
   // Restore relations
-  state.relations = (data.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 3, labelSize: r.labelSize || 12 }; });
+  state.relations = (data.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 6, labelSize: r.labelSize || 16 }; });
   state.selectedRelation = null;
   // Restore groups
   state.groups.forEach(g => g.borderEl.remove());
@@ -24038,7 +23982,7 @@ function renderRelations() {
 
     // Label (if any)
     if (rel.label) {
-      var labelSize = rel.labelSize || 14;
+      var labelSize = rel.labelSize || 20;
       var mx = (p1.x + p2.x) / 2;
       var my = (p1.y + p2.y) / 2;
       var labelText = rel.label.length > 40 ? rel.label.substring(0, 40) + '…' : rel.label;
@@ -24087,7 +24031,7 @@ function _showRelationCtxMenu(e, id) {
   if (!rel) return;
   var curStyle = rel.style || 'orthogonal';
   var curColor = rel.color || '#00e5ff';
-  var curWidth = rel.lineWidth || 3;
+  var curWidth = rel.lineWidth || 6;
   var colors = ['#00e5ff','#ffdd44','#ff6b6b','#51cf66','#cc5de8','#ff922b','#74c0fc','#ffffff'];
   var html = '<div class="ctx-section">Style</div>';
   for (var i = 0; i < RELATION_STYLES.length; i++) {
@@ -24096,9 +24040,9 @@ function _showRelationCtxMenu(e, id) {
   }
   html += '<div class="ctx-sep"></div>';
   html += '<div class="ctx-section">Width</div>';
-  html += '<div class="ctx-item" onclick="(function(){ _setRelationWidth(\'' + id + '\',2); hideCtx(); })()">' + (curWidth===2?'✓ ':'') + 'Thin (2px)</div>';
-  html += '<div class="ctx-item" onclick="(function(){ _setRelationWidth(\'' + id + '\',3); hideCtx(); })()">' + (curWidth===3?'✓ ':'') + 'Normal (3px)</div>';
-  html += '<div class="ctx-item" onclick="(function(){ _setRelationWidth(\'' + id + '\',5); hideCtx(); })()">' + (curWidth===5?'✓ ':'') + 'Thick (5px)</div>';
+  html += '<div class="ctx-item" onclick="(function(){ _setRelationWidth(\'' + id + '\',4); hideCtx(); })()">' + (curWidth===4?'✓ ':'') + 'Thin (4px)</div>';
+  html += '<div class="ctx-item" onclick="(function(){ _setRelationWidth(\'' + id + '\',6); hideCtx(); })()">' + (curWidth===6?'✓ ':'') + 'Normal (6px)</div>';
+  html += '<div class="ctx-item" onclick="(function(){ _setRelationWidth(\'' + id + '\',10); hideCtx(); })()">' + (curWidth===10?'✓ ':'') + 'Thick (10px)</div>';
   html += '<div class="ctx-sep"></div>';
   html += '<div class="ctx-section">Color</div><div style="display:flex;flex-wrap:wrap;gap:3px;padding:4px 8px;">';
   for (var c = 0; c < colors.length; c++) {
@@ -24106,8 +24050,18 @@ function _showRelationCtxMenu(e, id) {
   }
   html += '</div>';
   html += '<div class="ctx-sep"></div>';
-  html += '<div class="ctx-item" onclick="(function(){ _editRelationLabel(\'' + id + '\'); hideCtx(); })()">✏️ Edit Label</div>';
-  html += '<div class="ctx-item" onclick="(function(){ _setRelationLabelSize(\'' + id + '\'); hideCtx(); })()">🔤 Label Size (' + (rel.labelSize||12) + 'px)</div>';
+  html += '<div class="ctx-section">Label</div>';
+  html += '<div class="ctx-item" onclick="(function(){ _editRelationLabel(\'' + id + '\'); hideCtx(); })()">✏️ Edit Label Text</div>';
+  html += '<div class="ctx-item ctx-submenu-trigger" onclick="event.stopPropagation();(function(btn){ var sm=btn.nextElementSibling; if(sm){ sm.style.display=sm.style.display===&quot;block&quot;?&quot;none&quot;:&quot;block&quot;; } })(this)">🔤 Label Size (' + (rel.labelSize||16) + 'px) ▸</div>';
+  html += '<div class="ctx-submenu" style="display:none;padding-left:12px;">';
+  var _lsSizes = [12, 14, 16, 20, 24, 32, 48, 64];
+  for (var ls = 0; ls < _lsSizes.length; ls++) {
+    var _lsz = _lsSizes[ls];
+    var _lmark = (rel.labelSize === _lsz) ? '✓ ' : '';
+    html += '<div class="ctx-item" onclick="(function(){ _setRelationLabelSize(\'' + id + '\',' + _lsz + '); hideCtx(); })()">' + _lmark + _lsz + 'px</div>';
+  }
+  html += '</div>';
+  html += '<div class="ctx-sep"></div>';
   html += '<div class="ctx-item ctx-danger" onclick="(function(){ _deleteRelation(\'' + id + '\'); hideCtx(); })()">🗑 Delete Relation</div>';
   menu.innerHTML = html;
   menu.style.display = 'block';
@@ -24140,18 +24094,23 @@ function _setRelationColor(id, color) {
   scheduleAutoSave();
 }
 
-function _setRelationLabelSize(id) {
+function _setRelationLabelSize(id, size) {
   _ensureRelations();
   var rel = state.relations.find(function(r) { return r.id === id; });
   if (!rel) return;
-  var cur = rel.labelSize || 14;
-  var sizes = [12, 14, 16, 20, 24, 32];
-  var idx = sizes.indexOf(cur);
-  var next = sizes[(idx + 1) % sizes.length];
-  rel.labelSize = next;
+  if (size === undefined || size === null) {
+    // legacy cycle behaviour (single click with no size arg)
+    var cur = rel.labelSize || 16;
+    var sizes = [14, 16, 20, 24, 32, 48];
+    var idx = sizes.indexOf(cur);
+    var next = sizes[(idx + 1) % sizes.length];
+    rel.labelSize = next;
+  } else {
+    rel.labelSize = size;
+  }
   renderRelations();
   scheduleAutoSave();
-  toast('Label size: ' + next + 'px');
+  toast('Label: ' + rel.labelSize + 'px');
 }
 
 // Inline label editor — replaces prompt() to avoid double-click hang
