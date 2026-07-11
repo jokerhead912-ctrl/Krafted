@@ -1204,7 +1204,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783754400';
+  var HASH='KRAFTED_BUILD_1783756426';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -5521,6 +5521,20 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       circleBtn.classList.toggle('active', s.mode === 'circle');
       // Round 12: text mode active state
       textBtn.classList.toggle('active', s.mode === 'text');
+      // Round 34: when in text mode, update size button tooltips to
+      // show the corresponding font size so users know S/M/L controls
+      // text size as well as stroke size.
+      try {
+        var sizeBtns = annoToolbar.querySelectorAll('.toolbar-row-sizes button');
+        sizeBtns.forEach(function(sb) {
+          var sz = parseInt(sb.textContent === 'S' ? 2 : (sb.textContent === 'M' ? 4 : 7));
+          if (s.mode === 'text') {
+            sb.title = 'Text size ' + (Math.max(14, sz * 5)) + 'px (stroke ' + sz + 'px)';
+          } else {
+            sb.title = 'Stroke size ' + sz + 'px';
+          }
+        });
+      } catch (_eSz) {}
       drawBtn.classList.toggle('active', s.mode !== 'off');
       // Toggle the wrap class (controls CSS for canvas pointer-events + dim)
       el.classList.toggle('draw-mode', s.mode !== 'off');
@@ -23763,7 +23777,42 @@ document.addEventListener('keydown', e => {
 
   // Single keys
   if (e.key === 'v' || e.key === 'V') setTool('select');
-  else if (e.key === 't' || e.key === 'T') setTool('text');
+  else if (e.key === 't' || e.key === 'T') {
+    // Round 34: T is DOUBLE-MAPPED.
+    //   • Main handler:  T → setTool('text') (canvas text mode)
+    //   • Video handler:  T → enter video annotation text mode when
+    //     the mouse is over a selected video item.
+    // When the mouse is hovering over a selected video, pressing T
+    // should activate the video's own text annotation mode instead
+    // of the global canvas text tool.
+    var _hasVideoSelT = false;
+    try {
+      if (state && state.selected && state.selected.size > 0 && state.mouse) {
+        var mouseEl = document.elementFromPoint(state.mouse.x, state.mouse.y);
+        if (mouseEl) {
+          var hitItem = mouseEl.closest('.item.has-media');
+          if (hitItem) {
+            state.selected.forEach(function(id) {
+              if (_hasVideoSelT) return;
+              var it = state.items.find(function(i) { return i.id === id; });
+              if (it && (it.video || it.isVideo) && it.el === hitItem && it.el._annoDrawState) {
+                _hasVideoSelT = true;
+                // Toggle: if already in text mode, turn off; otherwise enter text mode
+                if (it.el._annoDrawState.mode === 'text') {
+                  it.el._annoDrawState.mode = 'off';
+                } else {
+                  it.el._annoDrawState.mode = 'text';
+                }
+                if (typeof it.el._applyDrawMode === 'function') it.el._applyDrawMode();
+              }
+            });
+          }
+        }
+      }
+    } catch (_eT) { /* fail-open: fall through */ }
+    if (_hasVideoSelT) return;            // ← yield to video annotation text mode
+    setTool('text');
+  }
   else if (e.key === 'e' || e.key === 'E') setTool('export');
   // NOTE: Draw tool is bound to Ctrl+D (and Ctrl+Shift+D = Duplicate) — see
   // the Ctrl block above. Plain D no longer activates Draw so typing "d"
