@@ -1252,7 +1252,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783781252';
+  var HASH='KRAFTED_BUILD_1783782324';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -2164,9 +2164,9 @@ body.dragging-file .media-anno-toolbar {
   cursor: pointer;
   transition: stroke 0.12s ease;
 }
-#relation-svg .rel-line { fill: none; stroke: #00e5ff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-#relation-svg .rel-line:hover { stroke-width: 3.5; filter: drop-shadow(0 0 6px rgba(0,229,255,0.5)); }
-#relation-svg .rel-line.selected { stroke-width: 3; stroke: #ffdd44; }
+#relation-svg .rel-line { fill: none; stroke: #00e5ff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+#relation-svg .rel-line:hover { stroke-width: 5; filter: drop-shadow(0 0 6px rgba(0,229,255,0.5)); }
+#relation-svg .rel-line.selected { stroke-width: 4; stroke: #ffdd44; }
 #relation-svg .rel-line.dashed { stroke-dasharray: 6 4; }
 #relation-svg .rel-arrow { fill: #00e5ff; }
 #relation-svg .rel-line.selected + .rel-arrow { fill: #ffdd44; }
@@ -2179,7 +2179,6 @@ body.dragging-file .media-anno-toolbar {
 #relation-svg .rel-label-text {
   fill: #fff;
   font-family: 'Inter', sans-serif;
-  font-size: 10px;
   font-weight: 500;
   pointer-events: none;
   user-select: none;
@@ -19945,7 +19944,7 @@ function buildManifest() {
     nextGroupId: nextGroupId,
     nextId, nextZ, nextStrokeId,
     pan: state.pan, zoom: state.zoom,
-    relations: (state.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label, style: r.style, color: r.color }; }),
+    relations: (state.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 3, labelSize: r.labelSize || 12 }; }),
     paper: { enabled: paperState.enabled, autoFit: paperState.autoFit, width: paperState.width, height: paperState.height, color: paperState.color },
     canvasBg: getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim(),
   };
@@ -20894,7 +20893,7 @@ function restoreBoard(data) {
   state.pan = data.pan || { x: 0, y: 0 };
   state.zoom = data.zoom || 1;
   // Restore relations
-  state.relations = (data.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff' }; });
+  state.relations = (data.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 3, labelSize: r.labelSize || 12 }; });
   state.selectedRelation = null;
   // Restore groups
   state.groups.forEach(g => g.borderEl.remove());
@@ -20963,6 +20962,8 @@ function restoreBoard(data) {
   } catch (e) { /* non-fatal */ }
   scheduleAutoSave();
   setTimeout(() => updateAutoFitPaper(), 200);
+  // Render relation lines after all items are restored
+  if (state.relations && state.relations.length) renderRelations();
 }
 
 // ============================================================
@@ -22462,6 +22463,8 @@ document.addEventListener('mousemove', e => {
       });
       updateAllGroupBorders();
       redrawDrawLayer();
+      // Refresh relation lines so they follow dragged items in real-time
+      if (state.relations && state.relations.length) renderRelations();
       // Keep any open annotation popovers parallel to the video as the
       // user drags items around. Without this, a popover opened for an
       // item would stay glued to its old viewport position even after
@@ -22611,6 +22614,8 @@ document.addEventListener('mousemove', e => {
         // Keep any open annotation popovers parallel to the video as the
         // selection is resized (popovers anchor to .media-wrap rect)
         repositionAllAnnoPopovers();
+        // Refresh relation lines
+        if (state.relations && state.relations.length) renderRelations();
         return;
       }
       // FAST PATH: direct style writes (no full updateItemStyle) for max snappiness
@@ -22644,6 +22649,8 @@ document.addEventListener('mousemove', e => {
         });
         updateGroupBorder(d._group);
       }
+      // Refresh relation lines so they follow resized items
+      if (state.relations && state.relations.length) renderRelations();
       // Keep any open annotation popovers parallel to the video as the
       // item is resized (video height changes, so the popover's parallel
       // span must follow).
@@ -23919,6 +23926,7 @@ function renderRelations() {
     var isSelected = (state.selectedRelation === rel.id);
     var style = rel.style || 'orthogonal';
     var color = rel.color || '#00e5ff';
+    var lw = rel.lineWidth || 3;
 
     // Group for this relation
     var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -23939,7 +23947,7 @@ function renderRelations() {
     path.setAttribute('class', 'rel-line' + (style === 'dashed' ? ' dashed' : '') + (isSelected ? ' selected' : ''));
     path.setAttribute('stroke', color);
     path.setAttribute('fill', 'none');
-    path.setAttribute('stroke-width', isSelected ? '3' : '2');
+    path.setAttribute('stroke-width', isSelected ? String(lw + 1) : String(lw));
     if (style === 'dashed') path.setAttribute('stroke-dasharray', '6 4');
     path.setAttribute('data-rel-id', rel.id);
     path.addEventListener('click', function(e) {
@@ -23966,24 +23974,26 @@ function renderRelations() {
 
     // Label (if any)
     if (rel.label) {
+      var labelSize = rel.labelSize || 12;
       var mx = (p1.x + p2.x) / 2;
       var my = (p1.y + p2.y) / 2;
       var labelText = rel.label.length > 40 ? rel.label.substring(0, 40) + '…' : rel.label;
-      // Background rect — approximate text width
-      var textW = Math.min(labelText.length * 6.5, 260);
-      var textH = 18;
+      var charW = labelSize * 0.58;
+      var textW = Math.min(labelText.length * charW, 300);
+      var textH = labelSize + 6;
       var bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       bg.setAttribute('x', mx - textW / 2 - 6);
-      bg.setAttribute('y', my - textH / 2 - 2);
+      bg.setAttribute('y', my - textH / 2 - 1);
       bg.setAttribute('width', textW + 12);
-      bg.setAttribute('height', textH);
+      bg.setAttribute('height', textH + 2);
       bg.setAttribute('class', 'rel-label-bg');
       g.appendChild(bg);
       var txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       txt.setAttribute('x', mx);
-      txt.setAttribute('y', my + 4);
+      txt.setAttribute('y', my + labelSize * 0.35);
       txt.setAttribute('text-anchor', 'middle');
       txt.setAttribute('class', 'rel-label-text');
+      txt.setAttribute('font-size', labelSize + 'px');
       txt.textContent = labelText;
       g.appendChild(txt);
     }
@@ -24012,13 +24022,28 @@ function _showRelationCtxMenu(e, id) {
   var rel = (state.relations || []).find(function(r) { return r.id === id; });
   if (!rel) return;
   var curStyle = rel.style || 'orthogonal';
-  var html = '<div class="ctx-section">Relation Style</div>';
+  var curColor = rel.color || '#00e5ff';
+  var curWidth = rel.lineWidth || 3;
+  var colors = ['#00e5ff','#ffdd44','#ff6b6b','#51cf66','#cc5de8','#ff922b','#74c0fc','#ffffff'];
+  var html = '<div class="ctx-section">Style</div>';
   for (var i = 0; i < RELATION_STYLES.length; i++) {
     var s = RELATION_STYLES[i];
     html += '<div class="ctx-item' + (s.id === curStyle ? ' ctx-checked' : '') + '" onclick="(function(){ _setRelationStyle(\'' + id + '\',\'' + s.id + '\'); hideCtx(); })()">' + s.icon + ' ' + s.name + '</div>';
   }
   html += '<div class="ctx-sep"></div>';
+  html += '<div class="ctx-section">Width</div>';
+  html += '<div class="ctx-item" onclick="(function(){ _setRelationWidth(\'' + id + '\',2); hideCtx(); })()">' + (curWidth===2?'✓ ':'') + 'Thin (2px)</div>';
+  html += '<div class="ctx-item" onclick="(function(){ _setRelationWidth(\'' + id + '\',3); hideCtx(); })()">' + (curWidth===3?'✓ ':'') + 'Normal (3px)</div>';
+  html += '<div class="ctx-item" onclick="(function(){ _setRelationWidth(\'' + id + '\',5); hideCtx(); })()">' + (curWidth===5?'✓ ':'') + 'Thick (5px)</div>';
+  html += '<div class="ctx-sep"></div>';
+  html += '<div class="ctx-section">Color</div><div style="display:flex;flex-wrap:wrap;gap:3px;padding:4px 8px;">';
+  for (var c = 0; c < colors.length; c++) {
+    html += '<div onclick="(function(){ _setRelationColor(\'' + id + '\',\'' + colors[c] + '\'); hideCtx(); })()" style="width:18px;height:18px;border-radius:3px;background:' + colors[c] + ';cursor:pointer;border:1px solid ' + (curColor===colors[c]?'#fff':'#444') + ';" title="' + colors[c] + '"></div>';
+  }
+  html += '</div>';
+  html += '<div class="ctx-sep"></div>';
   html += '<div class="ctx-item" onclick="(function(){ _editRelationLabel(\'' + id + '\'); hideCtx(); })()">✏️ Edit Label</div>';
+  html += '<div class="ctx-item" onclick="(function(){ _setRelationLabelSize(\'' + id + '\'); hideCtx(); })()">🔤 Label Size (' + (rel.labelSize||12) + 'px)</div>';
   html += '<div class="ctx-item ctx-danger" onclick="(function(){ _deleteRelation(\'' + id + '\'); hideCtx(); })()">🗑 Delete Relation</div>';
   menu.innerHTML = html;
   menu.style.display = 'block';
@@ -24035,13 +24060,82 @@ function _setRelationStyle(id, style) {
   scheduleAutoSave();
 }
 
+function _setRelationWidth(id, w) {
+  _ensureRelations();
+  var rel = state.relations.find(function(r) { return r.id === id; });
+  if (rel) { rel.lineWidth = w; }
+  renderRelations();
+  scheduleAutoSave();
+}
+
+function _setRelationColor(id, color) {
+  _ensureRelations();
+  var rel = state.relations.find(function(r) { return r.id === id; });
+  if (rel) { rel.color = color; }
+  renderRelations();
+  scheduleAutoSave();
+}
+
+function _setRelationLabelSize(id) {
+  _ensureRelations();
+  var rel = state.relations.find(function(r) { return r.id === id; });
+  if (!rel) return;
+  var cur = rel.labelSize || 12;
+  var sizes = [10, 12, 14, 16, 20, 24];
+  var idx = sizes.indexOf(cur);
+  var next = sizes[(idx + 1) % sizes.length];
+  rel.labelSize = next;
+  renderRelations();
+  scheduleAutoSave();
+  toast('Label size: ' + next + 'px');
+}
+
+// Inline label editor — replaces prompt() to avoid double-click hang
 function _editRelationLabel(id) {
   _ensureRelations();
   var rel = state.relations.find(function(r) { return r.id === id; });
   if (!rel) return;
-  var label = prompt('Relation label:', rel.label || '');
-  if (label === null) return; // cancelled
-  rel.label = label.trim();
+  // Remove any existing editor
+  var existing = document.getElementById('rel-label-editor');
+  if (existing) existing.remove();
+  // Find the label midpoint in screen coords
+  var ep = _getRelationEndpoints(rel);
+  if (!ep) return;
+  var OFF = 50000;
+  var mx = (ep.from.x + ep.to.x) / 2 + OFF;
+  var my = (ep.from.y + ep.to.y) / 2 + OFF;
+  // Convert world to screen
+  var screenX = mx * state.zoom + state.pan.x + OFF - OFF * state.zoom;
+  var screenY = my * state.zoom + state.pan.y + OFF - OFF * state.zoom;
+
+  var editor = document.createElement('div');
+  editor.id = 'rel-label-editor';
+  editor.style.cssText = 'position:fixed;z-index:99999999;background:#1a1a2e;border:1px solid #00e5ff;border-radius:6px;padding:6px 8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);';
+  editor.style.left = Math.max(10, Math.min(screenX - 100, window.innerWidth - 220)) + 'px';
+  editor.style.top = Math.max(10, Math.min(screenY - 20, window.innerHeight - 60)) + 'px';
+  editor.innerHTML = '<input id="rel-label-input" value="' + (rel.label||'').replace(/"/g,'&quot;') + '" style="background:#0d0d1a;border:1px solid #333;color:#fff;padding:4px 8px;border-radius:4px;font-size:12px;width:200px;font-family:Inter,sans-serif;" placeholder="Label text…" autofocus>' +
+    '<div style="display:flex;gap:4px;margin-top:4px;">' +
+    '<button onclick="(function(){ var v=document.getElementById(\'rel-label-input\').value.trim(); _commitRelationLabel(\'' + id + '\',v); })()" style="background:#00e5ff;color:#000;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">OK</button>' +
+    '<button onclick="(function(){ document.getElementById(\'rel-label-editor\').remove(); })()" style="background:#333;color:#fff;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Cancel</button>' +
+    '</div>';
+  document.body.appendChild(editor);
+  var inp = document.getElementById('rel-label-input');
+  if (inp) {
+    inp.focus();
+    inp.select();
+    inp.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter') { _commitRelationLabel(id, inp.value.trim()); }
+      if (ev.key === 'Escape') { editor.remove(); }
+    });
+  }
+}
+
+function _commitRelationLabel(id, value) {
+  _ensureRelations();
+  var rel = state.relations.find(function(r) { return r.id === id; });
+  if (rel) { rel.label = value; }
+  var editor = document.getElementById('rel-label-editor');
+  if (editor) editor.remove();
   renderRelations();
   scheduleAutoSave();
 }
