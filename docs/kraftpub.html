@@ -1252,7 +1252,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783782324';
+  var HASH='KRAFTED_BUILD_1783782606';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -2164,10 +2164,21 @@ body.dragging-file .media-anno-toolbar {
   cursor: pointer;
   transition: stroke 0.12s ease;
 }
-#relation-svg .rel-line { fill: none; stroke: #00e5ff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-#relation-svg .rel-line:hover { stroke-width: 5; filter: drop-shadow(0 0 6px rgba(0,229,255,0.5)); }
-#relation-svg .rel-line.selected { stroke-width: 4; stroke: #ffdd44; }
-#relation-svg .rel-line.dashed { stroke-dasharray: 6 4; }
+#relation-svg .rel-line {
+  fill: none; stroke: #00e5ff; stroke-width: 4;
+  stroke-linecap: round; stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+/* Invisible fat hit area behind the visible line — makes clicking much easier */
+#relation-svg .rel-hit {
+  fill: none; stroke: transparent; stroke-width: 16;
+  stroke-linecap: round; stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+#relation-svg .rel-line:hover { stroke-width: 7; filter: drop-shadow(0 0 8px rgba(0,229,255,0.6)); }
+#relation-svg .rel-line.selected { stroke-width: 6; stroke: #ffdd44; }
+#relation-svg .rel-line.dashed { stroke-dasharray: 8 6; }
 #relation-svg .rel-arrow { fill: #00e5ff; }
 #relation-svg .rel-line.selected + .rel-arrow { fill: #ffdd44; }
 #relation-svg .rel-label-bg {
@@ -2179,6 +2190,7 @@ body.dragging-file .media-anno-toolbar {
 #relation-svg .rel-label-text {
   fill: #fff;
   font-family: 'Inter', sans-serif;
+  font-size: 14px;
   font-weight: 500;
   pointer-events: none;
   user-select: none;
@@ -16260,6 +16272,7 @@ function captureSnapshot() {
       id: g.id, color: g.color, memberIds: [...g.memberIds],
     })),
     drawStrokes: drawStrokes,
+    relations: (state.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 3, labelSize: r.labelSize || 14 }; }),
     nextZ, nextId, nextGroupId, nextStrokeId,
   };
   return JSON.stringify(snap);
@@ -16505,6 +16518,10 @@ function restoreSnapshot(snapStr) {
   refreshSelection();
   // Re-render draw strokes (draw item DOMs were rebuilt above)
   redrawDrawLayer();
+  // Restore relation lines from snapshot
+  state.relations = (snap.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 3, labelSize: r.labelSize || 14 }; });
+  state.selectedRelation = null;
+  renderRelations();
   scheduleAutoSave();
   updateAutoFitPaper();
   // R73: re-render the frame-comment list for any video item that has
@@ -19944,7 +19961,7 @@ function buildManifest() {
     nextGroupId: nextGroupId,
     nextId, nextZ, nextStrokeId,
     pan: state.pan, zoom: state.zoom,
-    relations: (state.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 3, labelSize: r.labelSize || 12 }; }),
+    relations: (state.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 3, labelSize: r.labelSize || 14 }; }),
     paper: { enabled: paperState.enabled, autoFit: paperState.autoFit, width: paperState.width, height: paperState.height, color: paperState.color },
     canvasBg: getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim(),
   };
@@ -23942,6 +23959,26 @@ function renderRelations() {
       default:        d = _buildOrthogonalPath(p1, p2); break;
     }
 
+    // Invisible fat hit path — makes clicking the line much easier
+    var hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    hit.setAttribute('d', d);
+    hit.setAttribute('class', 'rel-hit');
+    hit.setAttribute('data-rel-id', rel.id);
+    hit.addEventListener('click', function(e) {
+      e.stopPropagation();
+      _selectRelation(this.getAttribute('data-rel-id'));
+    });
+    hit.addEventListener('dblclick', function(e) {
+      e.stopPropagation();
+      _editRelationLabel(this.getAttribute('data-rel-id'));
+    });
+    hit.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      _showRelationCtxMenu(e, this.getAttribute('data-rel-id'));
+    });
+    g.appendChild(hit);
+
     var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', d);
     path.setAttribute('class', 'rel-line' + (style === 'dashed' ? ' dashed' : '') + (isSelected ? ' selected' : ''));
@@ -23974,7 +24011,7 @@ function renderRelations() {
 
     // Label (if any)
     if (rel.label) {
-      var labelSize = rel.labelSize || 12;
+      var labelSize = rel.labelSize || 14;
       var mx = (p1.x + p2.x) / 2;
       var my = (p1.y + p2.y) / 2;
       var labelText = rel.label.length > 40 ? rel.label.substring(0, 40) + '…' : rel.label;
@@ -24080,8 +24117,8 @@ function _setRelationLabelSize(id) {
   _ensureRelations();
   var rel = state.relations.find(function(r) { return r.id === id; });
   if (!rel) return;
-  var cur = rel.labelSize || 12;
-  var sizes = [10, 12, 14, 16, 20, 24];
+  var cur = rel.labelSize || 14;
+  var sizes = [12, 14, 16, 20, 24, 32];
   var idx = sizes.indexOf(cur);
   var next = sizes[(idx + 1) % sizes.length];
   rel.labelSize = next;
