@@ -1204,7 +1204,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783757284';
+  var HASH='KRAFTED_BUILD_1783757507';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -11387,10 +11387,12 @@ async function videoAnnoExportVideo() {
   const dur = (isFinite(v.duration) ? v.duration : 0);
   if (!dur || dur <= 0) { toast('Video duration unknown — wait for it to load'); return; }
   // ── Build the composite canvas ──
-  // Match the video's intrinsic size for a 1:1 export. Cap at 1280x720
-  // so we don't blow up memory on huge 4K files. The user can still
-  // see the strokes clearly at this size.
-  const MAX_DIM = 1280;
+  // Match the video's native resolution for a 1:1 export so the
+  // baked-in strokes and text stay crisp. For 4K sources this can
+  // produce large canvases — we cap at 2560px on the longest edge
+  // to keep memory reasonable on older machines while still being
+  // 2× sharper than the previous 1280px cap.
+  const MAX_DIM = 2560;
   const aspect = (v.videoWidth || 1280) / (v.videoHeight || 720);
   let outW = Math.min(MAX_DIM, v.videoWidth || 1280);
   let outH = Math.round(outW / aspect);
@@ -18732,9 +18734,11 @@ function captureArea(sx, sy, sw, sh) {
   if (globalMediaBar) globalMediaBar.classList.remove('active');
 
   try {
-  // 1:1 capture: output dimensions match the selected screen area exactly
-  // (Previous scale=2 doubled the output, making captures feel "bigger than captured")
-  const scale = 1;
+  // High-res capture: scale=2 doubles the output resolution so images
+  // and text stay sharp when the user pastes the capture into a doc or
+  // opens it full-screen. The on-screen crop rectangle still shows the
+  // 1:1 pixel dimensions — the 2x scale only affects the exported PNG.
+  const scale = 2;
   const cv = document.createElement('canvas');
   cv.width = Math.round(sw * scale);
   cv.height = Math.round(sh * scale);
