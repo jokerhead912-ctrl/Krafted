@@ -1252,7 +1252,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783783106';
+  var HASH='KRAFTED_BUILD_1783783383';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -20217,7 +20217,14 @@ async function saveBoard() {
     } else {
       // === PLAIN JSON ===
       updateProg('Serializing layout...');
-      const data = buildManifest();
+      let data;
+      try { data = buildManifest(); }
+      catch(err) {
+        console.error('[SAVE] buildManifest failed:', err);
+        toast('Save failed: could not serialize layout — ' + err.message);
+        await new Promise(r => setTimeout(r, 3000));
+        return;
+      }
       // Before stripping blob URLs, try to embed small images as base64 data URLs
       // so they survive JSON save/load (blob URLs are only valid for the current session).
       updateProg('Embedding images...');
@@ -20253,7 +20260,15 @@ async function saveBoard() {
 
       updateProg('Saving...');
       await new Promise(r => setTimeout(r, 0));
-      const json = JSON.stringify(data);
+      let json;
+      try { json = JSON.stringify(data); }
+      catch(err) {
+        console.error('[SAVE] JSON.stringify failed:', err);
+        toast('Save failed: could not serialize JSON — ' + err.message);
+        await new Promise(r => setTimeout(r, 3000));
+        return;
+      }
+      console.log('[SAVE] JSON size:', formatBytes(json.length), 'items:', (data.items||[]).length, 'relations:', (data.relations||[]).length);
       const blob = new Blob([json], { type: 'application/json' });
 
       if (fileHandle) {
@@ -20405,9 +20420,24 @@ async function loadBoardFile(event) {
         reader.readAsText(file);
       });
 
+      // Defensive: empty file?
+      if (!text || text.trim().length === 0) {
+        toast('Error loading: file is empty');
+        event.target.value = '';
+        return;
+      }
+      console.log('[Load] file size:', file.size, 'text length:', text.length, 'first 200 chars:', text.substring(0, 200));
+
       let data;
       try { data = JSON.parse(text); }
-      catch(err) { toast('Error loading board: ' + err.message); event.target.value = ''; return; }
+      catch(err) {
+        console.error('[Load] JSON parse error:', err);
+        console.error('[Load] file size:', file.size, 'text length:', text.length);
+        console.error('[Load] last 500 chars:', text.substring(text.length - 500));
+        toast('Error loading: Invalid JSON: ' + err.message);
+        event.target.value = '';
+        return;
+      }
 
       // Handle locked .krafted files (base64-encoded kpak inside JSON)
       if (data._kraftedLock && data._kpakData) {
