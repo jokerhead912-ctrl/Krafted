@@ -12850,6 +12850,8 @@ async function videoAnnoSendToBoard() {
     if (typeof updateCanvas === 'function') updateCanvas();
   } catch (e) {}
   toast('Sent ' + comments.length + ' comment' + (comments.length === 1 ? '' : 's') + ' to board as a 2-column storyboard — click any text to edit (time chip + comment are combined in one box)');
+  // Auto-close the comment list popover so the user can see the board result immediately
+  try { if (item.el && item.el._setListOpen) item.el._setListOpen(false); } catch(e) {}
 }
 
 function videoAnnoJumpToComment(id) {
