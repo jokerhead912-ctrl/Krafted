@@ -1212,7 +1212,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783779243';
+  var HASH='KRAFTED_BUILD_1783779587';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -3996,7 +3996,7 @@ self.addEventListener('message', function(event) {
     <p class="welcome-sub">Professional reference board — images, video, audio, mind maps & more.</p>
     <button class="btn-primary btn-large" onclick="hideWelcome()">GET STARTED</button>
     <div class="welcome-creator">CREATED BY KINCHEUNG</div>
-    <div class="welcome-version" id="welcome-version">V 4 . 4</div>
+    <div class="welcome-version" id="welcome-version">V 5 . 3</div>
   </div>
 </div>
 
@@ -4136,7 +4136,7 @@ function showWelcome() {
           <tr><td style="padding:4px 0;color:#888;">Drag & Drop</td><td style="padding:4px 0;">Images, videos, audio files</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Paste (Ctrl+V)</td><td style="padding:4px 0;">Paste images, URLs, items</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Click / Space</td><td style="padding:4px 0;">Play / Pause video</td></tr>
-          <tr><td style="padding:4px 0;color:#888;">J / K</td><td style="padding:4px 0;">Prev / Next comment (Review Mode)</td></tr>
+          <tr><td style="padding:4px 0;color:#888;">J / K</td><td style="padding:4px 0;">Prev / Next comment (hover video)</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Double-click</td><td style="padding:4px 0;">Play video / Edit text</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Mind Map</td><td style="padding:4px 0;">Images + Audio in nodes</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Right-click</td><td style="padding:4px 0;">Download source files</td></tr>
@@ -12764,8 +12764,7 @@ function videoAnnoJumpToComment(id) {
 // scan through all commented frames — like Premiere's "Go to Next
 // Marker" workflow but for video annotation comments.
 
-function videoAnnoGetSortedComments() {
-  const item = videoAnnoGetSelected();
+function videoAnnoGetSortedComments(item) {
   if (!item) return null;
   const anno = videoAnnoEnsure(item);
   const comments = (anno && Array.isArray(anno.comments)) ? anno.comments : [];
@@ -12774,11 +12773,11 @@ function videoAnnoGetSortedComments() {
   return comments.slice().sort(function(a, b) { return (a.frame || 0) - (b.frame || 0); });
 }
 
-function videoAnnoJumpToNextComment() {
-  const sorted = videoAnnoGetSortedComments();
+function videoAnnoJumpToNextComment(item) {
+  if (!item) return false;
+  const sorted = videoAnnoGetSortedComments(item);
   if (!sorted) return false;
-  const item = videoAnnoGetSelected();
-  if (!item || !item.video) return false;
+  if (!item.video) return false;
   var curTime = item.video.currentTime;
   // Find the first comment whose time is > currentTime (with a small
   // epsilon so we don't skip the current frame's comment)
@@ -12795,11 +12794,11 @@ function videoAnnoJumpToNextComment() {
   return true;
 }
 
-function videoAnnoJumpToPrevComment() {
-  const sorted = videoAnnoGetSortedComments();
+function videoAnnoJumpToPrevComment(item) {
+  if (!item) return false;
+  const sorted = videoAnnoGetSortedComments(item);
   if (!sorted) return false;
-  const item = videoAnnoGetSelected();
-  if (!item || !item.video) return false;
+  if (!item.video) return false;
   var curTime = item.video.currentTime;
   // Find the last comment whose time is < currentTime
   var prev = null;
@@ -12813,6 +12812,29 @@ function videoAnnoJumpToPrevComment() {
   var idx = sorted.indexOf(prev) + 1;
   toast('Comment ' + idx + '/' + sorted.length + ' — Frame ' + prev.frame);
   return true;
+}
+
+// Helper: find the video item under the mouse cursor (used by J/K Review Mode).
+// Returns the item object or null. Works whether the video is selected or not —
+// just needs the mouse hovering over any video on the board.
+function videoAnnoGetItemUnderCursor(e) {
+  if (!state || !state.items) return null;
+  // Use e.clientX/Y from the keydown event (mouse position at time of keypress)
+  var cx = (typeof e.clientX === 'number') ? e.clientX : (state.mouse ? state.mouse.x : -1);
+  var cy = (typeof e.clientY === 'number') ? e.clientY : (state.mouse ? state.mouse.y : -1);
+  if (cx < 0 || cy < 0) return null;
+  var el = document.elementFromPoint(cx, cy);
+  if (!el) return null;
+  // Walk up to find the .item container
+  var itemEl = el.closest('.item');
+  if (!itemEl) return null;
+  // Find the matching item in state.items
+  for (var i = 0; i < state.items.length; i++) {
+    if (state.items[i].el === itemEl && (state.items[i].video || state.items[i].isVideo)) {
+      return state.items[i];
+    }
+  }
+  return null;
 }
 
 // ── Lightbox: full-size view of a single comment's snapshot+strokes ──
@@ -24196,31 +24218,26 @@ document.addEventListener('keydown', e => {
     setTool('text');
   }
   // Review Mode: J/K — jump between video comments (like Premiere markers)
-  // J = previous comment frame, K = next comment frame
-  // Only fires when a single video is selected and has comments.
+  // J = previous comment frame, K = next comment frame.
+  // Works by detecting which video the mouse is hovering over — no need to
+  // select the video first. Just hover + press J/K.
   else if (e.key === 'j' || e.key === 'J') {
-    console.log('[ReviewMode] J pressed, target:', e.target.tagName, 'contentEditable:', e.target.contentEditable, 'isVideo:', e.target.closest('video') ? 'yes' : 'no');
     e.preventDefault();
-    var _rvItem = videoAnnoGetSelected();
-    console.log('[ReviewMode] selected video:', _rvItem ? _rvItem.id : 'null');
-    if (!_rvItem) { toast('Review Mode: select a single video first'); return; }
+    var _rvItem = videoAnnoGetItemUnderCursor(e);
+    if (!_rvItem) { toast('Review Mode: hover over a video first'); return; }
     var _anno = videoAnnoEnsure(_rvItem);
     var _comms = (_anno && Array.isArray(_anno.comments)) ? _anno.comments : [];
-    console.log('[ReviewMode] comments count:', _comms.length);
     if (!_comms.length) { toast('Review Mode: no comments on this video'); return; }
-    if (!videoAnnoJumpToPrevComment()) { toast('Review Mode: jump failed'); }
+    videoAnnoJumpToPrevComment(_rvItem);
   }
   else if (e.key === 'k' || e.key === 'K') {
-    console.log('[ReviewMode] K pressed, target:', e.target.tagName, 'contentEditable:', e.target.contentEditable, 'isVideo:', e.target.closest('video') ? 'yes' : 'no');
     e.preventDefault();
-    var _rvItem2 = videoAnnoGetSelected();
-    console.log('[ReviewMode] selected video:', _rvItem2 ? _rvItem2.id : 'null');
-    if (!_rvItem2) { toast('Review Mode: select a single video first'); return; }
+    var _rvItem2 = videoAnnoGetItemUnderCursor(e);
+    if (!_rvItem2) { toast('Review Mode: hover over a video first'); return; }
     var _anno2 = videoAnnoEnsure(_rvItem2);
     var _comms2 = (_anno2 && Array.isArray(_anno2.comments)) ? _anno2.comments : [];
-    console.log('[ReviewMode] comments count:', _comms2.length);
     if (!_comms2.length) { toast('Review Mode: no comments on this video'); return; }
-    if (!videoAnnoJumpToNextComment()) { toast('Review Mode: jump failed'); }
+    videoAnnoJumpToNextComment(_rvItem2);
   }
   else if (e.key === 'e' || e.key === 'E') setTool('export');
   // NOTE: Draw tool is bound to Ctrl+D (and Ctrl+Shift+D = Duplicate) — see
