@@ -1212,7 +1212,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783766964';
+  var HASH='KRAFTED_BUILD_1783767367';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -19681,7 +19681,7 @@ function buildManifest() {
     _kraftedVersion: 4,
     _savedAt: new Date().toISOString(),
     items,
-    texts: state.texts.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, highlightColor: t.highlightColor, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false })),
+    texts: state.texts.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, highlightColor: t.highlightColor, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false, _textZoom: state.zoom })),
     todos: (state.todos||[]).map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, rot: t.rot || 0, opacity: t.opacity !== undefined ? t.opacity : 1, locked: t.locked || false, title: t.title || '', items: (t.items||[]).map(it => ({ text: it.text, done: it.done })) })),
     mindmaps: (state.mindmaps||[]).map(m => ({ id: m.id, x: m.x, y: m.y, w: m.w, h: m.h, z: m.z, rot: m.rot || 0, opacity: m.opacity !== undefined ? m.opacity : 1, locked: m.locked || false, title: m.title || '', nodes: (m.nodes||[]).map(n => ({ id: n.id, text: n.text, x: n.x, y: n.y, w: n.w, h: n.h, color: n.color, textColor: n.textColor, parentId: n.parentId || null, img: n.img || null, imgW: n.imgW || 0, imgH: n.imgH || 0, audio: n.audio || null, audioName: n.audioName || null })), connections: (m.connections||[]).map(c => ({ id: c.id, from: c.from, to: c.to, color: c.color })), nextNodeId: m.nextNodeId || 1, nextConnId: m.nextConnId || 1 })),
     drawStrokes: drawStrokes,
@@ -19945,6 +19945,30 @@ async function saveBoard() {
       // === PLAIN JSON ===
       updateProg('Serializing layout...');
       const data = buildManifest();
+      // Before stripping blob URLs, try to embed small images as base64 data URLs
+      // so they survive JSON save/load (blob URLs are only valid for the current session).
+      updateProg('Embedding images...');
+      for (const d of data.items) {
+        if (!d.isVideo && d.src && d.src.startsWith('blob:')) {
+          try {
+            const resp = await fetch(d.src);
+            if (resp.ok) {
+              const blob = await resp.blob();
+              // Only embed if under 5MB to keep JSON manageable
+              if (blob.size < 5 * 1024 * 1024) {
+                d.mediaData = await new Promise((resolve) => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(reader.result);
+                  reader.onerror = () => resolve(null);
+                  reader.readAsDataURL(blob);
+                });
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to embed image for JSON save:', d.id, e);
+          }
+        }
+      }
       // Plain save: strip blob URLs so they're clearly marked lost
       for (const d of data.items) {
         if (d.isVideo && d.src && d.src.startsWith('blob:')) {
@@ -20529,8 +20553,16 @@ function restoreBoard(data) {
     delete tx.html;
     nextZ = Math.max(nextZ, tx.z + 1);
     state.texts.push(tx);
+    // Bug fix: temporarily set state.zoom to the zoom level at save time
+    // so that applyTextProps/updateItemStyle divide by the correct zoom,
+    // producing the same rendered size as when saved.
+    var _savedZoom = state.zoom;
+    if (typeof d._textZoom === 'number' && d._textZoom > 0) {
+      state.zoom = d._textZoom;
+    }
     applyTextProps(tx);
     updateItemStyle(tx);
+    state.zoom = _savedZoom;
   // Auto-grow on input
   el.addEventListener('input', () => autoGrowTextItem(tx));
   el.addEventListener('focus', () => { el.classList.add('editing'); showTextQuickBar(true); updateTextQuickBarActive(); });
