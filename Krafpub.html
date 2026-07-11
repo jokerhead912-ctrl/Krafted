@@ -3725,7 +3725,7 @@ self.addEventListener('message', function(event) {
       <div class="btn-group" style="margin-top:3px;">
         <button onclick="normalizeSize('width')" title="Same Width">= W</button>
         <button onclick="normalizeSize('height')" title="Same Height">= H</button>
-        <button onclick="autoTidy()" title="Auto Tidy">Tidy</button>
+        <button onclick="tidySelection()" title="Tidy Selected (Ctrl+Shift+T)">Tidy</button>
         <button onclick="stackItems()" title="Stack">Stack</button>
       </div>
     </div>
@@ -4977,6 +4977,15 @@ function tidySelection() {
   try { scheduleAutoSave(); } catch (e) {}
 
   try { toast('Tidied ' + selItems.length + ' items'); } catch (e) {}
+}
+
+// Tidy all items on the board — select everything then run tidySelection
+function tidyAll() {
+  state.selected.clear();
+  [...state.items, ...state.texts, ...(state.todos||[]), ...(state.mindmaps||[])].forEach(function(i) {
+    state.selected.add(i.id);
+  });
+  tidySelection();
 }
 
 // Helper: frame the viewport to show all tidied items.
@@ -21206,7 +21215,7 @@ function showCtx(x, y) {
     html += `<div class="ctx-item" onclick="layoutGrid();hideCtx()">Grid Layout</div>`;
     html += `<div class="ctx-item" onclick="distributeItems('h');hideCtx()">Distribute H</div>`;
     html += `<div class="ctx-item" onclick="distributeItems('v');hideCtx()">Distribute V</div>`;
-    html += `<div class="ctx-item" onclick="autoTidy();hideCtx()">Auto Tidy</div>`;
+    html += `<div class="ctx-item" onclick="tidySelection();hideCtx()">🧹 Tidy Selected</div>`;
     html += `<div class="ctx-sep"></div>`;
     if (hasImages && getSelectedImages()[0] && getSelectedImages()[0].src && getSelectedImages()[0].src.includes('image/gif')) html += `<div class="ctx-item" onclick="trimGifSelected();hideCtx()">Trim GIF</div>`;
     html += `<div class="ctx-item" onclick="exportMediaSelected();hideCtx()">Download Source File</div>`;
@@ -21235,7 +21244,7 @@ function showCtx(x, y) {
     const _ctxTitle = hasFileSystemAccess() ? 'Save images to a local folder (Chrome / Edge on Win + Mac)' : 'Folder picker unavailable — will download each image instead';
     html += `<div class="ctx-item" onclick="exportAllImagesToFolder();hideCtx()" title="${_ctxTitle}">Save Images to Folder…${_imgCount > 0 ? ' <kbd style="opacity:.4">' + _imgCount + '</kbd>' : ''}</div>`;
     html += `<div class="ctx-item" onclick="document.getElementById('file-load').click();hideCtx()">Load Board</div>`;
-    html += `<div class="ctx-item" onclick="autoTidy();hideCtx()">Tidy All</div>`;
+    html += `<div class="ctx-item" onclick="tidyAll();hideCtx()">🧹 Tidy All</div>`;
     html += `<div class="ctx-sep"></div>`;
     html += `<div class="ctx-item" onclick="showHelp();hideCtx()">Help & Shortcuts <kbd>H</kbd></div>`;
     html += `<div class="ctx-sep"></div>`;
