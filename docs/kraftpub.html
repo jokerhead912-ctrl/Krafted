@@ -1023,12 +1023,19 @@ body.dragging-file .media-anno-toolbar {
   background: #000;
   border: 1px solid rgba(255,255,255,0.14);
   border-radius: 5px;
-  background-size: contain; background-position: center;
-  background-repeat: no-repeat;
   position: relative;
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
   cursor: zoom-in;
   box-shadow: 0 1px 4px rgba(0,0,0,0.4);
   transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.media-anno-comment .comment-thumb img {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  image-rendering: auto;
+  position: relative; z-index: 0;
+  display: block;
 }
 .media-anno-popover.list.fs-small .media-anno-comment .comment-thumb {
   width: 128px; height: 72px;
@@ -1045,6 +1052,7 @@ body.dragging-file .media-anno-toolbar {
   content: ''; position: absolute; inset: 0;
   background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.6) 100%);
   border-radius: inherit; pointer-events: none;
+  z-index: 1;
 }
 .media-anno-comment .comment-thumb .thumb-frame {
   position: absolute; left: 3px; bottom: 2px;
@@ -1204,7 +1212,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783757507';
+  var HASH='KRAFTED_BUILD_1783758051';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -7813,7 +7821,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     const thumb = document.createElement('div');
     thumb.className = 'comment-thumb' + (c.snapshot ? '' : ' no-snap');
     if (c.snapshot) {
-      thumb.style.backgroundImage = 'url("' + c.snapshot + '")';
+      var thumbImg = document.createElement('img');
+      thumbImg.src = c.snapshot;
+      thumbImg.alt = 'Frame ' + (c.frame || 0);
+      thumb.appendChild(thumbImg);
     } else {
       thumb.textContent = '—';
     }
@@ -13017,7 +13028,10 @@ function videoAnnoRefreshCommentList(item, highlightId) {
     const thumb = document.createElement('div');
     thumb.className = 'comment-thumb' + (c.snapshot ? '' : ' no-snap');
     if (c.snapshot) {
-      thumb.style.backgroundImage = 'url("' + c.snapshot + '")';
+      var thumbImg = document.createElement('img');
+      thumbImg.src = c.snapshot;
+      thumbImg.alt = 'Frame ' + (c.frame || 0);
+      thumb.appendChild(thumbImg);
     } else {
       thumb.textContent = '—';
     }
