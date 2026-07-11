@@ -20971,7 +20971,11 @@ function restoreBoard(data) {
   scheduleAutoSave();
   setTimeout(() => updateAutoFitPaper(), 200);
   // Render relation lines after all items are restored
-  if (state.relations && state.relations.length) renderRelations();
+  setTimeout(function() {
+    try {
+      if (state.relations && state.relations.length) renderRelations();
+    } catch(e) { console.warn('renderRelations after restore failed:', e); }
+  }, 300);
 }
 
 // ============================================================
@@ -23908,6 +23912,8 @@ function renderRelations() {
   var OFF = 50000;
   svg.innerHTML = '';
   if (!state.relations.length) return;
+  // Guard: skip if items haven't loaded yet (async restore)
+  if (!state.items || !state.items.length) return;
 
   // Build a defs section for arrowhead markers
   var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');

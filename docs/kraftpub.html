@@ -1252,7 +1252,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783782606';
+  var HASH='KRAFTED_BUILD_1783783106';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -20980,7 +20980,11 @@ function restoreBoard(data) {
   scheduleAutoSave();
   setTimeout(() => updateAutoFitPaper(), 200);
   // Render relation lines after all items are restored
-  if (state.relations && state.relations.length) renderRelations();
+  setTimeout(function() {
+    try {
+      if (state.relations && state.relations.length) renderRelations();
+    } catch(e) { console.warn('renderRelations after restore failed:', e); }
+  }, 300);
 }
 
 // ============================================================
@@ -23917,6 +23921,8 @@ function renderRelations() {
   var OFF = 50000;
   svg.innerHTML = '';
   if (!state.relations.length) return;
+  // Guard: skip if items haven't loaded yet (async restore)
+  if (!state.items || !state.items.length) return;
 
   // Build a defs section for arrowhead markers
   var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
