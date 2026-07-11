@@ -1204,7 +1204,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783756426';
+  var HASH='KRAFTED_BUILD_1783757284';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -7232,7 +7232,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     snapBtn.disabled = true;
     var origTime = mediaEl.currentTime;
     pushUndo();
-    var SNAP_W = 800, snapped = 0;
+    var SNAP_W = 0, snapped = 0; // 0 = use video native resolution
     for (var i = 0; i < newFrames.length; i++) {
       var frame = newFrames[i];
       var targetTime = Math.max(0, Math.min(mediaEl.duration || 0, frame / fps));
@@ -10834,11 +10834,12 @@ function videoAnnoAddComment(text, targetItem) {
   // composite them onto the snapshot here so the comment travels with
   // both the frame AND the markup.
   const drawState = (item.el && item.el._annoDrawState) || null;
-  // Round 9: capture comments at 800px max width (was 320px) so the
-  // 1:1 view in the lightbox is actually useful. 320px images looked
-  // pixelated when scaled up to fill the lightbox; 800px is sharp
-  // on a typical 1080p display and still under 200KB JPEG.
-  const SNAPPY_SNAP_MAX_W = 800;
+  // Round 9: capture comments at video native resolution (was 800px).
+  // The user reported snapshots looked blurry/low-res — the root cause
+  // was downscaling a 1080p/4K source to a fixed 800px cap. Now we pass
+  // maxW=0 so videoAnnoCaptureSnapshot uses the video's full native
+  // dimensions, keeping strokes + text sharp.
+  const SNAPPY_SNAP_MAX_W = 0;
   // Round 10 + R86 fix: use the already-computed `frame` from the target
   // video (line above) instead of videoAnnoGetCurrentFrame() which uses
   // videoAnnoGetSelected() — with multiple MOV players on the board the
@@ -10935,7 +10936,12 @@ function videoAnnoCaptureSnapshot(videoEl, maxW, strokes) {
   if (videoEl.readyState < 2) return '';
   const w = videoEl.videoWidth;
   const h = videoEl.videoHeight;
-  const ratio = Math.min(1, (maxW || 320) / w);
+  // Use the video's native resolution as the floor — never downscale
+  // below the source dimensions. Passing maxW=0 means "no downscale at
+  // all" (the captured snapshot is 1:1 with the video source). This
+  // keeps annotations crisp and text legible in the comment list.
+  const effectiveMaxW = Math.max(maxW || 0, w);
+  const ratio = Math.min(1, effectiveMaxW / w);
   const cw = Math.max(2, Math.round(w * ratio));
   const ch = Math.max(2, Math.round(h * ratio));
   const c = document.createElement('canvas');
@@ -11216,7 +11222,7 @@ async function videoAnnoExportComments() {
   // screens and stays legible when zoomed in. This is ~3x the previous
   // resolution (was 720px) and matches the user's request for a "bigger
   // preview that's easy to read".
-  const EXPORT_SNAP_MAX_W = 1280;
+  const EXPORT_SNAP_MAX_W = 0; // 0 = use video native resolution
   const captureOne = (c) => new Promise((resolve) => {
     // For each comment, seek the video to its exact time then capture.
     // We chain via rAF so the video has time to actually paint the new
@@ -12127,7 +12133,7 @@ async function videoAnnoSendToBoard() {
   const v = item.video;
   const prevTime = v.currentTime;
   const wasPaused = v.paused;
-  const SNAP_MAX_W = 800;
+  const SNAP_MAX_W = 0; // 0 = use video native resolution
   const captureOne = (c) => new Promise((resolve) => {
     // Fast path: c.snapshot exists and is a valid data URL → use it
     if (c.snapshot && c.snapshot.startsWith('data:image/')) {
