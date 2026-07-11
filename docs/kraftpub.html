@@ -1212,7 +1212,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783758287';
+  var HASH='KRAFTED_BUILD_1783766964';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -3437,6 +3437,7 @@ self.addEventListener('message', function(event) {
   <button onclick="openLinkModal()" title="Add Link Card (Ctrl+L)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5l3-3M6 10l-1 1a2 2 0 01-3-3l2-2a2 2 0 013 0M10 6l1-1a2 2 0 013 3l-2 2a2 2 0 01-3 0"/></svg> <span class="tb-label">Link</span></button>
   <button onclick="addTodo()" title="Add To-Do List"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M5 7l1.5 1.5L9 6"/><path d="M5 11h6"/></svg> <span class="tb-label">Todo</span></button>
   <div class="sep"></div>
+  <button onclick="tidySelection()" title="Tidy Selected (Ctrl+Shift+T)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="4" height="5" rx="0.5"/><rect x="6" y="3" width="4" height="3" rx="0.5"/><rect x="11" y="2" width="4" height="4" rx="0.5"/><rect x="1" y="7" width="4" height="4" rx="0.5"/><rect x="6" y="7" width="4" height="4" rx="0.5"/><rect x="11" y="7" width="4" height="4" rx="0.5"/></svg> <span class="tb-label">Tidy</span></button>
   <button onclick="toggleGrid()" title="Toggle Grid (G)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></svg> <span class="tb-label">Grid</span></button>
   <button onclick="groupSelected()" title="Group Selected (Ctrl+G)" id="btn-group"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg> <span class="tb-label">Group</span></button>
   <button onclick="ungroupSelected()" title="Ungroup (Ctrl+Shift+G)" id="btn-ungroup"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="1.5" width="4" height="4" rx="0.5"/><rect x="10.5" y="10.5" width="4" height="4" rx="0.5"/><path d="M7 4h5v5" stroke-dasharray="1.5 1.5"/></svg> <span class="tb-label">Ungroup</span></button>
@@ -4642,6 +4643,218 @@ function frameSelection() {
     const tag = count === 1 ? '1 item' : count + ' items';
     toast('Framed ' + tag + ' · ' + Math.round(state.zoom * 100) + '%  —  F');
   } catch (e) {}
+}
+
+// ============================================================
+//  TIDY SELECTION — Masonry layout for selected items
+// ============================================================
+// Arranges all selected items (items, texts, todos, mindmaps) in a compact
+// masonry (Pinterest-style) grid starting at world origin (0,0), preserving
+// original aspect ratios with a uniform 16px gap. After layout, auto-frames
+// the viewport to show all tidied items.
+// Bound to Ctrl+Shift+T (Cmd+Shift+T on Mac) and the 🧹 toolbar button.
+function tidySelection() {
+  var sel = state.selected;
+  if (!sel || sel.size === 0) {
+    try { toast('Select items to tidy first'); } catch (e) {}
+    return;
+  }
+
+  // --- Collect all selected items with their world-coordinate bounds ---
+  var selItems = [];
+  var selArr = Array.from(sel);
+  var GAP = 16;
+
+  for (var si = 0; si < selArr.length; si++) {
+    var id = selArr[si];
+
+    // Image / video / link / draw items
+    var it = (state.items || []).find(function(i) { return i.id === id; });
+    if (it) {
+      selItems.push({
+        id: id, x: it.x, y: it.y, w: it.w, h: it.h,
+        el: it.el, isText: false, isTodo: false, isMindmap: false,
+        item: it
+      });
+      continue;
+    }
+
+    // Text items — get world-coord size from BCR
+    var tx = (state.texts || []).find(function(t) { return t.id === id; });
+    if (tx && tx.el) {
+      var r = tx.el.getBoundingClientRect();
+      var _z = Math.max(0.02, Math.min(10, state.zoom || 1));
+      var wx = (r.left - state.pan.x) / state.zoom;
+      var wy = (r.top  - state.pan.y) / state.zoom;
+      var ww = r.width  / state.zoom;
+      var wh = r.height / state.zoom;
+      selItems.push({
+        id: id, x: wx, y: wy, w: ww, h: wh,
+        el: tx.el, isText: true, isTodo: false, isMindmap: false,
+        item: tx
+      });
+      continue;
+    }
+
+    // Todo items
+    var td = (state.todos || []).find(function(t) { return t.id === id; });
+    if (td && td.el) {
+      var r2 = td.el.getBoundingClientRect();
+      var wx2 = (r2.left - state.pan.x) / state.zoom;
+      var wy2 = (r2.top  - state.pan.y) / state.zoom;
+      var ww2 = r2.width  / state.zoom;
+      var wh2 = r2.height / state.zoom;
+      selItems.push({
+        id: id, x: wx2, y: wy2, w: ww2, h: wh2,
+        el: td.el, isText: false, isTodo: true, isMindmap: false,
+        item: td
+      });
+      continue;
+    }
+
+    // Mindmap items — use the bounding box of all nodes
+    var mm = (state.mindmaps || []).find(function(m) { return m.id === id; });
+    if (mm && Array.isArray(mm.nodes) && mm.nodes.length > 0) {
+      var mMinX = Infinity, mMinY = Infinity, mMaxX = -Infinity, mMaxY = -Infinity;
+      mm.nodes.forEach(function(n) {
+        if (typeof n.x === 'number' && typeof n.y === 'number') {
+          if (n.x < mMinX) mMinX = n.x;
+          if (n.y < mMinY) mMinY = n.y;
+          // Mindmap node approximate size: 120x40
+          var nw = n.w || 120;
+          var nh = n.h || 40;
+          if (n.x + nw > mMaxX) mMaxX = n.x + nw;
+          if (n.y + nh > mMaxY) mMaxY = n.y + nh;
+        }
+      });
+      if (isFinite(mMinX) && isFinite(mMaxX)) {
+        selItems.push({
+          id: id, x: mMinX, y: mMinY, w: mMaxX - mMinX, h: mMaxY - mMinY,
+          el: mm.el, isText: false, isTodo: false, isMindmap: true,
+          item: mm, origMinX: mMinX, origMinY: mMinY
+        });
+      }
+    }
+  }
+
+  if (selItems.length === 0) {
+    try { toast('Select items to tidy first'); } catch (e) {}
+    return;
+  }
+
+  // --- Push undo before modifying ---
+  try { pushUndo(); } catch (e) {}
+
+  // --- Masonry layout ---
+  // Use sqrt-based column count for a roughly square arrangement
+  var cols = Math.max(1, Math.ceil(Math.sqrt(selItems.length)));
+
+  // Sort by height descending (larger items first reduces gaps)
+  selItems.sort(function(a, b) { return b.h - a.h; });
+
+  var colHeights = new Array(cols);
+  for (var ci = 0; ci < cols; ci++) { colHeights[ci] = 0; }
+
+  selItems.forEach(function(si) {
+    // Find the shortest column
+    var shortestCol = 0;
+    for (var ci = 1; ci < cols; ci++) {
+      if (colHeights[ci] < colHeights[shortestCol]) shortestCol = ci;
+    }
+
+    // Compute new position
+    var newX = shortestCol * (si.w + GAP);
+    var newY = colHeights[shortestCol];
+
+    // Update column height
+    colHeights[shortestCol] += si.h + GAP;
+
+    // --- Apply new position to the underlying item ---
+    if (si.isMindmap) {
+      // Mindmap: shift all nodes by the delta
+      var dx = newX - si.origMinX;
+      var dy = newY - si.origMinY;
+      si.item.nodes.forEach(function(n) {
+        if (typeof n.x === 'number') n.x += dx;
+        if (typeof n.y === 'number') n.y += dy;
+      });
+      // Update connectors and DOM position
+      try { mmUpdateConnectors(si.item); } catch (e) {}
+    } else if (si.isText) {
+      si.item.x = newX;
+      si.item.y = newY;
+    } else if (si.isTodo) {
+      si.item.x = newX;
+      si.item.y = newY;
+    } else {
+      // Regular items
+      si.item.x = newX;
+      si.item.y = newY;
+    }
+
+    // Update DOM via updateItemStyle
+    try { updateItemStyle(si.item); } catch (e) {}
+
+    // Store tidied position for framing
+    si._newX = newX;
+    si._newY = newY;
+  });
+
+  // --- Refresh canvas ---
+  try { updateCanvas(); } catch (e) {}
+
+  // --- Auto-frame to show all tidied items ---
+  frameTidiedSelection(selItems);
+
+  // --- Schedule auto-save ---
+  try { scheduleAutoSave(); } catch (e) {}
+
+  try { toast('Tidied ' + selItems.length + ' items'); } catch (e) {}
+}
+
+// Helper: frame the viewport to show all tidied items.
+// Similar logic to frameSelection() but operates on the post-tidy item list.
+function frameTidiedSelection(selItems) {
+  if (!selItems || selItems.length === 0) return;
+
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  var GAP = 16;
+
+  for (var i = 0; i < selItems.length; i++) {
+    var si = selItems[i];
+    var nx = si._newX !== undefined ? si._newX : si.x;
+    var ny = si._newY !== undefined ? si._newY : si.y;
+    var nw = si.w;
+    var nh = si.h;
+
+    if (nx < minX) minX = nx;
+    if (ny < minY) minY = ny;
+    if (nx + nw > maxX) maxX = nx + nw;
+    if (ny + nh > maxY) maxY = ny + nh;
+  }
+
+  if (!isFinite(minX) || !isFinite(maxX)) return;
+
+  // Clamp degenerate selections
+  if (maxX - minX < 1) { minX -= 40; maxX += 40; }
+  if (maxY - minY < 1) { minY -= 30; maxY += 30; }
+
+  var bboxCx = (minX + maxX) / 2;
+  var bboxCy = (minY + maxY) / 2;
+  var bboxW  = maxX - minX;
+  var bboxH  = maxY - minY;
+  var PADDING = 1.24;
+  var sw = window.innerWidth;
+  var sh = window.innerHeight;
+  var targetW = bboxW * PADDING;
+  var targetH = bboxH * PADDING;
+
+  var z = Math.min(sw / Math.max(1, targetW), sh / Math.max(1, targetH));
+  z = Math.max(0.02, Math.min(10, z));
+  state.zoom = z;
+  state.pan.x = sw / 2 - bboxCx * state.zoom;
+  state.pan.y = sh / 2 - bboxCy * state.zoom;
+  try { updateCanvas(); } catch (e) {}
 }
 
 // ============================================================
@@ -23887,6 +24100,12 @@ document.addEventListener('keydown', e => {
     } else {
       frameSelection();
     }
+  }
+  // Ctrl+Shift+T / Cmd+Shift+T = Tidy selected items (masonry layout)
+  else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'T' || e.key === 't')) {
+    // Prevent browser's "Reopen closed tab" default behaviour
+    e.preventDefault();
+    tidySelection();
   }
   else if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
   // Arrow nudge
