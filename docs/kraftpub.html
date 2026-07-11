@@ -1212,7 +1212,7 @@ body.dragging-file .media-anno-toolbar {
 <!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
 <script>
 (function(){
-  var HASH='KRAFTED_BUILD_1783778993';
+  var HASH='KRAFTED_BUILD_1783779243';
   Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
   console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
     'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
@@ -4136,13 +4136,14 @@ function showWelcome() {
           <tr><td style="padding:4px 0;color:#888;">Drag & Drop</td><td style="padding:4px 0;">Images, videos, audio files</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Paste (Ctrl+V)</td><td style="padding:4px 0;">Paste images, URLs, items</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Click / Space</td><td style="padding:4px 0;">Play / Pause video</td></tr>
+          <tr><td style="padding:4px 0;color:#888;">J / K</td><td style="padding:4px 0;">Prev / Next comment (Review Mode)</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Double-click</td><td style="padding:4px 0;">Play video / Edit text</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Mind Map</td><td style="padding:4px 0;">Images + Audio in nodes</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Right-click</td><td style="padding:4px 0;">Download source files</td></tr>
         </table>
       </div>
     </div>
-    <p style="text-align:center;color:#666;font-size:11px;margin-top:20px;">KRAFTED v5.3 — For every creative soul.</p>
+    <p style="text-align:center;color:#666;font-size:11px;margin-top:20px;">KRAFTED v5.3.1 — For every creative soul.</p>
   </div>
 </div>
 
@@ -12754,6 +12755,64 @@ function videoAnnoJumpToComment(id) {
   // english" — so the translation is the primary line.
   const dispText = c.translation || c.text;
   toast('Jumped to frame ' + c.frame + ' — comment: ' + dispText);
+}
+
+// ── Review Mode: J/K to jump between comments ──
+// Press J to jump to the previous comment frame, K for the next.
+// Only active when a single video is selected and has comments.
+// This gives directors/reviewers a fast keyboard-driven way to
+// scan through all commented frames — like Premiere's "Go to Next
+// Marker" workflow but for video annotation comments.
+
+function videoAnnoGetSortedComments() {
+  const item = videoAnnoGetSelected();
+  if (!item) return null;
+  const anno = videoAnnoEnsure(item);
+  const comments = (anno && Array.isArray(anno.comments)) ? anno.comments : [];
+  if (!comments.length) return null;
+  // Sort by frame ascending so J/K navigation is predictable
+  return comments.slice().sort(function(a, b) { return (a.frame || 0) - (b.frame || 0); });
+}
+
+function videoAnnoJumpToNextComment() {
+  const sorted = videoAnnoGetSortedComments();
+  if (!sorted) return false;
+  const item = videoAnnoGetSelected();
+  if (!item || !item.video) return false;
+  var curTime = item.video.currentTime;
+  // Find the first comment whose time is > currentTime (with a small
+  // epsilon so we don't skip the current frame's comment)
+  var next = null;
+  for (var i = 0; i < sorted.length; i++) {
+    if (sorted[i].time > curTime + 0.001) { next = sorted[i]; break; }
+  }
+  // Wrap: if no later comment, go to the first one
+  if (!next) next = sorted[0];
+  videoAnnoJumpToComment(next.id);
+  // Toast with position info
+  var idx = sorted.indexOf(next) + 1;
+  toast('Comment ' + idx + '/' + sorted.length + ' — Frame ' + next.frame);
+  return true;
+}
+
+function videoAnnoJumpToPrevComment() {
+  const sorted = videoAnnoGetSortedComments();
+  if (!sorted) return false;
+  const item = videoAnnoGetSelected();
+  if (!item || !item.video) return false;
+  var curTime = item.video.currentTime;
+  // Find the last comment whose time is < currentTime
+  var prev = null;
+  for (var i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].time < curTime - 0.001) { prev = sorted[i]; break; }
+  }
+  // Wrap: if no earlier comment, go to the last one
+  if (!prev) prev = sorted[sorted.length - 1];
+  videoAnnoJumpToComment(prev.id);
+  // Toast with position info
+  var idx = sorted.indexOf(prev) + 1;
+  toast('Comment ' + idx + '/' + sorted.length + ' — Frame ' + prev.frame);
+  return true;
 }
 
 // ── Lightbox: full-size view of a single comment's snapshot+strokes ──
@@ -24135,6 +24194,33 @@ document.addEventListener('keydown', e => {
     } catch (_eT) { /* fail-open: fall through */ }
     if (_hasVideoSelT) return;            // ← yield to video annotation text mode
     setTool('text');
+  }
+  // Review Mode: J/K — jump between video comments (like Premiere markers)
+  // J = previous comment frame, K = next comment frame
+  // Only fires when a single video is selected and has comments.
+  else if (e.key === 'j' || e.key === 'J') {
+    console.log('[ReviewMode] J pressed, target:', e.target.tagName, 'contentEditable:', e.target.contentEditable, 'isVideo:', e.target.closest('video') ? 'yes' : 'no');
+    e.preventDefault();
+    var _rvItem = videoAnnoGetSelected();
+    console.log('[ReviewMode] selected video:', _rvItem ? _rvItem.id : 'null');
+    if (!_rvItem) { toast('Review Mode: select a single video first'); return; }
+    var _anno = videoAnnoEnsure(_rvItem);
+    var _comms = (_anno && Array.isArray(_anno.comments)) ? _anno.comments : [];
+    console.log('[ReviewMode] comments count:', _comms.length);
+    if (!_comms.length) { toast('Review Mode: no comments on this video'); return; }
+    if (!videoAnnoJumpToPrevComment()) { toast('Review Mode: jump failed'); }
+  }
+  else if (e.key === 'k' || e.key === 'K') {
+    console.log('[ReviewMode] K pressed, target:', e.target.tagName, 'contentEditable:', e.target.contentEditable, 'isVideo:', e.target.closest('video') ? 'yes' : 'no');
+    e.preventDefault();
+    var _rvItem2 = videoAnnoGetSelected();
+    console.log('[ReviewMode] selected video:', _rvItem2 ? _rvItem2.id : 'null');
+    if (!_rvItem2) { toast('Review Mode: select a single video first'); return; }
+    var _anno2 = videoAnnoEnsure(_rvItem2);
+    var _comms2 = (_anno2 && Array.isArray(_anno2.comments)) ? _anno2.comments : [];
+    console.log('[ReviewMode] comments count:', _comms2.length);
+    if (!_comms2.length) { toast('Review Mode: no comments on this video'); return; }
+    if (!videoAnnoJumpToNextComment()) { toast('Review Mode: jump failed'); }
   }
   else if (e.key === 'e' || e.key === 'E') setTool('export');
   // NOTE: Draw tool is bound to Ctrl+D (and Ctrl+Shift+D = Duplicate) — see
