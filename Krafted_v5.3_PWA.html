@@ -1208,16 +1208,7 @@ body.dragging-file .media-anno-toolbar {
 }
 
 /* ── Popovers (Add Comment + Comments List) — floating, NOT in flex flow ──
-   Positioned FIXED (not absolute) and APPENDED TO <body>
-<!-- KRAFTED INTEGRITY CHECK — DO NOT REMOVE -->
-<script>
-(function(){
-  var HASH='KRAFTED_BUILD_1783778993';
-  Object.defineProperty(window,'_kraftedIntegrity',{value:HASH,writable:false,configurable:false});
-  console.log('%c🔒 Krafted Build %c'+HASH+'%c — Protected by Joker Head Studios',
-    'color:#7c8cf0;','color:#fff;font-weight:bold;','color:#888;');
-})();
-</script> so they escape
+   Positioned FIXED (not absolute) and APPENDED TO <body> so they escape
    BOTH the canvas's transform AND the item's transform (the item has
    `will-change: transform` and `transform: matrix(...)`, which would
    otherwise create a containing block for `position: fixed` children and
