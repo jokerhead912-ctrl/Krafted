@@ -6957,12 +6957,12 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // Comments button (was: floating pill on the video)
   rightGroup.appendChild(commentsFab);
   // ── Snap button: quick capture current frame as comment ──
-  const snapBtn = document.createElement('div');
-  snapBtn.className = 'media-snap-btn';
-  snapBtn.title = 'Snap — capture current frame as comment (with any draw strokes baked in)';
-  snapBtn.innerHTML = '<span class="btn-icon">📸</span><span class="btn-label">Snap</span>';
-  snapBtn.addEventListener('mousedown', function(ev) { ev.stopPropagation(); ev.preventDefault(); });
-  snapBtn.addEventListener('click', function(ev) {
+  const playerSnapBtn = document.createElement('div');
+  playerSnapBtn.className = 'media-snap-btn';
+  playerSnapBtn.title = 'Snap — capture current frame as comment (with any draw strokes baked in)';
+  playerSnapBtn.innerHTML = '<span class="btn-icon">📸</span><span class="btn-label">Snap</span>';
+  playerSnapBtn.addEventListener('mousedown', function(ev) { ev.stopPropagation(); ev.preventDefault(); });
+  playerSnapBtn.addEventListener('click', function(ev) {
     ev.stopPropagation();
     const _itm = _getItem();
     if (!_itm || !_itm.video) { toast('Video not ready'); return; }
@@ -6986,7 +6986,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     videoAnnoRefreshCommentList(_itm);
     try { toast('Snapped f ' + frame); } catch(e) {}
   });
-  rightGroup.appendChild(snapBtn);
+  rightGroup.appendChild(playerSnapBtn);
   rightGroup.appendChild(mVolWrap);
   // ── Clean mode toggle: hides all controls for distraction-free viewing ──
   const cleanBtn = document.createElement('div');
