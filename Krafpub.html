@@ -6956,35 +6956,94 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   const rightGroup = _makeGroup();
   // Comments button (was: floating pill on the video)
   rightGroup.appendChild(commentsFab);
-  // ── Snap button: quick capture current frame as comment ──
+  // ── Snap button: batch-capture all stroked frames (same as popover Snap) ──
   const playerSnapBtn = document.createElement('div');
   playerSnapBtn.className = 'media-snap-btn';
-  playerSnapBtn.title = 'Snap — capture current frame as comment (with any draw strokes baked in)';
-  playerSnapBtn.innerHTML = '<span class="btn-icon">📸</span><span class="btn-label">Snap</span>';
+  playerSnapBtn.innerHTML = '&#9636;&#65039; Snap'; // ▤️ Snap
+  playerSnapBtn.title = 'Snap all annotated frames — batch-capture every frame that has draw/text strokes as a frame comment';
   playerSnapBtn.addEventListener('mousedown', function(ev) { ev.stopPropagation(); ev.preventDefault(); });
-  playerSnapBtn.addEventListener('click', function(ev) {
-    ev.stopPropagation();
-    const _itm = _getItem();
-    if (!_itm || !_itm.video) { toast('Video not ready'); return; }
-    const fps = (typeof getCurrentFps === 'function') ? getCurrentFps() : (_itm.video._kraftedFps || 30);
-    const frame = Math.max(0, Math.floor((_itm.video.currentTime || 0) * fps));
-    const drawState = _itm.el._annoDrawState;
-    const strokes = (drawState && drawState.strokesByFrame) ? (drawState.strokesByFrame[frame] || []) : [];
-    var snapshot = '';
-    try { snapshot = videoAnnoCaptureSnapshot(_itm.video, 0, strokes); } catch(e) {}
-    const anno = videoAnnoEnsure(_itm);
+  playerSnapBtn.addEventListener('click', async function(ev) {
+    ev.stopPropagation(); ev.preventDefault();
+    const itm = _getItem();
+    if (!itm || !itm.video) { toast('Video not ready'); return; }
+    const drawState = itm.el._annoDrawState;
+    const hasStrokes = drawState && drawState.strokesByFrame && Object.keys(drawState.strokesByFrame).some(function(f) { return (drawState.strokesByFrame[f] || []).length > 0; });
+    if (!hasStrokes) {
+      // No strokes → snap just the current frame
+      const fps = (typeof getCurrentFps === 'function') ? getCurrentFps() : (itm.video._kraftedFps || 30);
+      const frame = Math.max(0, Math.floor((itm.video.currentTime || 0) * fps));
+      var snapshot = '';
+      try { snapshot = videoAnnoCaptureSnapshot(itm.video, 0, []); } catch(e) {}
+      const anno = videoAnnoEnsure(itm);
+      pushUndo();
+      anno.comments.push({
+        id: 'c-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+        frame: frame, time: itm.video.currentTime || 0, text: '',
+        translation: '', translationDir: '', createdAt: Date.now(),
+        snapshot: snapshot, annoStrokes: [],
+      });
+      anno.comments.sort(function(a,b) { return (a.frame || 0) - (b.frame || 0); });
+      scheduleAutoSave();
+      videoAnnoRefreshCommentList(itm);
+      try { toast('Snapped f ' + frame); } catch(e) {}
+      return;
+    }
+    // Has strokes → batch-capture all stroked frames (same as popover Snap)
+    const anno2 = videoAnnoEnsure(itm);
+    const fps2 = (typeof getCurrentFps === 'function') ? getCurrentFps() : (mediaEl._kraftedFps || 30);
+    const framesWithStrokes = Object.keys(drawState.strokesByFrame)
+      .map(Number)
+      .filter(function(f){ return (drawState.strokesByFrame[f] || []).length > 0; })
+      .sort(function(a,b){ return a - b; });
+    if (!framesWithStrokes.length) { toast('No strokes on any frame'); return; }
+    var existingFrames = new Set((anno2.comments || []).map(function(c){ return c.frame; }));
+    var newFrames = framesWithStrokes.filter(function(f){ return !existingFrames.has(f); });
+    if (!newFrames.length) {
+      toast('All ' + framesWithStrokes.length + ' stroked frames already have comments');
+      return;
+    }
+    playerSnapBtn.style.opacity = '0.4';
+    var origTime = mediaEl.currentTime;
     pushUndo();
-    anno.comments.push({
-      id: 'c-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-      frame: frame, time: _itm.video.currentTime || 0, text: '',
-      translation: '', translationDir: '', createdAt: Date.now(),
-      snapshot: snapshot,
-      annoStrokes: strokes.map(function(s) { return { type: s.type, color: s.color, size: s.size, points: (s.points || []).map(function(p) { return [p[0], p[1]]; }), text: s.text || '' }; }),
-    });
-    anno.comments.sort(function(a,b) { return (a.frame || 0) - (b.frame || 0); });
+    var SNAP_W = 0, snapped = 0;
+    for (var i = 0; i < newFrames.length; i++) {
+      var frame2 = newFrames[i];
+      var targetTime = Math.max(0, Math.min(mediaEl.duration || 0, frame2 / fps2));
+      mediaEl.currentTime = targetTime;
+      await new Promise(function(resolve){
+        function onSeeked(){
+          mediaEl.removeEventListener('seeked', onSeeked);
+          resolve();
+        }
+        mediaEl.addEventListener('seeked', onSeeked);
+        setTimeout(function(){ mediaEl.removeEventListener('seeked', onSeeked); resolve(); }, 3000);
+      });
+      var strokes2 = drawState.strokesByFrame[frame2] || [];
+      var snapshot2 = '';
+      try { snapshot2 = videoAnnoCaptureSnapshot(mediaEl, SNAP_W, strokes2); } catch(e){}
+      anno2.comments.push({
+        id: 'c-' + Date.now() + '-' + Math.floor(Math.random() * 1000) + '-' + i,
+        frame: frame2, time: targetTime, text: '',
+        translation: '', translationDir: '', createdAt: Date.now(),
+        snapshot: snapshot2,
+        annoStrokes: strokes2.map(function(s){
+          return { type: s.type, color: s.color, size: s.size,
+            points: (s.points || []).map(function(p){ return [p[0], p[1]]; }),
+            text: s.text || '' };
+        }),
+      });
+      snapped++;
+      if (snapped % 5 === 0 || i === newFrames.length - 1) {
+        toast('Snapped ' + snapped + '/' + newFrames.length + ' frames…');
+      }
+    }
+    anno2.comments.sort(function(a,b){ return (a.frame || 0) - (b.frame || 0); });
     scheduleAutoSave();
-    videoAnnoRefreshCommentList(_itm);
-    try { toast('Snapped f ' + frame); } catch(e) {}
+    videoAnnoRefreshCommentList(itm);
+    mediaEl.currentTime = origTime;
+    playerSnapBtn.style.opacity = '';
+    var skipped = framesWithStrokes.length - newFrames.length;
+    toast('Snapped ' + snapped + ' frame(s)' + (skipped ? ' (' + skipped + ' skipped)' : ''));
   });
   rightGroup.appendChild(playerSnapBtn);
   rightGroup.appendChild(mVolWrap);
