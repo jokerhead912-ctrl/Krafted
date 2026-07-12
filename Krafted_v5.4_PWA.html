@@ -24664,6 +24664,8 @@ document.addEventListener('keydown', e => {
     if (e.key === 'e' || e.key === 'E') { e.preventDefault(); setTool('export'); return; }
     if (e.key === 'l' || e.key === 'L') { e.preventDefault(); openLinkModal(); return; }
     if ((e.key === 'T' || e.key === 't') && e.shiftKey) { e.preventDefault(); translateSelectedText('en', 'zh'); return; }
+    // Ctrl+Shift+Y = Tidy selected items (masonry layout)
+    if (e.shiftKey && (e.key === 'Y' || e.key === 'y')) { e.preventDefault(); tidySelection(); return; }
     return;
   }
 
