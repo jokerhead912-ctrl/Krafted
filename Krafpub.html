@@ -1246,6 +1246,25 @@ body.dragging-file .media-anno-toolbar {
 .media-comments-btn.active .btn-count {
   background: #000; color: var(--accent);
 }
+/* ── Snap button on the player controls bar ── */
+.media-snap-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 0 9px; height: 30px; flex-shrink: 0;
+  background: rgba(0,229,255,0.10);
+  border: 1px solid rgba(0,229,255,0.30);
+  border-radius: 6px;
+  color: var(--accent);
+  font: 600 12px 'Inter', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
+  user-select: none; -webkit-user-select: none;
+}
+.media-snap-btn:hover {
+  background: rgba(0,229,255,0.25); color: #fff;
+  border-color: var(--accent);
+}
+.media-snap-btn:active { transform: scale(0.96); }
+.media-snap-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 
 /* ── Popovers (Add Comment + Comments List) — floating, NOT in flex flow ──
    Positioned FIXED (not absolute) and APPENDED TO <body> so they escape
@@ -6927,7 +6946,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   mVolWrap.appendChild(mVolBtn);
   mVolWrap.appendChild(mVolPop);
 
-  // ── RIGHT GROUP: comments button + volume ──
+  // ── RIGHT GROUP: comments button + snap + volume ──
   // R51: the on-video comments FAB is GONE. The comments button now
   // lives here, in the utility group, alongside the volume control.
   // Click handler + popover positioning all still reference
@@ -6937,6 +6956,37 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   const rightGroup = _makeGroup();
   // Comments button (was: floating pill on the video)
   rightGroup.appendChild(commentsFab);
+  // ── Snap button: quick capture current frame as comment ──
+  const snapBtn = document.createElement('div');
+  snapBtn.className = 'media-snap-btn';
+  snapBtn.title = 'Snap — capture current frame as comment (with any draw strokes baked in)';
+  snapBtn.innerHTML = '<span class="btn-icon">📸</span><span class="btn-label">Snap</span>';
+  snapBtn.addEventListener('mousedown', function(ev) { ev.stopPropagation(); ev.preventDefault(); });
+  snapBtn.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    const _itm = _getItem();
+    if (!_itm || !_itm.video) { toast('Video not ready'); return; }
+    const fps = (typeof getCurrentFps === 'function') ? getCurrentFps() : (_itm.video._kraftedFps || 30);
+    const frame = Math.max(0, Math.floor((_itm.video.currentTime || 0) * fps));
+    const drawState = _itm.el._annoDrawState;
+    const strokes = (drawState && drawState.strokesByFrame) ? (drawState.strokesByFrame[frame] || []) : [];
+    var snapshot = '';
+    try { snapshot = videoAnnoCaptureSnapshot(_itm.video, 0, strokes); } catch(e) {}
+    const anno = videoAnnoEnsure(_itm);
+    pushUndo();
+    anno.comments.push({
+      id: 'c-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      frame: frame, time: _itm.video.currentTime || 0, text: '',
+      translation: '', translationDir: '', createdAt: Date.now(),
+      snapshot: snapshot,
+      annoStrokes: strokes.map(function(s) { return { type: s.type, color: s.color, size: s.size, points: (s.points || []).map(function(p) { return [p[0], p[1]]; }), text: s.text || '' }; }),
+    });
+    anno.comments.sort(function(a,b) { return (a.frame || 0) - (b.frame || 0); });
+    scheduleAutoSave();
+    videoAnnoRefreshCommentList(_itm);
+    try { toast('Snapped f ' + frame); } catch(e) {}
+  });
+  rightGroup.appendChild(snapBtn);
   rightGroup.appendChild(mVolWrap);
   // ── Clean mode toggle: hides all controls for distraction-free viewing ──
   const cleanBtn = document.createElement('div');
