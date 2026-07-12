@@ -3547,7 +3547,7 @@ self.addEventListener('message', function(event) {
   <button onclick="openLinkModal()" title="Add Link Card (Ctrl+L)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5l3-3M6 10l-1 1a2 2 0 01-3-3l2-2a2 2 0 013 0M10 6l1-1a2 2 0 013 3l-2 2a2 2 0 01-3 0"/></svg> <span class="tb-label">Link</span></button>
   <button onclick="addTodo()" title="Add To-Do List"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M5 7l1.5 1.5L9 6"/><path d="M5 11h6"/></svg> <span class="tb-label">Todo</span></button>
   <div class="sep"></div>
-  <button onclick="tidySelection()" title="Tidy Selected (Ctrl+Shift+Y)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="4" height="5" rx="0.5"/><rect x="6" y="3" width="4" height="3" rx="0.5"/><rect x="11" y="2" width="4" height="4" rx="0.5"/><rect x="1" y="7" width="4" height="4" rx="0.5"/><rect x="6" y="7" width="4" height="4" rx="0.5"/><rect x="11" y="7" width="4" height="4" rx="0.5"/></svg> <span class="tb-label">Tidy</span></button>
+  <button onclick="tidySelection()" title="Tidy Selected (Ctrl+Shift+U)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="4" height="5" rx="0.5"/><rect x="6" y="3" width="4" height="3" rx="0.5"/><rect x="11" y="2" width="4" height="4" rx="0.5"/><rect x="1" y="7" width="4" height="4" rx="0.5"/><rect x="6" y="7" width="4" height="4" rx="0.5"/><rect x="11" y="7" width="4" height="4" rx="0.5"/></svg> <span class="tb-label">Tidy</span></button>
   <button onclick="toggleGrid()" title="Toggle Grid (G)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></svg> <span class="tb-label">Grid</span></button>
   <button onclick="groupSelected()" title="Group Selected (Ctrl+G)" id="btn-group"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg> <span class="tb-label">Group</span></button>
   <button onclick="ungroupSelected()" title="Ungroup (Ctrl+Shift+G)" id="btn-ungroup"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="1.5" width="4" height="4" rx="0.5"/><rect x="10.5" y="10.5" width="4" height="4" rx="0.5"/><path d="M7 4h5v5" stroke-dasharray="1.5 1.5"/></svg> <span class="tb-label">Ungroup</span></button>
@@ -3725,7 +3725,7 @@ self.addEventListener('message', function(event) {
       <div class="btn-group" style="margin-top:3px;">
         <button onclick="normalizeSize('width')" title="Same Width">= W</button>
         <button onclick="normalizeSize('height')" title="Same Height">= H</button>
-        <button onclick="tidySelection()" title="Tidy Selected (Ctrl+Shift+Y)">Tidy</button>
+        <button onclick="tidySelection()" title="Tidy Selected (Ctrl+Shift+U)">Tidy</button>
         <button onclick="stackItems()" title="Stack">Stack</button>
       </div>
     </div>
@@ -24664,8 +24664,8 @@ document.addEventListener('keydown', e => {
     if (e.key === 'e' || e.key === 'E') { e.preventDefault(); setTool('export'); return; }
     if (e.key === 'l' || e.key === 'L') { e.preventDefault(); openLinkModal(); return; }
     if ((e.key === 'T' || e.key === 't') && e.shiftKey) { e.preventDefault(); translateSelectedText('en', 'zh'); return; }
-    // Ctrl+Shift+Y = Tidy selected items (masonry layout)
-    if (e.shiftKey && (e.key === 'Y' || e.key === 'y')) { e.preventDefault(); tidySelection(); return; }
+    // Ctrl+Shift+U = Tidy selected items (masonry layout)
+    if (e.shiftKey && (e.key === 'U' || e.key === 'u')) { e.preventDefault(); tidySelection(); return; }
     return;
   }
 
@@ -24960,8 +24960,8 @@ document.addEventListener('keydown', e => {
       frameSelection();
     }
   }
-  // Ctrl+Shift+Y / Cmd+Shift+Y = Tidy selected items (masonry layout)
-  else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'Y' || e.key === 'y')) {
+  // Ctrl+Shift+U / Cmd+Shift+U = Tidy selected items (masonry layout)
+  else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'U' || e.key === 'u')) {
     e.preventDefault();
     tidySelection();
   }
