@@ -15899,10 +15899,20 @@ function pasteClipboard() {
   pushUndo();
   state.selected.clear();
   let pastedCount = 0;
+  // ── Paste at cursor ──
+  // Calculate the offset from the first clipboard item's original position
+  // to the current mouse cursor (canvas coords), then apply that same offset
+  // to every item so the whole selection lands under the cursor.
+  const first = state.clipboard[0];
+  const cursor = getPasteXY();
+  const dx = cursor.x - (first.x || 0);
+  const dy = cursor.y - (first.y || 0);
   state.clipboard.forEach(data => {
+    const px = (data.x || 0) + dx;
+    const py = (data.y || 0) + dy;
     if (data.isLink) {
       // Link card — recreate with addLinkCard and restore properties
-      const item = addLinkCard(data.linkUrl, { x: data.x + 30, y: data.y + 30 });
+      const item = addLinkCard(data.linkUrl, { x: px, y: py });
       Object.assign(item, {
         w: data.w, h: data.h, rot: data.rot, opacity: data.opacity,
         flipH: data.flipH, flipV: data.flipV, locked: data.locked,
@@ -15925,7 +15935,7 @@ function pasteClipboard() {
         try { toast('Audio source expired — re-add the file to paste it again'); } catch (e) {}
         return;
       }
-      const audioItem = addAudioItem(data.src, data.audioName || 'Audio', data.x + 30, data.y + 30);
+      const audioItem = addAudioItem(data.src, data.audioName || 'Audio', px, py);
       Object.assign(audioItem, {
         w: data.w, h: data.h, rot: data.rot, opacity: data.opacity,
         flipH: data.flipH, flipV: data.flipV, locked: data.locked,
@@ -15947,7 +15957,7 @@ function pasteClipboard() {
         return;
       }
       const isVideoPaste = !!data.isVideo;
-      const item = addImage(data.src, data.natW, data.natH, data.x + 30, data.y + 30, isVideoPaste);
+      const item = addImage(data.src, data.natW, data.natH, px, py, isVideoPaste);
       Object.assign(item, {
         w: data.w, h: data.h, rot: data.rot, opacity: data.opacity,
         flipH: data.flipH, flipV: data.flipV, locked: data.locked,
@@ -15964,7 +15974,7 @@ function pasteClipboard() {
       pastedCount++;
     } else if (data.items) {
       // Todo checklist item
-      const todo = addTodo(data.x + 30, data.y + 30);
+      const todo = addTodo(px, py);
       Object.assign(todo, {
         w: data.w, h: data.h, rot: data.rot, opacity: data.opacity,
         locked: data.locked,
@@ -15977,7 +15987,7 @@ function pasteClipboard() {
       state.selected.add(todo.id);
       pastedCount++;
     } else {
-      const tx = addText(data.x + 30, data.y + 30, data.el ? data.el.textContent : '');
+      const tx = addText(px, py, data.el ? data.el.textContent : '');
       Object.assign(tx, {
         font: data.font, size: data.size, bold: data.bold, italic: data.italic,
         underline: data.underline, strike: data.strike, highlight: data.highlight,
