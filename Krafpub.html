@@ -24874,6 +24874,8 @@ document.addEventListener('keydown', e => {
               } else {
                 window.dispatchEvent(new Event('resize'));
               }
+            // Force toolbar z-index above everything
+            if (tb) tb.style.zIndex = '2147483647';  // max safe int
             } catch(e) { console.log('[T DEBUG] Reposition err:', e); }
             try { if (typeof scheduleVisibleItemsUpdate === 'function') scheduleVisibleItemsUpdate(); } catch(e) {}
           } catch(e) {}
