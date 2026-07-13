@@ -24903,47 +24903,27 @@ document.addEventListener('keydown', e => {
             } catch(e) { console.log('[T DEBUG] Reposition err:', e); }
             try { if (typeof scheduleVisibleItemsUpdate === 'function') scheduleVisibleItemsUpdate(); } catch(e) {}
           } catch(e) {}
+          // T key in text mode: directly spawn text editor at video centre.
+          // The annoCanvas pointerdown path is unreliable cross-platform
+          // (canvas may not receive pointer events when draw mode is
+          // toggled via global keyboard). Spawning directly ensures the
+          // user gets a text box immediately on pressing T.
+          if (sDT.mode === 'text') {
+            try {
+              var _spawnWrap = _selVidDT.el.querySelector('.media-wrap');
+              if (_spawnWrap) {
+                var _wrapR = _spawnWrap.getBoundingClientRect();
+                var _fakeEv = { clientX: _wrapR.left + _wrapR.width / 2, clientY: _wrapR.top + _wrapR.height / 2 };
+                if (typeof _selVidDT.el._spawnTextEditorDirect === 'function') {
+                  _selVidDT.el._spawnTextEditorDirect(_fakeEv);
+                }
+              }
+            } catch(e) {}
+          }
         }
       }
     }
   }
-
-  // ── Global pointerdown: text-mode click-to-place ──
-  // When a video is in text annotation mode (via T key), clicking
-  // anywhere on that video's wrap spawns a text editor at the click
-  // point. The per-video annoCanvas pointerdown may not fire reliably
-  // on all platforms (canvas may sit behind other elements), so this
-  // global capture-phase listener catches the click first.
-  (function _installTextClickToPlace() {
-    var _tcpActive = false; // avoid double-install
-    if (_tcpActive) return;
-    _tcpActive = true;
-    document.addEventListener('pointerdown', function(tcpEv) {
-      // Only handle when a video is in text mode
-      if (!state || !state.selected || !state.items) return;
-      var tcpVid = null;
-      state.selected.forEach(function(sid) {
-        var it = state.items.find(function(i) { return i.id === sid; });
-        if (it && it.video && it.el && it.el._annoDrawState
-            && it.el._annoDrawState.mode === 'text') {
-          tcpVid = it;
-        }
-      });
-      if (!tcpVid) return;
-      // Check if the click landed inside this video's wrap
-      var tcpWrap = tcpVid.el.querySelector('.media-wrap');
-      if (!tcpWrap) return;
-      var tcpR = tcpWrap.getBoundingClientRect();
-      if (tcpEv.clientX < tcpR.left || tcpEv.clientX > tcpR.right
-          || tcpEv.clientY < tcpR.top || tcpEv.clientY > tcpR.bottom) return;
-      // Click is on the video — spawn text editor
-      tcpEv.preventDefault();
-      tcpEv.stopPropagation();
-      if (typeof tcpVid.el._spawnTextEditorDirect === 'function') {
-        tcpVid.el._spawnTextEditorDirect(tcpEv);
-      }
-    }, true); // capture phase
-  })();
 
   // Round 34: i/o trim hotkey (was: per-video keydown listener that
   // leaked and raced when multiple videos were on the board). This is
