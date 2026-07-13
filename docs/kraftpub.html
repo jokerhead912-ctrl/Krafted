@@ -6086,6 +6086,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       try {
         if (annoToolbar) {
           annoToolbar.classList.toggle('toolbar-hidden', s.mode === 'off');
+          console.log('[APPLY] toolbar hidden=' + annoToolbar.classList.contains('toolbar-hidden') + ' mode=' + s.mode + ' rect=' + JSON.stringify(annoToolbar.getBoundingClientRect()));
         }
       } catch (e) {}
       // Round 31: re-sync the 📌 Follow button so it reflects the
