@@ -24824,7 +24824,15 @@ document.addEventListener('keydown', e => {
           var targetMode = (e.key === 'd' || e.key === 'D') ? 'pen' : 'text';
           // Toggle: if already in target mode, turn off; otherwise switch to target
           sDT.mode = (sDT.mode === targetMode) ? 'off' : targetMode;
-          if (_selVidDT.el._applyDrawMode) _selVidDT.el._applyDrawMode();
+          console.log('[D/T] Setting mode to:', sDT.mode, 'targetMode:', targetMode);
+          var _applyOk = false;
+          if (_selVidDT.el._applyDrawMode) { _selVidDT.el._applyDrawMode(); _applyOk = true; }
+          console.log('[D/T] _applyDrawMode called:', _applyOk, 'now mode is:', sDT.mode);
+          // Check toolbar
+          var _tb = _selVidDT.el.querySelector('.media-anno-toolbar');
+          console.log('[D/T] Toolbar:', _tb ? 'exists, classes=' + _tb.className : 'NOT FOUND');
+          // Check draw-mode class
+          console.log('[D/T] el.classList contains draw-mode:', _selVidDT.el.classList.contains('draw-mode'));
           // Exit draw mode on all OTHER videos
           try {
             if (state && state.items) {
