@@ -23202,11 +23202,13 @@ viewport.addEventListener('wheel', e => {
       // event would shift the view unpredictably.
       zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, window.innerWidth / 2, window.innerHeight / 2);
     }
-  } else if (_isMac ? _twoFingerPan : (_twoFingerPan && e.deltaMode === 0)) {
+  } else if (_isMac ? (_twoFingerPan || e.deltaMode === 0) : (_twoFingerPan && e.deltaMode === 0)) {
     // Two-finger trackpad drag (all axes): pan the canvas in 2D.
-    // ── Mac: _twoFingerPan alone is enough — trackpad pinch-zoom is
-    //   handled by the ctrlKey branch above, and plain two-finger drag
-    //   always fires with 2+ pointers on the viewport before wheel.
+    // ── Mac: original logic — _twoFingerPan OR deltaMode 0 (pixel-mode
+    //   trackpad). Mac trackpad two-finger swipe fires wheel events with
+    //   deltaMode 0 regardless of whether a pointerdown happened first,
+    //   so `||` covers both the "drag-to-pan" and "swipe-to-pan" paths.
+    //   Pinch-zoom is handled by the ctrlKey branch above.
     // ── Windows: require BOTH _twoFingerPan AND deltaMode 0, otherwise
     //   high-res mouse wheels (which also report deltaMode 0) would be
     //   misrouted to pan instead of zoom.
