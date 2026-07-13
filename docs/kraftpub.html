@@ -241,12 +241,13 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
 .item.has-media .media-controls-row {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 10px; min-height: 40px; box-sizing: border-box;
-  flex-wrap: wrap;
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: thin;
 }
 /* Visual grouping inside the controls row — left/center/right cluster */
 .item.has-media .media-controls-group {
   display: flex; align-items: center; gap: 5px;
-  flex-shrink: 0;
+  flex-shrink: 0; min-width: 0;
 }
 .item.has-media .media-controls-group.grow {
   flex: 1 1 120px; min-width: 100px; /* scrub group fills remaining space */
