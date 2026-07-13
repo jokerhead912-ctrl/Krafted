@@ -161,6 +161,64 @@ body.is-dragging .item-handle, body.is-dragging .item-rot { display:none !import
 .item.has-media .media-info-bar .ib-frame { color: #00e5ff; flex-shrink: 0; }
 .item.has-media .media-info-bar .ib-time  { color: #fff;   flex-shrink: 0; }
 .item.has-media .media-info-bar .ib-fps   { color: #888;   flex-shrink: 0; }
+/* ── High-DPI auto-scale for player controls ──
+   Applied when window.devicePixelRatio ≥ 2 (Retina / 4K screens).
+   Uses the body[data-dpi-scale] attribute set by JS init.
+   Only targets .media-controls buttons & labels — the canvas/toolbar
+   and other UI elements are unchanged. */
+body[data-dpi-scale] .item.has-media .media-controls-row {
+  padding: calc(6px * var(--dpi-scale, 1)) calc(10px * var(--dpi-scale, 1));
+  min-height: calc(40px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .item.has-media .media-play-btn {
+  width:  calc(28px * var(--dpi-scale, 1));
+  height: calc(28px * var(--dpi-scale, 1));
+  font-size: calc(12px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .item.has-media .media-draw-btn {
+  width:  calc(28px * var(--dpi-scale, 1));
+  height: calc(28px * var(--dpi-scale, 1));
+  font-size: calc(14px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .media-comments-btn {
+  height: calc(30px * var(--dpi-scale, 1));
+  padding: 0 calc(9px * var(--dpi-scale, 1));
+  font-size: calc(12px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .media-comments-btn .btn-icon { font-size: calc(13px * var(--dpi-scale, 1)); }
+body[data-dpi-scale] .media-comments-btn .btn-label { font-size: calc(11px * var(--dpi-scale, 1)); }
+body[data-dpi-scale] .media-comments-btn .btn-count {
+  font-size: calc(10px * var(--dpi-scale, 1));
+  padding: 0 calc(6px * var(--dpi-scale, 1));
+  border-radius: calc(9px * var(--dpi-scale, 1));
+  min-width: calc(18px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .media-snap-btn {
+  height: calc(30px * var(--dpi-scale, 1));
+  padding: 0 calc(9px * var(--dpi-scale, 1));
+  font-size: calc(12px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .media-clean-btn {
+  width:  calc(26px * var(--dpi-scale, 1));
+  height: calc(26px * var(--dpi-scale, 1));
+  font-size: calc(13px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .media-fullscreen-btn {
+  width:  calc(28px * var(--dpi-scale, 1));
+  height: calc(26px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .item.has-media .media-time {
+  font-size: calc(11.5px * var(--dpi-scale, 1));
+  min-width: calc(44px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .item.has-media .media-seek-track {
+  height: calc(6px * var(--dpi-scale, 1));
+  border-radius: calc(3px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .item.has-media .media-controls-group { gap: calc(5px * var(--dpi-scale, 1)); }
+body[data-dpi-scale] .item.has-media .media-controls-sep {
+  height: calc(22px * var(--dpi-scale, 1));
+}
 .item.has-media .media-controls {
   /* Sits BELOW the media-wrap as a flex sibling, not absolutely positioned.
      Two rows: row 1 = the play/times/seek bar/frame-rate, row 2 = a slim
@@ -4375,6 +4433,26 @@ const IS_TOUCH_DEVICE = (function() {
   return hasTouch && isSmallScreen;
 })();
 console.log('[INIT] Touch device:', IS_TOUCH_DEVICE);
+
+// ── High-DPI auto-scale for player controls ──
+// On Windows 4K / high-DPI screens, the fixed-px player buttons become
+// uncomfortably small. We detect the device pixel ratio and apply a
+// CSS custom property that scales all media-controls dimensions.
+// The scale is capped at 1.5× so it stays usable without dominating
+// the UI. This only affects .item.has-media controls — the rest of
+// the Krafted UI (canvas, toolbar, panels) is unchanged.
+(function _initDpiScale() {
+  var dpr = (window.devicePixelRatio || 1);
+  // Only scale up when DPR ≥ 2 (Retina / 4K). Below that (1080p @ 1×)
+  // the default sizes are already fine.
+  if (dpr >= 2) {
+    // Clamp: 2× DPR → 1.3× scale, 3× DPR → 1.5× scale (max)
+    var scale = Math.min(1.5, 1 + (dpr - 1) * 0.25);
+    document.body.dataset.dpiScale = String(Math.round(scale * 100) / 100);
+    document.body.style.setProperty('--dpi-scale', String(Math.round(scale * 100) / 100));
+    console.log('[INIT] High-DPI detected (DPR=' + dpr + '), player controls scaled ' + Math.round(scale * 100) + '%');
+  }
+})();
 
 // Mobile state for touch gesture tracking
 const touchState = {
