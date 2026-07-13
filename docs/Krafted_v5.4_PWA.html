@@ -8883,10 +8883,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     if (ev.key === 'm' || ev.key === 'M') {
       ev.preventDefault();
       _setListOpen(!listPopover.classList.contains('open'));
-    } else if (ev.key === 'c' || ev.key === 'C') {
-      ev.preventDefault();
-      _setListOpen(true);
-      setTimeout(() => { try { addInput.focus(); } catch (e) {} }, 30);
     } else if (ev.key === 'h' || ev.key === 'H') {
       // Clean mode toggle — hide/show all controls for distraction-free viewing
       ev.preventDefault();
@@ -25096,25 +25092,8 @@ document.addEventListener('keydown', e => {
   // the Ctrl block above. Plain D no longer activates Draw so typing "d"
   // in a text/comment input doesn't accidentally switch to draw mode.
   else if (e.key === 'c' || e.key === 'C') {
-    // Round 34: c is DOUBLE-MAPPED.
-    //   • Main handler:  c → setTool('capture'),  Shift+C → captureScreen()
-    //   • Video handler (registered later, line 6527): c → open frame comment
-    //     input on the selected video.
-    // The video handler is the one you actually want while editing a video.
-    // To stop the double work, this main handler yields when a video is
-    // selected — the later-registered video handler will pick it up. Capture
-    // tool still works for non-video selections, and Shift+C still does
-    // captureScreen() regardless.
-    var _hasVideoSelC = false;
-    try {
-      if (state && state.selected && state.items) {
-        state.selected.forEach(function(id) {
-          var it = state.items.find(function(i) { return i.id === id; });
-          if (it && (it.video || it.isVideo)) { _hasVideoSelC = true; }
-        });
-      }
-    } catch (_eC) { /* fail-open: fall through */ }
-    if (_hasVideoSelC) return;            // ← yield to video handler at 6527
+    // C = capture tool (always). Shift+C = captureScreen.
+    // No longer yields to per-video comment handler — C is capture only.
     if (e.shiftKey) { captureScreen(); return; }
     setTool('capture');
   }
