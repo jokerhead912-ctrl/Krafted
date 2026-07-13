@@ -24837,11 +24837,18 @@ document.addEventListener('keydown', e => {
           } catch(e) {}
           // Ensure toolbar is visible (it's appended to body, not el)
           try {
-            // Toolbar lives on document.body (see annoToolbar.appendChild at line ~5846)
-            // Find it via class — the body's first .media-anno-toolbar
-            // corresponds to this video since buildMediaControls creates
-            // a fresh one per item.
-            var tb = document.querySelector('.media-anno-toolbar');
+            // Use the per-video toolbar (each video has its own).
+            // The video el exposes a ref to its toolbar via the
+            // draw-state we just updated. Try the direct ref first,
+            // fall back to a class scan tied to the video.
+            var tb = null;
+            if (_selVidDT.el._annoToolbar) {
+              tb = _selVidDT.el._annoToolbar;
+            } else {
+              // Fallback: find toolbar whose data-video-id matches
+              tb = document.querySelector('.media-anno-toolbar[data-video-id="' + _selVidDT.id + '"]');
+            }
+            if (!tb) tb = document.querySelector('.media-anno-toolbar');
             console.log('[T DEBUG] Toolbar found:', !!tb, ' hidden:', tb ? tb.classList.contains('toolbar-hidden') : 'N/A',
             ' tbRect:', tb ? JSON.stringify(tb.getBoundingClientRect()) : 'N/A',
             ' tbStyle.display:', tb ? getComputedStyle(tb).display : 'N/A',
@@ -24855,9 +24862,19 @@ document.addEventListener('keydown', e => {
               ann.drawToolbarHidden = false;
               try { scheduleAutoSave(); } catch(e) {}
             }
-            // Re-position by triggering a window event so the toolbar
-            // re-computes its position from the video's bounding rect.
-            try { window.dispatchEvent(new Event('resize')); } catch(e) {}
+            // Re-position THIS video's toolbar. Reset toolbarPos first
+            // so it recomputes from the video's bounding rect (the
+            // stored pos may point to a stale location like (0,0)).
+            try {
+              if (_selVidDT.el._annoDrawState) {
+                _selVidDT.el._annoDrawState.toolbarPos = null;
+              }
+              if (typeof _selVidDT.el._repositionAnnoToolbar === 'function') {
+                _selVidDT.el._repositionAnnoToolbar();
+              } else {
+                window.dispatchEvent(new Event('resize'));
+              }
+            } catch(e) { console.log('[T DEBUG] Reposition err:', e); }
             try { if (typeof scheduleVisibleItemsUpdate === 'function') scheduleVisibleItemsUpdate(); } catch(e) {}
           } catch(e) {}
         }
