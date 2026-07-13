@@ -4444,7 +4444,7 @@ console.log('[INIT] Touch device:', IS_TOUCH_DEVICE);
 // Cap the combined scale at 1.6× so it stays usable without dominating.
 // The scale only targets .item.has-media controls — canvas, toolbar
 // and panels are unchanged.
-(function _initDpiScale() {
+window._applyDpiScale = (function _initDpiScale() {
   var dpr = (window.devicePixelRatio || 1);
   var vw = window.innerWidth || 0;
   // DPR-based: starts at 1.2× for DPR 1.0, grows to 1.4× at DPR 2+
@@ -4459,6 +4459,8 @@ console.log('[INIT] Touch device:', IS_TOUCH_DEVICE);
     document.body.style.setProperty('--dpi-scale', String(rounded));
     console.log('[INIT] Player controls auto-scaled ' + Math.round(scale * 100) + '% (DPR=' + dpr + ', vw=' + vw + ')');
   }
+  // Return as a callable function for kpak-load re-application
+  return arguments.callee;
 })();
 
 // Mobile state for touch gesture tracking
@@ -20603,6 +20605,10 @@ async function loadBoardFile(event) {
       console.log('[Krafted Load] v' + (data._kraftedVersion || 'legacy') + ', ' + (data.items || []).length + ' items, ' + embedded + ' embedded, ' + formatBytes(file.size));
 
       restoreBoard(data);
+      // Re-apply DPI scale after board restore — the DOM rebuild
+      // from restoreBoard() creates fresh player controls that need
+      // the --dpi-scale CSS variable on body.
+      if (typeof window._applyDpiScale === 'function') window._applyDpiScale();
       toast('Board loaded!');
     }
   } catch (err) {
