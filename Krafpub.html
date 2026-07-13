@@ -24873,6 +24873,35 @@ document.addEventListener('keydown', e => {
     return;
   }
 
+  // ── Plain D key: toggle video annotation draw mode ──
+  // The per-item video handler (line ~8835) also handles D, but on
+  // Windows with certain IME / keyboard layouts it may not always fire.
+  // This GLOBAL fallback ensures D always toggles draw on the selected
+  // video, regardless of how many video items are on the board or which
+  // listener order they registered in. Skips when typing in an input.
+  if ((e.key === 'd' || e.key === 'D') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    var aeD = document.activeElement;
+    if (aeD && (aeD.tagName === 'INPUT' || aeD.tagName === 'TEXTAREA' ||
+                (aeD.getAttribute && aeD.getAttribute('contenteditable') === 'true'))) {
+      // typing — let the character through
+    } else {
+      // Find the selected video item
+      var _selVid = null;
+      if (state && state.selected && state.items) {
+        state.selected.forEach(function(sid) {
+          var it = state.items.find(function(i) { return i.id === sid; });
+          if (it && it.video && it.el && it.el._annoDrawState) { _selVid = it; }
+        });
+      }
+      if (_selVid) {
+        e.preventDefault();
+        var s = _selVid.el._annoDrawState;
+        s.mode = (s.mode === 'off') ? 'pen' : 'off';
+        if (_selVid.el._applyDrawMode) _selVid.el._applyDrawMode();
+      }
+    }
+  }
+
   // Round 34: i/o trim hotkey (was: per-video keydown listener that
   // leaked and raced when multiple videos were on the board). This is
   // a SINGLE GLOBAL handler — exactly one place where i/o are checked.
