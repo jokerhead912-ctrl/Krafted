@@ -24632,31 +24632,14 @@ document.addEventListener('keydown', e => {
       // so the seek lands on a frame boundary instead of mid-frame.
       // Combined with the in-flight lock, this makes frame-step
       // feel truly frame-accurate at the video's natural rate.
+      // Frame-step: seek immediately. On Windows, `seeked` can be
+      // slower to fire than on Mac, causing the _seekInFlight lock
+      // to stall rapid key-repeat. For frame-step we bypass the lock
+      // entirely — each arrow press is a discrete seek that directly
+      // sets currentTime. The browser naturally coalesces rapid
+      // currentTime writes, so this stays smooth without the lock.
       clearTimeout(vid._seekTimer);
-      if (vid._seekInFlight) {
-        // Already seeking: remember this target for after the
-        // current seek completes. Only queue ONE so we never
-        // accumulate runaway targets on a long key-hold.
-        vid._seekQueuedTarget = targetTime;
-        return;
-      }
-      vid._seekInFlight = true;
-      vid._seekQueuedTarget = null;
       vid._seeking = true;
-      // Apply the seek IMMEDIATELY. We previously wrapped this in
-      // requestVideoFrameCallback (RVFC) to "land on a frame boundary",
-      // but RVFC has a critical failure mode: it only fires on frames
-      // that the browser actually renders. When the video is PAUSED
-      // (which is the typical state for frame-stepping — you pause
-      // to inspect a frame, then arrow-step through), no frames are
-      // rendered, so the callback NEVER fires, currentTime never
-      // changes, and the screen stays on the same frame. The user
-      // reported "screen haven't update the content" — that was
-      // exactly this. The browser already snaps the currentTime
-      // setter to the nearest keyframe natively, so we get the same
-      // visual result (stable, on a real frame) by just assigning
-      // the value directly. The seeked event fires when the snap
-      // completes, which is what the optimistic UI wait was for.
       vid.currentTime = targetTime;
       // On seeked: clear flag, process pending target if different.
       // Also include a safety net: if `seeked` doesn't fire within 500ms,
@@ -24669,12 +24652,6 @@ document.addEventListener('keydown', e => {
         vid.addEventListener('seeked', function() {
           clearSeekingSafety();
           vid._seeking = false;
-          // Round 57: clear the in-flight lock so the next keypress
-          // can fire a new seek. (If the user pressed again during
-          // this seek, _seekQueuedTarget holds the next target and
-          // we fire it immediately below — no dead time between
-          // rapid frame-steps.)
-          vid._seekInFlight = false;
           // Sync UI to actual currentTime (in case instant update was off).
           // Use formatVideoTimeForLabel so the user's chosen display mode
           // (0:00 vs f 1234) is preserved after a seek completes.
@@ -24733,38 +24710,16 @@ document.addEventListener('keydown', e => {
           // above). For a typical video, this lands on the nearest
           // keyframe — coarser than frame-accurate, but stable.
           //
-          // Round 57: if the user pressed another arrow while we were
-          // seeking, fire the queued target now. This makes rapid
-          // key-repeat feel like one smooth stream of frame-steps with
-          // no perceptible pause between them. We re-arm the in-flight
-          // lock first so the next press will queue again if the
-          // browser is still slow.
-          if (vid._seekQueuedTarget !== null && vid._seekQueuedTarget !== undefined) {
-            var q = vid._seekQueuedTarget;
-            vid._seekQueuedTarget = null;
-            vid._seekInFlight = true;
-            vid._seeking = true;
-            if (typeof vid.requestVideoFrameCallback === 'function') {
-              vid.requestVideoFrameCallback(function() {
-                vid.currentTime = q;
-              });
-            } else {
-              vid.currentTime = q;
-            }
-          }
+          // Frame-step is now lock-free (see keydown handler above).
         });
-        vid.addEventListener('ended', function() { vid._seeking = false; vid._seekInFlight = false; clearSeekingSafety(); });
+        vid.addEventListener('ended', function() { vid._seeking = false; clearSeekingSafety(); });
       }
       // Per-seek safety: if `seeked` doesn't fire within 500ms of a
-      // pending seek, clear `_seeking` and `_seekInFlight` so the
-      // next arrow press isn't blocked. This protects against the
-      // seeked event being lost (Round 57: also clear _seekInFlight
-      // and the queued target so we never get stuck waiting for a
-      // seek that will never complete).
+      // pending seek, clear `_seeking` so the next arrow press isn't
+      // blocked. This protects against the seeked event being lost.
       if (vid._seekSafetyTimer) clearTimeout(vid._seekSafetyTimer);
       vid._seekSafetyTimer = setTimeout(function() {
         vid._seeking = false;
-        vid._seekInFlight = false;
         vid._seekQueuedTarget = null;
         vid._seekSafetyTimer = null;
       }, 500);
