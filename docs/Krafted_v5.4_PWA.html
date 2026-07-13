@@ -6671,6 +6671,18 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     el._textEditorEl = null;
     el._commitTextEditor = _commitTextEditor;
     el._cancelTextEditor = _cancelTextEditor;
+    el._spawnTextEditorDirect = function(fakeEv) {
+      // Ensure draw state is active before spawning
+      if (el._annoDrawState.mode !== 'text') el._annoDrawState.mode = 'text';
+      _applyDrawMode();
+      // Use the video wrap's centre for the canvas point
+      var cr = annoCanvas.getBoundingClientRect();
+      var pt = [
+        Math.max(0, Math.min(1, (fakeEv.clientX - cr.left) / (cr.width || 1))),
+        Math.max(0, Math.min(1, (fakeEv.clientY - cr.top) / (cr.height || 1)))
+      ];
+      _spawnTextEditor(fakeEv, pt);
+    };
     annoCanvas.addEventListener('pointermove', function(ev) {
       const s = el._annoDrawState;
       if (!s.drawing) return;
@@ -24828,8 +24840,11 @@ document.addEventListener('keydown', e => {
           if (sDT.mode === 'text') {
             try {
               var _ac = _selVidDT.el.querySelector('.media-anno-canvas');
-              if (_ac) { _ac.style.pointerEvents = 'auto'; _ac.style.display = 'block'; }
-              console.log('[T DEBUG] annoCanvas:', !!_ac, ' rect:', _ac ? JSON.stringify(_ac.getBoundingClientRect()) : 'N/A');
+              if (_ac) { _ac.style.pointerEvents = 'auto'; _ac.style.display = 'block'; _ac.style.visibility = 'visible'; }
+              console.log('[T DEBUG] annoCanvas:', !!_ac, ' rect:', _ac ? JSON.stringify(_ac.getBoundingClientRect()) : 'N/A',
+                ' computed.display:', _ac ? getComputedStyle(_ac).display : 'N/A',
+                ' computed.visibility:', _ac ? getComputedStyle(_ac).visibility : 'N/A',
+                ' computed.pointerEvents:', _ac ? getComputedStyle(_ac).pointerEvents : 'N/A');
             } catch(e) { console.log('[T DEBUG] annoCanvas err:', e); }
           }
           // Exit draw mode on all OTHER videos
@@ -24888,6 +24903,24 @@ document.addEventListener('keydown', e => {
             } catch(e) { console.log('[T DEBUG] Reposition err:', e); }
             try { if (typeof scheduleVisibleItemsUpdate === 'function') scheduleVisibleItemsUpdate(); } catch(e) {}
           } catch(e) {}
+          // T key in text mode: directly spawn text editor at video centre.
+          // The annoCanvas pointerdown path is unreliable cross-platform
+          // (canvas may not receive pointer events when draw mode is
+          // toggled via global keyboard). Spawning directly ensures the
+          // user gets a text box immediately on pressing T.
+          if (sDT.mode === 'text') {
+            try {
+              var _spawnWrap = _selVidDT.el.querySelector('.media-wrap');
+              if (_spawnWrap) {
+                var _wrapR = _spawnWrap.getBoundingClientRect();
+                var _fakeEv = { clientX: _wrapR.left + _wrapR.width / 2, clientY: _wrapR.top + _wrapR.height / 2 };
+                if (typeof _selVidDT.el._spawnTextEditorDirect === 'function') {
+                  _selVidDT.el._spawnTextEditorDirect(_fakeEv);
+                }
+                console.log('[T DEBUG] spawnTextEditor at centre:', _fakeEv.clientX, _fakeEv.clientY);
+              }
+            } catch(e) { console.log('[T DEBUG] spawnText err:', e); }
+          }
         }
       }
     }
