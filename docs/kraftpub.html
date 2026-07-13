@@ -24821,6 +24821,7 @@ document.addEventListener('keydown', e => {
           var sDT = _selVidDT.el._annoDrawState;
           var targetMode = (e.key === 'd' || e.key === 'D') ? 'pen' : 'text';
           sDT.mode = (sDT.mode === targetMode) ? 'off' : targetMode;
+          console.log('[T DEBUG] mode=' + sDT.mode + ' target=' + targetMode + ' hasApply=' + (typeof _selVidDT.el._applyDrawMode === 'function'));
           if (_selVidDT.el._applyDrawMode) _selVidDT.el._applyDrawMode();
           // Exit draw mode on all OTHER videos
           try {
@@ -24841,7 +24842,8 @@ document.addEventListener('keydown', e => {
             // corresponds to this video since buildMediaControls creates
             // a fresh one per item.
             var tb = document.querySelector('.media-anno-toolbar');
-            if (tb && tb.classList.contains('toolbar-hidden')) {
+            console.log('[T DEBUG] Toolbar found:', !!tb, ' hidden:', tb ? tb.classList.contains('toolbar-hidden') : 'N/A');
+          if (tb && tb.classList.contains('toolbar-hidden')) {
               tb.classList.remove('toolbar-hidden');
               var ann = videoAnnoEnsure(_selVidDT);
               ann.drawToolbarHidden = false;
