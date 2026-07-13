@@ -24823,6 +24823,14 @@ document.addEventListener('keydown', e => {
           sDT.mode = (sDT.mode === targetMode) ? 'off' : targetMode;
           console.log('[T DEBUG] mode=' + sDT.mode + ' target=' + targetMode + ' hasApply=' + (typeof _selVidDT.el._applyDrawMode === 'function'));
           if (_selVidDT.el._applyDrawMode) _selVidDT.el._applyDrawMode();
+          // Force annoCanvas pointer-events so text-mode click-to-place works
+          if (sDT.mode === 'text') {
+            try {
+              var _ac = _selVidDT.el.querySelector('.media-anno-canvas');
+              if (_ac) { _ac.style.pointerEvents = 'auto'; _ac.style.display = 'block'; }
+              console.log('[T DEBUG] annoCanvas:', !!_ac, ' rect:', _ac ? JSON.stringify(_ac.getBoundingClientRect()) : 'N/A');
+            } catch(e) { console.log('[T DEBUG] annoCanvas err:', e); }
+          }
           // Exit draw mode on all OTHER videos
           try {
             if (state && state.items) {
