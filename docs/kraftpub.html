@@ -24842,7 +24842,13 @@ document.addEventListener('keydown', e => {
             // corresponds to this video since buildMediaControls creates
             // a fresh one per item.
             var tb = document.querySelector('.media-anno-toolbar');
-            console.log('[T DEBUG] Toolbar found:', !!tb, ' hidden:', tb ? tb.classList.contains('toolbar-hidden') : 'N/A');
+            console.log('[T DEBUG] Toolbar found:', !!tb, ' hidden:', tb ? tb.classList.contains('toolbar-hidden') : 'N/A',
+            ' tbRect:', tb ? JSON.stringify(tb.getBoundingClientRect()) : 'N/A',
+            ' tbStyle.display:', tb ? getComputedStyle(tb).display : 'N/A',
+            ' tbStyle.visibility:', tb ? getComputedStyle(tb).visibility : 'N/A',
+            ' tbStyle.zIndex:', tb ? getComputedStyle(tb).zIndex : 'N/A',
+            ' vidRect:', _selVidDT.el ? JSON.stringify(_selVidDT.el.getBoundingClientRect()) : 'N/A',
+            ' winSize:', window.innerWidth + 'x' + window.innerHeight);
           if (tb && tb.classList.contains('toolbar-hidden')) {
               tb.classList.remove('toolbar-hidden');
               var ann = videoAnnoEnsure(_selVidDT);
