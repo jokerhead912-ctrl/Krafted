@@ -6352,6 +6352,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     annoCanvas.addEventListener('pointerdown', function(ev) {
       const s = el._annoDrawState;
       if (s.mode === 'off') return;
+      console.log('[T CLICK] pointerdown mode=' + s.mode + ' clientX=' + ev.clientX + ' clientY=' + ev.clientY);
       ev.preventDefault();
       ev.stopPropagation();
       // Round 12: text mode is single-click (no drag). Spawn an
