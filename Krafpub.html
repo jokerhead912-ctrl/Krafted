@@ -24855,6 +24855,7 @@ document.addEventListener('keydown', e => {
           // Exactly the same logic as clicking the toolbar T/D button:
           // toggle the mode and call _applyDrawMode. Nothing else.
           sDT.mode = (sDT.mode === targetMode) ? 'off' : targetMode;
+          console.log('[T/D KEY] mode=' + sDT.mode + ' target=' + targetMode + ' elClass=' + _selVidDT.el.className);
           if (_selVidDT.el._applyDrawMode) _selVidDT.el._applyDrawMode();
           // Exit draw mode on all OTHER videos
           try {
