@@ -4435,17 +4435,22 @@ const IS_TOUCH_DEVICE = (function() {
 console.log('[INIT] Touch device:', IS_TOUCH_DEVICE);
 
 // ── Adaptive scale for player controls ──
-// Two independent triggers stack together:
-//   (a) devicePixelRatio ≥ 2 (Retina / 4K screens)
-//   (b) viewport width ≥ 1920px (large Windows monitors at any DPI)
+// Player controls are fixed-px so they look small on Windows
+// monitors that report DPR=1 (or low DPR like 1.25-1.5). Two triggers
+// stack and combine:
+//   (a) devicePixelRatio (Retina / 4K at high scaling)
+//   (b) viewport width (large Windows monitors at any DPI)
+// Base scale 1.2× so even modest-DPR screens get a noticeable bump.
 // Cap the combined scale at 1.6× so it stays usable without dominating.
-// The scale only targets .item.has-media controls — canvas, toolbar and
-// panels are unchanged.
+// The scale only targets .item.has-media controls — canvas, toolbar
+// and panels are unchanged.
 (function _initDpiScale() {
   var dpr = (window.devicePixelRatio || 1);
   var vw = window.innerWidth || 0;
-  var scaleDpr = dpr >= 2 ? Math.min(1.4, 1 + (dpr - 1) * 0.20) : 1;
-  var scaleVw  = vw >= 1920 ? Math.min(1.4, 1 + (vw - 1920) / 3000) : 1; // 1920→1.0, 2560→1.22, 3840→1.64
+  // DPR-based: starts at 1.2× for DPR 1.0, grows to 1.4× at DPR 2+
+  var scaleDpr = 1 + Math.min(0.4, 0.20 + Math.max(0, dpr - 1) * 0.20);
+  // Viewport-based: 1.2× base at 1600px, grows linearly to 1.4× at 3200px+
+  var scaleVw  = vw >= 1600 ? Math.min(1.4, 1.20 + (vw - 1600) / 4000) : 1.20;
   // Combine: take the larger, but cap at 1.6×
   var scale = Math.min(1.6, Math.max(scaleDpr, scaleVw));
   if (scale > 1.01) {
