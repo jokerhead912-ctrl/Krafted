@@ -23157,14 +23157,14 @@ viewport.addEventListener('wheel', e => {
       // event would shift the view unpredictably.
       zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, window.innerWidth / 2, window.innerHeight / 2);
     }
-  } else if (_twoFingerPan || (e.deltaMode === 0)) {
+  } else if (_twoFingerPan && e.deltaMode === 0) {
     // Two-finger trackpad drag (all axes): pan the canvas in 2D.
-    // We used to gate this on `deltaX !== 0`, which caused a pure
-    // two-finger vertical swipe (deltaX≈0, deltaY≠0) to fall into the
-    // mouse-wheel zoom branch — the user would try to pan up/down and
-    // the canvas would zoom instead. Now ANY trackpad event (deltaMode
-    // 0) that is NOT a pinch (no ctrlKey) pans. Only real notched mouse
-    // wheels (deltaMode 1 or 2) trigger the zoom branch below.
+    // Only fire when BOTH conditions are true:
+    //   1) _twoFingerPan is set (2+ pointers on the viewport before wheel)
+    //   2) deltaMode === 0 (pixel-based, characteristic of trackpads)
+    // Without both checks, high-res mouse wheels on Windows (which can
+    // also report deltaMode 0) would be misrouted to the pan branch
+    // instead of zoom, making the scroll wheel do nothing useful.
     state.pan.x -= e.deltaX;
     state.pan.y -= e.deltaY;
     updateCanvas();
