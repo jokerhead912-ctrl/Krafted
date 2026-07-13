@@ -24803,7 +24803,6 @@ document.addEventListener('keydown', e => {
   // Skips when typing in an input. Works on the currently selected video.
   if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
     if (e.key === 'd' || e.key === 'D' || e.key === 't' || e.key === 'T') {
-      console.log('[D/T] key pressed:', e.key, 'activeElement:', document.activeElement ? document.activeElement.tagName : null);
       var aeDT = document.activeElement;
       if (aeDT && (aeDT.tagName === 'INPUT' || aeDT.tagName === 'TEXTAREA' ||
                    (aeDT.getAttribute && aeDT.getAttribute('contenteditable') === 'true'))) {
@@ -24818,21 +24817,11 @@ document.addEventListener('keydown', e => {
           });
         }
         if (_selVidDT) {
-          console.log('[D/T] Found selected video:', _selVidDT.id, 'mode was:', _selVidDT.el._annoDrawState.mode);
           e.preventDefault();
           var sDT = _selVidDT.el._annoDrawState;
           var targetMode = (e.key === 'd' || e.key === 'D') ? 'pen' : 'text';
-          // Toggle: if already in target mode, turn off; otherwise switch to target
           sDT.mode = (sDT.mode === targetMode) ? 'off' : targetMode;
-          console.log('[D/T] Setting mode to:', sDT.mode, 'targetMode:', targetMode);
-          var _applyOk = false;
-          if (_selVidDT.el._applyDrawMode) { _selVidDT.el._applyDrawMode(); _applyOk = true; }
-          console.log('[D/T] _applyDrawMode called:', _applyOk, 'now mode is:', sDT.mode);
-          // Check toolbar
-          var _tb = _selVidDT.el.querySelector('.media-anno-toolbar');
-          console.log('[D/T] Toolbar:', _tb ? 'exists, classes=' + _tb.className : 'NOT FOUND');
-          // Check draw-mode class
-          console.log('[D/T] el.classList contains draw-mode:', _selVidDT.el.classList.contains('draw-mode'));
+          if (_selVidDT.el._applyDrawMode) _selVidDT.el._applyDrawMode();
           // Exit draw mode on all OTHER videos
           try {
             if (state && state.items) {
@@ -24845,19 +24834,24 @@ document.addEventListener('keydown', e => {
               });
             }
           } catch(e) {}
-          // Ensure toolbar is visible
+          // Ensure toolbar is visible (it's appended to body, not el)
           try {
-            var tb = _selVidDT.el.querySelector('.media-anno-toolbar');
+            // Toolbar lives on document.body (see annoToolbar.appendChild at line ~5846)
+            // Find it via class — the body's first .media-anno-toolbar
+            // corresponds to this video since buildMediaControls creates
+            // a fresh one per item.
+            var tb = document.querySelector('.media-anno-toolbar');
             if (tb && tb.classList.contains('toolbar-hidden')) {
               tb.classList.remove('toolbar-hidden');
               var ann = videoAnnoEnsure(_selVidDT);
               ann.drawToolbarHidden = false;
               try { scheduleAutoSave(); } catch(e) {}
             }
-            if (_selVidDT.el._positionToolbar) _selVidDT.el._positionToolbar();
+            // Re-position by triggering a window event so the toolbar
+            // re-computes its position from the video's bounding rect.
+            try { window.dispatchEvent(new Event('resize')); } catch(e) {}
+            try { if (typeof scheduleVisibleItemsUpdate === 'function') scheduleVisibleItemsUpdate(); } catch(e) {}
           } catch(e) {}
-        } else {
-          console.log('[D/T] No selected video found. state.selected size:', state && state.selected ? state.selected.size : 'N/A');
         }
       }
     }
