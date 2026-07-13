@@ -4434,23 +4434,25 @@ const IS_TOUCH_DEVICE = (function() {
 })();
 console.log('[INIT] Touch device:', IS_TOUCH_DEVICE);
 
-// ── High-DPI auto-scale for player controls ──
-// On Windows 4K / high-DPI screens, the fixed-px player buttons become
-// uncomfortably small. We detect the device pixel ratio and apply a
-// CSS custom property that scales all media-controls dimensions.
-// The scale is capped at 1.5× so it stays usable without dominating
-// the UI. This only affects .item.has-media controls — the rest of
-// the Krafted UI (canvas, toolbar, panels) is unchanged.
+// ── Adaptive scale for player controls ──
+// Two independent triggers stack together:
+//   (a) devicePixelRatio ≥ 2 (Retina / 4K screens)
+//   (b) viewport width ≥ 1920px (large Windows monitors at any DPI)
+// Cap the combined scale at 1.6× so it stays usable without dominating.
+// The scale only targets .item.has-media controls — canvas, toolbar and
+// panels are unchanged.
 (function _initDpiScale() {
   var dpr = (window.devicePixelRatio || 1);
-  // Only scale up when DPR ≥ 2 (Retina / 4K). Below that (1080p @ 1×)
-  // the default sizes are already fine.
-  if (dpr >= 2) {
-    // Clamp: 2× DPR → 1.3× scale, 3× DPR → 1.5× scale (max)
-    var scale = Math.min(1.5, 1 + (dpr - 1) * 0.25);
-    document.body.dataset.dpiScale = String(Math.round(scale * 100) / 100);
-    document.body.style.setProperty('--dpi-scale', String(Math.round(scale * 100) / 100));
-    console.log('[INIT] High-DPI detected (DPR=' + dpr + '), player controls scaled ' + Math.round(scale * 100) + '%');
+  var vw = window.innerWidth || 0;
+  var scaleDpr = dpr >= 2 ? Math.min(1.4, 1 + (dpr - 1) * 0.20) : 1;
+  var scaleVw  = vw >= 1920 ? Math.min(1.4, 1 + (vw - 1920) / 3000) : 1; // 1920→1.0, 2560→1.22, 3840→1.64
+  // Combine: take the larger, but cap at 1.6×
+  var scale = Math.min(1.6, Math.max(scaleDpr, scaleVw));
+  if (scale > 1.01) {
+    var rounded = Math.round(scale * 100) / 100;
+    document.body.dataset.dpiScale = String(rounded);
+    document.body.style.setProperty('--dpi-scale', String(rounded));
+    console.log('[INIT] Player controls auto-scaled ' + Math.round(scale * 100) + '% (DPR=' + dpr + ', vw=' + vw + ')');
   }
 })();
 
