@@ -6486,6 +6486,26 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // viewport/fullscreen viewport identically.
       document.body.appendChild(editor);
       el._textEditorEl = editor;
+      // Make the text editor draggable so the user can reposition it
+      // after it spawns at the video centre (T-key shortcut).
+      (function _makeDraggable() {
+        var dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+        editor.addEventListener('pointerdown', function(de) {
+          if (de.target.tagName === 'TEXTAREA') return; // let typing through
+          dragging = true; startX = de.clientX; startY = de.clientY;
+          origLeft = parseFloat(editor.style.left) || 0;
+          origTop = parseFloat(editor.style.top) || 0;
+          editor.setPointerCapture(de.pointerId);
+          de.preventDefault(); de.stopPropagation();
+        });
+        editor.addEventListener('pointermove', function(de) {
+          if (!dragging) return;
+          editor.style.left = (origLeft + de.clientX - startX) + 'px';
+          editor.style.top = (origTop + de.clientY - startY) + 'px';
+        });
+        editor.addEventListener('pointerup', function() { dragging = false; });
+        editor.addEventListener('pointercancel', function() { dragging = false; });
+      })();
       // Round 28.7: translate-to-Chinese button. Floats just below
       // the editor's right edge. Click → calls translateText(), replaces
       // the editor's value with the translation. The user can still
