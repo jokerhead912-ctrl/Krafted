@@ -6016,8 +6016,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     }
     function _applyDrawMode() {
       const s = el._annoDrawState;
-      // Track caller for diagnostics
-      try { console.log('[APPLY called] mode=' + s.mode + ' stack=' + (new Error()).stack.split('\n').slice(1, 4).join(' | ')); } catch (e) {}
       // Update active state on the buttons (Round 7: added box, circle)
       arrowBtn.classList.toggle('active', s.mode === 'arrow');
       penBtn.classList.toggle('active', s.mode === 'pen');
@@ -6085,10 +6083,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // button (or any other tool button), the toolbar pops up. The
       // ✕ close button now just exits draw mode (equivalent to pressing
       // the draw button again).
-      try {
+          try {
         if (annoToolbar) {
           annoToolbar.classList.toggle('toolbar-hidden', s.mode === 'off');
-          console.log('[APPLY] toolbar hidden=' + annoToolbar.classList.contains('toolbar-hidden') + ' mode=' + s.mode + ' rect=' + JSON.stringify(annoToolbar.getBoundingClientRect()));
         }
       } catch (e) {}
       // Round 31: re-sync the 📌 Follow button so it reflects the
@@ -24853,12 +24850,17 @@ document.addEventListener('keydown', e => {
         }
         if (_selVidDT) {
           e.preventDefault();
+          // Mark this T/D press as handled so the downstream canvas
+          // selection-aware handler (line 25069) doesn't double-toggle
+          // by running the same logic a second time when the mouse is
+          // hovering over the same selected video.
+          window.__kraftedTDKeyHandled = true;
+          setTimeout(function(){ window.__kraftedTDKeyHandled = false; }, 0);
           var sDT = _selVidDT.el._annoDrawState;
           var targetMode = (e.key === 'd' || e.key === 'D') ? 'pen' : 'text';
           // Exactly the same logic as clicking the toolbar T/D button:
           // toggle the mode and call _applyDrawMode. Nothing else.
           sDT.mode = (sDT.mode === targetMode) ? 'off' : targetMode;
-          console.log('[T/D KEY] mode=' + sDT.mode + ' target=' + targetMode + ' elClass=' + _selVidDT.el.className);
           if (_selVidDT.el._applyDrawMode) _selVidDT.el._applyDrawMode();
           // Exit draw mode on all OTHER videos
           try {
@@ -25068,6 +25070,9 @@ document.addEventListener('keydown', e => {
     // of the global canvas text tool.
     var _hasVideoSelT = false;
     try {
+      // Skip if the global D/T key handler (line 24831) already handled
+      // this keypress — otherwise we double-toggle the mode.
+      if (window.__kraftedTDKeyHandled) { return; }
       if (state && state.selected && state.selected.size > 0 && state.mouse) {
         var mouseEl = document.elementFromPoint(state.mouse.x, state.mouse.y);
         if (mouseEl) {
