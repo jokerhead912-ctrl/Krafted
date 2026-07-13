@@ -6352,7 +6352,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     annoCanvas.addEventListener('pointerdown', function(ev) {
       const s = el._annoDrawState;
       if (s.mode === 'off') return;
-      console.log('[T CLICK] pointerdown mode=' + s.mode + ' clientX=' + ev.clientX + ' clientY=' + ev.clientY);
       ev.preventDefault();
       ev.stopPropagation();
       // Round 12: text mode is single-click (no drag). Spawn an
@@ -24853,20 +24852,10 @@ document.addEventListener('keydown', e => {
           e.preventDefault();
           var sDT = _selVidDT.el._annoDrawState;
           var targetMode = (e.key === 'd' || e.key === 'D') ? 'pen' : 'text';
+          // Exactly the same logic as clicking the toolbar T/D button:
+          // toggle the mode and call _applyDrawMode. Nothing else.
           sDT.mode = (sDT.mode === targetMode) ? 'off' : targetMode;
-          console.log('[T DEBUG] mode=' + sDT.mode + ' target=' + targetMode + ' hasApply=' + (typeof _selVidDT.el._applyDrawMode === 'function'));
           if (_selVidDT.el._applyDrawMode) _selVidDT.el._applyDrawMode();
-          // Force annoCanvas pointer-events so text-mode click-to-place works
-          if (sDT.mode === 'text') {
-            try {
-              var _ac = _selVidDT.el.querySelector('.media-anno-canvas');
-              if (_ac) { _ac.style.pointerEvents = 'auto'; _ac.style.display = 'block'; _ac.style.visibility = 'visible'; }
-              console.log('[T DEBUG] annoCanvas:', !!_ac, ' rect:', _ac ? JSON.stringify(_ac.getBoundingClientRect()) : 'N/A',
-                ' computed.display:', _ac ? getComputedStyle(_ac).display : 'N/A',
-                ' computed.visibility:', _ac ? getComputedStyle(_ac).visibility : 'N/A',
-                ' computed.pointerEvents:', _ac ? getComputedStyle(_ac).pointerEvents : 'N/A');
-            } catch(e) { console.log('[T DEBUG] annoCanvas err:', e); }
-          }
           // Exit draw mode on all OTHER videos
           try {
             if (state && state.items) {
@@ -24879,67 +24868,6 @@ document.addEventListener('keydown', e => {
               });
             }
           } catch(e) {}
-          // Ensure toolbar is visible (it's appended to body, not el)
-          try {
-            // Use the per-video toolbar (each video has its own).
-            // The video el exposes a ref to its toolbar via the
-            // draw-state we just updated. Try the direct ref first,
-            // fall back to a class scan tied to the video.
-            var tb = null;
-            if (_selVidDT.el._annoToolbar) {
-              tb = _selVidDT.el._annoToolbar;
-            } else {
-              // Fallback: find toolbar whose data-video-id matches
-              tb = document.querySelector('.media-anno-toolbar[data-video-id="' + _selVidDT.id + '"]');
-            }
-            if (!tb) tb = document.querySelector('.media-anno-toolbar');
-            console.log('[T DEBUG] Toolbar found:', !!tb, ' hidden:', tb ? tb.classList.contains('toolbar-hidden') : 'N/A',
-            ' tbRect:', tb ? JSON.stringify(tb.getBoundingClientRect()) : 'N/A',
-            ' tbStyle.display:', tb ? getComputedStyle(tb).display : 'N/A',
-            ' tbStyle.visibility:', tb ? getComputedStyle(tb).visibility : 'N/A',
-            ' tbStyle.zIndex:', tb ? getComputedStyle(tb).zIndex : 'N/A',
-            ' vidRect:', _selVidDT.el ? JSON.stringify(_selVidDT.el.getBoundingClientRect()) : 'N/A',
-            ' winSize:', window.innerWidth + 'x' + window.innerHeight);
-          if (tb && tb.classList.contains('toolbar-hidden')) {
-              tb.classList.remove('toolbar-hidden');
-              var ann = videoAnnoEnsure(_selVidDT);
-              ann.drawToolbarHidden = false;
-              try { scheduleAutoSave(); } catch(e) {}
-            }
-            // Re-position THIS video's toolbar. Reset toolbarPos first
-            // so it recomputes from the video's bounding rect (the
-            // stored pos may point to a stale location like (0,0)).
-            try {
-              if (_selVidDT.el._annoDrawState) {
-                _selVidDT.el._annoDrawState.toolbarPos = null;
-              }
-              if (typeof _selVidDT.el._repositionAnnoToolbar === 'function') {
-                _selVidDT.el._repositionAnnoToolbar();
-              } else {
-                window.dispatchEvent(new Event('resize'));
-              }
-            // Force toolbar z-index above everything
-            if (tb) tb.style.zIndex = '2147483647';  // max safe int
-            } catch(e) { console.log('[T DEBUG] Reposition err:', e); }
-            try { if (typeof scheduleVisibleItemsUpdate === 'function') scheduleVisibleItemsUpdate(); } catch(e) {}
-          } catch(e) {}
-          // T key in text mode: directly spawn text editor at video centre.
-          // The annoCanvas pointerdown path is unreliable cross-platform
-          // (canvas may not receive pointer events when draw mode is
-          // toggled via global keyboard). Spawning directly ensures the
-          // user gets a text box immediately on pressing T.
-          if (sDT.mode === 'text') {
-            try {
-              var _spawnWrap = _selVidDT.el.querySelector('.media-wrap');
-              if (_spawnWrap) {
-                var _wrapR = _spawnWrap.getBoundingClientRect();
-                var _fakeEv = { clientX: _wrapR.left + _wrapR.width / 2, clientY: _wrapR.top + _wrapR.height / 2 };
-                if (typeof _selVidDT.el._spawnTextEditorDirect === 'function') {
-                  _selVidDT.el._spawnTextEditorDirect(_fakeEv);
-                }
-              }
-            } catch(e) {}
-          }
         }
       }
     }
