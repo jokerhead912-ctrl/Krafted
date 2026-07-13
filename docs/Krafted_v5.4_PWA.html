@@ -8834,7 +8834,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // contenteditable so they don't interfere with text editing.
   document.addEventListener('keydown', function(ev){
     if (ev.key !== 'm' && ev.key !== 'M' && ev.key !== 'c' && ev.key !== 'C'
-        && ev.key !== 'd' && ev.key !== 'D'
         && ev.key !== 'h' && ev.key !== 'H'
         && ev.key !== 'f' && ev.key !== 'F') return;
     // Don't hijack if the user is typing somewhere
@@ -8853,83 +8852,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       ev.preventDefault();
       _setListOpen(true);
       setTimeout(() => { try { addInput.focus(); } catch (e) {} }, 30);
-    } else if (ev.key === 'd' || ev.key === 'D') {
-      // Round 28: scope D to the SELECTED video only. Each video
-      // adds its own keydown listener here when it mounts, so
-      // without this check pressing D would toggle EVERY video
-      // on the board. The first one to call stopImmediatePropagation
-      // would still affect only one — but it'd always be the FIRST
-      // video the user added, regardless of which one they actually
-      // had selected. The fix: each handler first checks whether
-      // its own video is the currently selected item. If not, it
-      // returns early WITHOUT calling stopImmediatePropagation,
-      // letting the next handler run. Whichever handler finds
-      // itself on the selected video is the one that toggles, and
-      // IT calls stopImmediatePropagation to stop the rest.
-      try {
-        const _myItm = el._item;
-        if (!_myItm || !state || !state.selected || !state.selected.has(_myItm.id)) {
-          return; // not the selected video — let the selected one's handler take over
-        }
-      } catch (e) { return; }
-      // Video's own draw-mode toggle. Stop other document-level listeners
-      // (e.g. the board's setTool('draw')) from also firing — otherwise the
-      // board's draw tool activates simultaneously and the app looks broken.
-      // Round 7: D goes DIRECTLY to pen (freehand draw) on first press,
-      // not arrow. The user said: "when i press d on player, i want
-      // this is draw, and not arrow, draw is the frist". The pen tool
-      // is the most common "annotate this frame" use case so it should
-      // be the default. Subsequent D presses cycle to off, then back
-      // to pen.
-      //
-      // Round 10: also recover the toolbar if the user previously hid
-      // it (e.g. they hit the X close button). Without this, pressing
-      // D on a video where the toolbar is hidden would activate draw
-      // mode with NO TOOLS visible, making the user think the panel
-      // is lost. We un-hide the toolbar and update the persisted state.
-      ev.preventDefault();
-      ev.stopImmediatePropagation();
-      // Also turn off draw mode on any OTHER video that's currently
-      // in draw mode — the user only wants to draw on the selected
-      // one. Without this, a stray D press on an earlier session
-      // would leave other videos in draw mode with a phantom ring.
-      try {
-        if (state && state.items) {
-          state.items.forEach(function(other) {
-            if (other && other.el && other.el !== el && other.el._annoDrawState
-                && other.el._annoDrawState.mode && other.el._annoDrawState.mode !== 'off'
-                && typeof other.el._exitDrawMode === 'function') {
-              other.el._exitDrawMode();
-            }
-          });
-        }
-      } catch (e) {}
-      if (el._annoDrawState && el._applyDrawMode) {
-        const s = el._annoDrawState;
-        s.mode = (s.mode === 'off') ? 'pen' : 'off';
-        el._applyDrawMode();
-      }
-      // Always make the toolbar visible on D press — the user is asking
-      // to draw, so they need the tools in front of them.
-      try {
-        if (annoToolbar && annoToolbar.classList.contains('toolbar-hidden')) {
-          annoToolbar.classList.remove('toolbar-hidden');
-          const itm10 = _getItem();
-          if (itm10) {
-            const ann10 = videoAnnoEnsure(itm10);
-            ann10.drawToolbarHidden = false;
-            try { scheduleAutoSave(); } catch (e) {}
-          }
-          // Hide the "show toolbar" recovery button in the popover
-          try {
-            document.querySelectorAll('.media-anno-popover.list .head .head-btn.show-toolbar-btn').forEach(b => {
-              b.classList.add('hidden');
-            });
-          } catch (e) {}
-        }
-        // Re-position in case the toolbar was at a stale position
-        if (typeof _positionToolbar === 'function') _positionToolbar();
-      } catch (e) {}
     } else if (ev.key === 'h' || ev.key === 'H') {
       // Clean mode toggle — hide/show all controls for distraction-free viewing
       ev.preventDefault();
@@ -24873,31 +24795,58 @@ document.addEventListener('keydown', e => {
     return;
   }
 
-  // ── Plain D key: toggle video annotation draw mode ──
-  // The per-item video handler (line ~8835) also handles D, but on
-  // Windows with certain IME / keyboard layouts it may not always fire.
-  // This GLOBAL fallback ensures D always toggles draw on the selected
-  // video, regardless of how many video items are on the board or which
-  // listener order they registered in. Skips when typing in an input.
-  if ((e.key === 'd' || e.key === 'D') && !e.ctrlKey && !e.metaKey && !e.altKey) {
-    var aeD = document.activeElement;
-    if (aeD && (aeD.tagName === 'INPUT' || aeD.tagName === 'TEXTAREA' ||
-                (aeD.getAttribute && aeD.getAttribute('contenteditable') === 'true'))) {
-      // typing — let the character through
-    } else {
-      // Find the selected video item
-      var _selVid = null;
-      if (state && state.selected && state.items) {
-        state.selected.forEach(function(sid) {
-          var it = state.items.find(function(i) { return i.id === sid; });
-          if (it && it.video && it.el && it.el._annoDrawState) { _selVid = it; }
-        });
-      }
-      if (_selVid) {
-        e.preventDefault();
-        var s = _selVid.el._annoDrawState;
-        s.mode = (s.mode === 'off') ? 'pen' : 'off';
-        if (_selVid.el._applyDrawMode) _selVid.el._applyDrawMode();
+  // ── Plain D / T key: video annotation shortcuts ──
+  // D → toggle pen mode (draw directly on video frame)
+  // T → toggle text mode (type text on video frame)
+  // These are handled HERE (global handler) instead of the per-video
+  // keydown listener (which had cross-platform issues on Windows).
+  // Skips when typing in an input. Works on the currently selected video.
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+    if (e.key === 'd' || e.key === 'D' || e.key === 't' || e.key === 'T') {
+      var aeDT = document.activeElement;
+      if (aeDT && (aeDT.tagName === 'INPUT' || aeDT.tagName === 'TEXTAREA' ||
+                   (aeDT.getAttribute && aeDT.getAttribute('contenteditable') === 'true'))) {
+        // typing — let the character through
+      } else {
+        // Find the selected video item
+        var _selVidDT = null;
+        if (state && state.selected && state.items) {
+          state.selected.forEach(function(sid) {
+            var it = state.items.find(function(i) { return i.id === sid; });
+            if (it && it.video && it.el && it.el._annoDrawState) { _selVidDT = it; }
+          });
+        }
+        if (_selVidDT) {
+          e.preventDefault();
+          var sDT = _selVidDT.el._annoDrawState;
+          var targetMode = (e.key === 'd' || e.key === 'D') ? 'pen' : 'text';
+          // Toggle: if already in target mode, turn off; otherwise switch to target
+          sDT.mode = (sDT.mode === targetMode) ? 'off' : targetMode;
+          if (_selVidDT.el._applyDrawMode) _selVidDT.el._applyDrawMode();
+          // Exit draw mode on all OTHER videos
+          try {
+            if (state && state.items) {
+              state.items.forEach(function(other) {
+                if (other && other.el && other.el !== _selVidDT.el && other.el._annoDrawState
+                    && other.el._annoDrawState.mode && other.el._annoDrawState.mode !== 'off'
+                    && typeof other.el._exitDrawMode === 'function') {
+                  other.el._exitDrawMode();
+                }
+              });
+            }
+          } catch(e) {}
+          // Ensure toolbar is visible
+          try {
+            var tb = _selVidDT.el.querySelector('.media-anno-toolbar');
+            if (tb && tb.classList.contains('toolbar-hidden')) {
+              tb.classList.remove('toolbar-hidden');
+              var ann = videoAnnoEnsure(_selVidDT);
+              ann.drawToolbarHidden = false;
+              try { scheduleAutoSave(); } catch(e) {}
+            }
+            if (_selVidDT.el._positionToolbar) _selVidDT.el._positionToolbar();
+          } catch(e) {}
+        }
       }
     }
   }
