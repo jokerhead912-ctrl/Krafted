@@ -6016,6 +6016,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     }
     function _applyDrawMode() {
       const s = el._annoDrawState;
+      // Track caller for diagnostics
+      try { console.log('[APPLY called] mode=' + s.mode + ' stack=' + (new Error()).stack.split('\n').slice(1, 4).join(' | ')); } catch (e) {}
       // Update active state on the buttons (Round 7: added box, circle)
       arrowBtn.classList.toggle('active', s.mode === 'arrow');
       penBtn.classList.toggle('active', s.mode === 'pen');
