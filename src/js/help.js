@@ -25,8 +25,9 @@ export function hideHelp() {
 
 function _buildHelpContent(overlay) {
   overlay._built = true;
-  // Clear existing inline content
-  overlay.innerHTML = '';
+  // Clear existing inline content but preserve the overlay's own
+  // inline style (position, z-index, background, etc.)
+  while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
 
   var box = document.createElement('div');
   box.style.cssText = 'background:#14142a;border:1px solid rgba(0,229,255,0.3);border-radius:16px;padding:24px 28px;max-width:720px;max-height:85vh;overflow-y:auto;color:#e0e0e0;font-family:Inter,sans-serif;box-shadow:0 24px 80px rgba(0,0,0,0.6);width:90vw;';

@@ -4742,6 +4742,7 @@ G.lastScreenY = _lastScreenY;
 if (typeof window !== 'undefined') {
   window.G = G;
   window.state = state;
+  window.Platform = Platform;
   window.paperState = paperState;
   window.textTool = textTool;
   window.drawTool = drawTool;
@@ -16127,8 +16128,9 @@ function hideHelp() {
 
 function _buildHelpContent(overlay) {
   overlay._built = true;
-  // Clear existing inline content
-  overlay.innerHTML = '';
+  // Clear existing inline content but preserve the overlay's own
+  // inline style (position, z-index, background, etc.)
+  while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
 
   var box = document.createElement('div');
   box.style.cssText = 'background:#14142a;border:1px solid rgba(0,229,255,0.3);border-radius:16px;padding:24px 28px;max-width:720px;max-height:85vh;overflow-y:auto;color:#e0e0e0;font-family:Inter,sans-serif;box-shadow:0 24px 80px rgba(0,0,0,0.6);width:90vw;';
@@ -27239,16 +27241,11 @@ function loadAutoSave() {
 
 // ==== init.js ====
 
-//  HELP PANEL — hotkeys & function guide
+//  HELP PANEL — now in help.js (R79)
 // ============================================================
-function showHelp() {
-  const overlay = document.getElementById('help-overlay');
-  if (overlay) overlay.style.display = 'flex';
-}
-function hideHelp() {
-  const overlay = document.getElementById('help-overlay');
-  if (overlay) overlay.style.display = 'none';
-}
+// showHelp / hideHelp are defined in help.js with the full
+// tabbed UI (Guide + Shortcuts editor). The stubs below are
+// kept as no-ops so nothing breaks if help.js fails to load.
 
 initTextToolbar();
 updateCanvas();

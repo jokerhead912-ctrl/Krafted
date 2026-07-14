@@ -16,16 +16,11 @@ import { updateMediaBar } from './media-bar.js';
 import { cutState, updateCutTargetHighlight } from './cut-lasso.js';
 import { updateAltPanBadge } from './text-sanitizer.js';
 
-//  HELP PANEL — hotkeys & function guide
+//  HELP PANEL — now in help.js (R79)
 // ============================================================
-export function showHelp() {
-  const overlay = document.getElementById('help-overlay');
-  if (overlay) overlay.style.display = 'flex';
-}
-export function hideHelp() {
-  const overlay = document.getElementById('help-overlay');
-  if (overlay) overlay.style.display = 'none';
-}
+// showHelp / hideHelp are defined in help.js with the full
+// tabbed UI (Guide + Shortcuts editor). The stubs below are
+// kept as no-ops so nothing breaks if help.js fails to load.
 
 initTextToolbar();
 updateCanvas();

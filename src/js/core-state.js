@@ -317,6 +317,7 @@ G.lastScreenY = _lastScreenY;
 if (typeof window !== 'undefined') {
   window.G = G;
   window.state = state;
+  window.Platform = Platform;
   window.paperState = paperState;
   window.textTool = textTool;
   window.drawTool = drawTool;
