@@ -153,7 +153,7 @@ body.is-dragging .item-handle, body.is-dragging .item-rot { display:none !import
 }
 .item.has-media .media-info-bar .ib-name {
   color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  min-width: 60px; max-width: none; flex: 1 1 auto;
+  min-width: 0; max-width: 280px;
 }
 .item.has-media .media-info-bar .ib-sep {
   color: #444; flex-shrink: 0;
@@ -4402,14 +4402,6 @@ function showWelcome() {
 </div>
 
 <script>
-// ── Early global alias for button onclick handlers ──
-// Some HTML buttons use onclick="setTool('text')" etc. These need
-// setTool to be a global function. The actual function is defined
-// later (line ~21202) inside this same script block; we create a
-// forward declaration here so onclick attributes never fail with
-// "setTool is not defined", even if the button fires before the
-// full script has loaded (rare, but possible on slow networks).
-window.setTool = window.setTool || function(t) { console.warn('[Early setTool] tool=' + t + ' — waiting for real init'); };
 // ============================================================
 //  STARTUP CHECKS
 // ============================================================
@@ -10277,14 +10269,7 @@ function addText(x, y, initialText, opts) {
     // Old items in localStorage use the same convention, so no
     // migration is needed.
     // opts.initW still wins (used by paste/undo paths).
-    // Auto-size text box: use min-width as a starting point and let the
-    // element grow to fit the actual text. The old default of w:300,h:60
-    // gave a huge box for a single character, which is what the user
-    // reported ("the text box is too long, gets in the way"). We start
-    // from a small min size and let the content's natural width + the
-    // auto-grow handler (line 10284) handle the rest. Items restored
-    // from kpak still honour their saved w/h.
-    w: (opts && opts.initW) ? opts.initW : 60, h: 32, z: nextZ++,
+    w: (opts && opts.initW) ? opts.initW : 300, h: 60, z: nextZ++,
     font: textTool.font, size: textTool.size || 24,
     bold: textTool.bold, italic: textTool.italic, underline: textTool.underline, strike: textTool.strike,
     highlight: textTool.highlight, shadow: textTool.shadow, bg: textTool.bg, outline: textTool.outline,
@@ -10366,37 +10351,31 @@ function autoGrowTextItem(tx) {
     return;
   }
 
-  // Auto-fit BOTH width and height to content for a freshly-created text
-  // box (never user-resized). The old behaviour kept width fixed at the
-  // initial w:300, which made a single character sit in a huge empty box
-  // that blocked other content. Now the box hugs the text: width grows
-  // with the longest line, height grows with the wrapped line count.
-  // Once the user manually resizes the box, tx.userResized is set and the
-  // lockWidth branch above takes over.
-  el.style.width = 'auto';
-  el.style.height = 'auto';
-  // After width:auto, the element is as wide as its content naturally.
-  // We measure scrollWidth/scrollHeight (in CSS px) and convert to
-  // on-screen units by multiplying by zoom.
-  const finalW = el.scrollWidth;
-  const finalH = el.scrollHeight;
-  // Use unique names so we don't collide with the same identifiers
-  // declared elsewhere in the outer scope (line ~10406).
-  const _autoPadW = 8, _autoPadH = 12; // on-screen padding
-  const newW = Math.max(40, finalW * _tz + _autoPadW);
-  const newH = Math.max(32, finalH * _tz + _autoPadH);
-  if (tx.w === newW && tx.h === newH) {
-    el.style.width = origW;
-    el.style.height = origH;
+  // For a freshly-created text box (never user-resized), keep the width
+  // fixed at its initial size. Only grow the HEIGHT as the user types and
+  // the text wraps. This prevents the box from ballooning wider the
+  // moment the user starts typing a long line.
+  if (tx.w) {
+    el.style.width = (tx.w / _tz) + 'px';
+    el.style.height = 'auto';
+    const finalH = el.scrollHeight; // CSS pixels
+    const padH = 12;                // on-screen pixels of padding
+    const newH = Math.max(32, finalH * _tz + padH);
+    if (tx.h === newH) {
+      el.style.width = origW;
+      el.style.height = origH;
+      return;
+    }
+    tx.h = newH;
+    updateItemStyle(tx);
+    const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
+    if (hCont) { hCont.style.width = (tx.w / _tz) + 'px'; hCont.style.height = (newH / _tz) + 'px'; }
+    updateAutoFitPaper();
+    // Lock future auto-grows to the same width so the box stays small
+    // even as the user types more.
+    tx._autoGrowLocked = true;
     return;
   }
-  tx.w = newW;
-  tx.h = newH;
-  updateItemStyle(tx);
-  const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
-  if (hCont) { hCont.style.width = (newW / _tz) + 'px'; hCont.style.height = (newH / _tz) + 'px'; }
-  updateAutoFitPaper();
-  return;
 
   // Fallback: measure at maxW and shrink to fit (original behavior)
   const maxW = 520; // CSS pixels
@@ -20761,37 +20740,14 @@ function restoreBoard(data) {
     }
     if (d.isAudio) {
       // Audio item — rebuild using addAudioItem
-      // Try multiple sources in priority order:
-      // 1) d.filename (newer kpak saves)
-      // 2) d.audioName (older kpak saves)
-      // 3) URL path of d.src (kpak with embedded media → blob: URL, useless)
-      // 4) 'Audio' fallback
-      let audioName = d.filename || d.audioName || '';
-      if (!audioName && d.src) {
-        try {
-          const _u = new URL(d.src, location.origin);
-          if (_u.protocol !== 'blob:') {
-            audioName = decodeURIComponent(_u.pathname.split('/').pop() || '').split('?')[0];
-          }
-        } catch (_) {}
-      }
-      if (!audioName) audioName = 'Audio';
-      const item = addAudioItem(d.src, audioName, d.x, d.y);
+      const item = addAudioItem(d.src, d.audioName || 'Audio', d.x, d.y);
       item.id = d.id !== undefined ? d.id : item.id;
-      item.filename = audioName;
-      item.audioName = audioName;
       item.z = d.z || item.z;
       item.rot = d.rot || 0;
       item.opacity = d.opacity !== undefined ? d.opacity : 1;
       item.locked = d.locked || false;
       nextZ = Math.max(nextZ, item.z + 1);
       updateItemStyle(item);
-      // Re-apply the name on the actual DOM element in case addAudioItem
-      // set a different default. This guarantees the visible name matches
-      // the saved filename even if addAudioItem ignored the argument.
-      if (item.el && item.el._setAudioName) {
-        try { item.el._setAudioName(audioName); } catch (e) {}
-      }
       return;
     }
     if (d.isLink) {
@@ -20873,28 +20829,6 @@ function restoreBoard(data) {
     state.items.push(item);
     el._item = item; // stash so buildMediaControls closures can find this item
     updateItemStyle(item);
-    // Restore filename badge — buildMediaControls clears it on init (line 5224),
-    // so we must re-apply the saved filename after the item is built.
-    // For old kpak files saved before the `filename` field was added, try to
-    // infer the name from the media src URL as a fallback.
-    var _fname = d.filename || '';
-    if (!_fname && d.src) {
-      try {
-        var _u = new URL(d.src, location.origin);
-        var _p = _u.pathname;
-        if (_u.protocol !== 'blob:') {
-          _fname = decodeURIComponent(_p.split('/').pop() || '').split('?')[0];
-        }
-      } catch (_) {}
-    }
-    if (_fname && el._setFilenameBadge) {
-      try { el._setFilenameBadge(_fname); } catch (e) {}
-    }
-    // Also restore audio filename
-    if (d.isAudio && el._setFilenameBadge) {
-      var _afname = d.filename || d.audioName || 'Audio';
-      try { el._setFilenameBadge(_afname); } catch (e) {}
-    }
     // R82: restore user-set FPS from saved manifest (kpak / JSON round-trip).
     // Without this, a user who manually set FPS to, e.g., 24 fps on a film
     // video would lose that setting on save→load and revert to auto-detection.
@@ -21210,7 +21144,6 @@ function loadAutoSave() {
 //  TOOLS
 // ============================================================
 function setTool(tool) {
-  window.setTool = setTool; // ensure global alias stays fresh
   // Clean up any in-progress drag operations
   if (captureDrag) { captureDrag = null; captureBox.style.display = 'none'; captureOverlay.style.display = 'none'; document.body.style.cursor = ''; setCaptureMode(false); }
   captureHint.style.display = 'none';
@@ -23639,7 +23572,6 @@ function _handleFileDrop(e, files) {
 }
 
 viewport.addEventListener('drop', e => {
-  console.log('[DROP] files=' + (e.dataTransfer.files.length || 0));
   e.preventDefault();
   hideWelcome();
   const files = [...e.dataTransfer.files];
@@ -25619,9 +25551,6 @@ function addAudioItem(src, fileName, x, y) {
   nameEl.textContent = fileName || 'Audio';
   header.appendChild(nameEl);
   el.appendChild(header);
-  // Expose name setter so kpak restore can update the name after add
-  el._setAudioName = function(n) { nameEl.textContent = n || 'Audio'; };
-  el._audioNameEl = nameEl;
   // Audio element + custom player
   const audio = document.createElement('audio');
   audio.src = src;
