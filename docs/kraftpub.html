@@ -5216,6 +5216,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     if (!ibName) return;
     const s = (name || '').toString().trim();
     ibName.textContent = s || (isVideo ? 'Video' : 'Image');
+    if (typeof window.__kraftedFNLog === 'function') {
+      try { window.__kraftedFNLog(s); } catch (e) {}
+    }
   }
   // Initial population: the item may already have a filename (when the
   // item was loaded from history). We hook up later via the
@@ -20848,7 +20851,10 @@ function restoreBoard(data) {
     if (_fname && el._setFilenameBadge) {
       try { el._setFilenameBadge(_fname); } catch (e) {}
     }
-    if (d.isVideo) console.log('[RESTORE] video id=' + d.id + ' filename="' + _fname + '" orig="' + (d.filename || '') + '" hasBadge=' + !!el._setFilenameBadge);
+    if (d.isVideo) {
+      var _ibNameEl = el.querySelector('.ib-name');
+      console.log('[RESTORE] video id=' + d.id + ' filename="' + _fname + '" orig="' + (d.filename || '') + '" hasBadge=' + !!el._setFilenameBadge + ' ibName=' + (_ibNameEl ? _ibNameEl.textContent : 'NULL'));
+    }
     // Also restore audio filename
     if (d.isAudio && el._setFilenameBadge) {
       var _afname = d.filename || d.audioName || 'Audio';
