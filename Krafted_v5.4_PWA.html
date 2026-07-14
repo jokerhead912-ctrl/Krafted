@@ -16448,25 +16448,37 @@ viewport.addEventListener('wheel', e => {
   // the other way. The wheel handler is for canvas-level navigation,
   // and during a per-item drag the user is moving an item, not the view.
   if (state.dragging && state.dragging.type === 'move') return;
+
+  // R79: Cmd + mouse wheel on Mac (metaKey=true, NOT ctrlKey).
+  // Chrome/Safari on macOS set metaKey=true when the user holds the
+  // Command key during a mouse wheel event, while Ctrl+wheel sets
+  // ctrlKey=true. This gives us a clean branch: Cmd+wheel zooms
+  // with the regular wheel step (feels like a real mouse wheel),
+  // and Ctrl+wheel (pinch) uses the proportional pinch step.
+  // The user said "在Mac min 上 zoom in out 想加 command 鼠標點擊加
+  // 上下，而家係control 好吾順手" — Ctrl is awkward on Mac because
+  // Ctrl+click = right-click and Ctrl+wheel = browser zoom-override
+  // in some setups. Cmd is the native modifier key for "zoom".
+  if (e.metaKey) {
+    // Cmd + mouse wheel on Mac: use the regular wheel step,
+    // anchored at viewport center. Direction matches the
+    // naturalScroll preference (same as plain-wheel branch).
+    const s = state.zoomStep;
+    const rawDY = state.naturalScroll ? -e.deltaY : e.deltaY;
+    zoomBy(rawDY < 0 ? s : 1 / s, window.innerWidth / 2, window.innerHeight / 2);
+    return;
+  }
+
   if (e.ctrlKey) {
-    // Two sub-cases inside the ctrlKey branch:
+    // Two sub-cases:
     //  (a) Trackpad pinch (deltaMode 0 + typically 2 active pointers) →
-    //      small continuous deltaY → use pinchStep (proportional,
-    //      capped, mapped to the user's zoom-step slider).
-    //  (b) Cmd + mouse wheel (Mac) — the browser remaps Cmd → ctrlKey
-    //      on wheel events. A real mouse wheel has deltaMode 1 (line)
-    //      or 2 (page), NOT 0, and the deltaY is a step-quantised
-    //      integer (≈±1 per tick, not the ±5-50 of a pinch). Treat
-    //      these as a wheel event and use `state.zoomStep` (same as
-    //      plain wheel below) so Cmd+wheel feels like a real
-    //      mouse-wheel zoom. R78: user asked "在Mac 上 zoom in out 想
-    //      加 command 鼠標上下" — without this branch, Cmd+wheel
-    //      through Magic Mouse / external wheel mouse went into the
-    //      pinch code path and felt sluggish + non-quantised.
+    //      small continuous deltaY → use pinchStep.
+    //  (b) Ctrl + mouse wheel (Windows) — deltaMode 1 or 2, step-
+    //      quantised → use state.zoomStep (same as plain wheel).
+    // (Cmd on Mac was already handled by the e.metaKey branch above.)
     if (e.deltaMode !== 0) {
-      // (b) Cmd + mouse wheel on Mac: use the regular wheel step,
-      // anchored at the viewport center. Direction matches the
-      // naturalScroll preference (same as the plain-wheel branch).
+      // (b) Ctrl + mouse wheel (Windows): use the regular wheel step,
+      // anchored at the viewport center.
       const s = state.zoomStep;
       const rawDY = state.naturalScroll ? -e.deltaY : e.deltaY;
       zoomBy(rawDY < 0 ? s : 1 / s, window.innerWidth / 2, window.innerHeight / 2);
