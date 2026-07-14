@@ -4141,6 +4141,16 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   'use strict';
   var KF = window.KraftedFormat;
   if (!KF) { console.error('[KraftedBridge] KraftedFormat not loaded.'); return; }
+  // G, state, paperState are top-level consts in the concatenated build
+  // scope (declared in core-state.js). In ES module form the bridge would
+  // `import { G, state, paperState } from './core-state.js'`; in the
+  // built script those bindings live in the outer script scope and are
+  // visible to this IIFE via the scope chain at call time. We capture
+  // `G` once via a getter that always reads window.G (which the
+  // core-state.js file assigns after this IIFE runs), so by the time
+  // saveBoardV5 / loadBoardFileV5 fire, G is fully populated.
+  Object.defineProperty(window, '_bridgeResolveG', { value: function() { return window.G || G; } });
+  var G = window.G || {};
   console.log('[KraftedBridge] Initializing v4→v5 integration...');
 
   function waitForKraftedState(maxAttempts) {
@@ -4180,14 +4190,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
     var texts = state.texts || [];
     for (var j = 0; j < texts.length; j++) { var t = texts[j]; manifest.texts.push({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, highlightColor: t.highlightColor, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false }); }
-    manifest.drawStrokes = drawStrokes || [];
+    manifest.drawStrokes = (window.G && window.G.drawStrokes) || [];
     manifest.todos = (state.todos || []).map(function(td) { return { id: td.id, x: td.x, y: td.y, w: td.w, h: td.h, z: td.z, rot: td.rot || 0, opacity: td.opacity !== undefined ? td.opacity : 1, locked: td.locked || false, title: td.title || '', items: (td.items || []).map(function(it) { return { text: it.text, done: it.done }; }) }; });
     manifest.mindmaps = (state.mindmaps || []).map(function(mm) { return { id: mm.id, x: mm.x, y: mm.y, w: mm.w, h: mm.h, z: mm.z, rot: mm.rot || 0, opacity: mm.opacity !== undefined ? mm.opacity : 1, locked: mm.locked || false, title: mm.title || '', nodes: (mm.nodes || []).map(function(nn) { return { id: nn.id, text: nn.text, x: nn.x, y: nn.y, w: nn.w, h: nn.h, color: nn.color, textColor: nn.textColor, parentId: nn.parentId || null, img: nn.img || null, imgW: nn.imgW || 0, imgH: nn.imgH || 0, audio: nn.audio || null, audioName: nn.audioName || null }; }), connections: (mm.connections || []).map(function(c) { return { id: c.id, from: c.from, to: c.to, color: c.color }; }), nextNodeId: mm.nextNodeId || 1, nextConnId: mm.nextConnId || 1 }; });
     manifest.paper = { enabled: paperState.enabled, autoFit: paperState.autoFit, width: paperState.width, height: paperState.height, color: paperState.color };
     manifest.canvasBg = getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim() || '#1a1a1a';
     var groups = state.groups || [];
     for (var k = 0; k < groups.length; k++) { var g = groups[k]; manifest.groups.push({ id: g.id, color: g.color, memberIds: g.memberIds ? g.memberIds.slice() : [] }); }
-    manifest.counter = { nextId: nextId || 1, nextZ: nextZ || 1, nextStrokeId: nextStrokeId || 1, nextGroupId: nextGroupId || 1 };
+    manifest.counter = { nextId: (window.G && window.G.nextId) || 1, nextZ: (window.G && window.G.nextZ) || 1, nextStrokeId: (window.G && window.G.nextStrokeId) || 1, nextGroupId: (window.G && window.G.nextGroupId) || 1 };
     // CRITICAL: serialize relations into the V5 manifest (save path)
     manifest.relations = (state.relations || []).map(function(r) {
       return {
@@ -4658,6 +4668,20 @@ G.drawMoveState = _drawMoveState;
 G.potentialTextDrag = _potentialTextDrag;
 G.lastScreenX = _lastScreenX;
 G.lastScreenY = _lastScreenY;
+
+// Expose G globally so lib files (krafted-bridge.js) and any other code
+// running BEFORE this file in the concatenated build can read mutable
+// globals through `window.G`. Same for state, paperState, textTool,
+// drawTool, colors — they're all top-level consts that don't auto-bind
+// to window in <script> scope, so we explicitly publish them.
+if (typeof window !== 'undefined') {
+  window.G = G;
+  window.state = state;
+  window.paperState = paperState;
+  window.textTool = textTool;
+  window.drawTool = drawTool;
+  window.colors = colors;
+}
 
 // _frozenGifs Map — defined here so cullOffscreenItems (in canvas-view.js)
 // can reference it early. The media-bar section (originally ~line 9502)
