@@ -10380,9 +10380,11 @@ function autoGrowTextItem(tx) {
   // on-screen units by multiplying by zoom.
   const finalW = el.scrollWidth;
   const finalH = el.scrollHeight;
-  const padW = 8, padH = 12; // on-screen padding
-  const newW = Math.max(40, finalW * _tz + padW);
-  const newH = Math.max(32, finalH * _tz + padH);
+  // Use unique names so we don't collide with the same identifiers
+  // declared elsewhere in the outer scope (line ~10406).
+  const _autoPadW = 8, _autoPadH = 12; // on-screen padding
+  const newW = Math.max(40, finalW * _tz + _autoPadW);
+  const newH = Math.max(32, finalH * _tz + _autoPadH);
   if (tx.w === newW && tx.h === newH) {
     el.style.width = origW;
     el.style.height = origH;
