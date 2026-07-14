@@ -16351,7 +16351,9 @@ function captureSnapshot() {
       type: i.type || undefined,
       strokeId: i.strokeId, drawMode: i.drawMode, drawColor: i.drawColor,
       drawSize: i.drawSize, drawOpacity: i.drawOpacity, drawArrowHead: i.drawArrowHead,
-      src: i.src, natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, audioName: i.audioName || '',
+      src: i.src, natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false,
+      audioName: i.audioName || i.filename || '',
+      filename: i.filename || i.audioName || '',
       // Round 58: persist the user's manual FPS override so undo/redo
       // and save/reload keep the chip state. Cycle index is UI-only
       // (not saved) — it always re-initializes from the saved FPS.
@@ -20072,8 +20074,9 @@ function buildManifest() {
       id: i.id,
       x: i.x, y: i.y, w: i.w, h: i.h, rot: i.rot, opacity: i.opacity,
       flipH: i.flipH, flipV: i.flipV, locked: i.locked, z: i.z,
-      natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, audioName: i.audioName || '',
-      filename: i.filename || '',
+      natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false,
+      audioName: i.audioName || i.filename || '',
+      filename: i.filename || i.audioName || '',
       cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH,
       brightness: i.brightness, contrast: i.contrast, saturate: i.saturate,
       hueRotate: i.hueRotate, blur: i.blur, sepia: i.sepia, grayscale: i.grayscale,
@@ -20752,6 +20755,7 @@ function restoreBoard(data) {
         } catch (_) {}
       }
       if (!_audioName) _audioName = 'Audio';
+      console.log('[AUDIO RESTORE] id=' + d.id + ' d.filename="' + (d.filename || '') + '" d.audioName="' + (d.audioName || '') + '" final="' + _audioName + '"');
       const item = addAudioItem(d.src, _audioName, d.x, d.y);
       item.filename = _audioName;
       item.audioName = _audioName;
