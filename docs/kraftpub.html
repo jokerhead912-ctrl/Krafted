@@ -153,7 +153,7 @@ body.is-dragging .item-handle, body.is-dragging .item-rot { display:none !import
 }
 .item.has-media .media-info-bar .ib-name {
   color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  min-width: 0; max-width: 280px;
+  min-width: 60px; max-width: none; flex: 1 1 auto;
 }
 .item.has-media .media-info-bar .ib-sep {
   color: #444; flex-shrink: 0;
@@ -5216,9 +5216,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     if (!ibName) return;
     const s = (name || '').toString().trim();
     ibName.textContent = s || (isVideo ? 'Video' : 'Image');
-    if (typeof window.__kraftedFNLog === 'function') {
-      try { window.__kraftedFNLog(s); } catch (e) {}
-    }
   }
   // Initial population: the item may already have a filename (when the
   // item was loaded from history). We hook up later via the
@@ -20842,7 +20839,6 @@ function restoreBoard(data) {
       try {
         var _u = new URL(d.src, location.origin);
         var _p = _u.pathname;
-        // Skip blob: URLs (they have random UUIDs as names)
         if (_u.protocol !== 'blob:') {
           _fname = decodeURIComponent(_p.split('/').pop() || '').split('?')[0];
         }
@@ -20850,10 +20846,6 @@ function restoreBoard(data) {
     }
     if (_fname && el._setFilenameBadge) {
       try { el._setFilenameBadge(_fname); } catch (e) {}
-    }
-    if (d.isVideo) {
-      var _ibNameEl = el.querySelector('.ib-name');
-      console.log('[RESTORE] video id=' + d.id + ' filename="' + _fname + '" orig="' + (d.filename || '') + '" hasBadge=' + !!el._setFilenameBadge + ' ibName=' + (_ibNameEl ? _ibNameEl.textContent : 'NULL'));
     }
     // Also restore audio filename
     if (d.isAudio && el._setFilenameBadge) {
