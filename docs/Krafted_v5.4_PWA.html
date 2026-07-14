@@ -20070,10 +20070,6 @@ function countMediaItems() {
 // Reuses the item serialization pattern.
 function buildManifest() {
   const items = state.items.map(i => {
-    // Audio save debug
-    if (i.isAudio && typeof console !== 'undefined') {
-      try { console.log('[SAVE AUDIO] id=' + i.id + ' audioName="' + (i.audioName || '') + '" filename="' + (i.filename || '') + '"'); } catch (e) {}
-    }
     const d = {
       id: i.id,
       x: i.x, y: i.y, w: i.w, h: i.h, rot: i.rot, opacity: i.opacity,
@@ -20759,7 +20755,6 @@ function restoreBoard(data) {
         } catch (_) {}
       }
       if (!_audioName) _audioName = 'Audio';
-      console.log('[AUDIO RESTORE] id=' + d.id + ' d.filename="' + (d.filename || '') + '" d.audioName="' + (d.audioName || '') + '" final="' + _audioName + '"');
       const item = addAudioItem(d.src, _audioName, d.x, d.y);
       item.filename = _audioName;
       item.audioName = _audioName;
@@ -20770,6 +20765,12 @@ function restoreBoard(data) {
       item.locked = d.locked || false;
       nextZ = Math.max(nextZ, item.z + 1);
       updateItemStyle(item);
+      // Re-apply audio name on the DOM — updateItemStyle may rebuild
+      // the element, and addAudioItem's internal nameEl may have been
+      // overwritten by a later operation.
+      if (item.el && item.el._setAudioName) {
+        try { item.el._setAudioName(_audioName); } catch (e) {}
+      }
       return;
     }
     if (d.isLink) {
