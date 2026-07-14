@@ -20740,7 +20740,21 @@ function restoreBoard(data) {
     }
     if (d.isAudio) {
       // Audio item — rebuild using addAudioItem
-      const item = addAudioItem(d.src, d.audioName || 'Audio', d.x, d.y);
+      // Try d.filename first (newer saves), then d.audioName (older),
+      // then infer from src URL (last resort for legacy kpak).
+      var _audioName = d.filename || d.audioName || '';
+      if (!_audioName && d.src) {
+        try {
+          var _au = new URL(d.src, location.origin);
+          if (_au.protocol !== 'blob:') {
+            _audioName = decodeURIComponent(_au.pathname.split('/').pop() || '').split('?')[0];
+          }
+        } catch (_) {}
+      }
+      if (!_audioName) _audioName = 'Audio';
+      const item = addAudioItem(d.src, _audioName, d.x, d.y);
+      item.filename = _audioName;
+      item.audioName = _audioName;
       item.id = d.id !== undefined ? d.id : item.id;
       item.z = d.z || item.z;
       item.rot = d.rot || 0;
@@ -20829,6 +20843,22 @@ function restoreBoard(data) {
     state.items.push(item);
     el._item = item; // stash so buildMediaControls closures can find this item
     updateItemStyle(item);
+    // Restore filename badge after kpak load — buildMediaControls
+    // initialises it as empty (line 5224). The saved filename is in
+    // d.filename (newer saves) or can be inferred from the src URL
+    // for older kpak files that predate the filename field.
+    var _fname = d.filename || '';
+    if (!_fname && d.src) {
+      try {
+        var _u = new URL(d.src, location.origin);
+        if (_u.protocol !== 'blob:') {
+          _fname = decodeURIComponent(_u.pathname.split('/').pop() || '').split('?')[0];
+        }
+      } catch (_) {}
+    }
+    if (_fname && el._setFilenameBadge) {
+      try { el._setFilenameBadge(_fname); } catch (e) {}
+    }
     // R82: restore user-set FPS from saved manifest (kpak / JSON round-trip).
     // Without this, a user who manually set FPS to, e.g., 24 fps on a film
     // video would lose that setting on save→load and revert to auto-detection.
@@ -25551,6 +25581,8 @@ function addAudioItem(src, fileName, x, y) {
   nameEl.textContent = fileName || 'Audio';
   header.appendChild(nameEl);
   el.appendChild(header);
+  // Expose a setter so kpak restore can update the visible name after load
+  el._setAudioName = function(n) { nameEl.textContent = n || 'Audio'; };
   // Audio element + custom player
   const audio = document.createElement('audio');
   audio.src = src;
