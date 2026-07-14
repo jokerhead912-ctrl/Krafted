@@ -23637,6 +23637,7 @@ function _handleFileDrop(e, files) {
 }
 
 viewport.addEventListener('drop', e => {
+  console.log('[DROP] files=' + (e.dataTransfer.files.length || 0));
   e.preventDefault();
   hideWelcome();
   const files = [...e.dataTransfer.files];
