@@ -20832,13 +20832,27 @@ function restoreBoard(data) {
     updateItemStyle(item);
     // Restore filename badge — buildMediaControls clears it on init (line 5224),
     // so we must re-apply the saved filename after the item is built.
-    if (d.filename && el._setFilenameBadge) {
-      try { el._setFilenameBadge(d.filename); } catch (e) {}
+    // For old kpak files saved before the `filename` field was added, try to
+    // infer the name from the media src URL as a fallback.
+    var _fname = d.filename || '';
+    if (!_fname && d.src) {
+      try {
+        var _u = new URL(d.src, location.origin);
+        var _p = _u.pathname;
+        // Skip blob: URLs (they have random UUIDs as names)
+        if (_u.protocol !== 'blob:') {
+          _fname = decodeURIComponent(_p.split('/').pop() || '').split('?')[0];
+        }
+      } catch (_) {}
     }
-    if (d.isVideo) console.log('[RESTORE] video id=' + d.id + ' filename="' + (d.filename || '') + '" hasBadge=' + !!el._setFilenameBadge + ' infoBar=' + !!el.querySelector('.media-info-bar'));
+    if (_fname && el._setFilenameBadge) {
+      try { el._setFilenameBadge(_fname); } catch (e) {}
+    }
+    if (d.isVideo) console.log('[RESTORE] video id=' + d.id + ' filename="' + _fname + '" orig="' + (d.filename || '') + '" hasBadge=' + !!el._setFilenameBadge);
     // Also restore audio filename
     if (d.isAudio && el._setFilenameBadge) {
-      try { el._setFilenameBadge(d.filename || d.audioName || 'Audio'); } catch (e) {}
+      var _afname = d.filename || d.audioName || 'Audio';
+      try { el._setFilenameBadge(_afname); } catch (e) {}
     }
     // R82: restore user-set FPS from saved manifest (kpak / JSON round-trip).
     // Without this, a user who manually set FPS to, e.g., 24 fps on a film
