@@ -181,22 +181,22 @@ body[data-dpi-scale] .item.has-media .media-draw-btn {
   font-size: calc(14px * var(--dpi-scale, 1));
 }
 body[data-dpi-scale] .media-comments-btn {
-  height: calc(30px * var(--dpi-scale, 1));
-  padding: 0 calc(9px * var(--dpi-scale, 1));
-  font-size: calc(12px * var(--dpi-scale, 1));
-}
-body[data-dpi-scale] .media-comments-btn .btn-icon { font-size: calc(13px * var(--dpi-scale, 1)); }
-body[data-dpi-scale] .media-comments-btn .btn-label { font-size: calc(11px * var(--dpi-scale, 1)); }
-body[data-dpi-scale] .media-comments-btn .btn-count {
-  font-size: calc(10px * var(--dpi-scale, 1));
+  height: calc(21px * var(--dpi-scale, 1));
   padding: 0 calc(6px * var(--dpi-scale, 1));
-  border-radius: calc(9px * var(--dpi-scale, 1));
-  min-width: calc(18px * var(--dpi-scale, 1));
+  font-size: calc(8.4px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .media-comments-btn .btn-icon { font-size: calc(9px * var(--dpi-scale, 1)); }
+body[data-dpi-scale] .media-comments-btn .btn-label { font-size: calc(7.7px * var(--dpi-scale, 1)); }
+body[data-dpi-scale] .media-comments-btn .btn-count {
+  font-size: calc(7px * var(--dpi-scale, 1));
+  padding: 0 calc(4px * var(--dpi-scale, 1));
+  border-radius: calc(7px * var(--dpi-scale, 1));
+  min-width: calc(13px * var(--dpi-scale, 1));
 }
 body[data-dpi-scale] .media-snap-btn {
-  height: calc(30px * var(--dpi-scale, 1));
-  padding: 0 calc(9px * var(--dpi-scale, 1));
-  font-size: calc(12px * var(--dpi-scale, 1));
+  height: calc(21px * var(--dpi-scale, 1));
+  padding: 0 calc(6px * var(--dpi-scale, 1));
+  font-size: calc(8.4px * var(--dpi-scale, 1));
 }
 body[data-dpi-scale] .media-clean-btn {
   width:  calc(26px * var(--dpi-scale, 1));
@@ -1302,13 +1302,13 @@ body.dragging-file .media-anno-toolbar {
    but styled to match the other in-bar buttons (rectangular, subtle
    border, hover/active states). */
 .media-comments-btn {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 0 9px; height: 30px; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 3.5px;
+  padding: 0 6px; height: 21px; flex-shrink: 0;
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 6px;
+  border-radius: 4px;
   color: rgba(255,255,255,0.9);
-  font: 600 12px 'Inter', sans-serif;
+  font: 600 8.4px 'Inter', sans-serif;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
   user-select: none; -webkit-user-select: none;
@@ -1322,15 +1322,15 @@ body.dragging-file .media-anno-toolbar {
   background: var(--accent); color: #000;
   border-color: var(--accent);
 }
-.media-comments-btn .btn-icon { font-size: 13px; line-height: 1; }
+.media-comments-btn .btn-icon { font-size: 9px; line-height: 1; }
 .media-comments-btn .btn-label {
-  font-size: 11px; font-weight: 600; letter-spacing: 0.2px;
+  font-size: 7.7px; font-weight: 600; letter-spacing: 0.2px;
 }
 .media-comments-btn .btn-count {
   background: var(--accent); color: #0a0a0a;
-  border-radius: 9px; padding: 0 6px;
-  font-size: 10px; font-weight: 800;
-  min-width: 18px; text-align: center;
+  border-radius: 7px; padding: 0 4px;
+  font-size: 7px; font-weight: 800;
+  min-width: 13px; text-align: center;
   font-variant-numeric: tabular-nums;
 }
 .media-comments-btn.active .btn-count {
@@ -1338,13 +1338,13 @@ body.dragging-file .media-anno-toolbar {
 }
 /* ── Snap button on the player controls bar ── */
 .media-snap-btn {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 0 9px; height: 30px; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 3.5px;
+  padding: 0 6px; height: 21px; flex-shrink: 0;
   background: rgba(0,229,255,0.10);
   border: 1px solid rgba(0,229,255,0.30);
-  border-radius: 6px;
+  border-radius: 4px;
   color: var(--accent);
-  font: 600 12px 'Inter', sans-serif;
+  font: 600 8.4px 'Inter', sans-serif;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
   user-select: none; -webkit-user-select: none;
