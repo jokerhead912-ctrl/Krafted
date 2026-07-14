@@ -20835,6 +20835,7 @@ function restoreBoard(data) {
     if (d.filename && el._setFilenameBadge) {
       try { el._setFilenameBadge(d.filename); } catch (e) {}
     }
+    if (d.isVideo) console.log('[RESTORE] video id=' + d.id + ' filename="' + (d.filename || '') + '" hasBadge=' + !!el._setFilenameBadge + ' infoBar=' + !!el.querySelector('.media-info-bar'));
     // Also restore audio filename
     if (d.isAudio && el._setFilenameBadge) {
       try { el._setFilenameBadge(d.filename || d.audioName || 'Audio'); } catch (e) {}
