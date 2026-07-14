@@ -10269,7 +10269,14 @@ function addText(x, y, initialText, opts) {
     // Old items in localStorage use the same convention, so no
     // migration is needed.
     // opts.initW still wins (used by paste/undo paths).
-    w: (opts && opts.initW) ? opts.initW : 300, h: 60, z: nextZ++,
+    // Auto-size text box: use min-width as a starting point and let the
+    // element grow to fit the actual text. The old default of w:300,h:60
+    // gave a huge box for a single character, which is what the user
+    // reported ("the text box is too long, gets in the way"). We start
+    // from a small min size and let the content's natural width + the
+    // auto-grow handler (line 10284) handle the rest. Items restored
+    // from kpak still honour their saved w/h.
+    w: (opts && opts.initW) ? opts.initW : 60, h: 32, z: nextZ++,
     font: textTool.font, size: textTool.size || 24,
     bold: textTool.bold, italic: textTool.italic, underline: textTool.underline, strike: textTool.strike,
     highlight: textTool.highlight, shadow: textTool.shadow, bg: textTool.bg, outline: textTool.outline,
@@ -10351,31 +10358,35 @@ function autoGrowTextItem(tx) {
     return;
   }
 
-  // For a freshly-created text box (never user-resized), keep the width
-  // fixed at its initial size. Only grow the HEIGHT as the user types and
-  // the text wraps. This prevents the box from ballooning wider the
-  // moment the user starts typing a long line.
-  if (tx.w) {
-    el.style.width = (tx.w / _tz) + 'px';
-    el.style.height = 'auto';
-    const finalH = el.scrollHeight; // CSS pixels
-    const padH = 12;                // on-screen pixels of padding
-    const newH = Math.max(32, finalH * _tz + padH);
-    if (tx.h === newH) {
-      el.style.width = origW;
-      el.style.height = origH;
-      return;
-    }
-    tx.h = newH;
-    updateItemStyle(tx);
-    const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
-    if (hCont) { hCont.style.width = (tx.w / _tz) + 'px'; hCont.style.height = (newH / _tz) + 'px'; }
-    updateAutoFitPaper();
-    // Lock future auto-grows to the same width so the box stays small
-    // even as the user types more.
-    tx._autoGrowLocked = true;
+  // Auto-fit BOTH width and height to content for a freshly-created text
+  // box (never user-resized). The old behaviour kept width fixed at the
+  // initial w:300, which made a single character sit in a huge empty box
+  // that blocked other content. Now the box hugs the text: width grows
+  // with the longest line, height grows with the wrapped line count.
+  // Once the user manually resizes the box, tx.userResized is set and the
+  // lockWidth branch above takes over.
+  el.style.width = 'auto';
+  el.style.height = 'auto';
+  // After width:auto, the element is as wide as its content naturally.
+  // We measure scrollWidth/scrollHeight (in CSS px) and convert to
+  // on-screen units by multiplying by zoom.
+  const finalW = el.scrollWidth;
+  const finalH = el.scrollHeight;
+  const padW = 8, padH = 12; // on-screen padding
+  const newW = Math.max(40, finalW * _tz + padW);
+  const newH = Math.max(32, finalH * _tz + padH);
+  if (tx.w === newW && tx.h === newH) {
+    el.style.width = origW;
+    el.style.height = origH;
     return;
   }
+  tx.w = newW;
+  tx.h = newH;
+  updateItemStyle(tx);
+  const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
+  if (hCont) { hCont.style.width = (newW / _tz) + 'px'; hCont.style.height = (newH / _tz) + 'px'; }
+  updateAutoFitPaper();
+  return;
 
   // Fallback: measure at maxW and shrink to fit (original behavior)
   const maxW = 520; // CSS pixels
