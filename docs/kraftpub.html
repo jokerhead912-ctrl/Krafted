@@ -20740,15 +20740,37 @@ function restoreBoard(data) {
     }
     if (d.isAudio) {
       // Audio item — rebuild using addAudioItem
-      const audioName = d.filename || d.audioName || 'Audio';
+      // Try multiple sources in priority order:
+      // 1) d.filename (newer kpak saves)
+      // 2) d.audioName (older kpak saves)
+      // 3) URL path of d.src (kpak with embedded media → blob: URL, useless)
+      // 4) 'Audio' fallback
+      let audioName = d.filename || d.audioName || '';
+      if (!audioName && d.src) {
+        try {
+          const _u = new URL(d.src, location.origin);
+          if (_u.protocol !== 'blob:') {
+            audioName = decodeURIComponent(_u.pathname.split('/').pop() || '').split('?')[0];
+          }
+        } catch (_) {}
+      }
+      if (!audioName) audioName = 'Audio';
       const item = addAudioItem(d.src, audioName, d.x, d.y);
       item.id = d.id !== undefined ? d.id : item.id;
+      item.filename = audioName;
+      item.audioName = audioName;
       item.z = d.z || item.z;
       item.rot = d.rot || 0;
       item.opacity = d.opacity !== undefined ? d.opacity : 1;
       item.locked = d.locked || false;
       nextZ = Math.max(nextZ, item.z + 1);
       updateItemStyle(item);
+      // Re-apply the name on the actual DOM element in case addAudioItem
+      // set a different default. This guarantees the visible name matches
+      // the saved filename even if addAudioItem ignored the argument.
+      if (item.el && item.el._setAudioName) {
+        try { item.el._setAudioName(audioName); } catch (e) {}
+      }
       return;
     }
     if (d.isLink) {
@@ -25574,6 +25596,9 @@ function addAudioItem(src, fileName, x, y) {
   nameEl.textContent = fileName || 'Audio';
   header.appendChild(nameEl);
   el.appendChild(header);
+  // Expose name setter so kpak restore can update the name after add
+  el._setAudioName = function(n) { nameEl.textContent = n || 'Audio'; };
+  el._audioNameEl = nameEl;
   // Audio element + custom player
   const audio = document.createElement('audio');
   audio.src = src;
