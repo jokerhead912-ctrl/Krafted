@@ -2094,8 +2094,8 @@ body.dragging-file .media-anno-toolbar {
    is added so the typed text stays readable over any video frame. */
 .media-anno-text-editor {
   position: fixed; z-index: 8;
-  min-width: 120px; max-width: 320px;
-  padding: 5px 8px;
+  min-width: 20px; max-width: 140px;
+  padding: 3px 6px;
   background: rgba(0, 0, 0, 0.78);
   border: 1.5px solid var(--accent);
   border-radius: 6px;
@@ -2111,6 +2111,7 @@ body.dragging-file .media-anno-toolbar {
   box-shadow: 0 4px 18px rgba(0,0,0,0.7);
   white-space: pre-wrap;
   word-wrap: break-word;
+  overflow: hidden;
 }
 .media-anno-text-editor::placeholder {
   color: rgba(255, 255, 255, 0.4);
@@ -3333,7 +3334,7 @@ window.JSZip=JSZip;
       if (it.isVideo && it.el && it.el._annoDrawState) { var sbf = it.el._annoDrawState.strokesByFrame; if (sbf) { node._annoStrokesByFrame = {}; Object.keys(sbf).forEach(function(f) { if (sbf[f] && sbf[f].length) { node._annoStrokesByFrame[f] = sbf[f].map(function(s) { return { type: s.type, color: s.color, size: s.size, points: (s.points || []).map(function(p) { return [p[0], p[1]]; }), text: s.text || '' }; }); } }); } }
       if (it.type === 'draw') { node.type = 'draw'; node.strokeId = it.strokeId; node.drawMode = it.drawMode; node.drawColor = it.drawColor; node.drawSize = it.drawSize; node.drawOpacity = it.drawOpacity; node.drawArrowHead = it.drawArrowHead; }
       else if (it.isVideo) { node.type = 'video'; node.assetId = it.id; }
-      else if (it.isAudio) { node.type = 'audio'; node.assetId = it.id; node.audioName = it.audioName || ''; }
+      else if (it.isAudio) { node.type = 'audio'; node.assetId = it.id; node.audioName = it.audioName || it.filename || ''; node.filename = it.filename || it.audioName || ''; }
       else if (it.isLink) { node.type = 'link'; node.linkUrl = it.linkUrl || ''; node.linkTitle = it.linkTitle || ''; node.linkDesc = it.linkDesc || ''; }
       else { node.type = 'image'; node.assetId = it.id; }
       if (it.src && it.src.startsWith('blob:')) { node._src = it.src; }
@@ -3374,7 +3375,7 @@ window.JSZip=JSZip;
       if (!resolvedSrc && n.mediaData) { try { var arr = n.mediaData.split(','); var mime = (arr[0].match(/:(.*?);/) || [])[1] || 'application/octet-stream'; var bin = atob(arr[1] || arr[0]); var bytes = new Uint8Array(bin.length); for (var k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k); resolvedSrc = URL.createObjectURL(new Blob([bytes], { type: mime })); } catch (e) {} }
       var savedW = n.w > 0 ? n.w : (n.natW || 100);
       var savedH = n.h > 0 ? n.h : (n.natH || 100);
-      var item = { id: n.id, x: n.x || 0, y: n.y || 0, w: savedW, h: savedH, natW: n.natW, natH: n.natH, cropX: n.cropX, cropY: n.cropY, cropW: n.cropW, cropH: n.cropH, rot: n.rot || 0, opacity: n.opacity !== undefined ? n.opacity : 1, z: n.zIndex || 0, locked: n.locked || false, flipH: n.flipH || false, flipV: n.flipV || false, trimStart: n.trimStart || 0, trimEnd: n.trimEnd || 0, playbackRate: n.playbackRate || 1, fps: n.fps || null, fpsManual: n.fpsManual || false, isGif: n.isGif || false, brightness: (n.adjustments || {}).brightness, contrast: (n.adjustments || {}).contrast, saturate: (n.adjustments || {}).saturate, hueRotate: (n.adjustments || {}).hueRotate, blur: (n.adjustments || {}).blur, sepia: (n.adjustments || {}).sepia, grayscale: (n.adjustments || {}).grayscale, temp: (n.adjustments || {}).temp, vignette: (n.adjustments || {}).vignette, shadow: (n.adjustments || {}).shadow, highlight: (n.adjustments || {}).highlight, grain: (n.adjustments || {}).grain, filename: n.filename || '', isVideo: n.type === 'video', isAudio: n.type === 'audio', isLink: n.type === 'link', linkUrl: n.linkUrl || '', linkTitle: n.linkTitle || '', linkDesc: n.linkDesc || '', anno: n.anno ? { comments: (n.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text || '', translation: c.translation || '', translationDir: c.translationDir || '', originalText: c.originalText || '', snapshot: c.snapshot || '', annoStrokes: Array.isArray(c.annoStrokes) ? c.annoStrokes.filter(Boolean).map(function(s) { return { type: s.type, color: s.color, size: s.size, points: Array.isArray(s.points) ? s.points.map(function(p) { return [p[0], p[1]]; }) : [], text: s.text || '' }; }) : [] }; }) } : undefined, _annoStrokesByFrame: n._annoStrokesByFrame || undefined, masks: n.masks ? n.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }) : undefined, type: n.type === 'draw' ? 'draw' : undefined, strokeId: n.strokeId, drawMode: n.drawMode, drawColor: n.drawColor, drawSize: n.drawSize, drawOpacity: n.drawOpacity, drawArrowHead: n.drawArrowHead, src: resolvedSrc };
+      var item = { id: n.id, x: n.x || 0, y: n.y || 0, w: savedW, h: savedH, natW: n.natW, natH: n.natH, cropX: n.cropX, cropY: n.cropY, cropW: n.cropW, cropH: n.cropH, rot: n.rot || 0, opacity: n.opacity !== undefined ? n.opacity : 1, z: n.zIndex || 0, locked: n.locked || false, flipH: n.flipH || false, flipV: n.flipV || false, trimStart: n.trimStart || 0, trimEnd: n.trimEnd || 0, playbackRate: n.playbackRate || 1, fps: n.fps || null, fpsManual: n.fpsManual || false, isGif: n.isGif || false, brightness: (n.adjustments || {}).brightness, contrast: (n.adjustments || {}).contrast, saturate: (n.adjustments || {}).saturate, hueRotate: (n.adjustments || {}).hueRotate, blur: (n.adjustments || {}).blur, sepia: (n.adjustments || {}).sepia, grayscale: (n.adjustments || {}).grayscale, temp: (n.adjustments || {}).temp, vignette: (n.adjustments || {}).vignette, shadow: (n.adjustments || {}).shadow, highlight: (n.adjustments || {}).highlight, grain: (n.adjustments || {}).grain, filename: n.filename || n.audioName || '', isVideo: n.type === 'video', isAudio: n.type === 'audio', audioName: n.audioName || n.filename || '', isLink: n.type === 'link', linkUrl: n.linkUrl || '', linkTitle: n.linkTitle || '', linkDesc: n.linkDesc || '', anno: n.anno ? { comments: (n.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text || '', translation: c.translation || '', translationDir: c.translationDir || '', originalText: c.originalText || '', snapshot: c.snapshot || '', annoStrokes: Array.isArray(c.annoStrokes) ? c.annoStrokes.filter(Boolean).map(function(s) { return { type: s.type, color: s.color, size: s.size, points: Array.isArray(s.points) ? s.points.map(function(p) { return [p[0], p[1]]; }) : [], text: s.text || '' }; }) : [] }; }) } : undefined, _annoStrokesByFrame: n._annoStrokesByFrame || undefined, masks: n.masks ? n.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }) : undefined, type: n.type === 'draw' ? 'draw' : undefined, strokeId: n.strokeId, drawMode: n.drawMode, drawColor: n.drawColor, drawSize: n.drawSize, drawOpacity: n.drawOpacity, drawArrowHead: n.drawArrowHead, src: resolvedSrc };
       data.items.push(item);
     }
     var texts = manifest.texts || [];
@@ -6453,14 +6454,48 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       editor.style.font = '600 ' + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
       editor.style.left = (px - 2) + 'px';
       editor.style.top = (py - 1) + 'px';
+      editor.style.width = '20px'; // start small, auto-grow on input
       // Color: copy from current draw state
       editor.style.color = s.color || '#fff';
       // Stash the normalised point for later commit
       editor._annoPt = pt;
-      // Auto-grow height as the user types
-      editor.addEventListener('input', function(){
+      // Auto-grow width & height as the user types.
+      // Uses a hidden mirror <span> with identical styling to measure
+      // the natural text width, then clamps between minW(60) and maxW(420).
+      var _mirror = document.createElement('span');
+      _mirror.style.cssText = 'position:absolute;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;pointer-events:none;left:-9999px;top:-9999px;';
+      document.body.appendChild(_mirror);
+      editor._mirror = _mirror; // stash for cleanup
+      // Run once immediately to fit the placeholder width
+      (function(){
         editor.style.height = 'auto';
         editor.style.height = (editor.scrollHeight + 4) + 'px';
+        var txt = editor.value || editor.placeholder || '';
+        var fs = editor.style.font || window.getComputedStyle(editor).font || '14px sans-serif';
+        var pw = parseFloat(window.getComputedStyle(editor).paddingLeft || 0) + parseFloat(window.getComputedStyle(editor).paddingRight || 0);
+        _mirror.style.font = fs;
+        _mirror.style.lineHeight = editor.style.lineHeight || window.getComputedStyle(editor).lineHeight;
+        _mirror.style.letterSpacing = window.getComputedStyle(editor).letterSpacing;
+        _mirror.textContent = txt;
+        var naturalW = _mirror.getBoundingClientRect().width + pw + 2;
+        var targetW = Math.max(20, Math.min(140, Math.ceil(naturalW)));
+        editor.style.width = targetW + 'px';
+      })();
+      editor.addEventListener('input', function(){
+        // Height: auto-grow
+        editor.style.height = 'auto';
+        editor.style.height = (editor.scrollHeight + 4) + 'px';
+        // Width: measure via mirror span
+        var txt = editor.value || editor.placeholder || '';
+        var fs = editor.style.font || window.getComputedStyle(editor).font || '14px sans-serif';
+        var pw = parseFloat(window.getComputedStyle(editor).paddingLeft || 0) + parseFloat(window.getComputedStyle(editor).paddingRight || 0);
+        _mirror.style.font = fs;
+        _mirror.style.lineHeight = editor.style.lineHeight || window.getComputedStyle(editor).lineHeight;
+        _mirror.style.letterSpacing = window.getComputedStyle(editor).letterSpacing;
+        _mirror.textContent = txt;
+        var naturalW = _mirror.getBoundingClientRect().width + pw + 2; // +2 for border
+        var targetW = Math.max(20, Math.min(140, Math.ceil(naturalW)));
+        editor.style.width = targetW + 'px';
       });
       // Enter to commit, Shift+Enter for newline, Esc to cancel
       editor.addEventListener('keydown', function(ke){
@@ -6665,6 +6700,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         try { scheduleAutoSave(); } catch (e) {}
       }
       // Tear down the editor
+      try { if (ed._mirror && ed._mirror.parentNode) ed._mirror.parentNode.removeChild(ed._mirror); } catch (e) {}
       try { ed.parentNode.removeChild(ed); } catch (e) {}
       el._textEditorEl = null;
       s._textSpawnFrame = null;
@@ -6686,6 +6722,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         }
         if (ed) ed._trBtn = null;
       } catch (e) {}
+      try { if (el._textEditorEl._mirror && el._textEditorEl._mirror.parentNode) el._textEditorEl._mirror.parentNode.removeChild(el._textEditorEl._mirror); } catch (e) {}
       try { el._textEditorEl.parentNode.removeChild(el._textEditorEl); } catch (e) {}
       el._textEditorEl = null;
     }
@@ -20087,6 +20124,7 @@ function buildManifest() {
       isLink: i.isLink || false, linkUrl: i.linkUrl || '', linkTitle: i.linkTitle || '', linkDesc: i.linkDesc || '',
       masks: (i.masks || []).map(m => ({ id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength })),
     };
+    if (i.isAudio) console.log('[AUDIO SAVE] id=' + i.id + ' i.audioName="' + i.audioName + '" i.filename="' + i.filename + '" -> saved audioName="' + d.audioName + '" filename="' + d.filename + '"');
     // For kpak: mediaRef points to the zip entry (e.g. "media/vid_123.mp4")
     // src is kept as the current blob: URL for restoreBoard AFTER we remap it
     d.src = i.src;
@@ -20745,6 +20783,7 @@ function restoreBoard(data) {
       // Audio item — rebuild using addAudioItem
       // Try d.filename first (newer saves), then d.audioName (older),
       // then infer from src URL (last resort for legacy kpak).
+      console.log('[AUDIO RESTORE] raw d.filename="' + d.filename + '" d.audioName="' + d.audioName + '"');
       var _audioName = d.filename || d.audioName || '';
       if (!_audioName && d.src) {
         try {
@@ -20755,6 +20794,7 @@ function restoreBoard(data) {
         } catch (_) {}
       }
       if (!_audioName) _audioName = 'Audio';
+      console.log('[AUDIO RESTORE] final _audioName="' + _audioName + '" for id=' + d.id);
       const item = addAudioItem(d.src, _audioName, d.x, d.y);
       item.filename = _audioName;
       item.audioName = _audioName;
@@ -20773,10 +20813,8 @@ function restoreBoard(data) {
           item.el._setAudioName(_audioName);
           // Verify the name actually got applied
           var _ne = item.el.querySelector('span');
-          console.log('[AUDIO FIX] id=' + d.id + ' set="' + _audioName + '" domName="' + (_ne ? _ne.textContent : 'NULL') + '" hasSet=' + !!item.el._setAudioName);
         } catch (e) {}
       } else {
-        console.log('[AUDIO FIX] id=' + d.id + ' CANNOT set: hasEl=' + !!item.el + ' hasSetter=' + !!(item.el && item.el._setAudioName));
       }
       return;
     }
@@ -23611,7 +23649,6 @@ function _handleFileDrop(e, files) {
     const dropY = dropY0 + idx * 20;
     const reader = new FileReader();
     reader.onload = ev => {
-      console.log('[AUDIO IMPORT] fileName="' + file.name + '" size=' + file.size);
       addAudioItem(ev.target.result, file.name, dropX, dropY);
     };
     reader.readAsDataURL(file);
@@ -25714,7 +25751,6 @@ function addAudioItem(src, fileName, x, y) {
     trimStart: 0, trimEnd: 0, playbackRate: 1,
   };
   state.items.push(item);
-  console.log('[AUDIO ITEM] id=' + item.id + ' audioName="' + item.audioName + '" filename="' + (item.filename || '') + '"');
   updateItemStyle(item);
   selectOnly(item.id);
   scheduleAutoSave();
