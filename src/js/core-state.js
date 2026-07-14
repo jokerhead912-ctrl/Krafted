@@ -13,6 +13,67 @@ console.log(
 );
 console.log('%c© 2025 Joker Head Studios. All rights reserved. Unauthorized modification or redistribution is prohibited.',
   'color:#888;font-size:11px;');
+
+// ============================================================
+//  PLATFORM REGISTRY — unified detection for cross-platform
+//  feature gating. Every platform-specific shortcut, gesture,
+//  or behaviour should check this object instead of calling
+//  navigator.userAgent / navigator.platform directly.
+//  Rules:
+//    Platform.mac    → macOS (includes MacBook, iMac, Mac mini)
+//    Platform.win    → Windows
+//    Platform.touch  → touchscreen device (phone/tablet)
+//    Platform.trackpad → MacBook built-in trackpad OR Magic
+//                         Trackpad (multi-touch gestures)
+//    Platform.pen    → Wacom/Huion/XP-Pen stylus detected
+//  When adding a NEW platform-specific feature, add a branch
+//  in the feature file using these flags so it NEVER leaks
+//  onto the wrong platform.
+// ============================================================
+export const Platform = (function(){
+  const ua = (navigator.userAgent || '');
+  const plat = (navigator.platform || '');
+  const mac = /Mac|iPhone|iPad|iPod/.test(plat) || /Mac/.test(ua);
+  const win = /Win/.test(plat) || /Windows/.test(ua);
+  const touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  // Trackpad detection: Mac + touch-capable (Magic Trackpad / built-in).
+  // We can't 100% distinguish a Magic Mouse scroll from a Trackpad scroll
+  // at the UA level, so this flag means "the platform HAS a trackpad".
+  // Individual gesture handlers (wheel-zoom.js) use runtime deltaMode +
+  // pointer count to further narrow down pinch vs wheel.
+  const trackpad = mac && touch;
+  // Pen tablet detection: PointerEvent with pointerType='pen' at any point
+  // in the session. We set a one-shot listener so the flag is true after
+  // the first pen event. Before the first pen event, Platform.pen is false.
+  let penDetected = false;
+  try {
+    window.addEventListener('pointerdown', function _penDetect(e){
+      if (e.pointerType === 'pen') {
+        penDetected = true;
+        window.removeEventListener('pointerdown', _penDetect, true);
+      }
+    }, true);
+  } catch(e){}
+  return {
+    mac: mac,
+    win: win,
+    touch: touch,
+    trackpad: trackpad,
+    get pen(){ return penDetected; },
+    // Convenience: the "modifier" key for zoom on this platform.
+    // Mac → 'Cmd', Windows → 'Ctrl'. Use this in shortcut labels
+    // and help text so users see the right key for their OS.
+    zoomMod: mac ? 'Cmd' : 'Ctrl',
+    // Convenience: the native zoom key string for wheel events.
+    // Mac → 'metaKey', Windows → 'ctrlKey'. Used in wheel-zoom.js
+    // to branch without hard-coding platform checks.
+    zoomKey: mac ? 'metaKey' : 'ctrlKey',
+  };
+})();
+console.log('[INIT] Platform:', JSON.stringify({
+  mac: Platform.mac, win: Platform.win, touch: Platform.touch,
+  trackpad: Platform.trackpad, zoomMod: Platform.zoomMod,
+}));
 if (typeof JSZip === 'undefined') {
   console.error('[INIT] JSZip is NOT available! .kpak save will fail.');
 }

@@ -2259,8 +2259,8 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
     //                      pinch (ctrl+wheel) → zoom  (let it bubble)
     //   - Windows mouse:  wheel → zoom  (let it bubble to canvas)
 
-    const _isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || '') ||
-                   /Mac OS X/.test(navigator.userAgent || '');
+    // R79: use Platform registry instead of inline UA sniffing
+    const _isMac = !!(window.Platform && window.Platform.mac);
 
     // rAF-batched DOM sync — runs once per animation frame, cheaply
     // updates the fill bar, time label, thumb position and playhead
