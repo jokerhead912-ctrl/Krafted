@@ -269,7 +269,19 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
   flex-shrink: 0; min-width: 0;
 }
 .item.has-media .media-controls-group.grow {
-  flex: 1 1 120px; min-width: 100px; /* scrub group fills remaining space */
+  /* Round 94: min-width must cover its own children (2 time labels
+     @44px + seek bar @100px + 2x 5px gaps = ~198px) — otherwise the
+     children overflow this box and visually spill onto the buttons
+     to the right instead of triggering the row's horizontal scroll. */
+  flex: 1 1 120px; min-width: 198px;
+}
+.item.has-media .media-controls-row.compact .media-controls-group.grow {
+  /* Compact mode shrinks the time labels (30px) and the seek bar
+     itself gets a smaller floor too — see .compact .media-seek-bar. */
+  min-width: 130px;
+}
+.item.has-media .media-controls-row.compact .media-seek-bar {
+  min-width: 60px;
 }
 .item.has-media .media-controls-sep {
   width: 1px; height: 22px;
