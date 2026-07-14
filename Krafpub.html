@@ -4402,6 +4402,14 @@ function showWelcome() {
 </div>
 
 <script>
+// ── Early global alias for button onclick handlers ──
+// Some HTML buttons use onclick="setTool('text')" etc. These need
+// setTool to be a global function. The actual function is defined
+// later (line ~21202) inside this same script block; we create a
+// forward declaration here so onclick attributes never fail with
+// "setTool is not defined", even if the button fires before the
+// full script has loaded (rare, but possible on slow networks).
+window.setTool = window.setTool || function(t) { console.warn('[Early setTool] tool=' + t + ' — waiting for real init'); };
 // ============================================================
 //  STARTUP CHECKS
 // ============================================================
@@ -21200,6 +21208,7 @@ function loadAutoSave() {
 //  TOOLS
 // ============================================================
 function setTool(tool) {
+  window.setTool = setTool; // ensure global alias stays fresh
   // Clean up any in-progress drag operations
   if (captureDrag) { captureDrag = null; captureBox.style.display = 'none'; captureOverlay.style.display = 'none'; document.body.style.cursor = ''; setCaptureMode(false); }
   captureHint.style.display = 'none';
