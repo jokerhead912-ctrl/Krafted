@@ -2645,7 +2645,7 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #unlock-modal .unlock-actions button.danger:hover { color:var(--text); }
 
 /* STATUS BAR */
-#status { position:fixed; bottom:42px; right:12px; font-size:10px; color:var(--text-dim); background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:6px; padding:5px 10px; z-index:9999999; font-family:'Inter',sans-serif; letter-spacing:0.3px; }
+#status { position:fixed; bottom:42px; right:12px; font-size:10px; color:var(--text-dim); background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:6px; padding:5px 10px; z-index:9999999; font-family:'Inter',sans-serif; letter-spacing:0.3px; transition: bottom 0.18s ease; }
 
 /* ZOOM STEP WIDGET (Round 32) — sits just above the status bar at the
    bottom-right corner. Slightly more prominent than the status because
@@ -2663,6 +2663,11 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
   z-index: 9999999;
   font-family: 'Inter', sans-serif; letter-spacing: 0.3px;
   user-select: none;
+  /* Round 95: bottom is adjusted dynamically by _syncBottomBarOffsets()
+     whenever #media-bar (Play All/Pause All) shows up, so this widget
+     never sits underneath/overlapping it. Smooth transition so the
+     shift when a video/GIF is added or removed doesn't feel like a jump. */
+  transition: bottom 0.18s ease;
 }
 #zoom-step-widget .zs-label { white-space: nowrap; cursor: help; }
 #zoom-step-slider {
@@ -13947,6 +13952,7 @@ function updateMediaBar() {
   });
   if (mediaItems.length === 0) {
     bar.classList.remove('active');
+    _syncBottomBarOffsets();
     return;
   }
   bar.classList.add('active');
@@ -13965,6 +13971,42 @@ function updateMediaBar() {
   // Update Play All / Pause All button state
   const anyPlaying = mediaItems.some(i => i.video ? !i.video.paused : !_frozenGifs.has(i.id));
   document.getElementById('btn-play-all').classList.toggle('playing', anyPlaying);
+  _syncBottomBarOffsets();
+}
+
+/* Round 95: the bottom-left #zoom-step-widget (Wheel step / Frame /
+   Natural scroll) and bottom-right #status pill are both `position:fixed`
+   at a hardcoded `bottom` value, with NO awareness of #media-bar (the
+   Play All/Pause All row that slides in from the bottom whenever a
+   video or GIF exists on the board). Whenever media-bar activates, it
+   sits on top of them (screenshot: Wheel step row half-buried under
+   Play All/Pause All). Fix: measure the real, current height of
+   #media-bar via getBoundingClientRect() (never hardcode — text can
+   wrap, DPI-scale can change padding) and push both widgets up by
+   exactly that height + a small gap, whenever it's active. Restore
+   the default 14px/42px the instant media-bar goes away. */
+function _syncBottomBarOffsets() {
+  const bar = document.getElementById('media-bar');
+  const zw = document.getElementById('zoom-step-widget');
+  const st = document.getElementById('status');
+  if (!bar || !zw || !st) return;
+  const active = bar.classList.contains('active');
+  const barH = active ? bar.getBoundingClientRect().height : 0;
+  const gap = active ? 8 : 0;
+  zw.style.bottom = (14 + barH + gap) + 'px';
+  st.style.bottom = (42 + barH + gap) + 'px';
+}
+// Keep the offsets correct if media-bar's own height changes (e.g. the
+// media-list wraps to two lines on a narrow window, or DPI-scale changes
+// its padding) without anyone explicitly calling updateMediaBar() again.
+if (typeof ResizeObserver !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', function () {
+    const bar = document.getElementById('media-bar');
+    if (bar) {
+      const _mediaBarRO = new ResizeObserver(function () { _syncBottomBarOffsets(); });
+      _mediaBarRO.observe(bar);
+    }
+  });
 }
 
 function playAllMedia() {

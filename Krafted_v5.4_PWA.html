@@ -181,22 +181,22 @@ body[data-dpi-scale] .item.has-media .media-draw-btn {
   font-size: calc(14px * var(--dpi-scale, 1));
 }
 body[data-dpi-scale] .media-comments-btn {
-  height: calc(30px * var(--dpi-scale, 1));
-  padding: 0 calc(9px * var(--dpi-scale, 1));
-  font-size: calc(12px * var(--dpi-scale, 1));
-}
-body[data-dpi-scale] .media-comments-btn .btn-icon { font-size: calc(13px * var(--dpi-scale, 1)); }
-body[data-dpi-scale] .media-comments-btn .btn-label { font-size: calc(11px * var(--dpi-scale, 1)); }
-body[data-dpi-scale] .media-comments-btn .btn-count {
-  font-size: calc(10px * var(--dpi-scale, 1));
+  height: calc(21px * var(--dpi-scale, 1));
   padding: 0 calc(6px * var(--dpi-scale, 1));
-  border-radius: calc(9px * var(--dpi-scale, 1));
-  min-width: calc(18px * var(--dpi-scale, 1));
+  font-size: calc(8.4px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .media-comments-btn .btn-icon { font-size: calc(9px * var(--dpi-scale, 1)); }
+body[data-dpi-scale] .media-comments-btn .btn-label { font-size: calc(7.7px * var(--dpi-scale, 1)); }
+body[data-dpi-scale] .media-comments-btn .btn-count {
+  font-size: calc(7px * var(--dpi-scale, 1));
+  padding: 0 calc(4px * var(--dpi-scale, 1));
+  border-radius: calc(7px * var(--dpi-scale, 1));
+  min-width: calc(13px * var(--dpi-scale, 1));
 }
 body[data-dpi-scale] .media-snap-btn {
-  height: calc(30px * var(--dpi-scale, 1));
-  padding: 0 calc(9px * var(--dpi-scale, 1));
-  font-size: calc(12px * var(--dpi-scale, 1));
+  height: calc(21px * var(--dpi-scale, 1));
+  padding: 0 calc(6px * var(--dpi-scale, 1));
+  font-size: calc(8.4px * var(--dpi-scale, 1));
 }
 body[data-dpi-scale] .media-clean-btn {
   width:  calc(26px * var(--dpi-scale, 1));
@@ -241,15 +241,47 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
 .item.has-media .media-controls-row {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 10px; min-height: 40px; box-sizing: border-box;
-  flex-wrap: wrap;
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: thin;
+}
+/* Compact mode (Round 94): applied via ResizeObserver when the player
+   is too narrow for the full seek bar + labeled buttons to coexist
+   without overlapping. Hides button text labels — icons + count badge
+   remain — and shrinks the time label min-width so the seek bar gets
+   the space it needs. */
+.item.has-media .media-controls-row.compact .media-comments-btn .btn-label,
+.item.has-media .media-controls-row.compact .media-snap-btn .btn-label {
+  display: none;
+}
+.item.has-media .media-controls-row.compact .media-snap-btn {
+  padding: 0 6px;
+}
+.item.has-media .media-controls-row.compact .media-comments-btn {
+  padding: 0 6px;
+}
+.item.has-media .media-controls-row.compact .media-time {
+  min-width: 30px;
+  font-size: 10px;
 }
 /* Visual grouping inside the controls row — left/center/right cluster */
 .item.has-media .media-controls-group {
   display: flex; align-items: center; gap: 5px;
-  flex-shrink: 0;
+  flex-shrink: 0; min-width: 0;
 }
 .item.has-media .media-controls-group.grow {
-  flex: 1 1 120px; min-width: 100px; /* scrub group fills remaining space */
+  /* Round 94: min-width must cover its own children (2 time labels
+     @44px + seek bar @100px + 2x 5px gaps = ~198px) — otherwise the
+     children overflow this box and visually spill onto the buttons
+     to the right instead of triggering the row's horizontal scroll. */
+  flex: 1 1 120px; min-width: 198px;
+}
+.item.has-media .media-controls-row.compact .media-controls-group.grow {
+  /* Compact mode shrinks the time labels (30px) and the seek bar
+     itself gets a smaller floor too — see .compact .media-seek-bar. */
+  min-width: 130px;
+}
+.item.has-media .media-controls-row.compact .media-seek-bar {
+  min-width: 60px;
 }
 .item.has-media .media-controls-sep {
   width: 1px; height: 22px;
@@ -1270,13 +1302,13 @@ body.dragging-file .media-anno-toolbar {
    but styled to match the other in-bar buttons (rectangular, subtle
    border, hover/active states). */
 .media-comments-btn {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 0 9px; height: 30px; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 3.5px;
+  padding: 0 6px; height: 21px; flex-shrink: 0;
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 6px;
+  border-radius: 4px;
   color: rgba(255,255,255,0.9);
-  font: 600 12px 'Inter', sans-serif;
+  font: 600 8.4px 'Inter', sans-serif;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
   user-select: none; -webkit-user-select: none;
@@ -1290,15 +1322,15 @@ body.dragging-file .media-anno-toolbar {
   background: var(--accent); color: #000;
   border-color: var(--accent);
 }
-.media-comments-btn .btn-icon { font-size: 13px; line-height: 1; }
+.media-comments-btn .btn-icon { font-size: 9px; line-height: 1; }
 .media-comments-btn .btn-label {
-  font-size: 11px; font-weight: 600; letter-spacing: 0.2px;
+  font-size: 7.7px; font-weight: 600; letter-spacing: 0.2px;
 }
 .media-comments-btn .btn-count {
   background: var(--accent); color: #0a0a0a;
-  border-radius: 9px; padding: 0 6px;
-  font-size: 10px; font-weight: 800;
-  min-width: 18px; text-align: center;
+  border-radius: 7px; padding: 0 4px;
+  font-size: 7px; font-weight: 800;
+  min-width: 13px; text-align: center;
   font-variant-numeric: tabular-nums;
 }
 .media-comments-btn.active .btn-count {
@@ -1306,13 +1338,13 @@ body.dragging-file .media-anno-toolbar {
 }
 /* ── Snap button on the player controls bar ── */
 .media-snap-btn {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 0 9px; height: 30px; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 3.5px;
+  padding: 0 6px; height: 21px; flex-shrink: 0;
   background: rgba(0,229,255,0.10);
   border: 1px solid rgba(0,229,255,0.30);
-  border-radius: 6px;
+  border-radius: 4px;
   color: var(--accent);
-  font: 600 12px 'Inter', sans-serif;
+  font: 600 8.4px 'Inter', sans-serif;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
   user-select: none; -webkit-user-select: none;
@@ -1859,7 +1891,7 @@ body.dragging-file .media-anno-toolbar {
    scrubbing to, even if the cursor leaves the bar). */
 .item.has-media .media-seek-tooltip {
   position: absolute;
-  bottom: calc(100% + 4px);
+  top: calc(100% + 4px);
   left: 0;
   transform: translateX(-50%);
   background: rgba(20, 20, 28, 0.95);
@@ -1905,7 +1937,7 @@ body.dragging-file .media-anno-toolbar {
    blocks drag. Hidden by default, shown via .show class. */
 .item.has-media .media-playhead-label {
   position: absolute;
-  bottom: calc(100% + 4px);
+  top: calc(100% + 4px);
   left: 0;
   transform: translateX(-50%);
   background: linear-gradient(180deg, rgba(20, 20, 28, 0.92), rgba(30, 30, 42, 0.92));
@@ -2093,8 +2125,8 @@ body.dragging-file .media-anno-toolbar {
    is added so the typed text stays readable over any video frame. */
 .media-anno-text-editor {
   position: fixed; z-index: 8;
-  min-width: 120px; max-width: 320px;
-  padding: 5px 8px;
+  min-width: 20px; max-width: 140px;
+  padding: 3px 6px;
   background: rgba(0, 0, 0, 0.78);
   border: 1.5px solid var(--accent);
   border-radius: 6px;
@@ -2110,6 +2142,7 @@ body.dragging-file .media-anno-toolbar {
   box-shadow: 0 4px 18px rgba(0,0,0,0.7);
   white-space: pre-wrap;
   word-wrap: break-word;
+  overflow: hidden;
 }
 .media-anno-text-editor::placeholder {
   color: rgba(255, 255, 255, 0.4);
@@ -2612,7 +2645,7 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #unlock-modal .unlock-actions button.danger:hover { color:var(--text); }
 
 /* STATUS BAR */
-#status { position:fixed; bottom:42px; right:12px; font-size:10px; color:var(--text-dim); background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:6px; padding:5px 10px; z-index:9999999; font-family:'Inter',sans-serif; letter-spacing:0.3px; }
+#status { position:fixed; bottom:42px; right:12px; font-size:10px; color:var(--text-dim); background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:6px; padding:5px 10px; z-index:9999999; font-family:'Inter',sans-serif; letter-spacing:0.3px; transition: bottom 0.18s ease; }
 
 /* ZOOM STEP WIDGET (Round 32) — sits just above the status bar at the
    bottom-right corner. Slightly more prominent than the status because
@@ -2630,6 +2663,11 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
   z-index: 9999999;
   font-family: 'Inter', sans-serif; letter-spacing: 0.3px;
   user-select: none;
+  /* Round 95: bottom is adjusted dynamically by _syncBottomBarOffsets()
+     whenever #media-bar (Play All/Pause All) shows up, so this widget
+     never sits underneath/overlapping it. Smooth transition so the
+     shift when a video/GIF is added or removed doesn't feel like a jump. */
+  transition: bottom 0.18s ease;
 }
 #zoom-step-widget .zs-label { white-space: nowrap; cursor: help; }
 #zoom-step-slider {
@@ -3332,7 +3370,7 @@ window.JSZip=JSZip;
       if (it.isVideo && it.el && it.el._annoDrawState) { var sbf = it.el._annoDrawState.strokesByFrame; if (sbf) { node._annoStrokesByFrame = {}; Object.keys(sbf).forEach(function(f) { if (sbf[f] && sbf[f].length) { node._annoStrokesByFrame[f] = sbf[f].map(function(s) { return { type: s.type, color: s.color, size: s.size, points: (s.points || []).map(function(p) { return [p[0], p[1]]; }), text: s.text || '' }; }); } }); } }
       if (it.type === 'draw') { node.type = 'draw'; node.strokeId = it.strokeId; node.drawMode = it.drawMode; node.drawColor = it.drawColor; node.drawSize = it.drawSize; node.drawOpacity = it.drawOpacity; node.drawArrowHead = it.drawArrowHead; }
       else if (it.isVideo) { node.type = 'video'; node.assetId = it.id; }
-      else if (it.isAudio) { node.type = 'audio'; node.assetId = it.id; node.audioName = it.audioName || ''; }
+      else if (it.isAudio) { node.type = 'audio'; node.assetId = it.id; node.audioName = it.audioName || it.filename || ''; node.filename = it.filename || it.audioName || ''; }
       else if (it.isLink) { node.type = 'link'; node.linkUrl = it.linkUrl || ''; node.linkTitle = it.linkTitle || ''; node.linkDesc = it.linkDesc || ''; }
       else { node.type = 'image'; node.assetId = it.id; }
       if (it.src && it.src.startsWith('blob:')) { node._src = it.src; }
@@ -3373,7 +3411,7 @@ window.JSZip=JSZip;
       if (!resolvedSrc && n.mediaData) { try { var arr = n.mediaData.split(','); var mime = (arr[0].match(/:(.*?);/) || [])[1] || 'application/octet-stream'; var bin = atob(arr[1] || arr[0]); var bytes = new Uint8Array(bin.length); for (var k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k); resolvedSrc = URL.createObjectURL(new Blob([bytes], { type: mime })); } catch (e) {} }
       var savedW = n.w > 0 ? n.w : (n.natW || 100);
       var savedH = n.h > 0 ? n.h : (n.natH || 100);
-      var item = { id: n.id, x: n.x || 0, y: n.y || 0, w: savedW, h: savedH, natW: n.natW, natH: n.natH, cropX: n.cropX, cropY: n.cropY, cropW: n.cropW, cropH: n.cropH, rot: n.rot || 0, opacity: n.opacity !== undefined ? n.opacity : 1, z: n.zIndex || 0, locked: n.locked || false, flipH: n.flipH || false, flipV: n.flipV || false, trimStart: n.trimStart || 0, trimEnd: n.trimEnd || 0, playbackRate: n.playbackRate || 1, fps: n.fps || null, fpsManual: n.fpsManual || false, isGif: n.isGif || false, brightness: (n.adjustments || {}).brightness, contrast: (n.adjustments || {}).contrast, saturate: (n.adjustments || {}).saturate, hueRotate: (n.adjustments || {}).hueRotate, blur: (n.adjustments || {}).blur, sepia: (n.adjustments || {}).sepia, grayscale: (n.adjustments || {}).grayscale, temp: (n.adjustments || {}).temp, vignette: (n.adjustments || {}).vignette, shadow: (n.adjustments || {}).shadow, highlight: (n.adjustments || {}).highlight, grain: (n.adjustments || {}).grain, filename: n.filename || '', isVideo: n.type === 'video', isAudio: n.type === 'audio', isLink: n.type === 'link', linkUrl: n.linkUrl || '', linkTitle: n.linkTitle || '', linkDesc: n.linkDesc || '', anno: n.anno ? { comments: (n.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text || '', translation: c.translation || '', translationDir: c.translationDir || '', originalText: c.originalText || '', snapshot: c.snapshot || '', annoStrokes: Array.isArray(c.annoStrokes) ? c.annoStrokes.filter(Boolean).map(function(s) { return { type: s.type, color: s.color, size: s.size, points: Array.isArray(s.points) ? s.points.map(function(p) { return [p[0], p[1]]; }) : [], text: s.text || '' }; }) : [] }; }) } : undefined, _annoStrokesByFrame: n._annoStrokesByFrame || undefined, masks: n.masks ? n.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }) : undefined, type: n.type === 'draw' ? 'draw' : undefined, strokeId: n.strokeId, drawMode: n.drawMode, drawColor: n.drawColor, drawSize: n.drawSize, drawOpacity: n.drawOpacity, drawArrowHead: n.drawArrowHead, src: resolvedSrc };
+      var item = { id: n.id, x: n.x || 0, y: n.y || 0, w: savedW, h: savedH, natW: n.natW, natH: n.natH, cropX: n.cropX, cropY: n.cropY, cropW: n.cropW, cropH: n.cropH, rot: n.rot || 0, opacity: n.opacity !== undefined ? n.opacity : 1, z: n.zIndex || 0, locked: n.locked || false, flipH: n.flipH || false, flipV: n.flipV || false, trimStart: n.trimStart || 0, trimEnd: n.trimEnd || 0, playbackRate: n.playbackRate || 1, fps: n.fps || null, fpsManual: n.fpsManual || false, isGif: n.isGif || false, brightness: (n.adjustments || {}).brightness, contrast: (n.adjustments || {}).contrast, saturate: (n.adjustments || {}).saturate, hueRotate: (n.adjustments || {}).hueRotate, blur: (n.adjustments || {}).blur, sepia: (n.adjustments || {}).sepia, grayscale: (n.adjustments || {}).grayscale, temp: (n.adjustments || {}).temp, vignette: (n.adjustments || {}).vignette, shadow: (n.adjustments || {}).shadow, highlight: (n.adjustments || {}).highlight, grain: (n.adjustments || {}).grain, filename: n.filename || n.audioName || '', isVideo: n.type === 'video', isAudio: n.type === 'audio', audioName: n.audioName || n.filename || '', isLink: n.type === 'link', linkUrl: n.linkUrl || '', linkTitle: n.linkTitle || '', linkDesc: n.linkDesc || '', anno: n.anno ? { comments: (n.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text || '', translation: c.translation || '', translationDir: c.translationDir || '', originalText: c.originalText || '', snapshot: c.snapshot || '', annoStrokes: Array.isArray(c.annoStrokes) ? c.annoStrokes.filter(Boolean).map(function(s) { return { type: s.type, color: s.color, size: s.size, points: Array.isArray(s.points) ? s.points.map(function(p) { return [p[0], p[1]]; }) : [], text: s.text || '' }; }) : [] }; }) } : undefined, _annoStrokesByFrame: n._annoStrokesByFrame || undefined, masks: n.masks ? n.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }) : undefined, type: n.type === 'draw' ? 'draw' : undefined, strokeId: n.strokeId, drawMode: n.drawMode, drawColor: n.drawColor, drawSize: n.drawSize, drawOpacity: n.drawOpacity, drawArrowHead: n.drawArrowHead, src: resolvedSrc };
       data.items.push(item);
     }
     var texts = manifest.texts || [];
@@ -4444,7 +4482,7 @@ console.log('[INIT] Touch device:', IS_TOUCH_DEVICE);
 // Cap the combined scale at 1.6× so it stays usable without dominating.
 // The scale only targets .item.has-media controls — canvas, toolbar
 // and panels are unchanged.
-(function _initDpiScale() {
+window._applyDpiScale = (function _initDpiScale() {
   var dpr = (window.devicePixelRatio || 1);
   var vw = window.innerWidth || 0;
   // DPR-based: starts at 1.2× for DPR 1.0, grows to 1.4× at DPR 2+
@@ -4459,6 +4497,8 @@ console.log('[INIT] Touch device:', IS_TOUCH_DEVICE);
     document.body.style.setProperty('--dpi-scale', String(rounded));
     console.log('[INIT] Player controls auto-scaled ' + Math.round(scale * 100) + '% (DPR=' + dpr + ', vw=' + vw + ')');
   }
+  // Return as a callable function for kpak-load re-application
+  return arguments.callee;
 })();
 
 // Mobile state for touch gesture tracking
@@ -6083,7 +6123,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // button (or any other tool button), the toolbar pops up. The
       // ✕ close button now just exits draw mode (equivalent to pressing
       // the draw button again).
-      try {
+          try {
         if (annoToolbar) {
           annoToolbar.classList.toggle('toolbar-hidden', s.mode === 'off');
         }
@@ -6450,14 +6490,48 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       editor.style.font = '600 ' + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
       editor.style.left = (px - 2) + 'px';
       editor.style.top = (py - 1) + 'px';
+      editor.style.width = '20px'; // start small, auto-grow on input
       // Color: copy from current draw state
       editor.style.color = s.color || '#fff';
       // Stash the normalised point for later commit
       editor._annoPt = pt;
-      // Auto-grow height as the user types
-      editor.addEventListener('input', function(){
+      // Auto-grow width & height as the user types.
+      // Uses a hidden mirror <span> with identical styling to measure
+      // the natural text width, then clamps between minW(60) and maxW(420).
+      var _mirror = document.createElement('span');
+      _mirror.style.cssText = 'position:absolute;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;pointer-events:none;left:-9999px;top:-9999px;';
+      document.body.appendChild(_mirror);
+      editor._mirror = _mirror; // stash for cleanup
+      // Run once immediately to fit the placeholder width
+      (function(){
         editor.style.height = 'auto';
         editor.style.height = (editor.scrollHeight + 4) + 'px';
+        var txt = editor.value || editor.placeholder || '';
+        var fs = editor.style.font || window.getComputedStyle(editor).font || '14px sans-serif';
+        var pw = parseFloat(window.getComputedStyle(editor).paddingLeft || 0) + parseFloat(window.getComputedStyle(editor).paddingRight || 0);
+        _mirror.style.font = fs;
+        _mirror.style.lineHeight = editor.style.lineHeight || window.getComputedStyle(editor).lineHeight;
+        _mirror.style.letterSpacing = window.getComputedStyle(editor).letterSpacing;
+        _mirror.textContent = txt;
+        var naturalW = _mirror.getBoundingClientRect().width + pw + 2;
+        var targetW = Math.max(20, Math.min(140, Math.ceil(naturalW)));
+        editor.style.width = targetW + 'px';
+      })();
+      editor.addEventListener('input', function(){
+        // Height: auto-grow
+        editor.style.height = 'auto';
+        editor.style.height = (editor.scrollHeight + 4) + 'px';
+        // Width: measure via mirror span
+        var txt = editor.value || editor.placeholder || '';
+        var fs = editor.style.font || window.getComputedStyle(editor).font || '14px sans-serif';
+        var pw = parseFloat(window.getComputedStyle(editor).paddingLeft || 0) + parseFloat(window.getComputedStyle(editor).paddingRight || 0);
+        _mirror.style.font = fs;
+        _mirror.style.lineHeight = editor.style.lineHeight || window.getComputedStyle(editor).lineHeight;
+        _mirror.style.letterSpacing = window.getComputedStyle(editor).letterSpacing;
+        _mirror.textContent = txt;
+        var naturalW = _mirror.getBoundingClientRect().width + pw + 2; // +2 for border
+        var targetW = Math.max(20, Math.min(140, Math.ceil(naturalW)));
+        editor.style.width = targetW + 'px';
       });
       // Enter to commit, Shift+Enter for newline, Esc to cancel
       editor.addEventListener('keydown', function(ke){
@@ -6485,6 +6559,26 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // viewport/fullscreen viewport identically.
       document.body.appendChild(editor);
       el._textEditorEl = editor;
+      // Make the text editor draggable so the user can reposition it
+      // after it spawns at the video centre (T-key shortcut).
+      (function _makeDraggable() {
+        var dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+        editor.addEventListener('pointerdown', function(de) {
+          if (de.target.tagName === 'TEXTAREA') return; // let typing through
+          dragging = true; startX = de.clientX; startY = de.clientY;
+          origLeft = parseFloat(editor.style.left) || 0;
+          origTop = parseFloat(editor.style.top) || 0;
+          editor.setPointerCapture(de.pointerId);
+          de.preventDefault(); de.stopPropagation();
+        });
+        editor.addEventListener('pointermove', function(de) {
+          if (!dragging) return;
+          editor.style.left = (origLeft + de.clientX - startX) + 'px';
+          editor.style.top = (origTop + de.clientY - startY) + 'px';
+        });
+        editor.addEventListener('pointerup', function() { dragging = false; });
+        editor.addEventListener('pointercancel', function() { dragging = false; });
+      })();
       // Round 28.7: translate-to-Chinese button. Floats just below
       // the editor's right edge. Click → calls translateText(), replaces
       // the editor's value with the translation. The user can still
@@ -6642,6 +6736,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         try { scheduleAutoSave(); } catch (e) {}
       }
       // Tear down the editor
+      try { if (ed._mirror && ed._mirror.parentNode) ed._mirror.parentNode.removeChild(ed._mirror); } catch (e) {}
       try { ed.parentNode.removeChild(ed); } catch (e) {}
       el._textEditorEl = null;
       s._textSpawnFrame = null;
@@ -6663,6 +6758,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         }
         if (ed) ed._trBtn = null;
       } catch (e) {}
+      try { if (el._textEditorEl._mirror && el._textEditorEl._mirror.parentNode) el._textEditorEl._mirror.parentNode.removeChild(el._textEditorEl._mirror); } catch (e) {}
       try { el._textEditorEl.parentNode.removeChild(el._textEditorEl); } catch (e) {}
       el._textEditorEl = null;
     }
@@ -6670,6 +6766,18 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     el._textEditorEl = null;
     el._commitTextEditor = _commitTextEditor;
     el._cancelTextEditor = _cancelTextEditor;
+    el._spawnTextEditorDirect = function(fakeEv) {
+      // Ensure draw state is active before spawning
+      if (el._annoDrawState.mode !== 'text') el._annoDrawState.mode = 'text';
+      _applyDrawMode();
+      // Use the video wrap's centre for the canvas point
+      var cr = annoCanvas.getBoundingClientRect();
+      var pt = [
+        Math.max(0, Math.min(1, (fakeEv.clientX - cr.left) / (cr.width || 1))),
+        Math.max(0, Math.min(1, (fakeEv.clientY - cr.top) / (cr.height || 1)))
+      ];
+      _spawnTextEditor(fakeEv, pt);
+    };
     annoCanvas.addEventListener('pointermove', function(ev) {
       const s = el._annoDrawState;
       if (!s.drawing) return;
@@ -7044,7 +7152,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // ── Snap button: batch-capture all stroked frames (same as popover Snap) ──
   const playerSnapBtn = document.createElement('div');
   playerSnapBtn.className = 'media-snap-btn';
-  playerSnapBtn.innerHTML = '&#9636;&#65039; Snap'; // ▤️ Snap
+  playerSnapBtn.innerHTML = '&#9636;&#65039;<span class="btn-label"> Snap</span>'; // ▤️ Snap
   playerSnapBtn.title = 'Snap all annotated frames — batch-capture every frame that has draw/text strokes as a frame comment';
   playerSnapBtn.addEventListener('mousedown', function(ev) { ev.stopPropagation(); ev.preventDefault(); });
   playerSnapBtn.addEventListener('click', async function(ev) {
@@ -7234,6 +7342,22 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     });
   }
   ctrlsRow.appendChild(rightGroup);
+
+  // ── Responsive compact mode: when the player is narrow, the seek
+  // bar gets squeezed and its time labels / playhead marker can visually
+  // collide with the Comments/Snap buttons on the right. Fix: once the
+  // controls row drops below a width threshold, add `.compact` which
+  // hides the text labels on the comments/snap buttons (icon-only),
+  // freeing up horizontal space so nothing overlaps.
+  if (typeof ResizeObserver !== 'undefined') {
+    const _ctrlsRO = new ResizeObserver(function(entries) {
+      for (const entry of entries) {
+        const w = entry.contentRect.width;
+        ctrlsRow.classList.toggle('compact', w < 420);
+      }
+    });
+    _ctrlsRO.observe(ctrlsRow);
+  }
 
   // ── (Stage B: comment buttons REMOVED from the control bar) ──
   // The user asked to remove the two buttons ("💬 Add" + "🗨 list"). They
@@ -8848,10 +8972,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     if (ev.key === 'm' || ev.key === 'M') {
       ev.preventDefault();
       _setListOpen(!listPopover.classList.contains('open'));
-    } else if (ev.key === 'c' || ev.key === 'C') {
-      ev.preventDefault();
-      _setListOpen(true);
-      setTimeout(() => { try { addInput.focus(); } catch (e) {} }, 30);
     } else if (ev.key === 'h' || ev.key === 'H') {
       // Clean mode toggle — hide/show all controls for distraction-free viewing
       ev.preventDefault();
@@ -13832,6 +13952,7 @@ function updateMediaBar() {
   });
   if (mediaItems.length === 0) {
     bar.classList.remove('active');
+    _syncBottomBarOffsets();
     return;
   }
   bar.classList.add('active');
@@ -13850,6 +13971,42 @@ function updateMediaBar() {
   // Update Play All / Pause All button state
   const anyPlaying = mediaItems.some(i => i.video ? !i.video.paused : !_frozenGifs.has(i.id));
   document.getElementById('btn-play-all').classList.toggle('playing', anyPlaying);
+  _syncBottomBarOffsets();
+}
+
+/* Round 95: the bottom-left #zoom-step-widget (Wheel step / Frame /
+   Natural scroll) and bottom-right #status pill are both `position:fixed`
+   at a hardcoded `bottom` value, with NO awareness of #media-bar (the
+   Play All/Pause All row that slides in from the bottom whenever a
+   video or GIF exists on the board). Whenever media-bar activates, it
+   sits on top of them (screenshot: Wheel step row half-buried under
+   Play All/Pause All). Fix: measure the real, current height of
+   #media-bar via getBoundingClientRect() (never hardcode — text can
+   wrap, DPI-scale can change padding) and push both widgets up by
+   exactly that height + a small gap, whenever it's active. Restore
+   the default 14px/42px the instant media-bar goes away. */
+function _syncBottomBarOffsets() {
+  const bar = document.getElementById('media-bar');
+  const zw = document.getElementById('zoom-step-widget');
+  const st = document.getElementById('status');
+  if (!bar || !zw || !st) return;
+  const active = bar.classList.contains('active');
+  const barH = active ? bar.getBoundingClientRect().height : 0;
+  const gap = active ? 8 : 0;
+  zw.style.bottom = (14 + barH + gap) + 'px';
+  st.style.bottom = (42 + barH + gap) + 'px';
+}
+// Keep the offsets correct if media-bar's own height changes (e.g. the
+// media-list wraps to two lines on a narrow window, or DPI-scale changes
+// its padding) without anyone explicitly calling updateMediaBar() again.
+if (typeof ResizeObserver !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', function () {
+    const bar = document.getElementById('media-bar');
+    if (bar) {
+      const _mediaBarRO = new ResizeObserver(function () { _syncBottomBarOffsets(); });
+      _mediaBarRO.observe(bar);
+    }
+  });
 }
 
 function playAllMedia() {
@@ -16320,7 +16477,9 @@ function captureSnapshot() {
       type: i.type || undefined,
       strokeId: i.strokeId, drawMode: i.drawMode, drawColor: i.drawColor,
       drawSize: i.drawSize, drawOpacity: i.drawOpacity, drawArrowHead: i.drawArrowHead,
-      src: i.src, natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, audioName: i.audioName || '',
+      src: i.src, natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false,
+      audioName: i.audioName || i.filename || '',
+      filename: i.filename || i.audioName || '',
       // Round 58: persist the user's manual FPS override so undo/redo
       // and save/reload keep the chip state. Cycle index is UI-only
       // (not saved) — it always re-initializes from the saved FPS.
@@ -20041,8 +20200,9 @@ function buildManifest() {
       id: i.id,
       x: i.x, y: i.y, w: i.w, h: i.h, rot: i.rot, opacity: i.opacity,
       flipH: i.flipH, flipV: i.flipV, locked: i.locked, z: i.z,
-      natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, audioName: i.audioName || '',
-      filename: i.filename || '',
+      natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false,
+      audioName: i.audioName || i.filename || '',
+      filename: i.filename || i.audioName || '',
       cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH,
       brightness: i.brightness, contrast: i.contrast, saturate: i.saturate,
       hueRotate: i.hueRotate, blur: i.blur, sepia: i.sepia, grayscale: i.grayscale,
@@ -20053,6 +20213,7 @@ function buildManifest() {
       isLink: i.isLink || false, linkUrl: i.linkUrl || '', linkTitle: i.linkTitle || '', linkDesc: i.linkDesc || '',
       masks: (i.masks || []).map(m => ({ id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength })),
     };
+    if (i.isAudio) console.log('[AUDIO SAVE] id=' + i.id + ' i.audioName="' + i.audioName + '" i.filename="' + i.filename + '" -> saved audioName="' + d.audioName + '" filename="' + d.filename + '"');
     // For kpak: mediaRef points to the zip entry (e.g. "media/vid_123.mp4")
     // src is kept as the current blob: URL for restoreBoard AFTER we remap it
     d.src = i.src;
@@ -20571,6 +20732,10 @@ async function loadBoardFile(event) {
       console.log('[Krafted Load] v' + (data._kraftedVersion || 'legacy') + ', ' + (data.items || []).length + ' items, ' + embedded + ' embedded, ' + formatBytes(file.size));
 
       restoreBoard(data);
+      // Re-apply DPI scale after board restore — the DOM rebuild
+      // from restoreBoard() creates fresh player controls that need
+      // the --dpi-scale CSS variable on body.
+      if (typeof window._applyDpiScale === 'function') window._applyDpiScale();
       toast('Board loaded!');
     }
   } catch (err) {
@@ -20705,7 +20870,23 @@ function restoreBoard(data) {
     }
     if (d.isAudio) {
       // Audio item — rebuild using addAudioItem
-      const item = addAudioItem(d.src, d.audioName || 'Audio', d.x, d.y);
+      // Try d.filename first (newer saves), then d.audioName (older),
+      // then infer from src URL (last resort for legacy kpak).
+      console.log('[AUDIO RESTORE] raw d.filename="' + d.filename + '" d.audioName="' + d.audioName + '"');
+      var _audioName = d.filename || d.audioName || '';
+      if (!_audioName && d.src) {
+        try {
+          var _au = new URL(d.src, location.origin);
+          if (_au.protocol !== 'blob:') {
+            _audioName = decodeURIComponent(_au.pathname.split('/').pop() || '').split('?')[0];
+          }
+        } catch (_) {}
+      }
+      if (!_audioName) _audioName = 'Audio';
+      console.log('[AUDIO RESTORE] final _audioName="' + _audioName + '" for id=' + d.id);
+      const item = addAudioItem(d.src, _audioName, d.x, d.y);
+      item.filename = _audioName;
+      item.audioName = _audioName;
       item.id = d.id !== undefined ? d.id : item.id;
       item.z = d.z || item.z;
       item.rot = d.rot || 0;
@@ -20713,6 +20894,17 @@ function restoreBoard(data) {
       item.locked = d.locked || false;
       nextZ = Math.max(nextZ, item.z + 1);
       updateItemStyle(item);
+      // Re-apply audio name on the DOM — updateItemStyle may rebuild
+      // the element, and addAudioItem's internal nameEl may have been
+      // overwritten by a later operation.
+      if (item.el && item.el._setAudioName) {
+        try {
+          item.el._setAudioName(_audioName);
+          // Verify the name actually got applied
+          var _ne = item.el.querySelector('span');
+        } catch (e) {}
+      } else {
+      }
       return;
     }
     if (d.isLink) {
@@ -20794,6 +20986,22 @@ function restoreBoard(data) {
     state.items.push(item);
     el._item = item; // stash so buildMediaControls closures can find this item
     updateItemStyle(item);
+    // Restore filename badge after kpak load — buildMediaControls
+    // initialises it as empty (line 5224). The saved filename is in
+    // d.filename (newer saves) or can be inferred from the src URL
+    // for older kpak files that predate the filename field.
+    var _fname = d.filename || '';
+    if (!_fname && d.src) {
+      try {
+        var _u = new URL(d.src, location.origin);
+        if (_u.protocol !== 'blob:') {
+          _fname = decodeURIComponent(_u.pathname.split('/').pop() || '').split('?')[0];
+        }
+      } catch (_) {}
+    }
+    if (_fname && el._setFilenameBadge) {
+      try { el._setFilenameBadge(_fname); } catch (e) {}
+    }
     // R82: restore user-set FPS from saved manifest (kpak / JSON round-trip).
     // Without this, a user who manually set FPS to, e.g., 24 fps on a film
     // video would lose that setting on save→load and revert to auto-detection.
@@ -23085,6 +23293,12 @@ viewport.addEventListener('pointercancel', e => {
 // Precision Touchpads while still letting a true vertical mouse wheel zoom.
 viewport.addEventListener('wheel', e => {
   e.preventDefault();
+  // Platform detection: Mac vs Windows trackpad/mouse behaviour differs.
+  // Mac trackpads use deltaMode 0 for both pinch-zoom AND two-finger pan.
+  // Windows high-res mouse wheels also report deltaMode 0 but should zoom,
+  // not pan. We branch by platform so one fix doesn't break the other.
+  var _isMac = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent || '');
+  var _isTwoFingerPan; // ← computed per platform below
   // Round 35: when the user is in the middle of dragging an item (move
   // drag), don't let wheel events (which can fire from accidental
   // trackpad touches while clicking) also pan or zoom the canvas. The
@@ -23164,14 +23378,16 @@ viewport.addEventListener('wheel', e => {
       // event would shift the view unpredictably.
       zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, window.innerWidth / 2, window.innerHeight / 2);
     }
-  } else if (_twoFingerPan && e.deltaMode === 0) {
+  } else if (_isMac ? (_twoFingerPan || e.deltaMode === 0) : (_twoFingerPan && e.deltaMode === 0)) {
     // Two-finger trackpad drag (all axes): pan the canvas in 2D.
-    // Only fire when BOTH conditions are true:
-    //   1) _twoFingerPan is set (2+ pointers on the viewport before wheel)
-    //   2) deltaMode === 0 (pixel-based, characteristic of trackpads)
-    // Without both checks, high-res mouse wheels on Windows (which can
-    // also report deltaMode 0) would be misrouted to the pan branch
-    // instead of zoom, making the scroll wheel do nothing useful.
+    // ── Mac: original logic — _twoFingerPan OR deltaMode 0 (pixel-mode
+    //   trackpad). Mac trackpad two-finger swipe fires wheel events with
+    //   deltaMode 0 regardless of whether a pointerdown happened first,
+    //   so `||` covers both the "drag-to-pan" and "swipe-to-pan" paths.
+    //   Pinch-zoom is handled by the ctrlKey branch above.
+    // ── Windows: require BOTH _twoFingerPan AND deltaMode 0, otherwise
+    //   high-res mouse wheels (which also report deltaMode 0) would be
+    //   misrouted to pan instead of zoom.
     state.pan.x -= e.deltaX;
     state.pan.y -= e.deltaY;
     updateCanvas();
@@ -24592,31 +24808,14 @@ document.addEventListener('keydown', e => {
       // so the seek lands on a frame boundary instead of mid-frame.
       // Combined with the in-flight lock, this makes frame-step
       // feel truly frame-accurate at the video's natural rate.
+      // Frame-step: seek immediately. On Windows, `seeked` can be
+      // slower to fire than on Mac, causing the _seekInFlight lock
+      // to stall rapid key-repeat. For frame-step we bypass the lock
+      // entirely — each arrow press is a discrete seek that directly
+      // sets currentTime. The browser naturally coalesces rapid
+      // currentTime writes, so this stays smooth without the lock.
       clearTimeout(vid._seekTimer);
-      if (vid._seekInFlight) {
-        // Already seeking: remember this target for after the
-        // current seek completes. Only queue ONE so we never
-        // accumulate runaway targets on a long key-hold.
-        vid._seekQueuedTarget = targetTime;
-        return;
-      }
-      vid._seekInFlight = true;
-      vid._seekQueuedTarget = null;
       vid._seeking = true;
-      // Apply the seek IMMEDIATELY. We previously wrapped this in
-      // requestVideoFrameCallback (RVFC) to "land on a frame boundary",
-      // but RVFC has a critical failure mode: it only fires on frames
-      // that the browser actually renders. When the video is PAUSED
-      // (which is the typical state for frame-stepping — you pause
-      // to inspect a frame, then arrow-step through), no frames are
-      // rendered, so the callback NEVER fires, currentTime never
-      // changes, and the screen stays on the same frame. The user
-      // reported "screen haven't update the content" — that was
-      // exactly this. The browser already snaps the currentTime
-      // setter to the nearest keyframe natively, so we get the same
-      // visual result (stable, on a real frame) by just assigning
-      // the value directly. The seeked event fires when the snap
-      // completes, which is what the optimistic UI wait was for.
       vid.currentTime = targetTime;
       // On seeked: clear flag, process pending target if different.
       // Also include a safety net: if `seeked` doesn't fire within 500ms,
@@ -24629,12 +24828,6 @@ document.addEventListener('keydown', e => {
         vid.addEventListener('seeked', function() {
           clearSeekingSafety();
           vid._seeking = false;
-          // Round 57: clear the in-flight lock so the next keypress
-          // can fire a new seek. (If the user pressed again during
-          // this seek, _seekQueuedTarget holds the next target and
-          // we fire it immediately below — no dead time between
-          // rapid frame-steps.)
-          vid._seekInFlight = false;
           // Sync UI to actual currentTime (in case instant update was off).
           // Use formatVideoTimeForLabel so the user's chosen display mode
           // (0:00 vs f 1234) is preserved after a seek completes.
@@ -24693,38 +24886,16 @@ document.addEventListener('keydown', e => {
           // above). For a typical video, this lands on the nearest
           // keyframe — coarser than frame-accurate, but stable.
           //
-          // Round 57: if the user pressed another arrow while we were
-          // seeking, fire the queued target now. This makes rapid
-          // key-repeat feel like one smooth stream of frame-steps with
-          // no perceptible pause between them. We re-arm the in-flight
-          // lock first so the next press will queue again if the
-          // browser is still slow.
-          if (vid._seekQueuedTarget !== null && vid._seekQueuedTarget !== undefined) {
-            var q = vid._seekQueuedTarget;
-            vid._seekQueuedTarget = null;
-            vid._seekInFlight = true;
-            vid._seeking = true;
-            if (typeof vid.requestVideoFrameCallback === 'function') {
-              vid.requestVideoFrameCallback(function() {
-                vid.currentTime = q;
-              });
-            } else {
-              vid.currentTime = q;
-            }
-          }
+          // Frame-step is now lock-free (see keydown handler above).
         });
-        vid.addEventListener('ended', function() { vid._seeking = false; vid._seekInFlight = false; clearSeekingSafety(); });
+        vid.addEventListener('ended', function() { vid._seeking = false; clearSeekingSafety(); });
       }
       // Per-seek safety: if `seeked` doesn't fire within 500ms of a
-      // pending seek, clear `_seeking` and `_seekInFlight` so the
-      // next arrow press isn't blocked. This protects against the
-      // seeked event being lost (Round 57: also clear _seekInFlight
-      // and the queued target so we never get stuck waiting for a
-      // seek that will never complete).
+      // pending seek, clear `_seeking` so the next arrow press isn't
+      // blocked. This protects against the seeked event being lost.
       if (vid._seekSafetyTimer) clearTimeout(vid._seekSafetyTimer);
       vid._seekSafetyTimer = setTimeout(function() {
         vid._seeking = false;
-        vid._seekInFlight = false;
         vid._seekQueuedTarget = null;
         vid._seekSafetyTimer = null;
       }, 500);
@@ -24818,10 +24989,17 @@ document.addEventListener('keydown', e => {
         }
         if (_selVidDT) {
           e.preventDefault();
+          // Mark this T/D press as handled so the downstream canvas
+          // selection-aware handler (line 25069) doesn't double-toggle
+          // by running the same logic a second time when the mouse is
+          // hovering over the same selected video.
+          window.__kraftedTDKeyHandled = true;
+          setTimeout(function(){ window.__kraftedTDKeyHandled = false; }, 0);
           var sDT = _selVidDT.el._annoDrawState;
           var targetMode = (e.key === 'd' || e.key === 'D') ? 'pen' : 'text';
+          // Exactly the same logic as clicking the toolbar T/D button:
+          // toggle the mode and call _applyDrawMode. Nothing else.
           sDT.mode = (sDT.mode === targetMode) ? 'off' : targetMode;
-          console.log('[T DEBUG] mode=' + sDT.mode + ' target=' + targetMode + ' hasApply=' + (typeof _selVidDT.el._applyDrawMode === 'function'));
           if (_selVidDT.el._applyDrawMode) _selVidDT.el._applyDrawMode();
           // Exit draw mode on all OTHER videos
           try {
@@ -24834,48 +25012,6 @@ document.addEventListener('keydown', e => {
                 }
               });
             }
-          } catch(e) {}
-          // Ensure toolbar is visible (it's appended to body, not el)
-          try {
-            // Use the per-video toolbar (each video has its own).
-            // The video el exposes a ref to its toolbar via the
-            // draw-state we just updated. Try the direct ref first,
-            // fall back to a class scan tied to the video.
-            var tb = null;
-            if (_selVidDT.el._annoToolbar) {
-              tb = _selVidDT.el._annoToolbar;
-            } else {
-              // Fallback: find toolbar whose data-video-id matches
-              tb = document.querySelector('.media-anno-toolbar[data-video-id="' + _selVidDT.id + '"]');
-            }
-            if (!tb) tb = document.querySelector('.media-anno-toolbar');
-            console.log('[T DEBUG] Toolbar found:', !!tb, ' hidden:', tb ? tb.classList.contains('toolbar-hidden') : 'N/A',
-            ' tbRect:', tb ? JSON.stringify(tb.getBoundingClientRect()) : 'N/A',
-            ' tbStyle.display:', tb ? getComputedStyle(tb).display : 'N/A',
-            ' tbStyle.visibility:', tb ? getComputedStyle(tb).visibility : 'N/A',
-            ' tbStyle.zIndex:', tb ? getComputedStyle(tb).zIndex : 'N/A',
-            ' vidRect:', _selVidDT.el ? JSON.stringify(_selVidDT.el.getBoundingClientRect()) : 'N/A',
-            ' winSize:', window.innerWidth + 'x' + window.innerHeight);
-          if (tb && tb.classList.contains('toolbar-hidden')) {
-              tb.classList.remove('toolbar-hidden');
-              var ann = videoAnnoEnsure(_selVidDT);
-              ann.drawToolbarHidden = false;
-              try { scheduleAutoSave(); } catch(e) {}
-            }
-            // Re-position THIS video's toolbar. Reset toolbarPos first
-            // so it recomputes from the video's bounding rect (the
-            // stored pos may point to a stale location like (0,0)).
-            try {
-              if (_selVidDT.el._annoDrawState) {
-                _selVidDT.el._annoDrawState.toolbarPos = null;
-              }
-              if (typeof _selVidDT.el._repositionAnnoToolbar === 'function') {
-                _selVidDT.el._repositionAnnoToolbar();
-              } else {
-                window.dispatchEvent(new Event('resize'));
-              }
-            } catch(e) { console.log('[T DEBUG] Reposition err:', e); }
-            try { if (typeof scheduleVisibleItemsUpdate === 'function') scheduleVisibleItemsUpdate(); } catch(e) {}
           } catch(e) {}
         }
       }
@@ -25073,6 +25209,9 @@ document.addEventListener('keydown', e => {
     // of the global canvas text tool.
     var _hasVideoSelT = false;
     try {
+      // Skip if the global D/T key handler (line 24831) already handled
+      // this keypress — otherwise we double-toggle the mode.
+      if (window.__kraftedTDKeyHandled) { return; }
       if (state && state.selected && state.selected.size > 0 && state.mouse) {
         var mouseEl = document.elementFromPoint(state.mouse.x, state.mouse.y);
         if (mouseEl) {
@@ -25126,25 +25265,8 @@ document.addEventListener('keydown', e => {
   // the Ctrl block above. Plain D no longer activates Draw so typing "d"
   // in a text/comment input doesn't accidentally switch to draw mode.
   else if (e.key === 'c' || e.key === 'C') {
-    // Round 34: c is DOUBLE-MAPPED.
-    //   • Main handler:  c → setTool('capture'),  Shift+C → captureScreen()
-    //   • Video handler (registered later, line 6527): c → open frame comment
-    //     input on the selected video.
-    // The video handler is the one you actually want while editing a video.
-    // To stop the double work, this main handler yields when a video is
-    // selected — the later-registered video handler will pick it up. Capture
-    // tool still works for non-video selections, and Shift+C still does
-    // captureScreen() regardless.
-    var _hasVideoSelC = false;
-    try {
-      if (state && state.selected && state.items) {
-        state.selected.forEach(function(id) {
-          var it = state.items.find(function(i) { return i.id === id; });
-          if (it && (it.video || it.isVideo)) { _hasVideoSelC = true; }
-        });
-      }
-    } catch (_eC) { /* fail-open: fall through */ }
-    if (_hasVideoSelC) return;            // ← yield to video handler at 6527
+    // C = capture tool (always). Shift+C = captureScreen.
+    // No longer yields to per-video comment handler — C is capture only.
     if (e.shiftKey) { captureScreen(); return; }
     setTool('capture');
   }
@@ -25602,6 +25724,8 @@ function addAudioItem(src, fileName, x, y) {
   nameEl.textContent = fileName || 'Audio';
   header.appendChild(nameEl);
   el.appendChild(header);
+  // Expose a setter so kpak restore can update the visible name after load
+  el._setAudioName = function(n) { nameEl.textContent = n || 'Audio'; };
   // Audio element + custom player
   const audio = document.createElement('audio');
   audio.src = src;
