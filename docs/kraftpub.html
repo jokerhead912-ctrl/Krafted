@@ -8200,12 +8200,14 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           try { el._refreshAllSeekMarkers(); } catch (e) {}
         }
         try { scheduleAutoSave(); } catch (e) {}
+        // Reset spawn-frame so the next T-press on a different frame
+        // creates a fresh annotation (not the same one we just committed).
+        s._textSpawnFrame = null;
       }
       // Tear down the editor
       try { if (ed._mirror && ed._mirror.parentNode) ed._mirror.parentNode.removeChild(ed._mirror); } catch (e) {}
       try { ed.parentNode.removeChild(ed); } catch (e) {}
       el._textEditorEl = null;
-      s._textSpawnFrame = null;
       // Auto-exit text mode after committing a video annotation so the
       // user can click the video to play/pause/seek without accidentally
       // spawning another text editor. Skip this when the user clicked
