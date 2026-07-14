@@ -8704,6 +8704,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     mediaEl.currentTime = origTime;
     playerSnapBtn.style.opacity = '';
     var skipped = framesWithStrokes.length - newFrames.length;
+    // Auto-open the comment panel after player-bar Snap so the user can
+    // immediately see the new comments without clicking 💬 separately.
+    // The popover Snap button (snapBtn below) does NOT auto-open because
+    // the panel is already open when the user clicks it.
+    if (commentsFab) { commentsFab.click(); }
     toast('Snapped ' + snapped + ' frame(s)' + (skipped ? ' (' + skipped + ' skipped)' : ''));
   });
   rightGroup.appendChild(playerSnapBtn);
@@ -9454,10 +9459,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     mediaEl.currentTime = origTime;
     snapBtn.disabled = false;
     var skipped = framesWithStrokes.length - newFrames.length;
-    // Auto-open the comment panel after snap so the user can see
-    // the new comments right away without clicking the 💬 button.
-    // We fire a click on commentsFab to simulate the user clicking it.
-    if (commentsFab) { commentsFab.click(); }
+    // The popover Snap does NOT auto-open the comment panel — it's
+    // already open (user clicked it from inside the popover). Only the
+    // player-bar Snap button (playerSnapBtn above) auto-opens.
     toast('Snapped ' + snapped + ' frame(s)' + (skipped ? ' (' + skipped + ' already had comments, skipped)' : ''));
   });
   const addHint = document.createElement('span');
