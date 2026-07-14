@@ -1,0 +1,3241 @@
+/* ============================================================
+   THEME SYSTEM — 3 Premium Styles
+   ============================================================ */
+:root {
+  --bg: #1a1a1a;
+  --bg-panel: #222222;
+  --bg-darker: #161616;
+  --bg-elevated: #2a2a2a;
+  --border: #333333;
+  --border-light: #444444;
+  --border-subtle: #2a2a2a;
+  --text: #e8e8e8;
+  --text-dim: #888888;
+  --text-subtle: #555555;
+  --accent: #7c8cf0;
+  --accent-dim: #2a2e52;
+  --accent-glow: rgba(124,140,240,0.12);
+  --danger: #e74c3c;
+  --canvas-bg: #222222;
+  --toolbar-bg: rgba(34,34,34,0.92);
+  --panel-bg: rgba(34,34,34,0.95);
+  --shadow-heavy: 0 8px 32px rgba(0,0,0,0.5);
+  --shadow-medium: 0 4px 20px rgba(0,0,0,0.35);
+  --input-bg: #1a1a1a;
+  --btn-hover: rgba(255,255,255,0.06);
+  --btn-active-bg: rgba(124,140,240,0.15);
+  --btn-active-border: var(--accent);
+  --btn-active-text: var(--accent);
+  --scrollbar-track: #161616;
+  --scrollbar-thumb: #444444;
+  --grid-dot: rgba(255,255,255,0.08);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body { overflow:hidden; background:var(--bg); color:var(--text); font-family:'Inter','-apple-system','Segoe UI',system-ui,sans-serif; user-select:none; -webkit-user-select:none; letter-spacing:-0.01em; -webkit-font-smoothing:antialiased; }
+#viewport { position:fixed; inset:0; overflow:hidden; cursor:default; touch-action:none; -ms-touch-action:none; }
+#viewport * { touch-action:none; -ms-touch-action:none; }
+#viewport.grabbing { cursor:grabbing; }
+#viewport.tool-active .item,
+#viewport.tool-active .text-item,
+#viewport.tool-active .item-handle,
+#viewport.tool-active .item-rot,
+#viewport.tool-active .item-content { cursor: inherit !important; }
+#canvas { position:absolute; left:-50000px; top:-50000px; width:100000px; height:100000px; transform-origin:0 0; background:var(--canvas-bg); transition:background 0.3s ease; }
+#canvas.grid { background-image:radial-gradient(circle, var(--grid-dot) 1px, transparent 1px); background-size:20px 20px; background-repeat:repeat; }
+#canvas-content { position:absolute; left:50000px; top:50000px; }
+#paper { position:absolute; background:#ffffff; box-shadow:0 2px 40px rgba(0,0,0,0.25); border-radius:2px; z-index:-1; pointer-events:none; }
+.item { position:absolute; cursor:move; transition:outline-color 0.15s; will-change:transform; }
+.item img { display:block; width:100%; height:100%; pointer-events:none; -webkit-user-drag:none; }
+.item video { display:block; width:100%; height:100%; pointer-events:none; background:#000; }
+.item.locked { cursor:default; }
+/* Reframe mode */
+.item.reframing { overflow:hidden !important; outline:2.5px dashed var(--accent); outline-offset:-2.5px; z-index:9999 !important; }
+.item.reframing img, .item.reframing video { width:auto !important; height:auto !important; max-width:none !important; max-height:none !important; pointer-events:auto !important; cursor:move !important; }
+.item.reframing::after { content:''; position:absolute; inset:0; border:2px solid rgba(255,255,255,0.3); pointer-events:none; }
+/* Crop mode (Photoshop-style) */
+.item.cropping { z-index:999999 !important; }
+.item.cropping .item-handle, .item.cropping .item-rot { display:none !important; }
+.crop-overlay { position:absolute; inset:0; pointer-events:none; z-index:5; }
+.crop-mask { position:absolute; background:rgba(0,0,0,0.6); pointer-events:auto; }
+.crop-mask.mask-top    { left:0; right:0; top:0; }
+.crop-mask.mask-bottom { left:0; right:0; bottom:0; }
+.crop-mask.mask-left   { top:0; bottom:0; left:0; }
+.crop-mask.mask-right  { top:0; bottom:0; right:0; }
+.crop-window { position:absolute; pointer-events:auto; cursor:move; box-sizing:border-box; }
+.crop-window-inner { position:absolute; inset:0; border:1.5px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,0.5); pointer-events:none; }
+.crop-rule-h, .crop-rule-v { position:absolute; background:rgba(255,255,255,0.35); pointer-events:none; }
+.crop-rule-h { left:0; right:0; height:1px; }
+.crop-rule-v { top:0; bottom:0; width:1px; }
+.crop-handle { position:absolute; background:#fff; border:1px solid #1a1a1a; box-sizing:border-box; pointer-events:auto; z-index:2; }
+.crop-handle.corner { width:11px; height:11px; border-radius:1px; }
+.crop-handle.edge { background:#fff; }
+.crop-handle.nw { left:-5px; top:-5px; cursor:nw-resize; }
+.crop-handle.ne { right:-5px; top:-5px; cursor:ne-resize; }
+.crop-handle.sw { left:-5px; bottom:-5px; cursor:sw-resize; }
+.crop-handle.se { right:-5px; bottom:-5px; cursor:se-resize; }
+.crop-handle.n { left:50%; top:-4px; width:20px; height:8px; transform:translateX(-50%); cursor:n-resize; border-radius:1px; }
+.crop-handle.s { left:50%; bottom:-4px; width:20px; height:8px; transform:translateX(-50%); cursor:s-resize; border-radius:1px; }
+.crop-handle.w { top:50%; left:-4px; width:8px; height:20px; transform:translateY(-50%); cursor:w-resize; border-radius:1px; }
+.crop-handle.e { top:50%; right:-4px; width:8px; height:20px; transform:translateY(-50%); cursor:e-resize; border-radius:1px; }
+.crop-toolbar { position:absolute; left:50%; transform:translateX(-50%); display:flex; gap:4px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:8px; padding:5px 6px; z-index:10; box-shadow:var(--shadow-medium); white-space:nowrap; }
+.crop-toolbar.below { top:100%; margin-top:6px; }
+.crop-toolbar.above { bottom:100%; margin-bottom:6px; }
+.crop-toolbar button { background:transparent; border:1px solid transparent; color:var(--text-dim); padding:4px 9px; border-radius:6px; cursor:pointer; font-size:10.5px; font-family:'Inter',sans-serif; transition:all 0.15s; }
+.crop-toolbar button:hover { background:var(--btn-hover); color:var(--text); }
+.crop-toolbar button.primary { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+.crop-toolbar select { background:var(--input-bg); border:1px solid var(--border); color:var(--text); border-radius:5px; padding:3px 5px; font-size:10.5px; font-family:'Inter',sans-serif; outline:none; cursor:pointer; }
+.crop-toolbar .sep { width:1px; background:var(--border-subtle); margin:0 2px; align-self:stretch; }
+.item.selected { outline:1.5px solid var(--accent); outline-offset:2.5px; }
+.item.draw-item { cursor:pointer; border:1.5px dashed transparent; border-radius:4px; transition:border-color 0.15s, background 0.15s; }
+.item.draw-item:hover { background:rgba(0,229,255,0.05) !important; border-color:rgba(0,229,255,0.55) !important; border-radius:4px; }
+.item.draw-item.selected { background:rgba(0,229,255,0.08) !important; border-color:var(--accent) !important; border-style:solid; }
+.item-handle { position:absolute; width:16px; height:16px; background:var(--accent); border:1.5px solid var(--bg-panel); border-radius:3px; z-index:999999; transition:transform 0.1s ease, background 0.15s; }
+/* Invisible expanded hit area — 28x28 makes it easy to grab */
+.item-handle::after { content:''; position:absolute; top:-6px; left:-6px; right:-6px; bottom:-6px; }
+.item-handle:hover { transform:scale(1.25); }
+/* During drag: handles are physically removed from DOM; this CSS is a backup for any remaining elements */
+body.is-dragging .item-handle, body.is-dragging .item-rot { display:none !important; }
+/* Round 67 — Multi-select union handle container. Sits at the world-coord
+   position of the union AABB of all selected items. The container itself
+   is pointer-events:none so it doesn't steal clicks; the 8 handle children
+   re-enable pointer-events so they're grabbable. The .item-handle corner
+   CSS (top:-8px; left:-8px; etc.) positions each handle 8px OUTSIDE the
+   bbox corner — same visual as the per-item handles, but at the union
+   of all selected items instead of every individual one. */
+.multi-sel-handles { position:absolute; pointer-events:none; }
+.multi-sel-handles > .item-handle { pointer-events:auto; }
+/* Video/GIF items: flex column so controls bar sits below media (NOT overlaid)
+   The user reported that the time slider was overlapping the video content when
+   the controls were an absolute overlay. Now: video on top, controls below,
+   no overlap. Capture is done via captureStream (not drawImage of the whole
+   .item), so the video element keeps its natural aspect ratio. */
+.item.has-media { display:flex; flex-direction:column; align-items:stretch; }
+.item.has-media .media-wrap { flex:1; position:relative; overflow:hidden; min-height:0; }
+/* Round 68: dedicated black info header bar — sits ABOVE the video as a
+   flex sibling, never overlaps content. Shows: type, filename, frame
+   counter, timecode, and FPS in a single compact row. */
+.item.has-media .media-info-bar {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 6px;
+  height: 24px; min-height: 24px; padding: 0 10px;
+  background: #000;
+  font-family: 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 10px; font-weight: 500;
+  color: #888;
+  border-radius: 8px 8px 0 0;
+  user-select: none; pointer-events: none;
+  z-index: 3; overflow: hidden;
+  letter-spacing: 0.2px;
+  box-sizing: border-box;
+}
+.item.has-media .media-info-bar .ib-type {
+  flex-shrink: 0;
+  color: #fff; font-weight: 700; font-size: 9px;
+  background: rgba(124,140,240,0.35); padding: 1px 5px; border-radius: 3px;
+  line-height: 14px;
+}
+.item.has-media .media-info-bar .ib-name {
+  color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; max-width: 280px;
+}
+.item.has-media .media-info-bar .ib-sep {
+  color: #444; flex-shrink: 0;
+}
+.item.has-media .media-info-bar .ib-frame { color: #00e5ff; flex-shrink: 0; }
+.item.has-media .media-info-bar .ib-time  { color: #fff;   flex-shrink: 0; }
+.item.has-media .media-info-bar .ib-fps   { color: #888;   flex-shrink: 0; }
+/* ── High-DPI auto-scale for player controls ──
+   Applied when window.devicePixelRatio ≥ 2 (Retina / 4K screens).
+   Uses the body[data-dpi-scale] attribute set by JS init.
+   Only targets .media-controls buttons & labels — the canvas/toolbar
+   and other UI elements are unchanged. */
+body[data-dpi-scale] .item.has-media .media-controls-row {
+  padding: calc(6px * var(--dpi-scale, 1)) calc(10px * var(--dpi-scale, 1));
+  min-height: calc(40px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .item.has-media .media-play-btn {
+  width:  calc(28px * var(--dpi-scale, 1));
+  height: calc(28px * var(--dpi-scale, 1));
+  font-size: calc(12px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .item.has-media .media-draw-btn {
+  width:  calc(28px * var(--dpi-scale, 1));
+  height: calc(28px * var(--dpi-scale, 1));
+  font-size: calc(14px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .media-comments-btn {
+  height: calc(21px * var(--dpi-scale, 1));
+  padding: 0 calc(6px * var(--dpi-scale, 1));
+  font-size: calc(8.4px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .media-comments-btn .btn-icon { font-size: calc(9px * var(--dpi-scale, 1)); }
+body[data-dpi-scale] .media-comments-btn .btn-label { font-size: calc(7.7px * var(--dpi-scale, 1)); }
+body[data-dpi-scale] .media-comments-btn .btn-count {
+  font-size: calc(7px * var(--dpi-scale, 1));
+  padding: 0 calc(4px * var(--dpi-scale, 1));
+  border-radius: calc(7px * var(--dpi-scale, 1));
+  min-width: calc(13px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .media-snap-btn {
+  height: calc(21px * var(--dpi-scale, 1));
+  padding: 0 calc(6px * var(--dpi-scale, 1));
+  font-size: calc(8.4px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .media-clean-btn {
+  width:  calc(26px * var(--dpi-scale, 1));
+  height: calc(26px * var(--dpi-scale, 1));
+  font-size: calc(13px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .media-fullscreen-btn {
+  width:  calc(28px * var(--dpi-scale, 1));
+  height: calc(26px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .item.has-media .media-time {
+  font-size: calc(11.5px * var(--dpi-scale, 1));
+  min-width: calc(44px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .item.has-media .media-seek-track {
+  height: calc(6px * var(--dpi-scale, 1));
+  border-radius: calc(3px * var(--dpi-scale, 1));
+}
+body[data-dpi-scale] .item.has-media .media-controls-group { gap: calc(5px * var(--dpi-scale, 1)); }
+body[data-dpi-scale] .item.has-media .media-controls-sep {
+  height: calc(22px * var(--dpi-scale, 1));
+}
+.item.has-media .media-controls {
+  /* Sits BELOW the media-wrap as a flex sibling, not absolutely positioned.
+     Two rows: row 1 = the play/times/seek bar/frame-rate, row 2 = a slim
+     trim mini-timeline with start/end handles the user can drag directly. */
+  position: relative; z-index: 2; flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: stretch; gap: 0;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(22,22,22,0.94) 0%, rgba(16,16,16,0.98) 100%);
+  border-top: 1px solid rgba(255,255,255,0.07);
+  border-radius: 0 0 8px 8px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  user-select: none;
+  pointer-events: auto;
+  transform: translateZ(0); /* promote to its own layer for smoother show/hide */
+}
+/* Round 51: redesigned controls bar layout — three visual groups
+   (playback / scrub / utility) separated by thin dividers, no button
+   overlaps the video. The on-video 💬 FAB is GONE — the comments button
+   now lives in the utility group on the right side of the bar. */
+.item.has-media .media-controls-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; min-height: 40px; box-sizing: border-box;
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: thin;
+}
+/* Compact mode (Round 94): applied via ResizeObserver when the player
+   is too narrow for the full seek bar + labeled buttons to coexist
+   without overlapping. Hides button text labels — icons + count badge
+   remain — and shrinks the time label min-width so the seek bar gets
+   the space it needs. */
+.item.has-media .media-controls-row.compact .media-comments-btn .btn-label,
+.item.has-media .media-controls-row.compact .media-snap-btn .btn-label {
+  display: none;
+}
+.item.has-media .media-controls-row.compact .media-snap-btn {
+  padding: 0 6px;
+}
+.item.has-media .media-controls-row.compact .media-comments-btn {
+  padding: 0 6px;
+}
+.item.has-media .media-controls-row.compact .media-time {
+  min-width: 30px;
+  font-size: 10px;
+}
+/* Visual grouping inside the controls row — left/center/right cluster */
+.item.has-media .media-controls-group {
+  display: flex; align-items: center; gap: 5px;
+  flex-shrink: 0; min-width: 0;
+}
+.item.has-media .media-controls-group.grow {
+  /* Round 94: min-width must cover its own children (2 time labels
+     @44px + seek bar @100px + 2x 5px gaps = ~198px) — otherwise the
+     children overflow this box and visually spill onto the buttons
+     to the right instead of triggering the row's horizontal scroll. */
+  flex: 1 1 120px; min-width: 198px;
+}
+.item.has-media .media-controls-row.compact .media-controls-group.grow {
+  /* Compact mode shrinks the time labels (30px) and the seek bar
+     itself gets a smaller floor too — see .compact .media-seek-bar. */
+  min-width: 130px;
+}
+.item.has-media .media-controls-row.compact .media-seek-bar {
+  min-width: 60px;
+}
+.item.has-media .media-controls-sep {
+  width: 1px; height: 22px;
+  background: rgba(255,255,255,0.12);
+  flex-shrink: 0;
+  border-radius: 1px;
+}
+.item.has-media .media-trim-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px 6px; box-sizing: border-box;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  flex-wrap: wrap;
+}
+.item.has-media .media-trim-mini {
+  position: relative; flex: 1; height: 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px; cursor: pointer; overflow: visible;
+  box-sizing: border-box;
+}
+.item.has-media .media-trim-mini .trim-region {
+  position: absolute; top: 0; height: 100%;
+  background: rgba(0, 229, 255, 0.18);
+  border-left: 1.5px solid var(--accent);
+  border-right: 1.5px solid var(--accent);
+  pointer-events: none; border-radius: 0;
+}
+.item.has-media .media-trim-mini .trim-playhead {
+  position: absolute; top: -3px; height: calc(100% + 6px); width: 2px;
+  background: #fff; pointer-events: none; z-index: 3;
+  box-shadow: 0 0 4px var(--accent);
+}
+.item.has-media .media-trim-mini .trim-handle {
+  position: absolute; top: -2px; height: calc(100% + 4px); width: 4px;
+  margin-left: -2px; background: var(--accent);
+  cursor: ew-resize; z-index: 4; border-radius: 1px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 3px rgba(0, 229, 255, 0.4);
+}
+.item.has-media .media-trim-mini .trim-handle::after {
+  content: ''; width: 2px; height: 8px; background: rgba(0,0,0,0.6); border-radius: 1px;
+}
+.item.has-media .media-trim-mini .trim-handle:hover { background: #fff; box-shadow: 0 0 6px rgba(124, 140, 240, 0.8); }
+.item.has-media .media-trim-mini .trim-handle:hover::after { background: var(--accent); }
+/* Invisible expanded hit zone for the mini-trim too — keep the
+   4px visual slim while giving a comfortable 14px click target. */
+.item.has-media .media-trim-mini .trim-handle::before {
+  content: ''; position: absolute; top: 50%;
+  left: 50%; transform: translate(-50%, -50%);
+  width: 14px; height: 200%;
+  background: transparent;
+}
+/* Round 20: hotkey flash — when the user presses 'i' or 'o'
+   over the player, the corresponding handle briefly scales up
+   + glows so they see the confirmation. Auto-clears after
+   ~400ms (set by the JS that adds the class). */
+.item.has-media .media-trim-mini .trim-handle.trim-handle-flash {
+  background: #fff;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.95), 0 0 4px rgba(255, 255, 255, 0.8);
+  transform: scaleX(1.6) scaleY(1.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.item.has-media .media-trim-mini .trim-tick {
+  position: absolute; top: 0; width: 1px; height: 100%;
+  background: rgba(255,255,255,0.15); pointer-events: none;
+}
+.item.has-media .media-trim-info {
+  font-size: 9px; color: var(--text-subtle); font-family: 'Inter', sans-serif;
+  font-variant-numeric: tabular-nums; min-width: 38px; text-align: center;
+  white-space: nowrap; flex-shrink: 0;
+}
+.item.has-media .media-trim-info.start { text-align: right; }
+.item.has-media:hover .media-controls,
+.item.has-media.selected .media-controls { display: flex; }
+.item.has-media .media-trim-reset {
+  font-size: 9px; padding: 2px 5px; background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border); color: var(--text-dim); border-radius: 3px;
+  cursor: pointer; font-family: 'Inter', sans-serif; flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.item.has-media .media-trim-reset:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+/* Review Mode overlay — brief comment indicator on top of the video when J/K fires */
+.item.has-media .review-mode-overlay {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.78);
+  border: 1px solid rgba(0, 229, 255, 0.6);
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 80%;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0, 229, 255, 0.25);
+  animation: rmo-in 0.18s ease-out;
+}
+.item.has-media .review-mode-overlay.rmo-fading { opacity: 0; transition: opacity 0.3s; }
+.item.has-media .review-mode-overlay .rmo-position {
+  color: #00e5ff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.item.has-media .review-mode-overlay .rmo-text {
+  color: #fff;
+  font-size: 12px;
+  word-wrap: break-word;
+}
+@keyframes rmo-in {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Play button in controls — sized to match the other utility buttons
+   (28px draw / clean / etc.) so the controls bar reads as a balanced row
+   instead of one big circle dominating the left edge. Still gradient and
+   has a slight scale on hover for affordance, just smaller. */
+.item.has-media .media-play-btn {
+  width:28px; height:28px; border-radius:50%; flex-shrink:0;
+  background: linear-gradient(135deg, var(--accent) 0%, #7c5cfc 100%);
+  border:none; color:#fff; font-size:12px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:transform 0.18s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 8px rgba(120,86,255,0.35);
+}
+.item.has-media .media-play-btn:hover { transform:scale(1.15); box-shadow: 0 3px 14px rgba(120,86,255,0.55); }
+.item.has-media .media-play-btn:active { transform:scale(0.9); }
+
+/* (Frame-step buttons removed — trackpad two-finger swipe + arrow keys handle scrubbing) */
+
+/* ── Draw / annotate button (in player controls) ── */
+.item.has-media .media-draw-btn {
+  width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.85); font-size: 14px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s ease; padding: 0; margin: 0 2px;
+  user-select: none;
+}
+.item.has-media .media-draw-btn:hover {
+  background: rgba(0,229,255,0.18); color: #fff; border-color: var(--accent);
+}
+.item.has-media .media-draw-btn.active {
+  background: var(--accent); color: #000; border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0,229,255,0.25);
+}
+.item.has-media .media-draw-btn.has-strokes {
+  position: relative;
+}
+.item.has-media .media-draw-btn.has-strokes::after {
+  content: ''; position: absolute; top: -2px; right: -2px;
+  width: 8px; height: 8px; background: #ff6b6b;
+  border: 1.5px solid #18181c; border-radius: 50%;
+  pointer-events: none;
+}
+
+/* ── Annotation canvas overlay (sits on top of the video) ── */
+.item.has-media .media-anno-canvas {
+  position: absolute;
+  /* Round 65: position + size are set by JS to match the video's
+     actual rendered content rect (object-fit: contain letterbox
+     excluded). The canvas only covers the visible video area, so
+     strokes line up with the video content even when the wrap is a
+     different aspect ratio than the video. The canvas inherits the
+     canvas-content's scale/pan transform, so zoom + pan naturally
+     carry the strokes along with the video. */
+  top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 5;
+  pointer-events: none;       /* off by default */
+  touch-action: none;
+  cursor: crosshair;
+  box-sizing: border-box;
+}
+.item.has-media.draw-mode .media-anno-canvas {
+  pointer-events: auto;       /* on when in draw mode */
+}
+/* When draw mode is on, dim the video slightly so annotations are clearer */
+.item.has-media.draw-mode .media-wrap::after {
+  content: ''; position: absolute; inset: 0;
+  background: rgba(0,0,0,0.18);
+  pointer-events: none; z-index: 4;
+}
+/* Hide the bottom controls bar while drawing so the user has more room
+   to draw — but the bar comes back the moment they exit draw mode. */
+.item.has-media .media-controls.drawing-hide {
+  opacity: 0; pointer-events: none; transform: translateY(8px);
+  transition: opacity 0.18s, transform 0.18s;
+}
+/* ── Clean mode: hide all controls + overlay for distraction-free viewing ── */
+.item.has-media.clean-mode .media-controls {
+  display: none;
+}
+
+/* Round 65: hide the bottom trim mini-timeline row. The user said the
+   bottom progress bar of the mov player is not needed — they have the
+   seek bar at the top of the player + the main canvas scrubber + the
+   green trim markers on the seek bar for visual feedback. The i/o
+   keyboard shortcuts still work; they just no longer flash the
+   (now-hidden) handles. */
+.item.has-media .media-trim-row { display: none !important; }
+.item.has-media.clean-mode .media-wrap::before {
+  content: ''; position: absolute; inset: 0; z-index: 5;
+  background: transparent; pointer-events: auto;
+}
+/* Exit-clean notice — sits in the empty controls area BELOW the player,
+   NOT overlaying the video. Visible only during clean mode. */
+.media-clean-exit {
+  display: none; flex-shrink: 0; align-items: center; justify-content: center;
+  padding: 6px 16px; z-index: 10;
+  background: linear-gradient(180deg, rgba(22,22,22,0.96) 0%, rgba(14,14,14,0.98) 100%);
+  border-top: 1px solid rgba(255,255,255,0.07);
+  border-radius: 0 0 8px 8px;
+  font-size: 11px; font-family: 'Inter', sans-serif;
+  letter-spacing: 0.3px; white-space: nowrap;
+  transition: opacity 0.3s ease;
+  gap: 6px;
+}
+.media-clean-exit span {
+  display: flex; align-items: center; gap: 6px;
+  color: rgba(255,255,255,0.55);
+}
+.item.has-media.clean-mode .media-clean-exit {
+  display: flex;
+}
+.media-clean-exit .clean-exit-key {
+  display: inline-block; background: rgba(255,255,255,0.12); border-radius: 4px;
+  padding: 1px 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+}
+.media-clean-exit:hover {
+  cursor: pointer;
+}
+.media-clean-exit:hover span { color: #fff; }
+.media-clean-exit:hover .clean-exit-key { background: rgba(255,255,255,0.22); }
+/* Clean-mode toggle button in the controls bar */
+.media-clean-btn {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 5px;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; transition: all 0.15s;
+}
+.media-clean-btn:hover { background: var(--btn-hover); color: var(--text); border-color: var(--border-light); }
+.media-clean-btn.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+/* Fullscreen toggle button in the controls bar */
+.media-fullscreen-btn {
+  flex-shrink: 0; width: 28px; height: 26px; border-radius: 5px;
+  background: var(--accent-dim, rgba(124,140,240,0.12)); border: 1px solid var(--accent);
+  color: var(--accent); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+  font-weight: 600;
+}
+.media-fullscreen-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.media-fullscreen-btn svg { flex-shrink: 0; }
+
+/* ── Cursor ring indicator (follows mouse on the annotation canvas) ── */
+/* Shows the user EXACTLY where they're drawing and which color/size,
+   so they can see what they're doing on the paused frame. */
+.media-anno-cursor-ring {
+  position: fixed; pointer-events: none; z-index: 7;
+  /* Round 9: shrunk from 22px → 12px base size. The previous ring was so
+     large it covered the colors underneath and obscured the actual brush
+     position. The new size still shows the color but is small enough
+     not to interfere with the drawing. */
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 1.5px solid #ff4444;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.4);
+  transform: translate(-50%, -50%);
+  display: none;
+  transition: width 0.1s ease, height 0.1s ease, border-color 0.1s ease;
+  will-change: left, top;
+}
+.item.has-media.draw-mode .media-anno-cursor-ring { display: block; }
+/* Belt-and-braces: when ANY video is in draw mode, show the ring.
+   The ring lives on document.body (so `position: fixed` tracks the
+   mouse across scroll), so the rule above (which expects it as a
+   descendant of the item) doesn't match on its own. */
+body.video-draw-mode .media-anno-cursor-ring { display: block; }
+
+/* ── Floating annotation toolbar (Round 12: vertical side-panel) ── */
+/* Round 7: rewrote as a 2-column grid layout so the toolbar is narrower
+   (no more 8 stacked buttons) and the visual hierarchy is clearer.
+   Round 12: redesigned as a SINGLE vertical column. The user wanted:
+     - "the draw panel height is same as the movplayer they are related,
+        and scale together"
+     - "the button too small"
+     - "some button out of the boarder that is not professional"
+   The new layout is a tall narrow side panel (like Photoshop's layers
+   panel) attached to the side of the video. Its MIN-HEIGHT is set from
+   JS to the video's height, so the panel always feels "attached" to the
+   player and scales together with it. Buttons are larger (34px vs 30px).
+   All content stays within the panel bounds — nothing can overflow past
+   the cyan border. */
+.media-anno-toolbar {
+  position: fixed; top: 0; left: 0;
+  z-index: 6;
+  display: flex; flex-direction: column; gap: 4px; align-items: center;
+  background: rgba(20,20,24,0.96);
+  border: 1px solid rgba(0,229,255,0.4);
+  border-radius: 9px; padding: 6px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.7);
+  font-size: 12px; user-select: none;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  /* Round 12: width driven by the content, but constrained. The color
+     picker (widest element at ~120px) sets the natural width. */
+  width: calc(132px * var(--tb-scale, 1));
+  min-height: 120px;  /* JS overrides this with the video height */
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  --tb-scale: 1;  /* Set from JS to match the player size */
+  box-sizing: border-box;
+  /* Round 12: nothing can escape the panel — overflow hidden so any
+     accidental oversize is clipped, not shown bleeding past the border.
+     Round 13: switched to overflow-y: auto so on unusually short videos
+     (where the content would still be taller than the panel), the
+     user can scroll the picker into view instead of having it clipped
+     out of reach. overflow-x stays hidden to prevent horizontal bleed. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* Custom thin scrollbar so it doesn't compete with the panel content
+     for visual attention. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,229,255,0.3) transparent;
+}
+.media-anno-toolbar::-webkit-scrollbar { width: 4px; }
+.media-anno-toolbar::-webkit-scrollbar-thumb {
+  background: rgba(0,229,255,0.3);
+  border-radius: 2px;
+}
+.media-anno-toolbar::-webkit-scrollbar-track { background: transparent; }
+/* Round 12: the columns are now stacked vertically (full-width sections).
+   They share the panel's width and stack top-to-bottom. */
+.media-anno-toolbar .tb-col {
+  display: flex; flex-direction: column; gap: 4px; align-items: center;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+/* Round 12: divider between sections (not columns anymore). Horizontal
+   line between each section. */
+.media-anno-toolbar .tb-col + .tb-col {
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 4px;
+  margin-top: 2px;
+}
+/* Round 6: drag handle at the top of the floating toolbar so the user
+   can move it away from the video. Cursor is grab/grabbing. */
+.media-anno-toolbar .toolbar-drag-handle {
+  width: 100%; height: 8px; cursor: grab;
+  background: linear-gradient(180deg, rgba(0,229,255,0.15) 0%, transparent 100%);
+  border-radius: 4px 4px 0 0; margin: -6px -6px 4px;
+  padding: 0; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.media-anno-toolbar .toolbar-drag-handle::before {
+  content: ''; width: 18px; height: 2px; background: rgba(0,229,255,0.5);
+  border-radius: 1px; box-shadow: 0 4px 0 rgba(0,229,255,0.5);
+}
+.media-anno-toolbar .toolbar-drag-handle:active { cursor: grabbing; }
+/* User can hide the entire toolbar — state persists in anno.drawToolbarHidden */
+.media-anno-toolbar.toolbar-hidden {
+  display: none !important;
+}
+/* Round 13: auto-hide the draw panel while a file is being dragged in,
+   so it doesn't sit on top of the drop target and "trap" the cursor.
+   Restored when the drag completes or leaves the window. Important:
+   use a transition-aware hide (not display:none) so the panel can
+   fade in/out smoothly — and use !important to win over the
+   `body.video-draw-mode` border highlight. */
+body.dragging-file .media-anno-toolbar {
+  opacity: 0 !important;
+  transform: translateX(-12px) scale(0.96) !important;
+  pointer-events: none !important;
+}
+/* When the video is in draw mode, the toolbar gets a subtle highlight so
+   the user can see the tools are "armed". */
+.item.has-media.draw-mode .media-anno-toolbar {
+  border-color: var(--accent);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,229,255,0.5);
+}
+/* The close button (✕) at the bottom of the toolbar — hides the whole panel */
+.media-anno-toolbar .toolbar-close {
+  width: calc(34px * var(--tb-scale, 1));
+  height: calc(26px * var(--tb-scale, 1));
+  border-radius: 6px;
+  background: rgba(255,80,80,0.08); border: 1px solid rgba(255,80,80,0.25);
+  color: rgba(255,140,140,0.85); font-size: calc(13px * var(--tb-scale, 1)); line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s ease; padding: 0;
+  font-family: inherit; margin: 2px auto 0;
+}
+/* Round 12: top margin pushes the close button to the bottom of the
+   panel when the panel is taller than the content. */
+.media-anno-toolbar .toolbar-row-close {
+  margin-top: auto;
+  width: 100%;
+  display: flex; justify-content: center;
+}
+.media-anno-toolbar .toolbar-close:hover {
+  background: rgba(255,80,80,0.25); border-color: rgba(255,120,120,0.7);
+  color: #fff; transform: scale(1.05);
+}
+/* "Snap Strokes" button — batch-capture all annotated frames.
+   Moved from the draw toolbar to the frame-comment popover's add-row
+   so it lives next to the comment input (R78). */
+.media-anno-popover.list .add-row .snap-btn {
+  box-sizing: border-box; height: 28px; padding: 0 10px;
+  border: 1px solid var(--accent-dim, rgba(0,229,255,0.35));
+  border-radius: 5px;
+  background: rgba(0,229,255,0.08); color: var(--accent, #00e5ff);
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  white-space: nowrap; user-select: none; flex-shrink: 0;
+  font-family: inherit;
+  display: flex; align-items: center; gap: 4px;
+  transition: all 0.15s ease;
+}
+.media-anno-popover.list .add-row .snap-btn:hover {
+  background: rgba(0,229,255,0.22); border-color: var(--accent, #00e5ff);
+  color: #fff; transform: scale(1.03);
+}
+.media-anno-popover.list .add-row .snap-btn:disabled {
+  opacity: 0.4; cursor: not-allowed; transform: none;
+}
+/* Round 31: "📌 Follow" button — sits next to the ✕ in the close row.
+   Only shown when the user has detached the draw panel (toolbarPos set).
+   Clicking snaps the panel back to the video. */
+.media-anno-toolbar .toolbar-follow {
+  width: calc(34px * var(--tb-scale, 1));
+  height: calc(26px * var(--tb-scale, 1));
+  border-radius: 6px;
+  background: rgba(255,206,92,0.10); border: 1px solid rgba(255,206,92,0.5);
+  color: #ffce5c; font-size: calc(13px * var(--tb-scale, 1)); line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s ease; padding: 0;
+  font-family: inherit; margin: 2px 0 0 4px;
+  animation: tb-follow-pulse 1.4s ease-in-out infinite;
+}
+.media-anno-toolbar .toolbar-follow:hover {
+  background: rgba(255,206,92,0.25); border-color: rgba(255,220,120,0.8);
+  color: #fff; transform: scale(1.05);
+}
+.media-anno-toolbar .toolbar-follow.hidden { display: none !important; }
+@keyframes tb-follow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,206,92,0.4); }
+  50%      { box-shadow: 0 0 0 3px rgba(255,206,92,0.0); }
+}
+/* Each row in the toolbar (mode buttons, color swatches, sizes, actions) */
+.media-anno-toolbar .toolbar-row {
+  display: flex; flex-direction: row; gap: 4px; align-items: center;
+  padding: 2px 0;
+  justify-content: center;
+}
+.media-anno-toolbar .toolbar-row + .toolbar-row {
+  border-top: none;  /* Round 12: section divider handles this now */
+  padding-top: 0; margin-top: 0;
+}
+/* Round 12: larger tool buttons. Was 30px → now 34px. The size still
+   scales with --tb-scale so smaller videos get smaller buttons. */
+.media-anno-toolbar button {
+  width: calc(34px * var(--tb-scale, 1));
+  height: calc(34px * var(--tb-scale, 1));
+  border-radius: 7px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.9); font-size: calc(14px * var(--tb-scale, 1)); line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s ease; padding: 0;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+.media-anno-toolbar button:hover {
+  background: rgba(0,229,255,0.18); border-color: var(--accent); color: #fff;
+  transform: scale(1.06);
+}
+.media-anno-toolbar button.active {
+  background: var(--accent); color: #000; border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0,229,255,0.25);
+}
+.media-anno-toolbar .sep {
+  width: 24px; height: 1px; background: rgba(255,255,255,0.12);
+  margin: 2px auto;
+}
+/* Round 9: frame indicator — a small pill showing the current frame
+   number so the user knows which frame their drawings will be tied to.
+   Round 12: full-width row so it spans the panel. */
+.media-anno-toolbar .toolbar-row-frame {
+  display: flex; flex-direction: row; align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  gap: 4px;
+  font-size: calc(11px * var(--tb-scale, 1));
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  min-width: calc(64px * var(--tb-scale, 1));
+  cursor: default;
+  user-select: none;
+}
+.media-anno-toolbar .toolbar-row-frame .fi-label {
+  color: var(--accent);
+  font-size: calc(10px * var(--tb-scale, 1));
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.media-anno-toolbar .toolbar-row-frame .fi-value {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  font-size: calc(12px * var(--tb-scale, 1));
+}
+/* Round 10: replaced the conic-gradient color wheel with a Photoshop-style
+   HSV picker. The wheel was hard to use — small color slivers, center
+   blocking, hard to target specific hues. The new picker is:
+     1. A 2D saturation/value square (the big block — pick saturation
+        horizontally, value/brightness vertically).
+     2. A horizontal hue strip below the square (pick the base hue).
+     3. A row of preset swatches for quick access to common colors.
+     4. A current-color preview chip.
+   The current color is reflected live as the user drags. */
+.media-anno-toolbar .color-picker {
+  display: flex; flex-direction: column;
+  /* Round 13: tightened gap (3→2) and padding (4→3) so the picker
+     is more compact and fits inside the video-height panel without
+     getting clipped at the bottom. */
+  gap: 2px;
+  padding: 3px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* Round 13: the SV square's aspect ratio used to be 1/0.7 (taller than
+   wide), which combined with the hue strip + 2 rows of swatches + preview
+   row pushed the color picker past the panel's bottom edge. The panel
+   height is set from JS to the video height, so the picker was getting
+   clipped (the user reported "the HSV gradient is cut off at the border").
+   New aspect ratio 1/0.5 keeps the square wide-but-short, so the picker
+   fits comfortably inside the typical 320-380px video height. */
+.media-anno-toolbar .color-picker .cp-sv {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 0.5;
+  border-radius: 4px;
+  cursor: crosshair;
+  background-color: hsl(var(--cp-hue, 0), 100%, 50%);
+  background-image:
+    linear-gradient(to top, #000 0%, transparent 100%),
+    linear-gradient(to right, #fff 0%, transparent 100%);
+  border: 1px solid rgba(255,255,255,0.2);
+  user-select: none;
+  touch-action: none;
+  --cp-sx: 100%;
+  --cp-sy: 0%;
+}
+.media-anno-toolbar .color-picker .cp-sv::after {
+  content: ''; position: absolute;
+  left: var(--cp-sx);
+  top: var(--cp-sy);
+  width: calc(10px * var(--tb-scale, 1));
+  height: calc(10px * var(--tb-scale, 1));
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 0 1px #000, 0 0 4px rgba(0,0,0,0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: left 0.05s linear, top 0.05s linear;
+}
+/* The horizontal hue strip. Background is a linear gradient of the
+   full hue circle. The marker (a thin vertical bar) is positioned
+   via --cp-hx inline. */
+.media-anno-toolbar .color-picker .cp-hue {
+  position: relative;
+  width: 100%;
+  height: calc(12px * var(--tb-scale, 1));
+  border-radius: 4px;
+  cursor: ew-resize;
+  background: linear-gradient(to right,
+    hsl(0,100%,50%),
+    hsl(60,100%,50%),
+    hsl(120,100%,50%),
+    hsl(180,100%,50%),
+    hsl(240,100%,50%),
+    hsl(300,100%,50%),
+    hsl(360,100%,50%));
+  border: 1px solid rgba(255,255,255,0.2);
+  user-select: none;
+  touch-action: none;
+  --cp-hx: 0%;
+}
+.media-anno-toolbar .color-picker .cp-hue::after {
+  content: ''; position: absolute;
+  left: var(--cp-hx);
+  top: 50%;
+  width: calc(4px * var(--tb-scale, 1));
+  height: calc(16px * var(--tb-scale, 1));
+  border-radius: 1.5px;
+  background: #fff;
+  border: 1px solid #000;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 0 3px rgba(0,0,0,0.6);
+}
+/* Row of preset color swatches. Click to instantly pick.
+   Round 13: was 2 rows of 8 (16 swatches). The second row doubled the
+   picker's height, pushing it past the panel's bottom border on small
+   videos. Now a single row of 8 (grid-template-rows: 1fr forces
+   exactly one row of swatches). minmax(0, 1fr) keeps the swatches
+   shrinking to fit if the panel gets very narrow. */
+.media-anno-toolbar .color-picker .cp-swatches {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-rows: 1fr;
+  gap: 2px;
+  margin-top: 2px;
+  width: 100%;
+  min-width: 0;
+}
+.media-anno-toolbar .color-picker .cp-swatch {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+  border-radius: 2px;
+  border: 1px solid rgba(255,255,255,0.15);
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.1s;
+  padding: 0;
+  outline: none;
+  box-sizing: border-box;
+  height: auto;
+  align-self: stretch;
+  justify-self: stretch;
+}
+.media-anno-toolbar .color-picker .cp-swatch:hover {
+  transform: scale(1.15);
+  border-color: rgba(255,255,255,0.6);
+  z-index: 1;
+}
+.media-anno-toolbar .color-picker .cp-swatch.active {
+  border-color: #fff;
+  box-shadow: 0 0 0 1.5px #000, 0 0 4px rgba(0,229,255,0.7);
+}
+/* Current color preview + HEX readout row. */
+.media-anno-toolbar .color-picker .cp-preview-row {
+  display: flex; align-items: center; gap: 4px;
+  margin-top: 3px;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: calc(9px * var(--tb-scale, 1));
+  color: rgba(255,255,255,0.8);
+}
+.media-anno-toolbar .color-picker .cp-preview {
+  width: calc(16px * var(--tb-scale, 1));
+  height: calc(16px * var(--tb-scale, 1));
+  border-radius: 3px;
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
+  flex-shrink: 0;
+  background: #ff4444;
+}
+.media-anno-toolbar .color-picker .cp-hex {
+  flex: 1; min-width: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-anno-toolbar .label {
+  color: rgba(255,255,255,0.5); font-size: calc(8.5px * var(--tb-scale, 1)); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  text-align: center; padding: 1px 0 0;
+}
+/* Cursor indicator — a small ring that follows the pointer while drawing,
+   so the user can always see where the next stroke will land (the OS
+   cursor gets hidden by the canvas + dim overlay on some setups). */
+.item.has-media.draw-mode .media-anno-cursor {
+  position: absolute; z-index: 7; pointer-events: none;
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 0 6px rgba(0,229,255,0.6);
+  transform: translate(-50%, -50%);
+  display: none;
+  transition: width 0.1s, height 0.1s, border-color 0.1s;
+}
+.item.has-media.draw-mode .media-anno-cursor.show { display: block; }
+
+/* Lightbox (single shared instance, portaled to body to escape item stacking) */
+/* z-index 100000005 puts it ABOVE the comments popover (100000000) so
+   clicking a snapshot thumbnail doesn't leave the popover floating on
+   top of the lightbox. */
+.video-anno-lightbox {
+  position: fixed; inset: 0; z-index: 100000005;
+  background: rgba(0,0,0,0.88);
+  display: none; align-items: center; justify-content: center;
+  flex-direction: column; padding: 24px;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.video-anno-lightbox.open { display: flex; }
+.video-anno-lightbox .lb-close {
+  position: absolute; top: 16px; right: 16px;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+  color: #fff; font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2; transition: all 0.15s;
+}
+.video-anno-lightbox .lb-close:hover {
+  background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.4);
+}
+.video-anno-lightbox .lb-stage {
+  display: flex; gap: 18px; max-width: 95vw; max-height: 88vh;
+  align-items: flex-start; justify-content: center;
+}
+.video-anno-lightbox .lb-img-wrap {
+  position: relative; max-width: 78vw; max-height: 80vh;
+  background: #000; border-radius: 8px; overflow: hidden;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+}
+/* Round 6: lightbox image zoom. The img-wrap is the viewport; the
+   inner .lb-img-inner holds the actual image and gets transformed
+   on zoom. When the image is larger than the wrap, it scrolls. */
+.video-anno-lightbox .lb-img-wrap {
+  overflow: auto;       /* allow scroll when image > viewport */
+}
+.video-anno-lightbox .lb-img-inner {
+  display: inline-block; transform-origin: top left;
+  transition: transform 0.12s ease;
+  will-change: transform;
+  cursor: zoom-in;
+}
+.video-anno-lightbox .lb-img-inner.zoomed { cursor: grab; }
+.video-anno-lightbox .lb-img-inner.dragging { cursor: grabbing; }
+.video-anno-lightbox .lb-img-wrap img,
+.video-anno-lightbox .lb-img-wrap canvas {
+  display: block; max-width: none; max-height: none;
+  width: auto; height: auto; object-fit: contain;
+}
+/* Zoom controls toolbar — sits at the top-right of the image wrap */
+.video-anno-lightbox .lb-zoom-bar {
+  position: absolute; top: 10px; left: 10px;
+  display: flex; gap: 4px; align-items: center;
+  background: rgba(20,20,24,0.85); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px; padding: 4px 6px;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  z-index: 3; font-family: inherit;
+}
+.video-anno-lightbox .lb-zoom-bar button {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+  color: #fff; font-size: 13px; cursor: pointer;
+  width: 28px; height: 28px; border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: inherit; padding: 0; transition: all 0.12s;
+  font-weight: 600;
+}
+.video-anno-lightbox .lb-zoom-bar button:hover {
+  background: rgba(0,229,255,0.2); border-color: var(--accent);
+}
+.video-anno-lightbox .lb-zoom-bar button.toggle.active {
+  background: var(--accent); color: #000; border-color: var(--accent);
+}
+.video-anno-lightbox .lb-zoom-bar .lb-zoom-label {
+  color: #fff; font-size: 11px; font-weight: 600;
+  padding: 0 6px; min-width: 42px; text-align: center;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+}
+.video-anno-lightbox .lb-info {
+  width: 280px; flex-shrink: 0; max-height: 80vh; overflow: auto;
+  background: rgba(20,20,24,0.85); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px; padding: 16px;
+  color: #f1f1f4; font-family: inherit;
+}
+.video-anno-lightbox .lb-info .lb-frame {
+  display: inline-block; background: var(--accent); color: #000;
+  font-weight: 700; font-size: 12px; padding: 3px 8px; border-radius: 5px;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  margin-bottom: 8px;
+}
+.video-anno-lightbox .lb-info .lb-time {
+  font-size: 14px; color: var(--accent); font-weight: 700;
+  font-family: 'SF Mono', Menlo, Consolas, monospace; margin-bottom: 12px;
+}
+.video-anno-lightbox .lb-info .lb-text {
+  font-size: 15px; line-height: 1.55; color: #fff;
+  white-space: pre-wrap; word-wrap: break-word;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 12px;
+}
+.video-anno-lightbox .lb-info .lb-actions {
+  margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap;
+}
+.video-anno-lightbox .lb-info .lb-actions button {
+  flex: 1; min-width: 100px;
+  padding: 8px 12px; border-radius: 7px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
+  color: #fff; font-size: 12px; cursor: pointer;
+  font-family: inherit; transition: all 0.15s;
+}
+.video-anno-lightbox .lb-info .lb-actions button:hover {
+  background: rgba(0,229,255,0.18); border-color: var(--accent);
+}
+.video-anno-lightbox .lb-info .lb-actions button.primary {
+  background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600;
+}
+@media (max-width: 720px) {
+  .video-anno-lightbox .lb-stage { flex-direction: column; align-items: center; }
+  .video-anno-lightbox .lb-info { width: 90vw; max-height: 30vh; }
+}
+
+/* Snapshot thumbnail — make it visually clear it's clickable to enlarge */
+.media-anno-comment .comment-thumb {
+  cursor: zoom-in;
+}
+.media-anno-comment .comment-thumb::before {
+  content: '🔍'; position: absolute; top: 2px; right: 3px;
+  font-size: 9px; opacity: 0;
+  color: #fff; z-index: 2; pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  transition: opacity 0.15s;
+}
+.media-anno-comment .comment-thumb:hover::before { opacity: 0.95; }
+
+/* (DRAW FUNCTION REMOVED — only frame comments remain; input is inside the Add popover) */
+/* In-player comment card — bigger, clearer. Layout:
+   [snapshot thumb] [head: frame + time + actions]                row 1
+                     [text body]                                  row 2
+   The snapshot is captured at the moment the comment was added and
+   embedded as a base64 data URL on the comment object. */
+.media-anno-comment {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex; flex-direction: column; gap: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.media-anno-comment:hover { border-color: rgba(0,229,255,0.4); background: rgba(0,229,255,0.05); }
+.media-anno-comment.active { border-color: var(--accent); background: rgba(0,229,255,0.10); }
+/* Top row: thumbnail on the left, head+actions on the right */
+.media-anno-comment .comment-row-top {
+  display: flex; gap: 10px; align-items: flex-start;
+}
+/* Round 5: snapshot thumbnail — BIGGER so the user can read their
+   drawings without clicking. Was 64×36 (way too small for arrow/pen
+   strokes). Now 160×90 (16:9 to match most video aspect ratios).
+   On a small popover (fs-small), scales down to 128×72 to avoid
+   pushing the comment text off-screen. */
+/* Round 7: snapshot thumbnail — use `contain` so the ENTIRE snapshot is
+   visible (no cropping). On a 16:9 box, a 4:3 source gets letterboxed
+   (black bars top/bottom) instead of being zoomed in to fill the box.
+   The user said: "i need auto scal up, now it is cut the snap cant see
+   all" — this fixes that. The black bg is the same as the video bg so
+   the letterbox bars are visually consistent. */
+.media-anno-comment .comment-thumb {
+  width: 160px; height: 90px;
+  flex-shrink: 0;
+  background: #000;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 5px;
+  position: relative;
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  cursor: zoom-in;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.media-anno-comment .comment-thumb img {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  image-rendering: auto;
+  position: relative; z-index: 0;
+  display: block;
+}
+.media-anno-popover.list.fs-small .media-anno-comment .comment-thumb {
+  width: 128px; height: 72px;
+}
+.media-anno-popover.list.fs-large .media-anno-comment .comment-thumb {
+  width: 192px; height: 108px;
+}
+.media-anno-comment .comment-thumb:hover {
+  border-color: var(--accent);
+  transform: scale(1.02);
+}
+.media-anno-comment .comment-thumb:hover { border-color: var(--accent); }
+.media-anno-comment .comment-thumb::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.6) 100%);
+  border-radius: inherit; pointer-events: none;
+  z-index: 1;
+}
+.media-anno-comment .comment-thumb .thumb-frame {
+  position: absolute; left: 3px; bottom: 2px;
+  font-size: 8.5px; font-weight: 700; color: var(--accent);
+  font-family: 'Inter', sans-serif; z-index: 1;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+  pointer-events: none;
+}
+.media-anno-comment .comment-thumb.no-snap {
+  background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.08) 100%);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-subtle); font-size: 11px;
+}
+.media-anno-comment .comment-thumb.no-snap::after { display: none; }
+.media-anno-comment .comment-main {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.media-anno-comment-head {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10.5px; color: var(--accent);
+  font-weight: 600; letter-spacing: 0.3px;
+  font-variant-numeric: tabular-nums;
+}
+.media-anno-comment-head .frame-no {
+  background: rgba(0,229,255,0.12); color: var(--accent);
+  padding: 1px 6px; border-radius: 4px;
+  font-weight: 700; font-size: 10px;
+}
+.media-anno-comment-head .time-no {
+  color: var(--text-dim); font-size: 9.5px;
+}
+.media-anno-comment-head .actions {
+  margin-left: auto; display: flex; gap: 3px; align-items: center;
+}
+.media-anno-comment-head .actions button {
+  background: transparent; border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-dim); padding: 2px 6px; border-radius: 4px;
+  font-size: 10px; cursor: pointer; font-family: inherit;
+  line-height: 1; transition: all 0.15s;
+}
+.media-anno-comment-head .actions button:hover { color: var(--accent); border-color: var(--accent); }
+.media-anno-comment-head .actions button.del:hover { color: #ff6b6b; border-color: #ff6b6b; }
+/* Round 77: "Go to frame" button (▶) — accent-tinted by default so it
+   reads as the primary action on the card. Other actions stay dim. */
+.media-anno-comment-head .actions button.goto {
+  color: var(--accent); border-color: rgba(68,221,255,0.45);
+  background: rgba(68,221,255,0.10);
+  font-size: 9px; padding: 2px 7px;
+}
+.media-anno-comment-head .actions button.goto:hover {
+  color: #fff; background: var(--accent); border-color: var(--accent);
+}
+.media-anno-comment-text {
+  font-size: 13px; color: var(--text);
+  line-height: 1.5; word-wrap: break-word;
+  user-select: text; -webkit-user-select: text;
+  min-height: 1.5em; /* ensure clickable even when empty */
+}
+.media-anno-comment-text.placeholder {
+  color: var(--text-dim);
+  font-style: italic;
+  cursor: text;
+}
+/* Font size variants — toggled by the S/M/L button in the list head */
+.media-anno-popover.list.fs-small .media-anno-comment-text { font-size: 11px; line-height: 1.4; }
+.media-anno-popover.list.fs-medium .media-anno-comment-text { font-size: 13px; line-height: 1.5; }
+.media-anno-popover.list.fs-large .media-anno-comment-text { font-size: 15px; line-height: 1.55; }
+/* When a comment has a translation, the main text becomes the translation.
+   We don't show the original anywhere — the user said "I only need the
+   chinese to replace the original english" (no double information). */
+.media-anno-comment-text.is-translation {
+  color: var(--text);
+  font-style: normal;
+}
+/* Translation loading indicator — shown briefly while waiting for the API.
+   When the translation arrives, it REPLACES the main text (not added as a
+   second line) — the user wants only one piece of info per comment. */
+.media-anno-comment-translation {
+  font-size: 11px; color: var(--accent); font-style: italic;
+  padding: 2px 0; user-select: text; -webkit-user-select: text;
+}
+.media-anno-comment-translation.loading {
+  color: var(--accent); font-style: normal;
+}
+.media-anno-comment-original {
+  font-size: 11px; color: var(--text-subtle);
+  line-height: 1.4; word-wrap: break-word;
+  padding-top: 3px;
+  user-select: text; -webkit-user-select: text;
+}
+.media-anno-comment-original.hidden-original { display: none; }
+
+/* Round 30: "minimized" popover state — hide every snapshot thumbnail so
+   the user can scan a long list of comments as pure frame + text. The
+   state lives on the popover (per-video, since each video owns its own
+   popover) so each player toggles independently. */
+.media-anno-popover.list.minimized .media-anno-comment .comment-thumb { display: none; }
+.media-anno-popover.list.minimized .media-anno-comment { padding: 4px 8px; gap: 2px; }
+.media-anno-popover.list.minimized .media-anno-comment .comment-row-top { gap: 0; }
+.media-anno-popover.list.minimized .media-anno-comment .comment-main { width: 100%; }
+/* When minimized the per-card height drops from ~84px (thumb + text + gap)
+   to ~46px (text + tiny padding), so more comments fit on screen. The
+   _positionPopover() auto-grow logic reads this from JS too. */
+.head-btn.min-shots-btn.active { color: var(--accent); border-color: var(--accent); background: rgba(0,229,255,0.10); }
+
+/* ── Floating "Open Comments" button (top-right of video) — HIDDEN in R51
+   Replaces the two control-bar buttons (Add + List) that the user asked
+   to remove. Used to sit on top of the video with a clear cyan accent
+   so it was discoverable, but the user reported buttons overlapping
+   the video. R51 moved it into the controls bar as `.media-comments-btn`
+   (see below). The on-video FAB class is now a no-op. */
+.media-comments-fab { display: none !important; }
+
+/* ── In-bar Comments button (Round 51) — lives in the controls bar
+   utility group (right side). Same icon + count badge as the old FAB,
+   but styled to match the other in-bar buttons (rectangular, subtle
+   border, hover/active states). */
+.media-comments-btn {
+  display: inline-flex; align-items: center; gap: 3.5px;
+  padding: 0 6px; height: 21px; flex-shrink: 0;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.9);
+  font: 600 8.4px 'Inter', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
+  user-select: none; -webkit-user-select: none;
+}
+.media-comments-btn:hover {
+  background: rgba(0,229,255,0.18); color: #fff;
+  border-color: var(--accent);
+}
+.media-comments-btn:active { transform: scale(0.96); }
+.media-comments-btn.active {
+  background: var(--accent); color: #000;
+  border-color: var(--accent);
+}
+.media-comments-btn .btn-icon { font-size: 9px; line-height: 1; }
+.media-comments-btn .btn-label {
+  font-size: 7.7px; font-weight: 600; letter-spacing: 0.2px;
+}
+.media-comments-btn .btn-count {
+  background: var(--accent); color: #0a0a0a;
+  border-radius: 7px; padding: 0 4px;
+  font-size: 7px; font-weight: 800;
+  min-width: 13px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.media-comments-btn.active .btn-count {
+  background: #000; color: var(--accent);
+}
+/* ── Snap button on the player controls bar ── */
+.media-snap-btn {
+  display: inline-flex; align-items: center; gap: 3.5px;
+  padding: 0 6px; height: 21px; flex-shrink: 0;
+  background: rgba(0,229,255,0.10);
+  border: 1px solid rgba(0,229,255,0.30);
+  border-radius: 4px;
+  color: var(--accent);
+  font: 600 8.4px 'Inter', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
+  user-select: none; -webkit-user-select: none;
+}
+.media-snap-btn:hover {
+  background: rgba(0,229,255,0.25); color: #fff;
+  border-color: var(--accent);
+}
+.media-snap-btn:active { transform: scale(0.96); }
+.media-snap-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+/* ── Popovers (Add Comment + Comments List) — floating, NOT in flex flow ──
+   Positioned FIXED (not absolute) and APPENDED TO <body> so they escape
+   BOTH the canvas's transform AND the item's transform (the item has
+   `will-change: transform` and `transform: matrix(...)`, which would
+   otherwise create a containing block for `position: fixed` children and
+   trap the popover behind the toolbar / props panel).
+   Popovers are placed OUTSIDE the player — to the right of the video with a
+   clear gap — and run PARALLEL to the video (same vertical span, same top).
+   This way they look like a proper side panel and never cover the video. */
+.media-anno-popover {
+  display: none;
+  position: fixed; z-index: 100000000;
+  background: linear-gradient(180deg, rgba(22,22,22,0.98) 0%, rgba(14,14,14,0.99) 100%);
+  border: 1px solid rgba(0,229,255,0.30);
+  border-radius: 8px;
+  padding: 9px 10px 10px;
+  font-family: 'Inter', sans-serif;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.65);
+  /* Position set dynamically via inline style (left/top/height) — placed to
+     the RIGHT of the video and stretched to the same height so the popover
+     looks parallel to the player. */
+  box-sizing: border-box;
+}
+.media-anno-popover.open { display: flex; flex-direction: column; gap: 6px; }
+.media-anno-popover.add {
+  /* Add-comment popover: just an input + button */
+  width: 300px;
+}
+.media-anno-popover.add .input-row {
+  display: flex; gap: 5px; align-items: center;
+}
+.media-anno-popover.add .input-row input {
+  flex: 1; min-width: 0;
+  background: var(--input-bg, #1a1a1a);
+  border: 1px solid var(--border); color: var(--text);
+  border-radius: 5px; font-size: 12px; padding: 6px 9px;
+  font-family: inherit; outline: none;
+}
+.media-anno-popover.add .input-row input:focus { border-color: var(--accent); }
+.media-anno-popover.add .input-row button {
+  font-size: 11px; padding: 6px 11px;
+  background: var(--accent-dim); color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 5px;
+  cursor: pointer; flex-shrink: 0; font-family: inherit; font-weight: 600;
+}
+.media-anno-popover.add .hint {
+  font-size: 9.5px; color: var(--text-subtle); text-align: center;
+}
+.media-anno-popover.list {
+  /* Comments list popover: bigger, scrollable, sits to the right of player
+     and runs parallel to the video height. JS sets the actual height to
+     match the video (unless the user has dragged the popover elsewhere). */
+  width: 420px;
+  /* Auto-grow when there are many comments. _positionPopover() increases
+     the height past the video height once comments > 2, up to ~92vh.
+     Raised from 85vh → 92vh so 5-6 comment boards don't get clipped. */
+  max-height: calc(100vh - 24px);
+  min-width: 340px;
+  /* R70: was 240px. The previous min-height was preventing the popover
+     from shrinking when the canvas was zoomed out (the user reported
+     "when i scale down the canvas, the window need to auto scale relate
+     to the player"). JS sets the actual height to videoH for ≤2 comments
+     (matches player, scales with canvas zoom). Lower the CSS fallback to
+     100px so a 60px-tall player at 25% zoom gives a 100px popover, not
+     a 240px popover 4× the player's visible height. */
+  min-height: 100px;
+  /* Allow the popover to RESIZE itself when the user drags an edge corner
+     (we set position: fixed + a resize: both handle in the SE corner). */
+  resize: none;
+}
+.media-anno-popover.list .head {
+  display: flex; align-items: center;
+  /* Round 13: tightened gap from 6→4 so the row of 8 action buttons
+     fits comfortably. Combined with flex-wrap, this keeps the head
+     compact even with multiple buttons. */
+  gap: 4px;
+  font-size: 11px; color: var(--text); font-weight: 600;
+  padding: 3px 4px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  /* Round 13: wrap to 2 rows when the popover is narrow, so the Video
+     button doesn't get clipped at the right edge. flex-wrap: wrap is
+     safe — when there's room the row stays on one line. */
+  flex-wrap: wrap;
+  /* The head is the drag handle — cursor: move signals the affordance */
+  cursor: move;
+  user-select: none; -webkit-user-select: none;
+  /* If the title text gets long, let the action buttons stay visible.
+     The title and spacer can shrink; buttons never do (flex-shrink: 0). */
+  min-width: 0;
+}
+.media-anno-popover.list .head .drag-grip {
+  display: inline-block; width: 12px;
+  color: var(--text-subtle); font-size: 12px; line-height: 1;
+  margin-right: -2px; flex-shrink: 0;
+  letter-spacing: -2px;
+}
+.media-anno-popover.list .head .title {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+  /* Round 13: allow the title to shrink so action buttons (S/M/L,
+     Clear, Export, Video, ✕) don't get clipped. Without this, the
+     "Video" button runs off the right edge of the popover when
+     multiple videos are on the board and the popover is narrow. */
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* File name area inside the head title. The extension is dimmer so the
+   base name is the most prominent part. Truncates with ellipsis when the
+   popover is narrow. */
+.media-anno-popover.list .head .title-file {
+  display: inline-flex; align-items: baseline;
+  /* Round 13: tighter so the file name doesn't push the action
+     buttons past the right edge. The title's parent (.head .title)
+     already has overflow:hidden+text-overflow:ellipsis, so this
+     is mainly a hint to the layout. */
+  max-width: 120px;
+  overflow: hidden;
+}
+.media-anno-popover.list .head .title-file-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--accent);
+}
+.media-anno-popover.list .head .title-file-ext {
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 10.5px;
+  flex-shrink: 0;
+}
+.media-anno-popover.list .head .count {
+  background: rgba(0,229,255,0.15); color: var(--accent);
+  border-radius: 9px; padding: 1px 7px;
+  font-size: 9.5px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.media-anno-popover.list .head .head-spacer { flex: 1; }
+.media-anno-popover.list .head .esc {
+  font-size: 9.5px; color: var(--text-subtle);
+  font-weight: 400; white-space: nowrap;
+  /* Round 13: hide the "drag title · Esc to close" hint when the
+     popover is narrow. The title bar already says it's draggable
+     (cursor:move) and Esc is a well-known shortcut — the hint is
+     nice-to-have but eats valuable horizontal space. */
+  display: none;
+}
+/* Action buttons in the list head: export, close, font size */
+.media-anno-popover.list .head .head-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  /* Round 13: slightly tighter padding so 8 action buttons (S/M/L,
+     🖌, 🌍, 🗑, ⤓, 🎬, ✕) fit comfortably in the popover head. */
+  padding: 3px 6px;
+  font-size: 10.5px; font-weight: 600;
+  font-family: inherit;
+  cursor: pointer; line-height: 1;
+  transition: all 0.12s;
+  white-space: nowrap; flex-shrink: 0;
+  /* Head buttons must NOT trigger drag — mousedown handler below stops
+     propagation when a button is the target. */
+}
+.media-anno-popover.list .head .head-btn:hover {
+  background: rgba(0,229,255,0.15); color: var(--accent); border-color: var(--accent);
+}
+.media-anno-popover.list .head .head-btn.danger:hover {
+  background: rgba(255,107,107,0.15); color: #ff6b6b; border-color: #ff6b6b;
+}
+/* Round 5: "show draw toolbar" re-open button. Hidden by default; only
+   shown when the draw toolbar is currently hidden. */
+.media-anno-popover.list .head .head-btn.show-toolbar-btn {
+  color: var(--accent); border-color: rgba(0,229,255,0.4);
+  padding: 3px 6px; font-size: 12px;
+}
+.media-anno-popover.list .head .head-btn.show-toolbar-btn:hover {
+  background: rgba(0,229,255,0.25); color: #fff; border-color: var(--accent);
+}
+.media-anno-popover.list .head .head-btn.show-toolbar-btn.hidden {
+  display: none !important;
+}
+/* Round 5: "translate all" + "clear all" bulk-action buttons */
+.media-anno-popover.list .head .head-btn.bulk-translate {
+  color: #44ddff; border-color: rgba(68,221,255,0.4);
+  padding: 3px 7px; font-size: 10px;
+}
+.media-anno-popover.list .head .head-btn.bulk-translate:hover {
+  background: rgba(68,221,255,0.20); color: #fff; border-color: #44ddff;
+}
+.media-anno-popover.list .head .head-btn.bulk-translate:disabled {
+  opacity: 0.4; cursor: not-allowed;
+}
+/* Round 31: "📌 Follow" button — re-attach popover to video. Hidden by
+   default; appears when the user has detached the popover (drag/resize).
+   Distinct accent so it's obvious what it does. */
+.media-anno-popover.list .head .head-btn.follow-player-btn {
+  color: #ffce5c; border-color: rgba(255,206,92,0.5);
+  background: rgba(255,206,92,0.10);
+  padding: 3px 7px; font-size: 10px;
+  animation: follow-pulse 1.4s ease-in-out infinite;
+}
+.media-anno-popover.list .head .head-btn.follow-player-btn:hover {
+  background: rgba(255,206,92,0.25); color: #fff; border-color: #ffce5c;
+}
+.media-anno-popover.list .head .head-btn.follow-player-btn.hidden {
+  display: none !important;
+}
+@keyframes follow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,206,92,0.4); }
+  50%      { box-shadow: 0 0 0 3px rgba(255,206,92,0.0); }
+}
+.media-anno-popover.list .head .head-btn.bulk-clear {
+  color: #ff6b6b; border-color: rgba(255,107,107,0.35);
+  padding: 3px 6px; font-size: 10px;
+}
+.media-anno-popover.list .head .head-btn.bulk-clear:hover {
+  background: rgba(255,107,107,0.20); color: #fff; border-color: #ff6b6b;
+}
+.media-anno-popover.list .head .head-btn.bulk-clear:disabled {
+  opacity: 0.4; cursor: not-allowed;
+}
+/* Font size selector (S / M / L) — small inline toggle in the head */
+.media-anno-popover.list .head .font-size-toggle {
+  display: inline-flex; gap: 1px; background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border); border-radius: 5px; padding: 1px 2px;
+  flex-shrink: 0;
+}
+.media-anno-popover.list .head .title {
+  /* Title can shrink; action buttons keep their natural width */
+  flex-shrink: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.media-anno-popover.list .head .font-size-toggle button {
+  background: transparent; border: none; color: var(--text-dim);
+  font-family: inherit; cursor: pointer; padding: 2px 6px;
+  border-radius: 3px; line-height: 1; transition: all 0.12s;
+  font-weight: 600;
+}
+.media-anno-popover.list .head .font-size-toggle button.fs-s { font-size: 10px; }
+.media-anno-popover.list .head .font-size-toggle button.fs-m { font-size: 12px; }
+.media-anno-popover.list .head .font-size-toggle button.fs-l { font-size: 14px; }
+.media-anno-popover.list .head .font-size-toggle button:hover {
+  background: rgba(0,229,255,0.12); color: var(--accent);
+}
+.media-anno-popover.list .head .font-size-toggle button.active {
+  background: var(--accent-dim); color: var(--accent);
+}
+/* Add-comment input row — sits at the TOP of the list body so the user can
+   type a comment without needing a separate "add" popover. The popover
+   becomes the unified comment UI. */
+.media-anno-popover.list .add-row {
+  display: flex; gap: 5px; align-items: center;
+  padding: 4px 0 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+.media-anno-popover.list .add-row input {
+  flex: 1; min-width: 0;
+  background: var(--input-bg, #1a1a1a);
+  border: 1px solid var(--border); color: var(--text);
+  border-radius: 5px; font-size: 12px; padding: 6px 9px;
+  font-family: inherit; outline: none;
+}
+.media-anno-popover.list .add-row input:focus { border-color: var(--accent); }
+.media-anno-popover.list .add-row .add-btn {
+  font-size: 11px; padding: 6px 11px;
+  background: var(--accent-dim); color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 5px;
+  cursor: pointer; flex-shrink: 0; font-family: inherit; font-weight: 700;
+  transition: all 0.12s;
+}
+.media-anno-popover.list .add-row .add-btn:hover { background: var(--accent); color: #0a0a0a; }
+.media-anno-popover.list .add-row .add-hint {
+  font-size: 9.5px; color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; flex-shrink: 0;
+}
+/* ── Over Comment section ──
+   Sits between the add-input row and the comments list. Persistent
+   free-form text that gets included in the exported HTML report as an
+   "Overall Comment" block at the top. The user can collapse it via the
+   label header to save vertical space. */
+.media-anno-popover.list .over-wrap {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+.media-anno-popover.list .over-wrap.collapsed .over-input { display: none; }
+.media-anno-popover.list .over-wrap.collapsed { padding-bottom: 2px; }
+.media-anno-popover.list .over-head {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10.5px;
+  cursor: pointer;
+  user-select: none; -webkit-user-select: none;
+}
+.media-anno-popover.list .over-head .over-label {
+  font-weight: 700; color: var(--accent);
+  letter-spacing: 0.2px;
+}
+.media-anno-popover.list .over-head .over-hint {
+  color: var(--text-subtle); font-size: 9px;
+  font-weight: 400;
+  margin-left: auto;
+}
+.media-anno-popover.list .over-input {
+  width: 100%; min-height: 38px; max-height: 140px;
+  resize: vertical;
+  background: var(--input-bg, #1a1a1a);
+  border: 1px solid var(--border); color: var(--text);
+  border-radius: 5px; font-size: 12px; line-height: 1.45;
+  padding: 6px 9px; font-family: inherit; outline: none;
+  box-sizing: border-box;
+}
+.media-anno-popover.list .over-input:focus { border-color: var(--accent); }
+.media-anno-popover.list .over-input::placeholder {
+  color: var(--text-subtle); font-style: italic; opacity: 0.7;
+}
+.media-anno-popover.list .list-body {
+  display: flex; flex-direction: column; gap: 5px;
+  /* Grow to fill the popover (which matches the video height) and scroll
+     when comments overflow. The head row above stays at its natural
+     height; the list-body eats the remaining vertical space. */
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+.media-anno-popover.list .list-body:empty::before {
+  content: 'No comments yet. Pause the video, type above, and press Enter.';
+  display: block; text-align: center; color: var(--text-subtle);
+  font-size: 11px; padding: 18px 0; font-style: italic; line-height: 1.5;
+}
+.media-anno-popover.list .list-body::-webkit-scrollbar { width: 5px; }
+.media-anno-popover.list .list-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.media-anno-popover.list .list-body::-webkit-scrollbar-track { background: transparent; }
+/* Resize handle in the SE corner — small triangle. The user can drag
+   this corner to resize the popover if they want a different size. */
+.media-anno-popover.list .resize-handle {
+  position: absolute; right: 0; bottom: 0; width: 14px; height: 14px;
+  cursor: nwse-resize;
+  background:
+    linear-gradient(135deg, transparent 0%, transparent 50%, var(--border) 50%, var(--border) 60%, transparent 60%, transparent 70%, var(--border) 70%, var(--border) 80%, transparent 80%);
+  opacity: 0.7;
+}
+
+/* Inline edit state for comment text */
+.media-anno-comment-text[contenteditable="true"] {
+  outline: 1.5px solid var(--accent);
+  background: rgba(0,229,255,0.08);
+  border-radius: 3px;
+  padding: 1px 3px;
+  cursor: text;
+}
+
+/* (DRAW TOGGLE BUTTON REMOVED — only 💬 Add and 🗨 List buttons remain) */
+
+/* Time labels */
+.item.has-media .media-time {
+  font-size: 11.5px; color: var(--text); font-family: 'Inter', sans-serif;
+  white-space: nowrap; flex-shrink: 0; min-width: 44px; text-align: center;
+  font-variant-numeric: tabular-nums; font-weight: 500;
+}
+/* Clickable time labels — toggle 0:00 ↔ f 1234 */
+.item.has-media .media-time.media-time-clickable {
+  cursor: pointer; padding: 2px 4px; border-radius: 3px;
+  transition: background 0.15s, color 0.15s;
+}
+.item.has-media .media-time.media-time-clickable:hover {
+  background: rgba(255,255,255,0.08); color: var(--accent);
+}
+/* Right-panel time labels that toggle 0:00 ↔ f 1234 */
+.video-time-toggle {
+  transition: color 0.15s, background 0.15s; padding: 1px 3px; border-radius: 3px;
+}
+.video-time-toggle:hover { color: var(--accent) !important; background: rgba(120,86,255,0.1); }
+/* FPS chip — small label next to duration showing detected frame rate.
+   Round 58: two visual states — auto (cyan, no badge) vs manual
+   override (amber + "✎" badge). Auto is the default after re-detect;
+   clicking cycles through 24/25/30/50/60 → auto so the user can
+   always get back to the detected value. */
+.item.has-media .media-fps-chip {
+  font-size: 10px; color: var(--text); font-family: 'Inter',sans-serif;
+  white-space: nowrap; flex-shrink: 0; padding: 2px 7px; border-radius: 4px;
+  background: rgba(0, 229, 255, 0.10); border: 1px solid rgba(0, 229, 255, 0.35);
+  font-weight: 600; letter-spacing: 0.3px;
+  cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+.item.has-media .media-fps-chip::before {
+  content: '🎞'; font-size: 9px; opacity: 0.85;
+}
+.item.has-media .media-fps-chip:hover {
+  background: rgba(0, 229, 255, 0.22); color: #fff;
+  border-color: rgba(0, 229, 255, 0.6);
+}
+/* Manual override state — amber tint + pencil icon. Shown when the user
+   clicked the chip to set a specific FPS (not auto-detected). */
+.item.has-media .media-fps-chip[data-mode="manual"] {
+  background: rgba(255, 170, 60, 0.14);
+  border-color: rgba(255, 170, 60, 0.45);
+  color: #ffd49a;
+}
+.item.has-media .media-fps-chip[data-mode="manual"]:hover {
+  background: rgba(255, 170, 60, 0.24);
+  border-color: rgba(255, 170, 60, 0.7);
+  color: #fff;
+}
+.item.has-media .media-fps-chip[data-mode="manual"]::before {
+  content: '✎';  /* pencil — indicates user-set */
+}
+/* Auto state — explicit dot suffix to make "auto" mode visually distinct
+   from a manual value, so the user can always tell which mode they're in. */
+.item.has-media .media-fps-chip[data-mode="auto"]::after {
+  content: '•';
+  font-size: 14px; line-height: 0;
+  color: var(--accent); opacity: 0.85;
+  margin-left: 1px; margin-top: -2px;
+}
+
+/* Round 57: cinema-style frame / timecode overlay on the video.
+   Sits in the top-left corner of the player, monospace, semi-
+   transparent black. Two lines: the F-number (with total) on top
+   in accent cyan, the timecode (m:ss.cc) below in white. Auto-shows
+   when the video is selected (or while playing — see .show class),
+   fades out otherwise. pointer-events:none so it never blocks
+   draw / drag / scrub underneath. */
+.item.has-media .media-frame-display {
+  position: absolute;
+  top: 6px; left: 6px;
+  z-index: 5;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-family: 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  padding: 4px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  display: none;  /* hidden — time info now in the timeline area, never covers video */
+  transition: opacity 0.18s ease;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  flex-direction: column; gap: 1px;
+  min-width: 92px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  user-select: none;
+}
+.item.has-media.selected .media-frame-display,
+.item.has-media .media-frame-display.show {
+  opacity: 1;
+}
+.item.has-media .media-frame-display .fc-frame {
+  color: #00e5ff;
+  font-weight: 600;
+  font-size: 11px;
+  display: flex; align-items: baseline; gap: 4px;
+}
+.item.has-media .media-frame-display .fc-frame .fc-total {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 9.5px;
+  font-weight: 400;
+}
+.item.has-media .media-frame-display .fc-time {
+  color: #fff;
+  opacity: 0.95;
+  font-size: 10px;
+}
+
+/* Seek bar container — min-width so it stays usable when other controls wrap.
+   Round 61: padded vertically (8px top/bottom) so the click/drag hit area
+   extends well above and below the visible 6px track. Without this, users
+   see a thin line and aim for it — often missing on small heights, then
+   complaining the slider is "hard to click". Now the entire ~40px row
+   height is clickable, and a faint hover background shows them where
+   the hit area is.
+
+   box-sizing: border-box is critical here — without it, the 8px vertical
+   padding would push the seek bar's total visual height past the row's
+   content area, causing it to overflow the row and (in some layouts) the
+   item itself, which can hide the video or the controls. With border-box,
+   the 8px padding eats into the 100% height instead of adding to it. */
+.item.has-media .media-seek-bar {
+  flex: 1 1 120px; min-width: 100px; height: 100%; display: flex; align-items: center; cursor: pointer;
+  position: relative; padding: 8px 2px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+}
+.item.has-media .media-seek-bar:hover {
+  background: rgba(255,255,255,0.04);
+}
+/* Subtle expanded track on hover (4 → 6px) so the user sees the wider
+   visual target as confirmation. The hit area was already the full
+   seek-bar; this just makes the visual match. */
+.item.has-media .media-seek-track {
+  width:100%; height:6px; background:rgba(255,255,255,0.14); border-radius:3px;
+  position:relative; overflow:visible;
+  transition: height 0.12s ease, background 0.12s ease;
+}
+.item.has-media .media-seek-bar:hover .media-seek-track,
+.item.has-media .media-seek-bar.seeking .media-seek-track {
+  height: 8px;
+  background: rgba(255,255,255,0.22);
+}
+.item.has-media .media-seek-fill {
+  position:absolute; left:0; top:0; height:100%; border-radius:2px;
+  background: linear-gradient(90deg, var(--accent), #a78bfa);
+  transition:width 0.05s linear;
+  box-shadow: 0 0 6px rgba(120,86,255,0.35);
+}
+.item.has-media .media-seek-thumb {
+  position:absolute; top:50%; transform:translate(-50%, -50%);
+  width:12px; height:12px; border-radius:50%;
+  background:#fff; border:2px solid var(--accent);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+  opacity:0; transition:opacity 0.15s ease, transform 0.12s ease;
+  pointer-events:none;
+}
+.item.has-media .media-seek-bar:hover .media-seek-thumb { opacity:1; }
+.item.has-media .media-seek-bar.seeking .media-seek-thumb { opacity:1; transform:translate(-50%,-50%) scale(1.2); }
+
+/* Round 48: hover/drag tooltip on the time slider — shows the frame
+   number + time at the cursor's X position. Appears on hover and stays
+   visible during a drag (so the user can see exactly which frame they're
+   scrubbing to, even if the cursor leaves the bar). */
+.item.has-media .media-seek-tooltip {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  transform: translateX(-50%);
+  background: rgba(20, 20, 28, 0.95);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  line-height: 1.25;
+  pointer-events: none;
+  white-space: nowrap;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.item.has-media .media-seek-bar:hover .media-seek-tooltip,
+.item.has-media .media-seek-bar.seeking .media-seek-tooltip {
+  display: flex;
+}
+.item.has-media .media-seek-tooltip .tt-frame {
+  color: #a78bfa;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.item.has-media .media-seek-tooltip .tt-time {
+  color: rgba(255,255,255,0.85);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Round 58: playhead-position label.
+   A small tag that floats above the playhead (the white circle thumb on
+   the seek bar) showing the current F-number + time at the actual video
+   playhead position. Distinct from .media-seek-tooltip (which follows
+   the cursor during hover/drag) — this one follows the playhead itself
+   during playback, dragging, or whenever a video is the selected/active
+   item. Single-line, smaller than the hover tooltip so it doesn't
+   conflict visually when both are visible (drag = both show: tooltip
+   at cursor, playhead label at thumb). pointer-events:none so it never
+   blocks drag. Hidden by default, shown via .show class. */
+.item.has-media .media-playhead-label {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, rgba(20, 20, 28, 0.92), rgba(30, 30, 42, 0.92));
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  line-height: 1.3;
+  pointer-events: none;
+  white-space: nowrap;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  z-index: 9;  /* one below the hover tooltip (10) so the cursor tooltip wins on overlap */
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+  transition: opacity 0.12s ease;
+  opacity: 0;
+}
+.item.has-media .media-playhead-label.show {
+  /* Round 96: user asked to remove this label entirely (it kept
+     getting clipped/overlapping other controls no matter where it
+     was repositioned). Force it permanently hidden instead of ripping
+     out the JS that computes/updates it — keeps the update logic
+     harmless dead code rather than risking new breakage elsewhere. */
+  display: none !important;
+  opacity: 0;
+}
+.item.has-media .media-playhead-label .pl-frame {
+  color: #a78bfa;
+  font-weight: 700;
+}
+.item.has-media .media-playhead-label .pl-time {
+  color: rgba(255,255,255,0.92);
+}
+.item.has-media .media-playhead-label .pl-sep {
+  color: rgba(255,255,255,0.3);
+  margin: 0 1px;
+}
+
+/* Round 17: Trim handles on the MAIN seek bar.
+   Two narrow draggable handles at the start and end of the track, plus
+   a dimmed overlay covering the trimmed-out regions on each side.
+   Distinct from the existing property-panel trim bar — these are on
+   the main timeline so users can see + set trim points without
+   opening a second row. The handles are taller than the track and
+   extend above/below so they're easy to grab, and they have an
+   `ew-resize` cursor + distinct accent color so they read as
+   draggable. They sit at z-index 5 (above the playhead thumb at
+   z-index implicit) so a click on the handle doesn't reach the
+   seek bar's seek-to-x handler. */
+.item.has-media .media-seek-track .trim-overlay {
+  position: absolute; top: -2px; height: calc(100% + 4px);
+  background: rgba(0,0,0,0.55);
+  pointer-events: none;
+  z-index: 1;
+}
+.item.has-media .media-seek-track .trim-handle {
+  position: absolute; top: -3px;
+  height: calc(100% + 6px); width: 4px;
+  background: var(--accent);
+  cursor: ew-resize;
+  z-index: 5;
+  border-radius: 1px;
+  box-shadow: 0 0 3px rgba(124, 140, 240, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.12s, transform 0.12s, box-shadow 0.12s;
+}
+.item.has-media .media-seek-track .trim-handle::after {
+  content: ''; width: 2px; height: 8px;
+  background: rgba(0,0,0,0.6); border-radius: 1px;
+}
+.item.has-media .media-seek-track .trim-handle-start { left: 0; transform: translateX(-50%); }
+.item.has-media .media-seek-track .trim-handle-end   { right: 0; transform: translateX(50%); }
+/* Invisible expanded hit zone so the 4px visual stays slim but
+   the actual click target is 16px wide — easy to grab. */
+.item.has-media .media-seek-track .trim-handle::before {
+  content: ''; position: absolute; top: 50%;
+  left: 50%; transform: translate(-50%, -50%);
+  width: 16px; height: 200%;
+  background: transparent;
+}
+.item.has-media .media-seek-track .trim-handle:hover {
+  background: #fff;
+  box-shadow: 0 0 8px rgba(124, 140, 240, 0.9);
+}
+.item.has-media .media-seek-track .trim-handle:hover::after { background: var(--accent); }
+
+/* ── Comment markers on the seek bar ──
+   Small flags above the bar at the position of each frame comment. Click
+   any flag to jump to that frame. */
+.item.has-media .media-seek-markers {
+  position: absolute; top: 0; left: 0; right: 0; height: 100%;
+  pointer-events: none; /* let the seek bar handle dragging; markers re-enable below */
+}
+.item.has-media .media-seek-marker {
+  position: absolute; top: -7px; transform: translateX(-50%);
+  width: 4px; height: 14px;
+  background: #ffb84d;
+  border: 1px solid #1a1a1a;
+  border-radius: 1.5px;
+  pointer-events: auto; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  transition: transform 0.12s, background 0.12s;
+}
+.item.has-media .media-seek-marker:hover {
+  background: #ffd47a;
+  transform: translateX(-50%) scale(1.2) translateY(-1px);
+  z-index: 2;
+}
+.item.has-media .media-seek-marker.active {
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(0, 229, 255, 0.7);
+}
+
+/* Round 10: drawing markers on the seek bar — small diamond flags
+   showing where the user has drawn on the frame. Cyan to distinguish
+   from the amber comment markers (so the user can see at a glance
+   which frames have drawings vs which have text comments). Positioned
+   BELOW the seek bar (the comment markers are above). Click any
+   marker to seek to that frame. */
+.item.has-media .media-seek-draw-markers {
+  position: absolute; top: 0; left: 0; right: 0; height: 100%;
+  pointer-events: none;
+  /* Offset below the bar so it doesn't overlap the comment markers */
+  top: 2px;
+}
+.item.has-media .media-seek-draw-marker {
+  position: absolute;
+  /* Place the diamond below the bar */
+  top: 4px;
+  transform: translateX(-50%);
+  width: 8px; height: 8px;
+  background: #00e5ff;
+  border: 1px solid #003844;
+  border-radius: 1.5px;
+  /* Rotate to a diamond */
+  transform: translateX(-50%) rotate(45deg);
+  pointer-events: auto; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.6), 0 0 4px rgba(0, 229, 255, 0.5);
+  transition: transform 0.12s, background 0.12s;
+}
+.item.has-media .media-seek-draw-marker:hover {
+  background: #7ff5ff;
+  transform: translateX(-50%) rotate(45deg) scale(1.3);
+  z-index: 2;
+}
+.item.has-media .media-seek-draw-marker.active {
+  background: #fff;
+  box-shadow: 0 0 6px rgba(0, 229, 255, 0.9);
+}
+
+/* Round 12: text markers on the seek bar — small green squares
+   showing where the user has dropped text annotations. Distinct from
+   the amber comment flags (above) and the cyan draw diamonds (below)
+   so all three categories are visually unique. */
+.item.has-media .media-seek-text-markers {
+  position: absolute; top: 0; left: 0; right: 0; height: 100%;
+  pointer-events: none;
+}
+.item.has-media .media-seek-text-marker {
+  position: absolute;
+  top: -3px;
+  transform: translateX(-50%);
+  width: 8px; height: 8px;
+  background: #4ade80;
+  border: 1px solid #14532d;
+  border-radius: 1.5px;
+  pointer-events: auto; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.6), 0 0 4px rgba(74, 222, 128, 0.5);
+  transition: transform 0.12s, background 0.12s;
+}
+.item.has-media .media-seek-text-marker:hover {
+  background: #bbf7d0;
+  transform: translateX(-50%) scale(1.3);
+  z-index: 2;
+}
+.item.has-media .media-seek-text-marker.active {
+  background: #fff;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.9);
+}
+
+/* Round 12: text editor — the inline <textarea> that appears when
+   the user clicks on the video in text mode. Positioned absolutely
+   at the click point. Matches the canvas font (sans-serif) and uses
+   the current draw color for the text. The translucent black background
+   is added so the typed text stays readable over any video frame. */
+.media-anno-text-editor {
+  position: fixed; z-index: 8;
+  min-width: 20px; max-width: 140px;
+  padding: 3px 6px;
+  background: rgba(0, 0, 0, 0.78);
+  border: 1.5px solid var(--accent);
+  border-radius: 6px;
+  /* Round 18: font-size is set inline at spawn time to match the
+     final canvas text (max(14, size*5)px). The fixed `14px` here
+     is just a fallback for any pre-spawn render flash. */
+  font: 600 14px -apple-system, "SF Pro Display", system-ui, sans-serif;
+  line-height: 1.3;
+  color: #fff;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.7);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow: hidden;
+}
+.media-anno-text-editor::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+/* Round 28.7: floating "translate" chip next to the text editor.
+   Sits just below the editor's right edge, so the user's typed text
+   is still readable. Stays fixed-positioned like the editor itself
+   so it survives board scroll. */
+.media-anno-text-translate {
+  position: fixed; z-index: 9;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 9px;
+  background: linear-gradient(135deg, #00e5ff, #7c5cfc);
+  color: #000;
+  border: none; border-radius: 14px;
+  font: 700 11px -apple-system, "SF Pro Display", system-ui, sans-serif;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  box-shadow: 0 3px 12px rgba(0,229,255,0.4);
+  transition: transform 0.12s, box-shadow 0.12s, opacity 0.15s;
+  white-space: nowrap;
+}
+.media-anno-text-translate:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 18px rgba(0,229,255,0.55);
+}
+.media-anno-text-translate:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
+  box-shadow: none;
+}
+.media-anno-text-translate.translating::after {
+  content: '…';
+  margin-left: 2px;
+  animation: txttr-pulse 1s linear infinite;
+}
+@keyframes txttr-pulse {
+  0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; }
+}
+
+/* Audio-only badge stays on the media area (no info bar for audio) */
+.item.has-media .media-type-badge { z-index:3; }
+.item-handle.nw { top:-8px; left:-8px; cursor:nw-resize; }
+.item-handle.ne { top:-8px; right:-8px; cursor:ne-resize; }
+.item-handle.sw { bottom:-8px; left:-8px; cursor:sw-resize; }
+.item-handle.se { bottom:-8px; right:-8px; cursor:se-resize; }
+.item-handle.n { top:-8px; left:calc(50% - 8px); cursor:n-resize; }
+.item-handle.s { bottom:-8px; left:calc(50% - 8px); cursor:s-resize; }
+.item-handle.e { top:calc(50% - 8px); right:-8px; cursor:e-resize; }
+.item-handle.w { top:calc(50% - 8px); left:-8px; cursor:w-resize; }
+.item-rot { position:absolute; top:-28px; left:calc(50% - 7px); width:14px; height:14px; background:var(--accent); border:1.5px solid var(--bg-panel); border-radius:50%; cursor:grab; z-index:999999; }
+.text-item { position:absolute; cursor:move; padding:4px 10px; min-width:80px; min-height:28px; max-width:2000px; outline:none; word-wrap:break-word; white-space:pre-wrap; writing-mode:horizontal-tb; line-height:1.5; overflow:visible; font-family:'Inter',sans-serif; letter-spacing:0.01em; user-select:text; -webkit-user-select:text; -moz-user-select:text; -ms-user-select:text; }
+.text-item.selected { outline:1.5px solid var(--accent); outline-offset:2.5px; }
+.text-item.editing { outline:1.5px solid var(--accent); cursor:text; overflow:visible !important; min-width:100px; user-select:text; -webkit-user-select:text; -moz-user-select:text; -ms-user-select:text; }
+.text-item:empty::before { content:attr(data-placeholder); color:rgba(255,255,255,0.25); pointer-events:none; }
+
+/* LINK CARD items */
+.item.link-card { border-radius:6px; overflow:hidden; }
+.item.link-card .link-overlay { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(transparent,rgba(0,0,0,0.92)); padding:24px 10px 8px; pointer-events:none; }
+.item.link-card .link-title { color:#fff; font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:'Inter',sans-serif; letter-spacing:0.01em; }
+.item.link-card .link-url { color:rgba(255,255,255,0.55); font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:'Inter',sans-serif; margin-top:2px; }
+.item.link-card .link-badge { position:absolute; top:6px; right:6px; background:rgba(0,0,0,0.7); color:var(--accent); padding:3px 8px; border-radius:4px; font-size:9px; font-family:'Inter',sans-serif; display:flex; align-items:center; gap:3px; pointer-events:none; font-weight:600; letter-spacing:0.05em; }
+.item.link-card .link-open-btn { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.85); color:var(--accent); border:1px solid rgba(77,216,140,0.4); padding:8px 18px; border-radius:8px; font-size:12px; font-family:'Inter',sans-serif; cursor:pointer; opacity:0; transition:opacity 0.2s; pointer-events:none; display:flex; align-items:center; gap:6px; white-space:nowrap; font-weight:500; }
+.item.link-card:hover .link-open-btn { opacity:1; pointer-events:auto; }
+.item.link-card .link-placeholder { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--bg-elevated); gap:8px; }
+.item.link-card .link-placeholder .link-icon { font-size:32px; opacity:0.5; }
+.item.link-card .link-placeholder .link-text { color:var(--text-dim); font-size:11px; font-family:'Inter',sans-serif; text-align:center; padding:0 12px; word-break:break-all; }
+
+/* URL input modal */
+#link-modal { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; z-index:99999999; box-shadow:var(--shadow-heavy); display:none; flex-direction:column; gap:14px; min-width:420px; max-width:90vw; }
+#link-modal.active { display:flex; }
+#link-modal h3 { font-family:'Inter',sans-serif; font-size:14px; font-weight:600; color:var(--text); margin:0; display:flex; align-items:center; gap:8px; }
+#link-modal input { background:var(--input-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:10px 14px; font-size:13px; font-family:'Inter',sans-serif; outline:none; transition:border-color 0.2s; }
+#link-modal input:focus { border-color:var(--accent); }
+#link-modal input::placeholder { color:var(--text-subtle); }
+#link-modal .modal-btns { display:flex; gap:8px; justify-content:flex-end; }
+#link-modal .modal-btns button { padding:8px 18px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--text-dim); cursor:pointer; font-size:12px; font-family:'Inter',sans-serif; transition:all 0.2s; }
+#link-modal .modal-btns button:hover { background:var(--btn-hover); color:var(--text); }
+#link-modal .modal-btns button.primary { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+#link-modal .modal-btns button.primary:hover { background:var(--accent); color:#000; }
+#link-modal .link-loading { display:flex; align-items:center; gap:8px; color:var(--text-dim); font-size:12px; font-family:'Inter',sans-serif; }
+#link-modal .link-loading .spinner { width:14px; height:14px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+/* Text handle container — sibling of text-item, NOT a child (so contentEditable stays clean) */
+.text-handles { position:absolute; pointer-events:none; }
+.text-handles .item-handle { pointer-events:auto; }
+/* GROUP BORDER */
+.group-border { position:absolute; pointer-events:none; border:2px dashed; border-radius:4px; z-index:0; transition:all 0.1s; }
+
+/* ---- audio-only type badge (audio cards don't have an info bar) ---- */
+/* Round 72: the video/gif in-frame `.media-type-badge` and the
+   `.media-filename-badge` pill were REMOVED — type + filename now
+   live in the dedicated black `.media-info-bar` header at the top of
+   the video card. The audio card has no info bar, so it still uses a
+   small badge in the top-right corner. */
+.media-type-badge.audio-badge {
+  position: absolute; top: 4px; right: 4px; z-index: 3; pointer-events: none;
+  background: rgba(0,0,0,0.55); color: #00e5ff; padding: 1px 5px; border-radius: 3px;
+  font-size: 9px; font-family: 'Inter',sans-serif; font-weight: 500;
+  letter-spacing: 0.04em; opacity: 0.85;
+  text-transform: uppercase;
+  height: 18px; display: inline-flex; align-items: center; box-sizing: border-box;
+}
+.group-border.locked-border { border-style:solid; }
+#draw-layer { position:fixed; top:0; left:0; pointer-events:none; z-index:500; }
+
+/* Relation lines SVG layer — inside #canvas, follows pan/zoom transform.
+   Uses a huge fixed size so lines can span the entire board. */
+#relation-svg {
+  position: absolute; top: 0; left: 0;
+  width: 100000px; height: 100000px;
+  pointer-events: none; z-index: 0;
+  overflow: visible;
+}
+#relation-svg line,
+#relation-svg path,
+#relation-svg polyline {
+  pointer-events: stroke;
+  cursor: pointer;
+  transition: stroke 0.12s ease;
+}
+#relation-svg .rel-line {
+  fill: none; stroke: #00e5ff; stroke-width: 6;
+  stroke-linecap: round; stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+/* Invisible fat hit area behind the visible line — makes clicking much easier */
+#relation-svg .rel-hit {
+  fill: none; stroke: transparent; stroke-width: 24;
+  stroke-linecap: round; stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+#relation-svg .rel-line:hover { stroke-width: 9; filter: drop-shadow(0 0 10px rgba(0,229,255,0.7)); }
+#relation-svg .rel-line.selected { stroke-width: 8; stroke: #ffdd44; }
+#relation-svg .rel-line.dashed { stroke-dasharray: 10 8; }
+#relation-svg .rel-arrow { fill: #00e5ff; }
+#relation-svg .rel-line.selected + .rel-arrow { fill: #ffdd44; }
+#relation-svg .rel-label-bg {
+  fill: rgba(0, 0, 0, 0.78);
+  stroke: rgba(0, 229, 255, 0.4);
+  stroke-width: 1;
+  rx: 4;
+}
+#relation-svg .rel-label-text {
+  fill: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  pointer-events: none;
+  user-select: none;
+}
+#relation-svg .rel-anchor {
+  fill: #00e5ff;
+  stroke: #000;
+  stroke-width: 1;
+  cursor: move;
+  pointer-events: all;
+}
+#relation-svg .rel-anchor:hover { fill: #fff; r: 5; }
+/* Relation mode cursor */
+body.relation-mode { cursor: crosshair; }
+body.relation-mode .item { cursor: crosshair; }
+body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline-offset: 2px; border-radius: 4px; }
+
+/* TOOLBAR */
+#toolbar { position:fixed; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:2px; background:var(--toolbar-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:6px 8px; z-index:9999999; box-shadow:var(--shadow-medium); max-width:calc(100vw - 290px); flex-wrap:wrap; justify-content:center; }
+#toolbar button { background:transparent; border:1px solid transparent; color:var(--text-dim); padding:7px 13px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:400; font-family:'Inter',sans-serif; transition:all 0.2s ease; display:flex; align-items:center; gap:5px; white-space:nowrap; letter-spacing:0.01em; }
+#toolbar button:hover { background:var(--btn-hover); color:var(--text); }
+#toolbar button.active { background:var(--btn-active-bg); color:var(--btn-active-text); border-color:var(--btn-active-border); }
+#toolbar .sep { width:1px; background:var(--border-subtle); margin:0 3px; }
+#toolbar button.tb-primary { border-color:var(--accent); color:var(--accent); font-weight:500; }
+#toolbar button.tb-primary:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
+#toolbar button.tb-full { border-color:#22c55e; color:#22c55e; font-weight:600; background:rgba(34,197,94,0.08); }
+#toolbar button.tb-full:hover { background:#22c55e; color:#fff; border-color:#22c55e; }
+#toolbar kbd { font-size:9px; opacity:0.35; font-family:'Inter',monospace; }
+#toolbar .tb-label { font-size:11px; font-weight:500; }
+
+/* PROPERTIES PANEL */
+#props { position:fixed; top:12px; right:12px; width:250px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:0; z-index:9999999; max-height:calc(100vh - 80px); overflow-y:auto; box-shadow:var(--shadow-medium); transition:width 0.2s ease, min-width 0.2s ease, opacity 0.2s ease; }
+#props.collapsed { width:36px; min-width:36px; overflow:hidden; }
+#props.collapsed .prop-section,
+#props.collapsed .props-empty,
+#props.collapsed .section-header { display:none; }
+#props.collapsed #props-content { display:none; }
+#props-toggle { position:absolute; top:8px; right:8px; width:20px; height:20px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; background:var(--input-bg); border:1px solid var(--border); color:var(--text-dim); font-size:10px; line-height:1; z-index:2; transition:all 0.15s; user-select:none; }
+#props-toggle:hover { background:var(--btn-hover); color:var(--text); }
+#props.collapsed #props-toggle { right:auto; left:8px; top:50%; transform:translateY(-50%); }
+#props h3 { font-size:10px; text-transform:uppercase; color:var(--text-subtle); margin:0; letter-spacing:1.5px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:rgba(255,255,255,0.015); border-bottom:1px solid var(--border-subtle); user-select:none; font-weight:500; font-family:'Inter',sans-serif; transition:background 0.15s; }
+#props h3:hover { background:rgba(255,255,255,0.03); }
+#props h3::after { content:'▾'; font-size:9px; color:var(--text-subtle); transition:transform 0.2s; }
+#props h3.collapsed::after { transform:rotate(-90deg); }
+#props .prop-section { padding:10px 14px; border-bottom:1px solid var(--border-subtle); }
+#props .prop-section.hidden { display:none; }
+#props .prop-row { display:flex; align-items:center; gap:6px; margin-bottom:7px; }
+#props label { font-size:11px; color:var(--text-dim); width:55px; flex-shrink:0; font-family:'Inter',sans-serif; font-weight:400; }
+#props input[type="range"] { flex:1; height:3px; accent-color:var(--accent); border-radius:2px; }
+#props input[type="number"] { width:50px; background:var(--input-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:3px 6px; font-size:11px; font-family:'Inter',sans-serif; outline:none; transition:border-color 0.15s; }
+#props input[type="number"]:focus { border-color:var(--accent); }
+#props button { background:var(--input-bg); border:1px solid var(--border); color:var(--text-dim); padding:5px 10px; border-radius:6px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; font-weight:400; transition:all 0.2s ease; white-space:nowrap; }
+#props button:hover { background:var(--btn-hover); color:var(--text); border-color:var(--border-light); }
+#props button.active { background:var(--btn-active-bg); color:var(--btn-active-text); border-color:var(--btn-active-border); }
+#props .btn-group { display:flex; gap:3px; flex-wrap:wrap; }
+#props .btn-group button { flex:1; min-width:0; text-align:center; padding:5px 4px; }
+#props .color-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+#props .mask-list { display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+#props .mask-item { background:var(--input-bg); border:1px solid var(--border-subtle); border-radius:8px; padding:7px 9px; }
+#props .mask-item.active-mask { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+#props .mask-item-head { display:flex; align-items:center; gap:5px; cursor:pointer; }
+#props .mask-item-head .mi-name { flex:1; font-size:11px; color:var(--text); font-family:'Inter',sans-serif; }
+#props .mask-item-head .mi-toggle { width:14px; height:14px; accent-color:var(--accent); cursor:pointer; }
+#props .mask-item-head .mi-del { background:none; border:none; color:var(--text-subtle); cursor:pointer; font-size:13px; padding:0; line-height:1; }
+#props .mask-item-head .mi-del:hover { color:#ff5555; }
+#props .mask-detail { margin-top:7px; display:none; }
+#props .mask-detail.show { display:block; }
+#props .mask-detail .prop-row { margin-bottom:5px; }
+#props .mask-detail label { width:48px; }
+#props .mask-pick-btn { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); font-size:10px; padding:4px 8px; }
+#props .mask-pick-btn.active { background:var(--accent); color:#fff; }
+#props .mask-color-row { display:flex; align-items:center; gap:5px; margin-bottom:5px; }
+#props .mask-color-row input[type="color"] { width:28px; height:24px; border:1px solid var(--border-subtle); border-radius:4px; cursor:pointer; background:none; padding:0; }
+#props .mask-color-row label { font-size:10px; color:var(--text-dim); }
+#props .mask-brush-canvas { position:absolute; pointer-events:auto; cursor:crosshair; z-index:5; }
+.mask-overlay { position:absolute; inset:0; pointer-events:none; }
+.mask-brush-overlay { position:fixed; pointer-events:auto; cursor:crosshair; z-index:9999998; }
+#viewport.mask-pick-mode { cursor:crosshair !important; }
+#viewport.mask-pick-mode .item, #viewport.mask-pick-mode .text-item { cursor:crosshair !important; }
+#props .color-swatch { width:100%; aspect-ratio:1; border-radius:4px; cursor:pointer; border:1.5px solid var(--border); transition:transform 0.12s, border-color 0.12s; }
+#props .color-swatch:hover { transform:scale(1.15); }
+#props .color-swatch.active { border:2px solid var(--accent); }
+#props select { background:var(--input-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:3px 6px; font-size:11px; font-family:'Inter',sans-serif; flex:1; outline:none; }
+#props select option, #text-toolbar select option { background:var(--input-bg); color:var(--text); }
+#props .props-empty { padding:24px 14px; font-size:12px; color:var(--text-subtle); text-align:center; font-family:'Inter',sans-serif; letter-spacing:0.02em; }
+#props .section-header { font-size:10px; text-transform:uppercase; color:var(--text-subtle); letter-spacing:1.5px; padding:10px 14px; background:rgba(255,255,255,0.015); border-bottom:1px solid var(--border-subtle); cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none; font-weight:500; font-family:'Inter',sans-serif; transition:background 0.15s; }
+#props .section-header:hover { background:rgba(255,255,255,0.03); }
+#props .section-header::after { content:'▾'; font-size:9px; color:var(--text-subtle); transition:transform 0.2s; }
+#props .section-header.collapsed::after { transform:rotate(-90deg); }
+
+/* TEXT TOOLBAR */
+#text-toolbar { position:fixed; top:56px; left:50%; transform:translateX(-50%); display:none; gap:3px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:10px; padding:7px; z-index:9999999; box-shadow:var(--shadow-medium); flex-wrap:wrap; max-width:640px; }
+#text-toolbar.active { display:flex; }
+#text-toolbar button, #text-toolbar select { background:transparent; border:1px solid transparent; color:var(--text-dim); padding:5px 9px; border-radius:6px; cursor:pointer; font-size:11.5px; font-family:'Inter',sans-serif; transition:all 0.2s ease; font-weight:400; }
+#text-toolbar button:hover { background:var(--btn-hover); color:var(--text); }
+#text-toolbar button.active { background:var(--btn-active-bg); color:var(--btn-active-text); border-color:var(--btn-active-border); }
+#text-toolbar select { background:var(--input-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:3px 6px; font-size:11px; font-family:'Inter',sans-serif; outline:none; }
+#text-toolbar .sep { width:1px; background:var(--border-subtle); margin:0 3px; }
+#text-toolbar input[type="number"] { width:42px; background:var(--input-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:3px 5px; font-size:11px; font-family:'Inter',sans-serif; outline:none; }
+#text-toolbar .color-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; position:absolute; top:100%; left:0; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:8px; padding:5px; z-index:99999999; box-shadow:var(--shadow-medium); }
+
+/* TEXT COLOR PALETTE — appears next to selected text item */
+#text-color-palette { position:fixed; top:104px; left:50%; transform:translateX(-50%); display:none; gap:4px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:10px; padding:6px 8px; z-index:9999998; box-shadow:var(--shadow-medium); align-items:center; flex-wrap:wrap; max-width:520px; }
+#text-color-palette.active { display:flex; }
+#text-color-palette .tcp-label { font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; padding:0 4px; font-family:'Inter',sans-serif; }
+#text-color-palette .tcp-swatch { width:22px; height:22px; border-radius:5px; cursor:pointer; border:1.5px solid rgba(255,255,255,0.12); transition:transform 0.15s, box-shadow 0.15s, border-color 0.15s; flex-shrink:0; }
+#text-color-palette .tcp-swatch:hover { transform:scale(1.18); border-color:rgba(255,255,255,0.5); }
+#text-color-palette .tcp-swatch.active { border-color:var(--accent); box-shadow:0 0 0 2px rgba(124,140,240,0.4); transform:scale(1.15); }
+#text-color-palette .tcp-picker { width:22px; height:22px; border-radius:5px; cursor:pointer; border:1.5px solid rgba(255,255,255,0.12); background:linear-gradient(135deg,#ff4444 0%,#ffdd00 25%,#44ff44 50%,#44ddff 75%,#ff44aa 100%); padding:0; }
+#text-color-palette .tcp-picker::-webkit-color-swatch-wrapper { padding:0; }
+#text-color-palette .tcp-picker::-webkit-color-swatch { border:none; border-radius:3px; }
+#text-toolbar .color-swatch { width:18px; height:18px; border-radius:4px; cursor:pointer; border:1.5px solid var(--border); }
+#text-toolbar .color-swatch:hover { transform:scale(1.15); }
+#text-toolbar .color-swatch.active { border:2px solid var(--accent); }
+
+/* DRAW TOOLBAR */
+#draw-toolbar { position:fixed; top:56px; left:12px; display:none; flex-direction:column; gap:7px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:10px; padding:10px; z-index:9999999; width:190px; box-shadow:var(--shadow-medium); }
+#draw-toolbar.active { display:flex; }
+@media (max-width:700px) {
+  #draw-toolbar { width:150px; padding:7px; gap:4px; }
+  #draw-toolbar label { font-size:9px; }
+  #draw-toolbar button { font-size:9.5px; padding:4px; }
+}
+#draw-toolbar label { font-size:10px; color:var(--text-dim); font-family:'Inter',sans-serif; font-weight:500; letter-spacing:0.3px; }
+#draw-toolbar input[type="range"] { width:100%; height:3px; accent-color:var(--accent); border-radius:2px; }
+#draw-toolbar .btn-group { display:flex; gap:3px; }
+#draw-toolbar button { flex:1; background:var(--input-bg); border:1px solid var(--border); color:var(--text-dim); padding:5px; border-radius:6px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; font-weight:400; transition:all 0.15s; }
+#draw-toolbar button.active { background:var(--btn-active-bg); color:var(--btn-active-text); border-color:var(--btn-active-border); }
+#draw-toolbar input[type="color"] { width:100%; height:26px; border:1.5px solid var(--border); border-radius:6px; cursor:pointer; background:var(--input-bg); }
+
+
+
+/* FREE SHAPE CUT TOOL */
+#cut-overlay { position:fixed; inset:0; z-index:9999997; display:none; pointer-events:none; }
+#cut-overlay.active { display:block; }
+#cut-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+#cut-path { fill:none; stroke:#00e5ff; stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+#cut-path.closed { fill:rgba(0,229,255,0.12); }
+#cut-fill-path { fill:rgba(0,229,255,0.15); stroke:none; }
+#cut-target-highlight { position:absolute; border:2px dashed #00e5ff; border-radius:3px; pointer-events:none; display:none; box-shadow:0 0 12px rgba(0,229,255,0.4); }
+#cut-target-highlight.active { display:block; }
+#cut-preview-mask { position:absolute; display:none; pointer-events:none; }
+#cut-preview-mask.active { display:block; }
+#cut-panel { position:fixed; bottom:12px; left:50%; transform:translateX(-50%); display:none; gap:6px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:10px; padding:7px; z-index:9999999; align-items:center; box-shadow:var(--shadow-medium); }
+#cut-panel.active { display:flex; }
+#cut-panel .cut-label { font-size:10px; color:var(--text-dim); margin:0 4px; font-family:'Inter',sans-serif; white-space:nowrap; }
+#cut-panel .cut-sep { width:1px; height:18px; background:var(--border-subtle); margin:0 3px; }
+#cut-panel .cut-btn { padding:5px 11px; background:var(--input-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; transition:all 0.15s; white-space:nowrap; }
+#cut-panel .cut-btn:hover { background:var(--btn-hover); color:var(--text); }
+#cut-panel .cut-btn.primary { background:#00e5ff; color:#000; border-color:#00e5ff; font-weight:600; }
+
+/* LASSO (POLYGON CUT) TOOL */
+#lasso-overlay { position:fixed; inset:0; z-index:9999997; display:none; pointer-events:none; }
+#lasso-overlay.active { display:block; }
+#lasso-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+#lasso-path { fill:rgba(124,140,240,0.12); stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; stroke-dasharray:6,3; }
+#lasso-fill-path { fill:rgba(124,140,240,0.15); stroke:none; }
+.lasso-point { position:fixed; width:10px; height:10px; background:var(--accent); border:2px solid #fff; border-radius:50%; transform:translate(-50%,-50%); pointer-events:none; z-index:9999998; box-shadow:0 0 6px rgba(124,140,240,0.6); }
+.lasso-point.first-point { background:#fff; border-color:var(--accent); width:14px; height:14px; cursor:pointer; pointer-events:auto; }
+.lasso-point.first-point::after { content:''; position:absolute; inset:-6px; border-radius:50%; border:2px solid var(--accent); opacity:0.4; }
+#lasso-target-highlight { position:absolute; border:2px dashed var(--accent); border-radius:3px; pointer-events:none; display:none; box-shadow:0 0 12px rgba(124,140,240,0.4); }
+#lasso-target-highlight.active { display:block; }
+#lasso-panel { position:fixed; bottom:12px; left:50%; transform:translateX(-50%); display:none; gap:6px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:10px; padding:7px; z-index:9999999; align-items:center; box-shadow:var(--shadow-medium); }
+#lasso-panel.active { display:flex; }
+#lasso-panel .lasso-label { font-size:10px; color:var(--text-dim); margin:0 4px; font-family:'Inter',sans-serif; white-space:nowrap; }
+#lasso-panel .lasso-sep { width:1px; height:18px; background:var(--border-subtle); margin:0 3px; }
+#lasso-panel .lasso-btn { padding:5px 11px; background:var(--input-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; transition:all 0.15s; white-space:nowrap; }
+#lasso-panel .lasso-btn:hover { background:var(--btn-hover); color:var(--text); }
+#lasso-panel .lasso-btn.primary { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
+#lasso-panel .lasso-btn.primary:hover { filter:brightness(1.1); }
+#lasso-panel .lasso-checkbox { display:flex; align-items:center; gap:4px; font-size:10px; color:var(--text-dim); font-family:'Inter',sans-serif; cursor:pointer; user-select:none; }
+#lasso-panel .lasso-checkbox input { accent-color:var(--accent); cursor:pointer; }
+#lasso-panel .lasso-border-color { width:24px; height:22px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:none; padding:0; }
+
+/* TO-DO LIST ITEMS */
+.todo-item {
+  --todo-zoom: 1;
+  position:absolute; cursor:move; background:var(--bg-elevated); border:1px solid var(--border-light); border-radius:10px;
+  padding:calc(12px * var(--todo-zoom)) calc(14px * var(--todo-zoom));
+  min-width:calc(80px * var(--todo-zoom));
+  transition:outline-color 0.15s; overflow:hidden;
+}
+.todo-item.selected { outline:1.5px solid var(--accent); outline-offset:2.5px; }
+.todo-item.locked { cursor:default; }
+.todo-item .todo-header { display:flex; align-items:center; gap:calc(6px * var(--todo-zoom)); margin-bottom:calc(8px * var(--todo-zoom)); padding-bottom:calc(6px * var(--todo-zoom)); border-bottom:1px solid var(--border-subtle); }
+.todo-item .todo-title { flex:1; font-size:calc(13px * var(--todo-zoom)); font-weight:600; color:var(--text); font-family:'Inter',sans-serif; background:transparent; border:none; outline:none; min-width:0; }
+.todo-item .todo-title::placeholder { color:var(--text-subtle); }
+.todo-item .todo-add-btn { background:var(--accent-dim); color:var(--accent); border:1px solid var(--accent); border-radius:5px; padding:calc(3px * var(--todo-zoom)) calc(8px * var(--todo-zoom)); font-size:calc(11px * var(--todo-zoom)); cursor:pointer; font-family:'Inter',sans-serif; white-space:nowrap; transition:all 0.15s; }
+.todo-item .todo-add-btn:hover { background:var(--accent); color:#fff; }
+.todo-item .todo-list { display:flex; flex-direction:column; gap:calc(3px * var(--todo-zoom)); }
+.todo-item .todo-row { display:flex; align-items:center; gap:calc(7px * var(--todo-zoom)); padding:calc(2px * var(--todo-zoom)) 0; }
+.todo-item .todo-check { width:calc(15px * var(--todo-zoom)); height:calc(15px * var(--todo-zoom)); border:1.5px solid var(--border-light); border-radius:calc(4px * var(--todo-zoom)); cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:all 0.15s; background:var(--input-bg); }
+.todo-item .todo-check.checked { background:var(--accent); border-color:var(--accent); }
+.todo-item .todo-check.checked::after { content:''; width:calc(7px * var(--todo-zoom)); height:calc(4px * var(--todo-zoom)); border:solid #fff; border-width:0 0 calc(2px * var(--todo-zoom)) calc(2px * var(--todo-zoom)); transform:rotate(-45deg) translate(0px,calc(-1px * var(--todo-zoom))); }
+.todo-item .todo-text { flex:1; font-size:calc(12px * var(--todo-zoom)); color:var(--text); font-family:'Inter',sans-serif; background:transparent; border:none; outline:none; min-width:0; }
+.todo-item .todo-text.done { text-decoration:line-through; color:var(--text-subtle); }
+.todo-item .todo-text::placeholder { color:var(--text-subtle); }
+.todo-item .todo-del { background:none; border:none; color:var(--text-subtle); cursor:pointer; font-size:calc(14px * var(--todo-zoom)); padding:0 2px; line-height:1; opacity:0; transition:opacity 0.15s, color 0.15s; }
+.todo-item .todo-row:hover .todo-del { opacity:1; }
+.todo-item .todo-del:hover { color:#ff5555; }
+.todo-item .todo-progress { font-size:calc(9px * var(--todo-zoom)); color:var(--text-dim); font-family:'Inter',sans-serif; margin-top:calc(6px * var(--todo-zoom)); text-align:right; }
+
+/* MIND MAP */
+.mindmap-item { position:absolute; cursor:move; background:var(--bg-darker); border:1px solid var(--border); border-radius:12px; overflow:visible; will-change:transform; transition:outline-color 0.15s; display:flex; flex-direction:column; }
+.mindmap-item.selected { outline:1.5px solid var(--accent); outline-offset:2.5px; }
+.mindmap-item.locked { cursor:default; }
+.mindmap-header { display:flex; align-items:center; gap:5px; padding:5px 8px; background:rgba(0,0,0,0.25); border-bottom:1px solid var(--border-subtle); border-radius:11px 11px 0 0; flex-shrink:0; }
+.mindmap-title { flex:1; font-size:11px; font-weight:600; color:var(--text); font-family:'Inter',sans-serif; background:transparent; border:none; outline:none; min-width:0; }
+.mindmap-title::placeholder { color:var(--text-subtle); }
+.mindmap-add-btn { background:var(--accent-dim); color:var(--accent); border:1px solid var(--accent); border-radius:5px; padding:2px 7px; font-size:10px; cursor:pointer; font-family:'Inter',sans-serif; white-space:nowrap; transition:all 0.15s; }
+.mindmap-add-btn:hover { background:var(--accent); color:#fff; }
+.mm-translate-btn { background:transparent; color:var(--text-dim); border:1px solid var(--border-subtle); border-radius:5px; padding:2px 7px; font-size:9px; cursor:pointer; font-family:'Inter',sans-serif; white-space:nowrap; transition:all 0.15s; }
+.mm-translate-btn:hover { background:var(--btn-hover); color:var(--text); border-color:var(--accent); }
+.mm-fit-btn { background:rgba(255,255,255,0.08); color:var(--text-dim); border:1px solid var(--border); border-radius:5px; padding:2px 7px; font-size:10px; cursor:pointer; font-family:'Inter',sans-serif; white-space:nowrap; transition:all 0.15s; }
+.mm-fit-btn:hover { background:rgba(255,255,255,0.15); color:var(--text); }
+.mindmap-canvas { position:relative; flex:1; overflow:visible; min-height:120px; }
+.mm-node { position:absolute; min-width:70px; min-height:28px; padding:5px 11px; border-radius:8px; cursor:grab; font-size:11.5px; font-family:'Inter',sans-serif; font-weight:500; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; word-wrap:break-word; user-select:none; transition:box-shadow 0.15s, transform 0.08s; z-index:2; line-height:1.3; }
+.mm-node:hover { box-shadow:0 0 0 2px rgba(255,255,255,0.25); z-index:3; }
+.mm-node.mm-selected { box-shadow:0 0 0 2px #fff, 0 0 8px rgba(255,255,255,0.3); z-index:3; }
+.mm-node.mm-editing { cursor:text; box-shadow:0 0 0 2px var(--accent); outline:none; }
+.mm-node:active { cursor:grabbing; }
+.mm-node-text { padding:2px 0; }
+.mm-node-img { width:100%; max-width:120px; height:auto; border-radius:5px; margin-bottom:4px; pointer-events:none; object-fit:cover; max-height:80px; }
+.mm-img-btn { position:absolute; top:-8px; left:-8px; width:18px; height:18px; border-radius:50%; background:var(--accent); color:#fff; border:1.5px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:9px; opacity:0; transition:opacity 0.2s; z-index:5; }
+.mm-node:hover .mm-img-btn { opacity:1; }
+.mm-img-btn:hover { transform:scale(1.2); }
+.mm-img-remove { position:absolute; top:-6px; right:-6px; width:16px; height:16px; border-radius:50%; background:#e74c3c; color:#fff; border:1.5px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:8px; opacity:0; transition:opacity 0.2s; z-index:5; }
+.mm-node:hover .mm-img-remove { opacity:1; }
+.mm-img-remove:hover { transform:scale(1.2); }
+.mm-audio-btn { position:absolute; top:-8px; left:14px; width:18px; height:18px; border-radius:50%; background:#e84393; color:#fff; border:1.5px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:9px; opacity:0; transition:opacity 0.2s; z-index:5; }
+.mm-node:hover .mm-audio-btn { opacity:1; }
+.mm-audio-btn:hover { transform:scale(1.2); }
+.mm-audio-wrap { width:100%; max-width:120px; margin-bottom:4px; }
+.mm-audio-player { width:100%; height:24px; border-radius:5px; background:rgba(0,0,0,0.3); display:flex; align-items:center; gap:4px; padding:2px 6px; }
+.mm-audio-play { width:18px; height:18px; border-radius:50%; background:#fff; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:8px; color:#333; flex-shrink:0; padding:0; }
+.mm-audio-play:hover { background:var(--accent); color:#fff; }
+.mm-audio-label { font-size:8px; color:rgba(255,255,255,0.85); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; text-align:left; font-family:'Inter',sans-serif; }
+.mm-audio-seek { flex:1; height:3px; border-radius:2px; background:rgba(255,255,255,0.25); cursor:pointer; position:relative; min-width:30px; }
+.mm-audio-progress { height:100%; border-radius:2px; background:var(--accent); width:0%; transition:width 0.1s linear; }
+.mm-audio-time { font-size:7px; color:rgba(255,255,255,0.6); font-family:'Inter',sans-serif; white-space:nowrap; }
+.mm-audio-remove { position:absolute; top:-6px; right:-6px; width:16px; height:16px; border-radius:50%; background:#e74c3c; color:#fff; border:1.5px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:8px; opacity:0; transition:opacity 0.2s; z-index:5; }
+.mm-node:hover .mm-audio-remove { opacity:1; }
+.mm-audio-remove:hover { transform:scale(1.2); }
+.mm-connect-dot { position:absolute; width:10px; height:10px; border-radius:50%; background:#fff; border:2px solid var(--accent); cursor:crosshair; opacity:0.3; transition:opacity 0.2s, transform 0.15s; z-index:4; top:50%; right:-7px; transform:translateY(-50%); }
+.mm-node:hover .mm-connect-dot { opacity:1; }
+.mm-connect-dot:hover { transform:translateY(-50%) scale(1.4); background:var(--accent); }
+.mm-svg-layer { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:1; }
+.mm-svg-layer path { pointer-events:stroke; cursor:pointer; }
+.mm-svg-layer path:hover { stroke-width:3 !important; }
+.mm-temp-line { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:5; }
+.mm-color-row { display:flex; gap:3px; padding:4px 8px; background:rgba(0,0,0,0.15); border-top:1px solid var(--border-subtle); flex-shrink:0; align-items:center; }
+.mm-color-dot { width:16px; height:16px; border-radius:4px; cursor:pointer; border:1.5px solid transparent; transition:transform 0.1s; flex-shrink:0; }
+.mm-color-dot:hover { transform:scale(1.2); }
+.mm-color-dot.active { border-color:#fff; box-shadow:0 0 0 1px rgba(255,255,255,0.3); }
+.mm-color-label { font-size:9px; color:var(--text-subtle); margin-right:4px; font-family:'Inter',sans-serif; }
+.mm-del-btn { background:none; border:1px solid var(--border); color:var(--text-dim); border-radius:4px; padding:1px 6px; font-size:10px; cursor:pointer; font-family:'Inter',sans-serif; margin-left:auto; transition:all 0.15s; }
+.mm-del-btn:hover { color:#ff5555; border-color:#ff5555; }
+.mm-footer { display:flex; align-items:center; justify-content:space-between; padding:3px 8px; background:rgba(0,0,0,0.1); border-top:1px solid var(--border-subtle); border-radius:0 0 11px 11px; font-size:9px; color:var(--text-dim); font-family:'Inter',sans-serif; flex-shrink:0; }
+
+/* TEXT QUICK CONTROLS */
+#text-quick-bar { position:fixed; top:104px; left:50%; transform:translateX(-50%); display:none; gap:4px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:8px; padding:5px 7px; z-index:9999999; box-shadow:var(--shadow-medium); align-items:center; }
+#text-quick-bar.active { display:flex; }
+#text-quick-bar .tqb-label { font-size:9px; color:var(--text-subtle); text-transform:uppercase; letter-spacing:0.5px; margin-right:2px; font-family:'Inter',sans-serif; }
+#text-quick-bar .tqb-size { background:var(--input-bg); border:1px solid var(--border); color:var(--text-dim); border-radius:5px; padding:3px 8px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; font-weight:500; transition:all 0.15s; min-width:32px; }
+#text-quick-bar .tqb-size:hover { background:var(--btn-hover); color:var(--text); }
+#text-quick-bar .tqb-size.active { background:var(--btn-active-bg); color:var(--btn-active-text); border-color:var(--btn-active-border); }
+#text-quick-bar .tqb-step { background:var(--input-bg); border:1px solid var(--border); color:var(--text-dim); border-radius:5px; padding:3px 6px; cursor:pointer; font-size:10px; font-family:'Inter',sans-serif; font-weight:600; letter-spacing:0.3px; transition:all 0.15s; min-width:28px; }
+#text-quick-bar .tqb-step:hover { background:var(--btn-hover); color:var(--accent); border-color:var(--accent); }
+#text-quick-bar .tqb-step:active { transform:scale(0.93); }
+#text-quick-bar .tqb-sep { width:1px; height:18px; background:var(--border-subtle); margin:0 3px; }
+#text-quick-bar .tqb-swatch { width:18px; height:18px; border-radius:4px; cursor:pointer; border:1.5px solid var(--border); transition:transform 0.12s; }
+#text-quick-bar .tqb-swatch:hover { transform:scale(1.2); }
+#text-quick-bar .tqb-swatch.active { border:2px solid var(--accent); box-shadow:0 0 0 1px var(--accent); }
+#text-quick-bar input[type="color"] { width:24px; height:22px; border:1px solid var(--border); border-radius:5px; cursor:pointer; background:none; padding:0; }
+
+/* CONTEXT MENU */
+#ctx-menu { position:fixed; display:none; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:10px; padding:5px; z-index:99999999; box-shadow:var(--shadow-heavy); min-width:170px; }
+#ctx-menu .ctx-item { padding:7px 14px; font-size:12px; cursor:pointer; border-radius:6px; display:flex; justify-content:space-between; align-items:center; gap:12px; font-family:'Inter',sans-serif; font-weight:400; transition:background 0.12s; }
+#ctx-menu .ctx-item:hover { background:var(--btn-hover); color:var(--text); }
+#ctx-menu .ctx-item kbd { font-size:9px; opacity:0.4; font-family:'Inter',monospace; }
+#ctx-menu .ctx-sep { height:1px; background:var(--border-subtle); margin:4px 0; }
+#ctx-menu .ctx-group { display:flex; gap:0; }
+#ctx-menu .ctx-group .ctx-item { flex:1; justify-content:center; font-size:11px; padding:7px 4px; }
+
+/* EXPORT MODAL */
+#export-modal { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; z-index:99999999; justify-content:center; align-items:center; }
+#export-modal.active { display:flex; }
+#export-modal .modal-content { background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; max-width:90vw; max-height:90vh; overflow:auto; box-shadow:var(--shadow-heavy); }
+#export-modal canvas { max-width:80vw; max-height:60vh; border:1px solid var(--border-subtle); border-radius:8px; }
+#export-modal .modal-actions { display:flex; gap:8px; margin-top:16px; justify-content:center; flex-wrap:wrap; }
+#export-modal button { padding:9px 18px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); border-radius:8px; cursor:pointer; font-size:13px; font-family:'Inter',sans-serif; font-weight:400; transition:all 0.2s ease; }
+#export-modal button.primary { background:var(--accent); color:#000; font-weight:600; }
+#export-modal button:hover { transform:translateY(-1px); }
+#export-modal button.folder-btn { background:var(--input-bg); color:var(--text); }
+#export-modal button.folder-btn:hover { border-color:var(--accent); }
+#export-modal .export-bg-row { display:flex; align-items:center; gap:8px; margin-top:14px; justify-content:center; flex-wrap:wrap; font-size:12px; color:var(--text-dim); font-family:'Inter',sans-serif; }
+#export-modal .export-bg-row > .export-bg-label { font-weight:500; }
+#export-modal .export-bg-row input[type="color"] { width:36px; height:26px; border:1px solid var(--border); border-radius:6px; cursor:pointer; background:transparent; padding:0; }
+#export-modal .export-bg-preset { padding:5px 10px !important; font-size:11px !important; }
+#export-modal .export-bg-row label.export-bg-transparent { display:flex; align-items:center; gap:5px; cursor:pointer; margin:0; }
+
+/* SAVE LOCK MODAL — prompt: lock? plain? cancel? */
+#save-lock-modal { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; z-index:99999999; justify-content:center; align-items:center; }
+#save-lock-modal.active { display:flex; }
+#save-lock-modal .lock-card { background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; min-width:340px; max-width:90vw; box-shadow:var(--shadow-heavy); font-family:'Inter',sans-serif; }
+#save-lock-modal .lock-title { font-size:15px; font-weight:600; color:var(--text); margin:0 0 8px 0; }
+#save-lock-modal .lock-desc { font-size:12px; color:var(--text-muted); line-height:1.5; margin:0 0 18px 0; }
+#save-lock-modal .lock-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+#save-lock-modal .lock-actions button { padding:9px 16px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); border-radius:8px; cursor:pointer; font-size:12px; font-family:'Inter',sans-serif; font-weight:500; transition:all 0.2s ease; }
+#save-lock-modal .lock-actions button:hover { transform:translateY(-1px); border-color:var(--accent); }
+#save-lock-modal .lock-actions button.primary { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
+#save-lock-modal .lock-actions button.primary:hover { filter:brightness(1.08); }
+#save-lock-modal .lock-actions button.danger { background:transparent; color:var(--text-muted); }
+#save-lock-modal .lock-actions button.danger:hover { color:var(--text); }
+
+/* PASSWORD DISPLAY MODAL — shows auto-generated password */
+#password-display-modal { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; z-index:99999999; justify-content:center; align-items:center; }
+#password-display-modal.active { display:flex; }
+#password-display-modal .pwd-card { background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; min-width:380px; max-width:90vw; box-shadow:var(--shadow-heavy); font-family:'Inter',sans-serif; }
+#password-display-modal .pwd-title { font-size:15px; font-weight:600; color:var(--text); margin:0 0 6px 0; }
+#password-display-modal .pwd-sub { font-size:11px; color:var(--text-muted); margin:0 0 14px 0; }
+#password-display-modal .pwd-box { display:flex; align-items:center; gap:8px; background:var(--input-bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:12px; }
+#password-display-modal .pwd-value { flex:1; font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; font-size:18px; font-weight:600; letter-spacing:2px; color:var(--accent); user-select:all; -webkit-user-select:all; }
+#password-display-modal .pwd-copy { background:transparent; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:5px 10px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; transition:all 0.2s ease; }
+#password-display-modal .pwd-copy:hover { border-color:var(--accent); color:var(--accent); }
+#password-display-modal .pwd-copy.copied { border-color:#22c55e; color:#22c55e; }
+#password-display-modal .pwd-warn { font-size:11px; color:#f59e0b; line-height:1.5; margin:0 0 14px 0; padding:8px 10px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:6px; }
+#password-display-modal .pwd-actions { display:flex; gap:8px; justify-content:flex-end; }
+#password-display-modal .pwd-actions button { padding:9px 16px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); border-radius:8px; cursor:pointer; font-size:12px; font-family:'Inter',sans-serif; font-weight:500; transition:all 0.2s ease; }
+#password-display-modal .pwd-actions button:hover { transform:translateY(-1px); border-color:var(--accent); }
+#password-display-modal .pwd-actions button.primary { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
+#password-display-modal .pwd-actions button.primary:hover { filter:brightness(1.08); }
+
+/* UNLOCK MODAL — password input to open a locked file */
+#unlock-modal { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; z-index:99999999; justify-content:center; align-items:center; }
+#unlock-modal.active { display:flex; }
+#unlock-modal .unlock-card { background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; min-width:360px; max-width:90vw; box-shadow:var(--shadow-heavy); font-family:'Inter',sans-serif; }
+#unlock-modal .unlock-title { font-size:15px; font-weight:600; color:var(--text); margin:0 0 6px 0; display:flex; align-items:center; gap:8px; }
+#unlock-modal .unlock-title .lock-icon { font-size:18px; }
+#unlock-modal .unlock-desc { font-size:12px; color:var(--text-muted); line-height:1.5; margin:0 0 14px 0; }
+#unlock-modal .unlock-input { width:100%; padding:10px 12px; background:var(--input-bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; letter-spacing:1px; box-sizing:border-box; outline:none; transition:border-color 0.2s ease; }
+#unlock-modal .unlock-input:focus { border-color:var(--accent); }
+#unlock-modal .unlock-input::placeholder { color:var(--text-muted); font-family:'Inter',sans-serif; letter-spacing:0; }
+#unlock-modal .unlock-err { font-size:11px; color:#ef4444; margin:8px 0 0 0; min-height:14px; }
+#unlock-modal .unlock-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
+#unlock-modal .unlock-actions button { padding:9px 16px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); border-radius:8px; cursor:pointer; font-size:12px; font-family:'Inter',sans-serif; font-weight:500; transition:all 0.2s ease; }
+#unlock-modal .unlock-actions button:hover { transform:translateY(-1px); border-color:var(--accent); }
+#unlock-modal .unlock-actions button.primary { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
+#unlock-modal .unlock-actions button.primary:hover { filter:brightness(1.08); }
+#unlock-modal .unlock-actions button.danger { background:transparent; color:var(--text-muted); }
+#unlock-modal .unlock-actions button.danger:hover { color:var(--text); }
+
+/* STATUS BAR */
+#status { position:fixed; bottom:42px; right:12px; font-size:10px; color:var(--text-dim); background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:6px; padding:5px 10px; z-index:9999999; font-family:'Inter',sans-serif; letter-spacing:0.3px; transition: bottom 0.18s ease; }
+
+/* ZOOM STEP WIDGET (Round 32) — sits just above the status bar at the
+   bottom-right corner. Slightly more prominent than the status because
+   it is interactive (slider), but still discreet enough not to block
+   the canvas. The label, slider, and value are all inline-flex so the
+   widget stays a single thin row. The slider is intentionally narrow
+   (110px) so the whole widget fits in ~250px. */
+#zoom-step-widget {
+  position: fixed; bottom: 14px; left: 12px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 10px; color: var(--text-dim);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px; padding: 5px 10px;
+  z-index: 9999999;
+  font-family: 'Inter', sans-serif; letter-spacing: 0.3px;
+  user-select: none;
+  /* Round 95: bottom is adjusted dynamically by _syncBottomBarOffsets()
+     whenever #media-bar (Play All/Pause All) shows up, so this widget
+     never sits underneath/overlapping it. Smooth transition so the
+     shift when a video/GIF is added or removed doesn't feel like a jump. */
+  transition: bottom 0.18s ease;
+}
+#zoom-step-widget .zs-label { white-space: nowrap; cursor: help; }
+#zoom-step-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 110px; height: 4px;
+  background: var(--input-bg, rgba(255,255,255,0.08));
+  border-radius: 2px; outline: none; cursor: pointer;
+  border: 1px solid var(--border-subtle);
+}
+#zoom-step-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 12px; height: 12px;
+  background: var(--accent, #44ddff);
+  border: 1px solid var(--accent, #44ddff);
+  border-radius: 50%; cursor: pointer;
+  box-shadow: 0 0 4px rgba(68,221,255,0.4);
+}
+#zoom-step-slider::-moz-range-thumb {
+  width: 12px; height: 12px;
+  background: var(--accent, #44ddff);
+  border: 1px solid var(--accent, #44ddff);
+  border-radius: 50%; cursor: pointer;
+}
+#zoom-step-widget #zoom-step-value {
+  min-width: 32px; text-align: right;
+  color: var(--accent, #44ddff); font-weight: 500;
+}
+
+/* Reset-view button — sits next to the zoom-step widget so the
+   user has a discoverable mouse/touch target for "back to default
+   view" without needing to remember the F shortcut. Slightly
+   inset border + accent text colour match the wheel-step row so
+   the two controls look like one toolbar, not a pile of stickers. */
+#zoom-step-widget #btn-reset-view {
+  background: var(--input-bg, rgba(255,255,255,0.06));
+  border: 1px solid var(--border-subtle);
+  color: var(--text-dim, #aaa);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+#zoom-step-widget #btn-reset-view:hover {
+  background: rgba(68,221,255,0.10);
+  color: var(--accent, #44ddff);
+  border-color: var(--accent, #44ddff);
+}
+#zoom-step-widget #btn-reset-view:active {
+  background: rgba(68,221,255,0.20);
+  transform: translateY(1px);
+}
+
+/* Natural-scroll toggle — checkbox label styled to match the widget's
+   other controls. Small, subtle, out of the way but discoverable. */
+#zoom-step-widget #natural-scroll-label {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 500;
+  color: var(--text-dim, #aaa);
+  cursor: pointer; white-space: nowrap;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+#zoom-step-widget #natural-scroll-label:hover {
+  color: var(--accent, #44ddff);
+}
+#zoom-step-widget #natural-scroll-checkbox {
+  -webkit-appearance: none; appearance: none;
+  width: 12px; height: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  background: var(--input-bg, rgba(255,255,255,0.06));
+  cursor: pointer;
+  position: relative; top: 1px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+#zoom-step-widget #natural-scroll-checkbox:checked {
+  background: var(--accent, #44ddff);
+  border-color: var(--accent, #44ddff);
+}
+#zoom-step-widget #natural-scroll-checkbox:checked::after {
+  content: '✓';
+  position: absolute; top: -1px; left: 1px;
+  font-size: 10px; color: #0e0e0e; font-weight: 700;
+}
+
+/* MEDIA CONTROL BAR */
+#media-bar { position:fixed; bottom:0; left:0; right:0; background:var(--panel-bg); border-top:1px solid var(--border-subtle); padding:7px 18px; z-index:9999998; display:none; align-items:center; gap:8px; box-shadow:0 -2px 16px rgba(0,0,0,0.2); }
+#media-bar.active { display:flex; }
+/* Hide ALL media UI during capture — the toolbar should never bleed into the captured image */
+body.capturing #media-bar,
+body.capturing .item.has-media .media-controls,
+body.capturing .item.has-media .media-type-badge.audio-badge { display: none !important; }
+#media-bar .media-bar-title { font-size:11px; color:var(--text-dim); margin-right:4px; white-space:nowrap; font-family:'Inter',sans-serif; font-weight:500; }
+#media-bar button { background:var(--input-bg); border:1px solid var(--border); color:var(--text-dim); padding:5px 13px; border-radius:6px; cursor:pointer; font-size:11.5px; font-family:'Inter',sans-serif; transition:all 0.2s ease; display:flex; align-items:center; gap:4px; white-space:nowrap; font-weight:400; }
+#media-bar button:hover { background:var(--btn-hover); color:var(--text); border-color:var(--border-light); }
+#media-bar button.playing { background:var(--btn-active-bg); color:var(--btn-active-text); border-color:var(--btn-active-border); }
+#media-bar .media-sep { width:1px; height:20px; background:var(--border-subtle); }
+#media-bar .media-list { display:flex; gap:4px; overflow-x:auto; flex:1; padding:2px 0; }
+#media-bar .media-item { display:flex; align-items:center; gap:4px; background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:6px; padding:3px 9px; font-size:10px; color:var(--text-dim); cursor:pointer; white-space:nowrap; font-family:'Inter',sans-serif; transition:all 0.12s; }
+#media-bar .media-item:hover { background:rgba(255,255,255,0.06); }
+#media-bar .media-item.is-playing { border-color:var(--accent); color:var(--accent); }
+#media-bar .media-item .media-icon { font-size:12px; }
+
+/* WELCOME — Premium Minimal */
+#welcome { position:fixed; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:99999999; background:#111111; transition: opacity 0.8s cubic-bezier(0.4,0,0.2,1); overflow-y:auto; }
+#welcome.fading { opacity:0; pointer-events:none; }
+.welcome-container { max-width:520px; width:90vw; padding:60px 0 48px; text-align:center; }
+.welcome-logo-area { margin-bottom:32px; display:flex; justify-content:center; }
+/* Window/Grid Icon — four-panel outline */
+.welcome-mark {
+  width:72px; height:72px; color:rgba(255,255,255,0.18); opacity:1;
+  transition: color 0.5s ease;
+}
+#welcome:hover .welcome-mark { color:rgba(255,255,255,0.28); }
+.welcome-title {
+  font-family:'Inter', -apple-system, sans-serif;
+  font-weight:300; font-size:34px; color:rgba(255,255,255,0.92);
+  letter-spacing:14px; margin:0 0 20px; text-indent:14px;
+  text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased;
+}
+.welcome-divider {
+  width:40px; height:1px; background:rgba(255,255,255,0.12);
+  margin:0 auto 22px;
+}
+.welcome-tagline {
+  font-family:'Inter', -apple-system, sans-serif;
+  font-weight:300; font-size:15px; color:rgba(255,255,255,0.45);
+  letter-spacing:1px; margin:0 0 8px;
+}
+.welcome-sub {
+  font-family:'Inter', -apple-system, sans-serif;
+  font-weight:300; font-size:12px; color:rgba(255,255,255,0.22);
+  letter-spacing:0.5px; margin:0 0 44px; line-height:1.6;
+}
+
+/* GET STARTED Button — outlined pill */
+.btn-primary {
+  font-family:'Inter', -apple-system, sans-serif;
+  font-weight:400; font-size:11px; letter-spacing:4px; text-transform:uppercase;
+  padding:15px 52px; background:transparent; color:rgba(255,255,255,0.7);
+  border:1.5px solid rgba(255,255,255,0.25); border-radius:100px;
+  cursor:pointer; transition:all 0.35s cubic-bezier(0.4,0,0.2,1);
+  position:relative; overflow:hidden; backdrop-filter:none;
+}
+.btn-primary:hover {
+  background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.95);
+  border-color:rgba(255,255,255,0.4); transform:translateY(-1px);
+  box-shadow:0 4px 24px rgba(255,255,255,0.06);
+}
+.btn-primary:active { transform:translateY(0); }
+
+/* Creator Credit */
+.welcome-creator {
+  margin-top:18px;
+  font-family:'Inter', -apple-system, sans-serif;
+  font-weight:300; font-size:5px; color:rgba(255,255,255,0.15);
+  letter-spacing:0.5px; text-transform:uppercase;
+}
+
+.welcome-version {
+  font-family:'Inter', -apple-system, sans-serif;
+  font-weight:300; font-size:10px; color:rgba(255,255,255,0.1);
+  margin-top:44px; letter-spacing:2px; text-transform:uppercase;
+}
+
+
+/* TOAST */
+#toast { position:fixed; bottom:44px; left:50%; transform:translateX(-50%); background:var(--panel-bg); border:1px solid var(--border-subtle); color:var(--text); padding:7px 20px; border-radius:8px; font-size:12px; z-index:99999999; opacity:0; transition:opacity 0.3s, transform 0.3s; pointer-events:none; font-family:'Inter',sans-serif; font-weight:400; }
+#toast.show { opacity:1; }
+
+/* Round 9: video export progress — bottom-center card that shows
+   the percentage while MediaRecorder captures the video. */
+.video-export-progress {
+  position: fixed; bottom: 80px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel-bg);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 12px 20px;
+  border-radius: 10px;
+  z-index: 99999998;
+  min-width: 280px;
+  box-shadow: 0 4px 24px rgba(0, 229, 255, 0.2);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  pointer-events: none;
+}
+.video-export-progress .pct {
+  margin-bottom: 6px;
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.video-export-progress .bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.video-export-progress .bar .fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+/* Round 78: save/load progress indicator. Same look as the video
+   export progress so users have a consistent "something is
+   happening" affordance during the multi-second JSON encode /
+   decode pass. */
+.save-progress {
+  position: fixed; bottom: 80px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel-bg);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 12px 20px;
+  border-radius: 10px;
+  z-index: 99999998;
+  min-width: 280px;
+  box-shadow: 0 4px 24px rgba(0, 229, 255, 0.2);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  pointer-events: none;
+}
+.save-progress .pct {
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* SELECTION BOX */
+#sel-box { position:fixed; border:1px dashed var(--accent); background:rgba(200,200,200,0.04); display:none; z-index:999999; pointer-events:none; }
+
+/* EXPORT DRAG BOX */
+#export-box { position:fixed; border:1.5px dashed #f0a030; background:rgba(240,160,48,0.05); display:none; z-index:999999; pointer-events:none; }
+
+/* CAPTURE OVERLAY - dim outside */
+#capture-overlay { position:fixed; inset:0; display:none; z-index:10000000; pointer-events:none; }
+#capture-overlay .co-panel { position:fixed; background:rgba(0,0,0,0.5); }
+
+/* CAPTURE DRAG BOX - the selection rectangle */
+#capture-box { position:fixed; border:none; background:transparent; display:none; z-index:10000001; pointer-events:none; }
+#capture-box .cb-border {
+  position:absolute; inset:0;
+  border:2px solid #00e5ff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 0 12px rgba(0,229,255,0.4);
+}
+/* Marching ants animation */
+#capture-box .cb-ants {
+  position:absolute; inset:-1px;
+  border:none;
+  background:
+    repeating-linear-gradient(90deg, #fff 0, #fff 6px, transparent 6px, transparent 12px) 0 0/100% 2px no-repeat,
+    repeating-linear-gradient(90deg, #fff 0, #fff 6px, transparent 6px, transparent 12px) 0 100%/100% 2px no-repeat,
+    repeating-linear-gradient(0deg, #fff 0, #fff 6px, transparent 6px, transparent 12px) 0 0/2px 100% no-repeat,
+    repeating-linear-gradient(0deg, #fff 0, #fff 6px, transparent 6px, transparent 12px) 100% 0/2px 100% no-repeat;
+  animation: cb-march 0.4s linear infinite;
+}
+@keyframes cb-march {
+  from { background-position: 0 0, 0 100%, 0 0, 100% 0; }
+  to   { background-position: 12px 0, 12px 100%, 0 12px, 100% 12px; }
+}
+
+/* Crosshair guide lines */
+#capture-box .cb-guide-v { position:absolute; width:1px; background:rgba(0,229,255,0.2); pointer-events:none; }
+#capture-box .cb-guide-h { position:absolute; height:1px; background:rgba(0,229,255,0.2); pointer-events:none; }
+
+/* Corner markers */
+#capture-box .cb-corner { position:absolute; width:14px; height:14px; border:3px solid #00e5ff; background:rgba(0,0,0,0.6); border-radius:2px; }
+#capture-box .cb-corner.tl { top:-7px; left:-7px; border-right:none; border-bottom:none; }
+#capture-box .cb-corner.tr { top:-7px; right:-7px; border-left:none; border-bottom:none; }
+#capture-box .cb-corner.bl { bottom:-7px; left:-7px; border-right:none; border-top:none; }
+#capture-box .cb-corner.br { bottom:-7px; right:-7px; border-left:none; border-top:none; }
+
+/* Dimension label */
+#capture-box .cb-label {
+  position:absolute; top:-30px; left:0;
+  background:#00e5ff; color:#000;
+  font-size:12px; font-weight:700; font-family:'Inter',sans-serif;
+  padding:4px 10px; border-radius:5px; white-space:nowrap;
+  letter-spacing:0.5px; box-shadow:0 2px 8px rgba(0,229,255,0.4);
+}
+
+/* Capture hint badge */
+#capture-hint {
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:rgba(0,229,255,0.9); color:#000;
+  font-size:13px; font-weight:700; font-family:'Inter',sans-serif;
+  padding:10px 22px; border-radius:8px; z-index:10000002;
+  pointer-events:none; display:none;
+  box-shadow:0 4px 20px rgba(0,229,255,0.5);
+  letter-spacing:0.5px;
+}
+
+/* TOOL INDICATOR BADGE */
+#tool-badge { position:fixed; top:56px; left:50%; transform:translateX(-50%); background:var(--panel-bg); border:1px solid var(--border); border-radius:20px; padding:6px 16px; font-size:11px; font-weight:600; color:var(--text); z-index:999998; pointer-events:none; opacity:0; transition:opacity .2s; box-shadow:0 4px 16px rgba(0,0,0,0.4); display:flex; align-items:center; gap:6px; }
+#tool-badge.show { opacity:1; }
+#tool-badge .tb-icon { display:flex; align-items:center; }
+
+/* CAPTURE RESULT PANEL */
+#capture-result { position:fixed; bottom:20px; left:20px; background:var(--panel-bg); border:1px solid var(--border); border-radius:12px; padding:14px; z-index:1000000; display:none; max-width:360px; box-shadow:0 8px 32px rgba(0,0,0,0.5); }
+#capture-result.show { display:block; animation:crSlide .25s ease; }
+@keyframes crSlide { from { transform:translateY(20px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+#capture-result .cr-preview { width:100%; max-height:160px; object-fit:contain; border-radius:8px; margin-bottom:10px; background:var(--bg); border:1px solid var(--border); }
+#capture-result .cr-info { font-size:11px; color:var(--text-subtle); margin-bottom:10px; line-height:1.5; }
+#capture-result .cr-info b { color:var(--text); }
+#capture-result .cr-buttons { display:flex; gap:6px; flex-wrap:wrap; }
+#capture-result .cr-btn { flex:1 1 100px; padding:8px 8px; border:1px solid var(--border); border-radius:8px; background:var(--bg-elevated); color:var(--text); font-size:11px; font-weight:600; cursor:pointer; transition:all .15s; font-family:inherit; white-space:nowrap; }
+#capture-result .cr-btn:hover { background:var(--btn-hover); border-color:var(--accent); }
+#capture-result .cr-btn-save { background:var(--accent); color:#fff; border-color:var(--accent); }
+#capture-result .cr-btn-save:hover { filter:brightness(1.1); }
+#capture-result .cr-btn-folder { background:var(--bg-elevated); color:var(--text); }
+#capture-result .cr-btn-folder:hover { background:var(--btn-hover); }
+/* Paste-to-Board: visually distinct accent-cyan button so it's the
+   primary action (most users want to keep working, not save to disk) */
+#capture-result .cr-btn-paste { background:linear-gradient(135deg, #00e5ff 0%, #00aaff 100%); color:#001218; border-color:rgba(0,229,255,0.5); box-shadow:0 2px 8px rgba(0,229,255,0.25); }
+#capture-result .cr-btn-paste:hover { filter:brightness(1.08); box-shadow:0 3px 12px rgba(0,229,255,0.4); }
+#capture-result .cr-btn-row2 { display:flex; gap:8px; margin-top:6px; }
+#capture-result .cr-btn-row2 .cr-btn { flex:1; padding:8px 8px; }
+#capture-result .cr-btn-discard { color:var(--text-subtle); }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width:5px; }
+::-webkit-scrollbar-track { background:var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background:var(--scrollbar-thumb); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:var(--accent); opacity:0.6; }
+
+/* ---- audio volume control ---- */
+.audio-volume-wrap { position:relative; flex-shrink:0; display:flex; align-items:center; }
+.audio-volume-btn {
+  background:none; border:1px solid rgba(0,229,255,0.35); color:#00e5ff;
+  border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; font-size:10px; flex-shrink:0; padding:0; transition:background 0.15s;
+}
+.audio-volume-btn:hover { background:rgba(0,229,255,0.18); }
+.audio-volume-popover {
+  position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
+  background:rgba(26,26,46,0.97); border:1px solid #444; border-radius:8px;
+  padding:10px 8px; display:none; flex-direction:column; align-items:center; gap:6px;
+  z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,0.5); }
+.audio-volume-wrap:hover .audio-volume-popover { display:flex; }
+.audio-volume-slider-v {
+  -webkit-appearance:none; appearance:none; width:80px; height:4px; border-radius:2px;
+  background:rgba(255,255,255,0.2); outline:none; cursor:pointer;
+}
+.audio-volume-slider-v::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none; width:12px; height:12px; border-radius:50%;
+  background:#00e5ff; border:2px solid #1a1a2e; cursor:pointer; box-shadow:0 0 6px rgba(0,229,255,0.4);
+}
+.audio-volume-slider-v::-moz-range-thumb {
+  width:12px; height:12px; border-radius:50%; background:#00e5ff; border:2px solid #1a1a2e; cursor:pointer;
+}
+.audio-volume-label { font-size:9px; color:rgba(255,255,255,0.7); font-family:"Inter",monospace; min-width:28px; text-align:center; }
+/* mind-map audio volume */
+.mm-audio-volume-wrap { position:relative; flex-shrink:0; display:flex; align-items:center; margin-left:2px; }
+.mm-audio-volume-btn {
+  background:none; border:none; color:rgba(255,255,255,0.7); width:16px; height:16px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:9px; padding:0; border-radius:3px;
+}
+.mm-audio-volume-btn:hover { background:rgba(255,255,255,0.12); color:#fff; }
+.mm-audio-volume-popover {
+  position:absolute; bottom:calc(100% + 4px); left:50%; transform:translateX(-50%);
+  background:rgba(26,26,46,0.97); border:1px solid #444; border-radius:6px;
+  padding:8px 6px; display:none; flex-direction:column; align-items:center; gap:4px;
+  z-index:9999; box-shadow:0 4px 16px rgba(0,0,0,0.5);
+}
+.mm-audio-volume-wrap:hover .mm-audio-volume-popover { display:flex; }
+.mm-audio-volume-slider {
+  -webkit-appearance:none; appearance:none; width:60px; height:3px; border-radius:2px;
+  background:rgba(255,255,255,0.2); outline:none; cursor:pointer;
+}
+.mm-audio-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none; width:10px; height:10px; border-radius:50%;
+  background:var(--accent); border:1.5px solid #1a1a2e; cursor:pointer;
+}
+.mm-audio-volume-slider::-moz-range-thumb {
+  width:10px; height:10px; border-radius:50%; background:var(--accent); border:1.5px solid #1a1a2e; cursor:pointer;
+}
+/* media-controls volume (video bottom bar) */
+.media-volume-wrap { position:relative; display:flex; align-items:center; margin-left:4px; }
+.media-volume-btn {
+  background:none; border:none; color:rgba(255,255,255,0.8); width:20px; height:20px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; padding:0;
+}
+.media-volume-btn:hover { color:#fff; }
+.media-volume-popover {
+  position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
+  background:rgba(22,22,22,0.97); border:1px solid rgba(255,255,255,0.12); border-radius:8px;
+  padding:10px 8px; display:none; flex-direction:column; align-items:center; gap:6px;
+  z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,0.5); }
+.media-volume-wrap:hover .media-volume-popover { display:flex; }
+.media-volume-slider {
+  -webkit-appearance:none; appearance:none; width:80px; height:4px; border-radius:2px;
+  background:rgba(255,255,255,0.2); outline:none; cursor:pointer;
+}
+.media-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none; width:12px; height:12px; border-radius:50%;
+  background:#fff; border:2px solid rgba(255,255,255,0.3); cursor:pointer; box-shadow:0 0 6px rgba(255,255,255,0.2);
+}
+.media-volume-slider::-moz-range-thumb {
+  width:12px; height:12px; border-radius:50%; background:#fff; border:2px solid rgba(255,255,255,0.3); cursor:pointer;
+}
+.media-volume-label { font-size:9px; color:rgba(255,255,255,0.6); font-family:"Inter",monospace; min-width:28px; text-align:center; }
+
+
+/* Video frame rendering optimization */
+.item.has-media video,
+.media-wrap video {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+/* GPU-accelerated video rendering */
+.media-wrap {
+  transform: translateZ(0);
+  will-change: transform;
+}
+/* Player-only fullscreen — fills the screen with the video only */
+.media-wrap:fullscreen,
+.media-wrap:-webkit-full-screen {
+  display: flex; align-items: center; justify-content: center;
+  background: #000;
+  width: 100vw; height: 100vh;
+}
+.media-wrap:fullscreen video,
+.media-wrap:-webkit-full-screen video {
+  max-width: 100vw; max-height: 100vh;
+  object-fit: contain;
+}
+
+/* ============================================================
+   MOBILE / TOUCH DEVICE STYLES (iPhone + iPad, ≤1024px)
+   Only affects touch devices — desktop unchanged
+   ============================================================ */
+@media (max-width: 1024px) and (pointer: coarse) {
+  /* Prevent iOS bounce/rubber-band on the whole page */
+  html, body {
+    position: fixed; overflow: hidden;
+    width: 100%; height: 100%;
+  }
+
+  /* Bigger touch targets for handles */
+  .item-handle {
+    width: 24px !important; height: 24px !important;
+  }
+
+  /* Bigger crop handles */
+  .crop-handle.corner { width: 18px !important; height: 18px !important; }
+  .crop-handle.edge { min-width: 10px; min-height: 10px; }
+
+  /* Slimmer toolbar on mobile */
+  #toolbar {
+    bottom: 8px !important; top: auto !important;
+    left: 50% !important; transform: translateX(-50%) !important;
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    gap: 4px !important;
+    padding: 6px 10px !important;
+    border-radius: 14px !important;
+    max-width: 95vw;
+  }
+  #toolbar button {
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+    min-height: 36px;
+  }
+
+  /* Move status bar to bottom above toolbar */
+  #status-bar {
+    bottom: 60px !important; top: auto !important;
+    left: 8px !important; right: 8px !important;
+    font-size: 10px !important;
+  }
+
+  /* Props panel — slide up from bottom */
+  #props {
+    bottom: 0 !important; top: auto !important;
+    left: 0 !important; right: 0 !important;
+    max-height: 45vh !important;
+    border-radius: 16px 16px 0 0 !important;
+  }
+
+  /* Toast — top center on mobile */
+  #toast {
+    top: 16px !important; bottom: auto !important;
+    left: 50% !important; transform: translateX(-50%) !important;
+    font-size: 12px !important; padding: 8px 18px !important;
+  }
+
+  /* Context menu — bigger for fingers */
+  #ctx-menu {
+    min-width: 180px !important;
+    font-size: 13px !important;
+    padding: 8px !important;
+  }
+  #ctx-menu button {
+    padding: 10px 14px !important;
+    font-size: 13px !important;
+  }
+
+  /* Welcome screen — full-width */
+  .welcome-card {
+    max-width: 90vw !important;
+    padding: 20px !important;
+  }
+}
+
+/* iPad larger screens — moderate adjustments */
+@media (min-width: 768px) and (max-width: 1024px) and (pointer: coarse) {
+  #toolbar {
+    max-width: 80vw;
+  }
+  .item-handle {
+    width: 20px !important; height: 20px !important;
+  }
+}
+
+/* ============================================================
+   MOBILE SIDE TOOLBARS (compact, always visible)
+   Split into two vertical groups pinned to the left/right edges
+   so the center of the canvas stays unobstructed.
+   ============================================================ */
+#mobile-toolbar-left,
+#mobile-toolbar-right {
+  display: none;
+  flex-direction: column;
+  position: fixed; top: 50%;
+  transform: translateY(-50%);
+  z-index: 9999999;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 8px 6px;
+  gap: 4px;
+  box-shadow: var(--shadow-heavy);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+#mobile-toolbar-left { left: 8px; }
+#mobile-toolbar-right { right: 8px; }
+#mobile-toolbar-left button,
+#mobile-toolbar-right button {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.15s;
+  min-width: 36px;
+  min-height: 36px;
+  display: flex; align-items: center; justify-content: center;
+}
+#mobile-toolbar-left button:active,
+#mobile-toolbar-left button.active,
+#mobile-toolbar-right button:active,
+#mobile-toolbar-right button.active {
+  background: var(--btn-active-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+#mobile-toolbar-left .mt-sep,
+#mobile-toolbar-right .mt-sep {
+  height: 1px; width: 100%;
+  background: var(--border-subtle);
+  margin: 2px 0; align-self: stretch;
+}
+/* Show mobile toolbars only on touch devices */
+@media (pointer: coarse) {
+  #mobile-toolbar-left,
+  #mobile-toolbar-right { display: flex; }
+}
