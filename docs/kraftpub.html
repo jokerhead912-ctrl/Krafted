@@ -9456,7 +9456,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     var skipped = framesWithStrokes.length - newFrames.length;
     // Auto-open the comment panel after snap so the user can see
     // the new comments right away without clicking the 💬 button.
-    try { el._setListOpen(true); } catch (_) {}
+    // We fire a click on commentsFab to simulate the user clicking it.
+    if (commentsFab) { commentsFab.click(); }
     toast('Snapped ' + snapped + ' frame(s)' + (skipped ? ' (' + skipped + ' already had comments, skipped)' : ''));
   });
   const addHint = document.createElement('span');
