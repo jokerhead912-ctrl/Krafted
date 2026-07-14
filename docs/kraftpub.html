@@ -1912,7 +1912,12 @@ body.dragging-file .media-anno-toolbar {
 }
 .item.has-media .media-seek-bar:hover .media-seek-tooltip,
 .item.has-media .media-seek-bar.seeking .media-seek-tooltip {
-  display: flex;
+  /* Round 96b: user also asked to remove the hover/drag tooltip
+     (the F 602 frame-count + time tag that floats below the seek bar
+     on hover/drag) — same reason as the playhead label: it kept
+     getting clipped by the row's overflow and overlapping the canvas
+     even after repositioning. Force permanently hidden. */
+  display: none !important;
 }
 .item.has-media .media-seek-tooltip .tt-frame {
   color: #a78bfa;
