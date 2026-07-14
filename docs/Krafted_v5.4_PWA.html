@@ -23611,6 +23611,7 @@ function _handleFileDrop(e, files) {
     const dropY = dropY0 + idx * 20;
     const reader = new FileReader();
     reader.onload = ev => {
+      console.log('[AUDIO IMPORT] fileName="' + file.name + '" size=' + file.size);
       addAudioItem(ev.target.result, file.name, dropX, dropY);
     };
     reader.readAsDataURL(file);
