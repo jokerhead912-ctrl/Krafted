@@ -20740,7 +20740,8 @@ function restoreBoard(data) {
     }
     if (d.isAudio) {
       // Audio item — rebuild using addAudioItem
-      const item = addAudioItem(d.src, d.audioName || 'Audio', d.x, d.y);
+      const audioName = d.filename || d.audioName || 'Audio';
+      const item = addAudioItem(d.src, audioName, d.x, d.y);
       item.id = d.id !== undefined ? d.id : item.id;
       item.z = d.z || item.z;
       item.rot = d.rot || 0;
@@ -20829,6 +20830,15 @@ function restoreBoard(data) {
     state.items.push(item);
     el._item = item; // stash so buildMediaControls closures can find this item
     updateItemStyle(item);
+    // Restore filename badge — buildMediaControls clears it on init (line 5224),
+    // so we must re-apply the saved filename after the item is built.
+    if (d.filename && el._setFilenameBadge) {
+      try { el._setFilenameBadge(d.filename); } catch (e) {}
+    }
+    // Also restore audio filename
+    if (d.isAudio && el._setFilenameBadge) {
+      try { el._setFilenameBadge(d.filename || d.audioName || 'Audio'); } catch (e) {}
+    }
     // R82: restore user-set FPS from saved manifest (kpak / JSON round-trip).
     // Without this, a user who manually set FPS to, e.g., 24 fps on a film
     // video would lose that setting on save→load and revert to auto-detection.

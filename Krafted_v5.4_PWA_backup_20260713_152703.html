@@ -241,13 +241,12 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
 .item.has-media .media-controls-row {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 10px; min-height: 40px; box-sizing: border-box;
-  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
-  scrollbar-width: thin;
+  flex-wrap: wrap;
 }
 /* Visual grouping inside the controls row — left/center/right cluster */
 .item.has-media .media-controls-group {
   display: flex; align-items: center; gap: 5px;
-  flex-shrink: 0; min-width: 0;
+  flex-shrink: 0;
 }
 .item.has-media .media-controls-group.grow {
   flex: 1 1 120px; min-width: 100px; /* scrub group fills remaining space */
@@ -4445,7 +4444,7 @@ console.log('[INIT] Touch device:', IS_TOUCH_DEVICE);
 // Cap the combined scale at 1.6× so it stays usable without dominating.
 // The scale only targets .item.has-media controls — canvas, toolbar
 // and panels are unchanged.
-window._applyDpiScale = (function _initDpiScale() {
+(function _initDpiScale() {
   var dpr = (window.devicePixelRatio || 1);
   var vw = window.innerWidth || 0;
   // DPR-based: starts at 1.2× for DPR 1.0, grows to 1.4× at DPR 2+
@@ -4460,8 +4459,6 @@ window._applyDpiScale = (function _initDpiScale() {
     document.body.style.setProperty('--dpi-scale', String(rounded));
     console.log('[INIT] Player controls auto-scaled ' + Math.round(scale * 100) + '% (DPR=' + dpr + ', vw=' + vw + ')');
   }
-  // Return as a callable function for kpak-load re-application
-  return arguments.callee;
 })();
 
 // Mobile state for touch gesture tracking
@@ -6086,7 +6083,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // button (or any other tool button), the toolbar pops up. The
       // ✕ close button now just exits draw mode (equivalent to pressing
       // the draw button again).
-          try {
+      try {
         if (annoToolbar) {
           annoToolbar.classList.toggle('toolbar-hidden', s.mode === 'off');
         }
@@ -6488,26 +6485,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // viewport/fullscreen viewport identically.
       document.body.appendChild(editor);
       el._textEditorEl = editor;
-      // Make the text editor draggable so the user can reposition it
-      // after it spawns at the video centre (T-key shortcut).
-      (function _makeDraggable() {
-        var dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
-        editor.addEventListener('pointerdown', function(de) {
-          if (de.target.tagName === 'TEXTAREA') return; // let typing through
-          dragging = true; startX = de.clientX; startY = de.clientY;
-          origLeft = parseFloat(editor.style.left) || 0;
-          origTop = parseFloat(editor.style.top) || 0;
-          editor.setPointerCapture(de.pointerId);
-          de.preventDefault(); de.stopPropagation();
-        });
-        editor.addEventListener('pointermove', function(de) {
-          if (!dragging) return;
-          editor.style.left = (origLeft + de.clientX - startX) + 'px';
-          editor.style.top = (origTop + de.clientY - startY) + 'px';
-        });
-        editor.addEventListener('pointerup', function() { dragging = false; });
-        editor.addEventListener('pointercancel', function() { dragging = false; });
-      })();
       // Round 28.7: translate-to-Chinese button. Floats just below
       // the editor's right edge. Click → calls translateText(), replaces
       // the editor's value with the translation. The user can still
@@ -6693,18 +6670,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     el._textEditorEl = null;
     el._commitTextEditor = _commitTextEditor;
     el._cancelTextEditor = _cancelTextEditor;
-    el._spawnTextEditorDirect = function(fakeEv) {
-      // Ensure draw state is active before spawning
-      if (el._annoDrawState.mode !== 'text') el._annoDrawState.mode = 'text';
-      _applyDrawMode();
-      // Use the video wrap's centre for the canvas point
-      var cr = annoCanvas.getBoundingClientRect();
-      var pt = [
-        Math.max(0, Math.min(1, (fakeEv.clientX - cr.left) / (cr.width || 1))),
-        Math.max(0, Math.min(1, (fakeEv.clientY - cr.top) / (cr.height || 1)))
-      ];
-      _spawnTextEditor(fakeEv, pt);
-    };
     annoCanvas.addEventListener('pointermove', function(ev) {
       const s = el._annoDrawState;
       if (!s.drawing) return;
@@ -8883,6 +8848,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     if (ev.key === 'm' || ev.key === 'M') {
       ev.preventDefault();
       _setListOpen(!listPopover.classList.contains('open'));
+    } else if (ev.key === 'c' || ev.key === 'C') {
+      ev.preventDefault();
+      _setListOpen(true);
+      setTimeout(() => { try { addInput.focus(); } catch (e) {} }, 30);
     } else if (ev.key === 'h' || ev.key === 'H') {
       // Clean mode toggle — hide/show all controls for distraction-free viewing
       ev.preventDefault();
@@ -20602,10 +20571,6 @@ async function loadBoardFile(event) {
       console.log('[Krafted Load] v' + (data._kraftedVersion || 'legacy') + ', ' + (data.items || []).length + ' items, ' + embedded + ' embedded, ' + formatBytes(file.size));
 
       restoreBoard(data);
-      // Re-apply DPI scale after board restore — the DOM rebuild
-      // from restoreBoard() creates fresh player controls that need
-      // the --dpi-scale CSS variable on body.
-      if (typeof window._applyDpiScale === 'function') window._applyDpiScale();
       toast('Board loaded!');
     }
   } catch (err) {
@@ -20740,8 +20705,7 @@ function restoreBoard(data) {
     }
     if (d.isAudio) {
       // Audio item — rebuild using addAudioItem
-      const audioName = d.filename || d.audioName || 'Audio';
-      const item = addAudioItem(d.src, audioName, d.x, d.y);
+      const item = addAudioItem(d.src, d.audioName || 'Audio', d.x, d.y);
       item.id = d.id !== undefined ? d.id : item.id;
       item.z = d.z || item.z;
       item.rot = d.rot || 0;
@@ -20830,15 +20794,6 @@ function restoreBoard(data) {
     state.items.push(item);
     el._item = item; // stash so buildMediaControls closures can find this item
     updateItemStyle(item);
-    // Restore filename badge — buildMediaControls clears it on init (line 5224),
-    // so we must re-apply the saved filename after the item is built.
-    if (d.filename && el._setFilenameBadge) {
-      try { el._setFilenameBadge(d.filename); } catch (e) {}
-    }
-    // Also restore audio filename
-    if (d.isAudio && el._setFilenameBadge) {
-      try { el._setFilenameBadge(d.filename || d.audioName || 'Audio'); } catch (e) {}
-    }
     // R82: restore user-set FPS from saved manifest (kpak / JSON round-trip).
     // Without this, a user who manually set FPS to, e.g., 24 fps on a film
     // video would lose that setting on save→load and revert to auto-detection.
@@ -23130,12 +23085,6 @@ viewport.addEventListener('pointercancel', e => {
 // Precision Touchpads while still letting a true vertical mouse wheel zoom.
 viewport.addEventListener('wheel', e => {
   e.preventDefault();
-  // Platform detection: Mac vs Windows trackpad/mouse behaviour differs.
-  // Mac trackpads use deltaMode 0 for both pinch-zoom AND two-finger pan.
-  // Windows high-res mouse wheels also report deltaMode 0 but should zoom,
-  // not pan. We branch by platform so one fix doesn't break the other.
-  var _isMac = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent || '');
-  var _isTwoFingerPan; // ← computed per platform below
   // Round 35: when the user is in the middle of dragging an item (move
   // drag), don't let wheel events (which can fire from accidental
   // trackpad touches while clicking) also pan or zoom the canvas. The
@@ -23215,16 +23164,14 @@ viewport.addEventListener('wheel', e => {
       // event would shift the view unpredictably.
       zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, window.innerWidth / 2, window.innerHeight / 2);
     }
-  } else if (_isMac ? (_twoFingerPan || e.deltaMode === 0) : (_twoFingerPan && e.deltaMode === 0)) {
+  } else if (_twoFingerPan && e.deltaMode === 0) {
     // Two-finger trackpad drag (all axes): pan the canvas in 2D.
-    // ── Mac: original logic — _twoFingerPan OR deltaMode 0 (pixel-mode
-    //   trackpad). Mac trackpad two-finger swipe fires wheel events with
-    //   deltaMode 0 regardless of whether a pointerdown happened first,
-    //   so `||` covers both the "drag-to-pan" and "swipe-to-pan" paths.
-    //   Pinch-zoom is handled by the ctrlKey branch above.
-    // ── Windows: require BOTH _twoFingerPan AND deltaMode 0, otherwise
-    //   high-res mouse wheels (which also report deltaMode 0) would be
-    //   misrouted to pan instead of zoom.
+    // Only fire when BOTH conditions are true:
+    //   1) _twoFingerPan is set (2+ pointers on the viewport before wheel)
+    //   2) deltaMode === 0 (pixel-based, characteristic of trackpads)
+    // Without both checks, high-res mouse wheels on Windows (which can
+    // also report deltaMode 0) would be misrouted to the pan branch
+    // instead of zoom, making the scroll wheel do nothing useful.
     state.pan.x -= e.deltaX;
     state.pan.y -= e.deltaY;
     updateCanvas();
@@ -24645,14 +24592,31 @@ document.addEventListener('keydown', e => {
       // so the seek lands on a frame boundary instead of mid-frame.
       // Combined with the in-flight lock, this makes frame-step
       // feel truly frame-accurate at the video's natural rate.
-      // Frame-step: seek immediately. On Windows, `seeked` can be
-      // slower to fire than on Mac, causing the _seekInFlight lock
-      // to stall rapid key-repeat. For frame-step we bypass the lock
-      // entirely — each arrow press is a discrete seek that directly
-      // sets currentTime. The browser naturally coalesces rapid
-      // currentTime writes, so this stays smooth without the lock.
       clearTimeout(vid._seekTimer);
+      if (vid._seekInFlight) {
+        // Already seeking: remember this target for after the
+        // current seek completes. Only queue ONE so we never
+        // accumulate runaway targets on a long key-hold.
+        vid._seekQueuedTarget = targetTime;
+        return;
+      }
+      vid._seekInFlight = true;
+      vid._seekQueuedTarget = null;
       vid._seeking = true;
+      // Apply the seek IMMEDIATELY. We previously wrapped this in
+      // requestVideoFrameCallback (RVFC) to "land on a frame boundary",
+      // but RVFC has a critical failure mode: it only fires on frames
+      // that the browser actually renders. When the video is PAUSED
+      // (which is the typical state for frame-stepping — you pause
+      // to inspect a frame, then arrow-step through), no frames are
+      // rendered, so the callback NEVER fires, currentTime never
+      // changes, and the screen stays on the same frame. The user
+      // reported "screen haven't update the content" — that was
+      // exactly this. The browser already snaps the currentTime
+      // setter to the nearest keyframe natively, so we get the same
+      // visual result (stable, on a real frame) by just assigning
+      // the value directly. The seeked event fires when the snap
+      // completes, which is what the optimistic UI wait was for.
       vid.currentTime = targetTime;
       // On seeked: clear flag, process pending target if different.
       // Also include a safety net: if `seeked` doesn't fire within 500ms,
@@ -24665,6 +24629,12 @@ document.addEventListener('keydown', e => {
         vid.addEventListener('seeked', function() {
           clearSeekingSafety();
           vid._seeking = false;
+          // Round 57: clear the in-flight lock so the next keypress
+          // can fire a new seek. (If the user pressed again during
+          // this seek, _seekQueuedTarget holds the next target and
+          // we fire it immediately below — no dead time between
+          // rapid frame-steps.)
+          vid._seekInFlight = false;
           // Sync UI to actual currentTime (in case instant update was off).
           // Use formatVideoTimeForLabel so the user's chosen display mode
           // (0:00 vs f 1234) is preserved after a seek completes.
@@ -24723,16 +24693,38 @@ document.addEventListener('keydown', e => {
           // above). For a typical video, this lands on the nearest
           // keyframe — coarser than frame-accurate, but stable.
           //
-          // Frame-step is now lock-free (see keydown handler above).
+          // Round 57: if the user pressed another arrow while we were
+          // seeking, fire the queued target now. This makes rapid
+          // key-repeat feel like one smooth stream of frame-steps with
+          // no perceptible pause between them. We re-arm the in-flight
+          // lock first so the next press will queue again if the
+          // browser is still slow.
+          if (vid._seekQueuedTarget !== null && vid._seekQueuedTarget !== undefined) {
+            var q = vid._seekQueuedTarget;
+            vid._seekQueuedTarget = null;
+            vid._seekInFlight = true;
+            vid._seeking = true;
+            if (typeof vid.requestVideoFrameCallback === 'function') {
+              vid.requestVideoFrameCallback(function() {
+                vid.currentTime = q;
+              });
+            } else {
+              vid.currentTime = q;
+            }
+          }
         });
-        vid.addEventListener('ended', function() { vid._seeking = false; clearSeekingSafety(); });
+        vid.addEventListener('ended', function() { vid._seeking = false; vid._seekInFlight = false; clearSeekingSafety(); });
       }
       // Per-seek safety: if `seeked` doesn't fire within 500ms of a
-      // pending seek, clear `_seeking` so the next arrow press isn't
-      // blocked. This protects against the seeked event being lost.
+      // pending seek, clear `_seeking` and `_seekInFlight` so the
+      // next arrow press isn't blocked. This protects against the
+      // seeked event being lost (Round 57: also clear _seekInFlight
+      // and the queued target so we never get stuck waiting for a
+      // seek that will never complete).
       if (vid._seekSafetyTimer) clearTimeout(vid._seekSafetyTimer);
       vid._seekSafetyTimer = setTimeout(function() {
         vid._seeking = false;
+        vid._seekInFlight = false;
         vid._seekQueuedTarget = null;
         vid._seekSafetyTimer = null;
       }, 500);
@@ -24826,17 +24818,10 @@ document.addEventListener('keydown', e => {
         }
         if (_selVidDT) {
           e.preventDefault();
-          // Mark this T/D press as handled so the downstream canvas
-          // selection-aware handler (line 25069) doesn't double-toggle
-          // by running the same logic a second time when the mouse is
-          // hovering over the same selected video.
-          window.__kraftedTDKeyHandled = true;
-          setTimeout(function(){ window.__kraftedTDKeyHandled = false; }, 0);
           var sDT = _selVidDT.el._annoDrawState;
           var targetMode = (e.key === 'd' || e.key === 'D') ? 'pen' : 'text';
-          // Exactly the same logic as clicking the toolbar T/D button:
-          // toggle the mode and call _applyDrawMode. Nothing else.
           sDT.mode = (sDT.mode === targetMode) ? 'off' : targetMode;
+          console.log('[T DEBUG] mode=' + sDT.mode + ' target=' + targetMode + ' hasApply=' + (typeof _selVidDT.el._applyDrawMode === 'function'));
           if (_selVidDT.el._applyDrawMode) _selVidDT.el._applyDrawMode();
           // Exit draw mode on all OTHER videos
           try {
@@ -24849,6 +24834,48 @@ document.addEventListener('keydown', e => {
                 }
               });
             }
+          } catch(e) {}
+          // Ensure toolbar is visible (it's appended to body, not el)
+          try {
+            // Use the per-video toolbar (each video has its own).
+            // The video el exposes a ref to its toolbar via the
+            // draw-state we just updated. Try the direct ref first,
+            // fall back to a class scan tied to the video.
+            var tb = null;
+            if (_selVidDT.el._annoToolbar) {
+              tb = _selVidDT.el._annoToolbar;
+            } else {
+              // Fallback: find toolbar whose data-video-id matches
+              tb = document.querySelector('.media-anno-toolbar[data-video-id="' + _selVidDT.id + '"]');
+            }
+            if (!tb) tb = document.querySelector('.media-anno-toolbar');
+            console.log('[T DEBUG] Toolbar found:', !!tb, ' hidden:', tb ? tb.classList.contains('toolbar-hidden') : 'N/A',
+            ' tbRect:', tb ? JSON.stringify(tb.getBoundingClientRect()) : 'N/A',
+            ' tbStyle.display:', tb ? getComputedStyle(tb).display : 'N/A',
+            ' tbStyle.visibility:', tb ? getComputedStyle(tb).visibility : 'N/A',
+            ' tbStyle.zIndex:', tb ? getComputedStyle(tb).zIndex : 'N/A',
+            ' vidRect:', _selVidDT.el ? JSON.stringify(_selVidDT.el.getBoundingClientRect()) : 'N/A',
+            ' winSize:', window.innerWidth + 'x' + window.innerHeight);
+          if (tb && tb.classList.contains('toolbar-hidden')) {
+              tb.classList.remove('toolbar-hidden');
+              var ann = videoAnnoEnsure(_selVidDT);
+              ann.drawToolbarHidden = false;
+              try { scheduleAutoSave(); } catch(e) {}
+            }
+            // Re-position THIS video's toolbar. Reset toolbarPos first
+            // so it recomputes from the video's bounding rect (the
+            // stored pos may point to a stale location like (0,0)).
+            try {
+              if (_selVidDT.el._annoDrawState) {
+                _selVidDT.el._annoDrawState.toolbarPos = null;
+              }
+              if (typeof _selVidDT.el._repositionAnnoToolbar === 'function') {
+                _selVidDT.el._repositionAnnoToolbar();
+              } else {
+                window.dispatchEvent(new Event('resize'));
+              }
+            } catch(e) { console.log('[T DEBUG] Reposition err:', e); }
+            try { if (typeof scheduleVisibleItemsUpdate === 'function') scheduleVisibleItemsUpdate(); } catch(e) {}
           } catch(e) {}
         }
       }
@@ -25046,9 +25073,6 @@ document.addEventListener('keydown', e => {
     // of the global canvas text tool.
     var _hasVideoSelT = false;
     try {
-      // Skip if the global D/T key handler (line 24831) already handled
-      // this keypress — otherwise we double-toggle the mode.
-      if (window.__kraftedTDKeyHandled) { return; }
       if (state && state.selected && state.selected.size > 0 && state.mouse) {
         var mouseEl = document.elementFromPoint(state.mouse.x, state.mouse.y);
         if (mouseEl) {
@@ -25102,8 +25126,25 @@ document.addEventListener('keydown', e => {
   // the Ctrl block above. Plain D no longer activates Draw so typing "d"
   // in a text/comment input doesn't accidentally switch to draw mode.
   else if (e.key === 'c' || e.key === 'C') {
-    // C = capture tool (always). Shift+C = captureScreen.
-    // No longer yields to per-video comment handler — C is capture only.
+    // Round 34: c is DOUBLE-MAPPED.
+    //   • Main handler:  c → setTool('capture'),  Shift+C → captureScreen()
+    //   • Video handler (registered later, line 6527): c → open frame comment
+    //     input on the selected video.
+    // The video handler is the one you actually want while editing a video.
+    // To stop the double work, this main handler yields when a video is
+    // selected — the later-registered video handler will pick it up. Capture
+    // tool still works for non-video selections, and Shift+C still does
+    // captureScreen() regardless.
+    var _hasVideoSelC = false;
+    try {
+      if (state && state.selected && state.items) {
+        state.selected.forEach(function(id) {
+          var it = state.items.find(function(i) { return i.id === id; });
+          if (it && (it.video || it.isVideo)) { _hasVideoSelC = true; }
+        });
+      }
+    } catch (_eC) { /* fail-open: fall through */ }
+    if (_hasVideoSelC) return;            // ← yield to video handler at 6527
     if (e.shiftKey) { captureScreen(); return; }
     setTool('capture');
   }
