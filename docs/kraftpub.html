@@ -26362,12 +26362,13 @@ function restoreBoard(data) {
     updateItemStyle(mm);
   });
   // Restore G.nextId — use saved value or compute from max ID seen
-  G.nextId = data.G.nextId || (maxId + 1);
-  G.nextZ = data.G.nextZ || G.nextZ;
-  G.nextStrokeId = data.G.nextStrokeId || G.nextStrokeId;
+  // Support both flat format (buildManifest) and nested G format (legacy)
+  G.nextId = (data.G && data.G.nextId) || data.nextId || (maxId + 1);
+  G.nextZ = (data.G && data.G.nextZ) || data.nextZ || G.nextZ;
+  G.nextStrokeId = (data.G && data.G.nextStrokeId) || data.nextStrokeId || G.nextStrokeId;
   // Restore draw strokes (with backward compat for old drawLayers / strokes formats)
-  if (Array.isArray(data.G.drawStrokes)) {
-    G.drawStrokes.length = 0; data.G.drawStrokes.forEach(s => G.drawStrokes.push(s));
+  if (Array.isArray((data.G && data.G.drawStrokes) || data.drawStrokes)) {
+    G.drawStrokes.length = 0; ((data.G && data.G.drawStrokes) || data.drawStrokes).forEach(s => G.drawStrokes.push(s));
   } else if (Array.isArray(data.drawLayers)) {
     // Legacy: flatten all layer strokes into one array
     G.drawStrokes.length = 0; data.drawLayers.flatMap(l => l.strokes || []).forEach(s => G.drawStrokes.push(s));
@@ -26386,7 +26387,7 @@ function restoreBoard(data) {
   state.groups.forEach(g => g.borderEl.remove());
   state.groups = [];
   if (data.groups) {
-    G.nextGroupId = data.G.nextGroupId || (Math.max(...data.groups.map(g => g.id), 0) + 1);
+    G.nextGroupId = (data.G && data.G.nextGroupId) || data.nextGroupId || (Math.max(...data.groups.map(g => g.id), 0) + 1);
     data.groups.forEach(gd => {
       const borderEl = document.createElement('div');
       borderEl.className = 'group-border';
