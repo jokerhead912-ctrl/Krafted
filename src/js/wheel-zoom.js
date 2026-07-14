@@ -89,6 +89,28 @@ viewport.addEventListener('wheel', e => {
   // and during a per-item drag the user is moving an item, not the view.
   if (state.dragging && state.dragging.type === 'move') return;
   if (e.ctrlKey) {
+    // Two sub-cases inside the ctrlKey branch:
+    //  (a) Trackpad pinch (deltaMode 0 + typically 2 active pointers) →
+    //      small continuous deltaY → use pinchStep (proportional,
+    //      capped, mapped to the user's zoom-step slider).
+    //  (b) Cmd + mouse wheel (Mac) — the browser remaps Cmd → ctrlKey
+    //      on wheel events. A real mouse wheel has deltaMode 1 (line)
+    //      or 2 (page), NOT 0, and the deltaY is a step-quantised
+    //      integer (≈±1 per tick, not the ±5-50 of a pinch). Treat
+    //      these as a wheel event and use `state.zoomStep` (same as
+    //      plain wheel below) so Cmd+wheel feels like a real
+    //      mouse-wheel zoom. R78: user asked "在Mac 上 zoom in out 想
+    //      加 command 鼠標上下" — without this branch, Cmd+wheel
+    //      through Magic Mouse / external wheel mouse went into the
+    //      pinch code path and felt sluggish + non-quantised.
+    if (e.deltaMode !== 0) {
+      // (b) Cmd + mouse wheel on Mac: use the regular wheel step,
+      // anchored at the viewport center. Direction matches the
+      // naturalScroll preference (same as the plain-wheel branch).
+      const s = state.zoomStep;
+      const rawDY = state.naturalScroll ? -e.deltaY : e.deltaY;
+      zoomBy(rawDY < 0 ? s : 1 / s, window.innerWidth / 2, window.innerHeight / 2);
+    } else {
     // Trackpad pinch: flip direction so "spread" zooms in, "pinch" zooms out.
     // Round 12: drastically reduced sensitivity — the user said the previous
     // 0.98/1.02 step (1.02^20 ≈ 1.49× over 1-2s) was "always suddenly scale
@@ -155,6 +177,7 @@ viewport.addEventListener('wheel', e => {
       // zoom was confusing because moving the cursor during a wheel
       // event would shift the view unpredictably.
       zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, window.innerWidth / 2, window.innerHeight / 2);
+    }
     }
   } else if (_isMac ? (_twoFingerPan || e.deltaMode === 0) : (_twoFingerPan && e.deltaMode === 0)) {
     // Two-finger trackpad drag (all axes): pan the canvas in 2D.

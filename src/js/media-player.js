@@ -2674,6 +2674,21 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
   sendToBoardBtn.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
   sendToBoardBtn.addEventListener('click', function(ev){
     ev.stopPropagation(); ev.preventDefault();
+    // R78: commit any active inline comment edit FIRST. If the user
+    // typed text in the popover list ("Click to type…") and pressed
+    // the Send-to-Board button without first blurring the field, the
+    // `c.text` was still empty — the board export used the stale text.
+    // Force-blur every contenteditable in the popover so each one's
+    // `blur` handler runs and updates the comment's `text` field.
+    try {
+      const pop = listPopover;
+      if (pop && typeof pop.querySelectorAll === 'function') {
+        const editables = pop.querySelectorAll('[contenteditable="true"]');
+        editables.forEach(function(el){
+          try { el.blur(); } catch (e) {}
+        });
+      }
+    } catch (e) {}
     if (typeof videoAnnoSendToBoard === 'function') {
       videoAnnoSendToBoard();
     } else {
