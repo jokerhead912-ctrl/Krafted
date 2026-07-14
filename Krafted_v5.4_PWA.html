@@ -5086,11 +5086,12 @@ function restoreSnapshot(snapStr) {
   state.todos = [];
   state.mindmaps = [];
   state.selected.clear();
-  G.nextZ = snap.G.nextZ;
-  G.nextId = snap.G.nextId;
-  G.nextStrokeId = snap.G.nextStrokeId || G.nextStrokeId;
+  G.nextZ = snap.nextZ;
+  G.nextId = snap.nextId;
+  G.nextStrokeId = snap.nextStrokeId || G.nextStrokeId;
+  G.nextGroupId = snap.nextGroupId || G.nextGroupId;
   // Restore draw strokes (snapshot keeps flat array; legacy drawLayers is already collapsed in saveBoard)
-  G.drawStrokes = Array.isArray(snap.G.drawStrokes) ? snap.drawStrokes: Array.isArray(snap.drawLayers) ? snap.drawLayers.flatMap(l => l.strokes || [])
+  G.drawStrokes = Array.isArray(snap.drawStrokes) ? snap.drawStrokes: Array.isArray(snap.drawLayers) ? snap.drawLayers.flatMap(l => l.strokes || [])
               : [];
   // Restore items
   snap.items.forEach(data => {
@@ -5288,7 +5289,7 @@ function restoreSnapshot(snapStr) {
   state.groups.forEach(g => g.borderEl.remove());
   state.groups = [];
   if (snap.groups) {
-    G.nextGroupId = snap.G.nextGroupId || G.nextGroupId;
+    G.nextGroupId = snap.nextGroupId || G.nextGroupId;
     snap.groups.forEach(gd => {
       const borderEl = document.createElement('div');
       borderEl.className = 'group-border';
