@@ -244,6 +244,25 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
   flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
   scrollbar-width: thin;
 }
+/* Compact mode (Round 94): applied via ResizeObserver when the player
+   is too narrow for the full seek bar + labeled buttons to coexist
+   without overlapping. Hides button text labels — icons + count badge
+   remain — and shrinks the time label min-width so the seek bar gets
+   the space it needs. */
+.item.has-media .media-controls-row.compact .media-comments-btn .btn-label,
+.item.has-media .media-controls-row.compact .media-snap-btn .btn-label {
+  display: none;
+}
+.item.has-media .media-controls-row.compact .media-snap-btn {
+  padding: 0 6px;
+}
+.item.has-media .media-controls-row.compact .media-comments-btn {
+  padding: 0 6px;
+}
+.item.has-media .media-controls-row.compact .media-time {
+  min-width: 30px;
+  font-size: 10px;
+}
 /* Visual grouping inside the controls row — left/center/right cluster */
 .item.has-media .media-controls-group {
   display: flex; align-items: center; gap: 5px;
@@ -7116,7 +7135,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // ── Snap button: batch-capture all stroked frames (same as popover Snap) ──
   const playerSnapBtn = document.createElement('div');
   playerSnapBtn.className = 'media-snap-btn';
-  playerSnapBtn.innerHTML = '&#9636;&#65039; Snap'; // ▤️ Snap
+  playerSnapBtn.innerHTML = '&#9636;&#65039;<span class="btn-label"> Snap</span>'; // ▤️ Snap
   playerSnapBtn.title = 'Snap all annotated frames — batch-capture every frame that has draw/text strokes as a frame comment';
   playerSnapBtn.addEventListener('mousedown', function(ev) { ev.stopPropagation(); ev.preventDefault(); });
   playerSnapBtn.addEventListener('click', async function(ev) {
@@ -7306,6 +7325,22 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     });
   }
   ctrlsRow.appendChild(rightGroup);
+
+  // ── Responsive compact mode: when the player is narrow, the seek
+  // bar gets squeezed and its time labels / playhead marker can visually
+  // collide with the Comments/Snap buttons on the right. Fix: once the
+  // controls row drops below a width threshold, add `.compact` which
+  // hides the text labels on the comments/snap buttons (icon-only),
+  // freeing up horizontal space so nothing overlaps.
+  if (typeof ResizeObserver !== 'undefined') {
+    const _ctrlsRO = new ResizeObserver(function(entries) {
+      for (const entry of entries) {
+        const w = entry.contentRect.width;
+        ctrlsRow.classList.toggle('compact', w < 420);
+      }
+    });
+    _ctrlsRO.observe(ctrlsRow);
+  }
 
   // ── (Stage B: comment buttons REMOVED from the control bar) ──
   // The user asked to remove the two buttons ("💬 Add" + "🗨 list"). They
