@@ -1,5 +1,5 @@
 /**
- * Krafted v5.4 — Simple Build Script
+ * Krafted v5.5 — Simple Build Script
  * Concatenates all source files in dependency order (no esbuild module system).
  * Removes all import/export statements since everything shares one global scope.
  */
@@ -9,7 +9,7 @@ const path = require('path');
 const SRC_DIR = path.join(__dirname, 'src');
 const JS_DIR = path.join(SRC_DIR, 'js');
 const LIB_DIR = path.join(SRC_DIR, 'lib');
-const OUTPUT = process.argv[2] || path.join(__dirname, '..', 'krafted-build', 'docs', 'kraftpub.html');
+const OUTPUT = process.argv[2] || path.join(__dirname, 'docs', 'kraftpub.html');
 
 // Dependency order — files that define functions used by others come first
 const JS_ORDER = [
@@ -63,7 +63,7 @@ const JS_ORDER = [
   'init.js',
 ];
 
-console.log('🔨 Krafted v5.4 — Building (simple concat)...\n');
+console.log('🔨 Krafted v5.5 — Building (simple concat)...\n');
 
 // Step 1: Concatenate all JS files, stripping import/export
 console.log('  📦 Concatenating JS modules...');
@@ -159,18 +159,7 @@ if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(OUTPUT, html, 'utf8');
 console.log(`\n✅ Built: ${OUTPUT} (${html.length.toLocaleString()} bytes)`);
 
-// Also sync to other deploy targets
-const deployDir = path.join(__dirname, '..', 'krafted-build');
-if (fs.existsSync(deployDir)) {
-  const targets = [
-    path.join(deployDir, 'Krafpub.html'),
-    path.join(deployDir, 'Krafted_v5.4_PWA.html'),
-    path.join(deployDir, 'docs', 'Krafted_v5.4_PWA.html'),
-  ];
-  for (const t of targets) {
-    const td = path.dirname(t);
-    if (!fs.existsSync(td)) fs.mkdirSync(td, { recursive: true });
-    fs.writeFileSync(t, html, 'utf8');
-  }
-  console.log(`✅ Also synced to krafted-build/ (4 files)`);
-}
+// Also sync to docs/ with versioned name
+const versionedOutput = path.join(__dirname, 'docs', 'Krafted_v5.5_PWA.html');
+fs.writeFileSync(versionedOutput, html, 'utf8');
+console.log(`✅ Also synced: ${versionedOutput}`);

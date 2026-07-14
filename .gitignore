@@ -1,7 +1,4 @@
 # Krafted — NEVER commit these to public repo
-Krafted_v5.2_PWA.html
-krafted-format.bundle.js
-krafted-v5-integration.js
 *.kpak
 *.krafted
 node_modules/

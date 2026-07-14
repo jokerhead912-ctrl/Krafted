@@ -1,6 +1,6 @@
 # Krafted — Creative Reference Board
 
-**by Joker Head Studios** | v5.2
+**by Joker Head Studios** | v5.5
 
 ---
 
