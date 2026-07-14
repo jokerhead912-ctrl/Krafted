@@ -20070,6 +20070,10 @@ function countMediaItems() {
 // Reuses the item serialization pattern.
 function buildManifest() {
   const items = state.items.map(i => {
+    // Audio save debug
+    if (i.isAudio && typeof console !== 'undefined') {
+      try { console.log('[SAVE AUDIO] id=' + i.id + ' audioName="' + (i.audioName || '') + '" filename="' + (i.filename || '') + '"'); } catch (e) {}
+    }
     const d = {
       id: i.id,
       x: i.x, y: i.y, w: i.w, h: i.h, rot: i.rot, opacity: i.opacity,
