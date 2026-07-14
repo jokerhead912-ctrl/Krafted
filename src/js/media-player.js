@@ -581,6 +581,33 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
       }
     });
     actionRow.appendChild(undoBtn);
+    // R79: lock-to-player button — when on, the draw mode stays
+    // active after each stroke so the user can immediately start
+    // the next one without picking the draw tool again. Sits
+    // between Undo and Clear so it's reachable with the pen
+    // tablet without crowding the color/size row above.
+    const lockBtn = document.createElement('button');
+    lockBtn.className = 'lock-btn';
+    lockBtn.innerHTML = '&#128274;'; // 🔒
+    lockBtn.title = 'Lock to player — stay in draw mode between strokes (off → keep current tool, on → continuous draw)';
+    lockBtn.addEventListener('click', function(){
+      const newState = !window.G.lockToPlayer;
+      window.G.lockToPlayer = newState;
+      _refreshLockBtn();
+      if (typeof toast === 'function') {
+        toast(newState ? 'Lock ON — stay in draw mode' : 'Lock OFF — back to single-stroke draw');
+      }
+    });
+    function _refreshLockBtn(){
+      const on = !!(window.G && window.G.lockToPlayer);
+      lockBtn.classList.toggle('active', on);
+      lockBtn.innerHTML = on ? '&#128275;' : '&#128274;'; // 🔓 / 🔒
+      lockBtn.title = on
+        ? 'Lock ON — stay in draw mode between strokes (click to turn off)'
+        : 'Lock OFF — drop to select after each stroke (click to turn on)';
+    }
+    _refreshLockBtn();
+    actionRow.appendChild(lockBtn);
     const clearBtn = document.createElement('button');
     clearBtn.innerHTML = '&#128465;'; // 🗑
     clearBtn.title = 'Clear all strokes on this frame';

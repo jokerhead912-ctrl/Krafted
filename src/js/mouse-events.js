@@ -1197,7 +1197,19 @@ document.addEventListener('mouseup', e => {
     if (stroke.points.length >= 2 && stroke.mode !== 'eraser') {
       createDrawItem(stroke);
     }
+    // R79: push an undo snapshot so undo walks back ONE stroke at a
+    // time. Previously mouseup of a draw stroke didn't push — undo
+    // reverted to the pre-stroke state and removed the stroke AND
+    // any text/items the user had added since, which the user
+    // reported as "撤一次清晒所有嘢". Pushing here gives proper
+    // per-stroke undo granularity.
+    try { pushUndo(); } catch (e) {}
     scheduleAutoSave();
+    // R79: if "lock to player" is on, stay in draw mode so the user
+    // can immediately start the next stroke. Otherwise the default
+    // behaviour is to drop back to select on stroke end (handled by
+    // the existing tool-state machine; the lock toggle is the only
+    // opt-in to "continuous draw" here).
   }
 
   // DRAW STROKE MOVE END

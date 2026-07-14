@@ -227,6 +227,10 @@ export const G = {
   potentialTextDrag: undefined,  // will be initialized below
   lastScreenX: undefined,  // will be initialized below
   lastScreenY: undefined,  // will be initialized below
+  lockToPlayer: false,  // R79: when true, draw mode stays active after
+                         // each stroke (no need to re-pick the Draw tool
+                         // between strokes). Toggled by the lock button
+                         // in the draw toolbar and the player bar.
 };
 
 G.drawStrokes = _drawStrokes;

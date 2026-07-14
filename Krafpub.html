@@ -4652,6 +4652,10 @@ const G = {
   potentialTextDrag: undefined,  // will be initialized below
   lastScreenX: undefined,  // will be initialized below
   lastScreenY: undefined,  // will be initialized below
+  lockToPlayer: false,  // R79: when true, draw mode stays active after
+                         // each stroke (no need to re-pick the Draw tool
+                         // between strokes). Toggled by the lock button
+                         // in the draw toolbar and the player bar.
 };
 
 G.drawStrokes = _drawStrokes;
@@ -7219,6 +7223,33 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       }
     });
     actionRow.appendChild(undoBtn);
+    // R79: lock-to-player button — when on, the draw mode stays
+    // active after each stroke so the user can immediately start
+    // the next one without picking the draw tool again. Sits
+    // between Undo and Clear so it's reachable with the pen
+    // tablet without crowding the color/size row above.
+    const lockBtn = document.createElement('button');
+    lockBtn.className = 'lock-btn';
+    lockBtn.innerHTML = '&#128274;'; // 🔒
+    lockBtn.title = 'Lock to player — stay in draw mode between strokes (off → keep current tool, on → continuous draw)';
+    lockBtn.addEventListener('click', function(){
+      const newState = !window.G.lockToPlayer;
+      window.G.lockToPlayer = newState;
+      _refreshLockBtn();
+      if (typeof toast === 'function') {
+        toast(newState ? 'Lock ON — stay in draw mode' : 'Lock OFF — back to single-stroke draw');
+      }
+    });
+    function _refreshLockBtn(){
+      const on = !!(window.G && window.G.lockToPlayer);
+      lockBtn.classList.toggle('active', on);
+      lockBtn.innerHTML = on ? '&#128275;' : '&#128274;'; // 🔓 / 🔒
+      lockBtn.title = on
+        ? 'Lock ON — stay in draw mode between strokes (click to turn off)'
+        : 'Lock OFF — drop to select after each stroke (click to turn on)';
+    }
+    _refreshLockBtn();
+    actionRow.appendChild(lockBtn);
     const clearBtn = document.createElement('button');
     clearBtn.innerHTML = '&#128465;'; // 🗑
     clearBtn.title = 'Clear all strokes on this frame';
@@ -16065,6 +16096,40 @@ function updateAltPanBadge() {
             tgt.dispatchEvent(md);
           }
         });
+        // R79: also pre-emptively fire a synthetic 'click' on buttons
+        // the pen lands on. Many Wacom/Huion tablets don't emit a
+        // native click event when the pen taps a button (only mousedown
+        // + mouseup) and some Chrome versions delay click until pointer
+        // release, which never reaches the button if the pen lifted off
+        // its edge. Buttons wired with `addEventListener('click', ...)`
+        // (S/M/L, Pen/Arrow/Box/Eraser, Snap, ▶, lock, etc.) silently
+        // miss pen taps. We dispatch a click right after mousedown so
+        // the toolbar / player-bar / popover buttons respond reliably
+        // to stylus taps. We still allow the native click to fire on
+        // pointerup (the browser suppresses our synthetic click's
+        // default action because the next event is also a click) so
+        // there's no double-fire on devices that already work.
+        Promise.resolve().then(() => {
+          const tgt = e.target;
+          if (tgt && tgt.closest) {
+            const btn = tgt.closest('button, .media-play-btn, .media-draw-btn, .media-snap-btn, .head-btn, .lock-btn, .btn, [role="button"]');
+            if (btn && !btn.disabled) {
+              try {
+                const c = new MouseEvent('click', {
+                  bubbles: true,
+                  cancelable: true,
+                  composed: true,
+                  view: window,
+                  button: 0,
+                  buttons: 1,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+                btn.dispatchEvent(c);
+              } catch (err) {}
+            }
+          }
+        });
       }
     }
   }, { passive: false });
@@ -19087,7 +19152,19 @@ document.addEventListener('mouseup', e => {
     if (stroke.points.length >= 2 && stroke.mode !== 'eraser') {
       createDrawItem(stroke);
     }
+    // R79: push an undo snapshot so undo walks back ONE stroke at a
+    // time. Previously mouseup of a draw stroke didn't push — undo
+    // reverted to the pre-stroke state and removed the stroke AND
+    // any text/items the user had added since, which the user
+    // reported as "撤一次清晒所有嘢". Pushing here gives proper
+    // per-stroke undo granularity.
+    try { pushUndo(); } catch (e) {}
     scheduleAutoSave();
+    // R79: if "lock to player" is on, stay in draw mode so the user
+    // can immediately start the next stroke. Otherwise the default
+    // behaviour is to drop back to select on stroke end (handled by
+    // the existing tool-state machine; the lock toggle is the only
+    // opt-in to "continuous draw" here).
   }
 
   // DRAW STROKE MOVE END

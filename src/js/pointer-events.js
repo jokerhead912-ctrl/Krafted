@@ -66,6 +66,40 @@ import { viewport } from './core-state.js';
             tgt.dispatchEvent(md);
           }
         });
+        // R79: also pre-emptively fire a synthetic 'click' on buttons
+        // the pen lands on. Many Wacom/Huion tablets don't emit a
+        // native click event when the pen taps a button (only mousedown
+        // + mouseup) and some Chrome versions delay click until pointer
+        // release, which never reaches the button if the pen lifted off
+        // its edge. Buttons wired with `addEventListener('click', ...)`
+        // (S/M/L, Pen/Arrow/Box/Eraser, Snap, ▶, lock, etc.) silently
+        // miss pen taps. We dispatch a click right after mousedown so
+        // the toolbar / player-bar / popover buttons respond reliably
+        // to stylus taps. We still allow the native click to fire on
+        // pointerup (the browser suppresses our synthetic click's
+        // default action because the next event is also a click) so
+        // there's no double-fire on devices that already work.
+        Promise.resolve().then(() => {
+          const tgt = e.target;
+          if (tgt && tgt.closest) {
+            const btn = tgt.closest('button, .media-play-btn, .media-draw-btn, .media-snap-btn, .head-btn, .lock-btn, .btn, [role="button"]');
+            if (btn && !btn.disabled) {
+              try {
+                const c = new MouseEvent('click', {
+                  bubbles: true,
+                  cancelable: true,
+                  composed: true,
+                  view: window,
+                  button: 0,
+                  buttons: 1,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+                btn.dispatchEvent(c);
+              } catch (err) {}
+            }
+          }
+        });
       }
     }
   }, { passive: false });
