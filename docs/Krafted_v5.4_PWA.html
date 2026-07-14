@@ -25714,6 +25714,7 @@ function addAudioItem(src, fileName, x, y) {
     trimStart: 0, trimEnd: 0, playbackRate: 1,
   };
   state.items.push(item);
+  console.log('[AUDIO ITEM] id=' + item.id + ' audioName="' + item.audioName + '" filename="' + (item.filename || '') + '"');
   updateItemStyle(item);
   selectOnly(item.id);
   scheduleAutoSave();
