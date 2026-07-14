@@ -20769,7 +20769,14 @@ function restoreBoard(data) {
       // the element, and addAudioItem's internal nameEl may have been
       // overwritten by a later operation.
       if (item.el && item.el._setAudioName) {
-        try { item.el._setAudioName(_audioName); } catch (e) {}
+        try {
+          item.el._setAudioName(_audioName);
+          // Verify the name actually got applied
+          var _ne = item.el.querySelector('span');
+          console.log('[AUDIO FIX] id=' + d.id + ' set="' + _audioName + '" domName="' + (_ne ? _ne.textContent : 'NULL') + '" hasSet=' + !!item.el._setAudioName);
+        } catch (e) {}
+      } else {
+        console.log('[AUDIO FIX] id=' + d.id + ' CANNOT set: hasEl=' + !!item.el + ' hasSetter=' + !!(item.el && item.el._setAudioName));
       }
       return;
     }
