@@ -1961,8 +1961,13 @@ body.dragging-file .media-anno-toolbar {
   opacity: 0;
 }
 .item.has-media .media-playhead-label.show {
-  display: inline-flex;
-  opacity: 1;
+  /* Round 96: user asked to remove this label entirely (it kept
+     getting clipped/overlapping other controls no matter where it
+     was repositioned). Force it permanently hidden instead of ripping
+     out the JS that computes/updates it — keeps the update logic
+     harmless dead code rather than risking new breakage elsewhere. */
+  display: none !important;
+  opacity: 0;
 }
 .item.has-media .media-playhead-label .pl-frame {
   color: #a78bfa;
