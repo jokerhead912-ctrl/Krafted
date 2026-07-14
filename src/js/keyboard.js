@@ -24,6 +24,122 @@ import { toggleAppFullscreen, toggleGrid } from './grid-fs.js';
 import { hideCtx, toast } from './ui-utils.js';
 import { frameSelection } from './canvas-view.js';
 
+// ── Shortcut Registry dispatcher ─────────────────────────────
+// R79: lookup the active shortcut registry and dispatch the
+// matching action. Returns true if a shortcut was handled.
+// Called at the top of the keydown handler so user-customised
+// shortcuts always take priority over the legacy hardcoded
+// logic below.
+function _dispatchShortcut(e) {
+  var reg = (typeof window !== 'undefined' && window.ShortcutRegistry) ? window.ShortcutRegistry : {};
+  var matchedId = null;
+  var matchedKeys = null;
+  // Walk every shortcut; find the first one whose key combo matches.
+  var ids = Object.keys(reg);
+  for (var i = 0; i < ids.length; i++) {
+    var entry = reg[ids[i]];
+    if (!entry || !entry.keys) continue;
+    for (var j = 0; j < entry.keys.length; j++) {
+      var k = entry.keys[j];
+      // Match modifiers: ctrl OR meta is treated as "modifier key"
+      // (Cmd on Mac, Ctrl on Win). If the shortcut expects ctrl and
+      // the user pressed meta (or vice versa), we match — because
+      // Platform.zoomKey already maps Cmd→metaKey, Ctrl→ctrlKey.
+      var wantCtrl = !!k.ctrl;
+      var wantMeta = !!k.meta;
+      var wantShift = !!k.shift;
+      var wantAlt = !!k.alt;
+      var gotCtrl = !!e.ctrlKey;
+      var gotMeta = !!e.metaKey;
+      var gotShift = !!e.shiftKey;
+      var gotAlt = !!e.altKey;
+      // If the shortcut wants ctrl OR meta, accept either.
+      // If it wants BOTH, require both.
+      var modOk = true;
+      if (wantCtrl && wantMeta) {
+        modOk = gotCtrl && gotMeta;
+      } else if (wantCtrl || wantMeta) {
+        modOk = gotCtrl || gotMeta;
+      } else {
+        modOk = !gotCtrl && !gotMeta;
+      }
+      modOk = modOk && (wantShift === gotShift) && (wantAlt === gotAlt);
+      // Key match (case-insensitive for letters)
+      var keyOk = (k.key === e.key) || (k.key.toUpperCase && k.key.toLowerCase() === e.key.toLowerCase());
+      if (modOk && keyOk) {
+        matchedId = entry.id;
+        matchedKeys = entry.keys;
+        break;
+      }
+    }
+    if (matchedId) break;
+  }
+  if (!matchedId) return false;
+
+  // ── Dispatch action ────────────────────────────────────────
+  e.preventDefault();
+  switch (matchedId) {
+    // Tools
+    case 'tool-select':      setTool('select'); return true;
+    case 'tool-text':        setTool('text'); return true;
+    case 'tool-draw':        setTool('draw'); return true;
+    case 'tool-export':      setTool('export'); return true;
+    case 'tool-capture':     setTool('capture'); return true;
+    case 'tool-screen-cap':  captureScreen(); return true;
+    case 'tool-cut':         setTool('cut'); return true;
+    case 'tool-lasso':       setTool('lasso'); return true;
+    case 'tool-mindmap':     addMindMap(); return true;
+    case 'tool-relation':    setTool('relation'); return true;
+    case 'tool-link':        openLinkModal(); return true;
+    case 'tool-grid':        toggleGrid(); return true;
+    case 'tool-fullscreen':  toggleAppFullscreen(); return true;
+    case 'tool-frame-sel':   frameSelection(); return true;
+    // Edit
+    case 'edit-undo':        undo(); return true;
+    case 'edit-redo':        redo(); return true;
+    case 'edit-redo-alt':    redo(); return true;
+    case 'edit-copy':        copySelected(); return true;
+    case 'edit-paste':       return true; // handled by native paste event
+    case 'edit-duplicate':   duplicateSelected(); return true;
+    case 'edit-delete':      deleteSelected(); return true;
+    case 'edit-select-all':  state.selected.clear(); var all = []; [].push.apply(all, state.items); [].push.apply(all, state.texts); [].push.apply(all, state.todos||[]); [].push.apply(all, state.mindmaps||[]); all.forEach(function(i){ state.selected.add(i.id); }); refreshSelection(); return true;
+    // File
+    case 'file-save':        if (typeof saveBoard === 'function') saveBoard(); return true;
+    case 'file-save-as':     if (typeof setTool === 'function') setTool('capture'); return true; // Shift+Ctrl+S = screen cap
+    case 'file-open':        if (typeof loadBoard === 'function') loadBoard(); return true;
+    // Group
+    case 'group-group':      groupSelected(); return true;
+    case 'group-ungroup':    ungroupSelected(); return true;
+    // Arrange
+    case 'arrange-tidy':     tidySelection(); return true;
+    case 'arrange-tetris-up':    tetrisAlign('up'); return true;
+    case 'arrange-tetris-down':  tetrisAlign('down'); return true;
+    case 'arrange-tetris-left':  tetrisAlign('left'); return true;
+    case 'arrange-tetris-right': tetrisAlign('right'); return true;
+    case 'arrange-dist-h':   distributeItems('h'); return true;
+    case 'arrange-dist-v':   distributeItems('v'); return true;
+    case 'arrange-norm-size':  normalizeSize('size'); return true;
+    case 'arrange-norm-scale': normalizeSize('scale'); return true;
+    case 'arrange-norm-h':   normalizeSize('height'); return true;
+    case 'arrange-norm-w':   normalizeSize('width'); return true;
+    case 'arrange-stack':    stackItems(); return true;
+    // Navigation
+    case 'nav-pan-space':    state.spaceDown = true; viewport.style.cursor = 'grab'; return true;
+    case 'nav-help':         if (typeof showHelp === 'function') showHelp(); return true;
+    case 'nav-esc':          clearSelection(); hideCtx(); if (typeof hideHelp === 'function') hideHelp(); captureResultPanel.classList.remove('show'); _exitRelationTool(); if (state.tool !== 'select') setTool('select'); return true;
+    // Translate
+    case 'translate-en-zh':  translateSelectedText('en', 'zh'); return true;
+    // Media
+    case 'media-frame-left':       /* handled by existing logic */ return false;
+    case 'media-frame-right':      /* handled by existing logic */ return false;
+    case 'media-frame-10-left':    /* handled by existing logic */ return false;
+    case 'media-frame-10-right':   /* handled by existing logic */ return false;
+    case 'media-trim-i':           /* handled by existing logic */ return false;
+    case 'media-trim-o':           /* handled by existing logic */ return false;
+    default: return false;
+  }
+}
+
 // ============================================================
 //  KEYBOARD
 // ============================================================
@@ -43,6 +159,11 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') e.target.blur();
     return;
   }
+
+  // R79: try the shortcut registry first. If the user has remapped
+  // a shortcut, the registry dispatches it and the legacy hardcoded
+  // logic below is skipped for that key combo.
+  if (_dispatchShortcut(e)) return;
 
   if (e.key === ' ' && !state.spaceDown) {
     state.spaceDown = true;

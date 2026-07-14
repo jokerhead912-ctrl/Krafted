@@ -14,6 +14,7 @@ const OUTPUT = process.argv[2] || path.join(__dirname, '..', 'krafted-build', 'd
 // Dependency order — files that define functions used by others come first
 const JS_ORDER = [
   'core-state.js',
+  'shortcut-editor.js',
   'canvas-view.js',
   'undo-redo.js',
   'selection.js',

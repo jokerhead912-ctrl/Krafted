@@ -4754,6 +4754,188 @@ if (typeof window !== 'undefined') {
 const _frozenGifs = new Map();
 
 
+// ==== shortcut-editor.js ====
+
+// ============================================================
+//  SHORTCUT EDITOR — customizable keyboard shortcuts
+//  v5.4 R79 — user can remap any shortcut from the Help panel.
+//  All shortcuts read from ShortcutRegistry; user overrides
+//  are persisted to localStorage.
+// ============================================================
+
+// ── Default shortcut registry ────────────────────────────────
+// Each entry: { id, label, category, defaultKeys, macKeys?, action }
+// - defaultKeys: array of { key, ctrl, shift, alt, meta } objects
+// - macKeys: optional Mac-specific override (Cmd instead of Ctrl)
+// - action: function name to call
+// When Platform.mac is true AND macKeys is provided, macKeys wins.
+// Otherwise defaultKeys is used, with ctrl→cmd on Mac automatically.
+
+const DEFAULT_SHORTCUTS = [
+  // === TOOLS ===
+  { id: 'tool-select',     category: 'Tools', label: 'Select & Move',            keys: [{ key: 'v' }] },
+  { id: 'tool-text',       category: 'Tools', label: 'Text Tool',                keys: [{ key: 't' }] },
+  { id: 'tool-draw',       category: 'Tools', label: 'Draw Tool',                keys: [{ key: 'd', ctrl: true }], macKeys: [{ key: 'd', meta: true }] },
+  { id: 'tool-export',     category: 'Tools', label: 'Export Area',              keys: [{ key: 'e' }] },
+  { id: 'tool-capture',    category: 'Tools', label: 'Capture Area',             keys: [{ key: 'c' }] },
+  { id: 'tool-screen-cap', category: 'Tools', label: 'Screen Capture',           keys: [{ key: 'c', shift: true }] },
+  { id: 'tool-cut',        category: 'Tools', label: 'Free Shape Cut',           keys: [{ key: 'x' }] },
+  { id: 'tool-lasso',      category: 'Tools', label: 'Lasso Cut',                keys: [{ key: 'l' }] },
+  { id: 'tool-mindmap',    category: 'Tools', label: 'Mind Map',                 keys: [{ key: 'm' }] },
+  { id: 'tool-relation',   category: 'Tools', label: 'Relation Line',            keys: [{ key: 'r' }] },
+  { id: 'tool-link',       category: 'Tools', label: 'Add Link Card',            keys: [{ key: 'l', ctrl: true }], macKeys: [{ key: 'l', meta: true }] },
+  { id: 'tool-grid',       category: 'Tools', label: 'Toggle Grid',              keys: [{ key: 'g' }] },
+  { id: 'tool-fullscreen', category: 'Tools', label: 'Fullscreen',               keys: [{ key: 'f', shift: true }] },
+  { id: 'tool-frame-sel',  category: 'Tools', label: 'Frame Selection',          keys: [{ key: 'f' }] },
+
+  // === EDIT ===
+  { id: 'edit-undo',       category: 'Edit', label: 'Undo',                      keys: [{ key: 'z', ctrl: true }], macKeys: [{ key: 'z', meta: true }] },
+  { id: 'edit-redo',       category: 'Edit', label: 'Redo',                      keys: [{ key: 'y', ctrl: true }], macKeys: [{ key: 'y', meta: true }] },
+  { id: 'edit-redo-alt',   category: 'Edit', label: 'Redo (Shift+Undo)',         keys: [{ key: 'z', ctrl: true, shift: true }], macKeys: [{ key: 'z', meta: true, shift: true }] },
+  { id: 'edit-copy',       category: 'Edit', label: 'Copy',                      keys: [{ key: 'c', ctrl: true }], macKeys: [{ key: 'c', meta: true }] },
+  { id: 'edit-paste',      category: 'Edit', label: 'Paste',                     keys: [{ key: 'v', ctrl: true }], macKeys: [{ key: 'v', meta: true }] },
+  { id: 'edit-duplicate',  category: 'Edit', label: 'Duplicate',                 keys: [{ key: 'd', ctrl: true, shift: true }], macKeys: [{ key: 'd', meta: true, shift: true }] },
+  { id: 'edit-delete',     category: 'Edit', label: 'Delete Selected',           keys: [{ key: 'Delete' }, { key: 'Backspace' }] },
+  { id: 'edit-select-all', category: 'Edit', label: 'Select All',                keys: [{ key: 'a', ctrl: true }], macKeys: [{ key: 'a', meta: true }] },
+
+  // === FILE ===
+  { id: 'file-save',       category: 'File', label: 'Save Board',                keys: [{ key: 's', ctrl: true }], macKeys: [{ key: 's', meta: true }] },
+  { id: 'file-save-as',    category: 'File', label: 'Save As…',                  keys: [{ key: 's', ctrl: true, shift: true }], macKeys: [{ key: 's', meta: true, shift: true }] },
+  { id: 'file-open',       category: 'File', label: 'Open Board',                keys: [{ key: 'o', ctrl: true }], macKeys: [{ key: 'o', meta: true }] },
+
+  // === GROUP ===
+  { id: 'group-group',     category: 'Group', label: 'Group Selected',           keys: [{ key: 'g', ctrl: true }], macKeys: [{ key: 'g', meta: true }] },
+  { id: 'group-ungroup',   category: 'Group', label: 'Ungroup',                  keys: [{ key: 'g', ctrl: true, shift: true }], macKeys: [{ key: 'g', meta: true, shift: true }] },
+
+  // === ARRANGE ===
+  { id: 'arrange-tidy',    category: 'Arrange', label: 'Tidy Selection',         keys: [{ key: 'u', ctrl: true, shift: true }], macKeys: [{ key: 'u', meta: true, shift: true }] },
+  { id: 'arrange-tetris-up',    category: 'Arrange', label: 'Tetris Align Up',    keys: [{ key: 'ArrowUp', ctrl: true }], macKeys: [{ key: 'ArrowUp', meta: true }] },
+  { id: 'arrange-tetris-down',  category: 'Arrange', label: 'Tetris Align Down',  keys: [{ key: 'ArrowDown', ctrl: true }], macKeys: [{ key: 'ArrowDown', meta: true }] },
+  { id: 'arrange-tetris-left',  category: 'Arrange', label: 'Tetris Align Left',  keys: [{ key: 'ArrowLeft', ctrl: true }], macKeys: [{ key: 'ArrowLeft', meta: true }] },
+  { id: 'arrange-tetris-right', category: 'Arrange', label: 'Tetris Align Right', keys: [{ key: 'ArrowRight', ctrl: true }], macKeys: [{ key: 'ArrowRight', meta: true }] },
+  { id: 'arrange-dist-h',  category: 'Arrange', label: 'Distribute Horizontal',  keys: [{ key: 'ArrowUp', ctrl: true, alt: true, shift: true }] },
+  { id: 'arrange-dist-v',  category: 'Arrange', label: 'Distribute Vertical',    keys: [{ key: 'ArrowDown', ctrl: true, alt: true, shift: true }] },
+  { id: 'arrange-norm-size',  category: 'Arrange', label: 'Normalize Size',      keys: [{ key: 'ArrowUp', ctrl: true, alt: true }] },
+  { id: 'arrange-norm-scale', category: 'Arrange', label: 'Normalize Scale',     keys: [{ key: 'ArrowDown', ctrl: true, alt: true }] },
+  { id: 'arrange-norm-h',  category: 'Arrange', label: 'Normalize Height',       keys: [{ key: 'ArrowLeft', ctrl: true, alt: true }] },
+  { id: 'arrange-norm-w',  category: 'Arrange', label: 'Normalize Width',        keys: [{ key: 'ArrowRight', ctrl: true, alt: true }] },
+  { id: 'arrange-stack',   category: 'Arrange', label: 'Stack Items',            keys: [{ key: 's', ctrl: true, alt: true }] },
+
+  // === NAVIGATION ===
+  { id: 'nav-pan-space',   category: 'Navigation', label: 'Pan Canvas (hold)',   keys: [{ key: ' ' }] },
+  { id: 'nav-help',        category: 'Navigation', label: 'Show Help / Shortcuts', keys: [{ key: 'h' }] },
+  { id: 'nav-esc',         category: 'Navigation', label: 'Cancel / Deselect',   keys: [{ key: 'Escape' }] },
+
+  // === TRANSLATE ===
+  { id: 'translate-en-zh', category: 'Translate', label: 'Translate EN→中文',    keys: [{ key: 't', ctrl: true, shift: true }], macKeys: [{ key: 't', meta: true, shift: true }] },
+
+  // === MEDIA ===
+  { id: 'media-frame-left',  category: 'Media', label: 'Frame Step Left',       keys: [{ key: 'ArrowLeft' }] },
+  { id: 'media-frame-right', category: 'Media', label: 'Frame Step Right',      keys: [{ key: 'ArrowRight' }] },
+  { id: 'media-frame-10-left',  category: 'Media', label: 'Jump 10 Frames Left',  keys: [{ key: 'ArrowLeft', shift: true }] },
+  { id: 'media-frame-10-right', category: 'Media', label: 'Jump 10 Frames Right', keys: [{ key: 'ArrowRight', shift: true }] },
+  { id: 'media-trim-i',    category: 'Media', label: 'Trim In Point',            keys: [{ key: 'i' }] },
+  { id: 'media-trim-o',    category: 'Media', label: 'Trim Out Point',           keys: [{ key: 'o' }] },
+];
+
+// ── Runtime registry ─────────────────────────────────────────
+// On init, defaults are merged with localStorage overrides.
+let ShortcutRegistry = {};
+
+function _loadOverrides() {
+  try {
+    const raw = localStorage.getItem('krafted_shortcuts');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return {};
+}
+
+function _saveOverrides(overrides) {
+  try { localStorage.setItem('krafted_shortcuts', JSON.stringify(overrides)); } catch (e) {}
+}
+
+// Build the active shortcut map from defaults + overrides.
+// For each shortcut id, if the user has an override array, use it.
+// Otherwise pick macKeys on Mac, defaultKeys on Win.
+function _rebuildRegistry() {
+  const overrides = _loadOverrides();
+  const out = {};
+  DEFAULT_SHORTCUTS.forEach(function(def){
+    const userKeys = overrides[def.id];
+    if (userKeys && Array.isArray(userKeys) && userKeys.length > 0) {
+      out[def.id] = { id: def.id, label: def.label, category: def.category, keys: userKeys, userDefined: true };
+    } else if (Platform.mac && def.macKeys) {
+      out[def.id] = { id: def.id, label: def.label, category: def.category, keys: def.macKeys, userDefined: false };
+    } else {
+      out[def.id] = { id: def.id, label: def.label, category: def.category, keys: def.keys, userDefined: false };
+    }
+  });
+  ShortcutRegistry = out;
+  // Expose globally so the keyboard handler can read it
+  if (typeof window !== 'undefined') window.ShortcutRegistry = ShortcutRegistry;
+  if (typeof window !== 'undefined') window.DEFAULT_SHORTCUTS = DEFAULT_SHORTCUTS;
+}
+
+// ── Public API ───────────────────────────────────────────────
+
+// Reset ONE shortcut to default
+function resetShortcut(id) {
+  const overrides = _loadOverrides();
+  delete overrides[id];
+  _saveOverrides(overrides);
+  _rebuildRegistry();
+}
+
+// Set a custom key binding for a shortcut
+// keysArr: array of { key, ctrl, shift, alt, meta }
+function setShortcut(id, keysArr) {
+  const overrides = _loadOverrides();
+  overrides[id] = keysArr;
+  _saveOverrides(overrides);
+  _rebuildRegistry();
+}
+
+// Reset ALL shortcuts to default
+function resetAllShortcuts() {
+  try { localStorage.removeItem('krafted_shortcuts'); } catch (e) {}
+  _rebuildRegistry();
+}
+
+// Format a key combo for display
+function formatKeyCombo(keys) {
+  if (!keys || !keys.length) return '—';
+  return keys.map(function(k){
+    const parts = [];
+    if (k.ctrl) parts.push(Platform.mac ? '⌃' : 'Ctrl');
+    if (k.meta) parts.push(Platform.mac ? '⌘' : 'Win');
+    if (k.alt) parts.push(Platform.mac ? '⌥' : 'Alt');
+    if (k.shift) parts.push(Platform.mac ? '⇧' : 'Shift');
+    let keyName = k.key;
+    if (keyName === ' ') keyName = 'Space';
+    if (keyName === 'ArrowUp') keyName = '↑';
+    if (keyName === 'ArrowDown') keyName = '↓';
+    if (keyName === 'ArrowLeft') keyName = '←';
+    if (keyName === 'ArrowRight') keyName = '→';
+    if (keyName === 'Escape') keyName = 'Esc';
+    if (keyName === 'Delete') keyName = 'Del';
+    if (keyName === 'Backspace') keyName = '⌫';
+    parts.push(keyName);
+    return parts.join(Platform.mac ? '' : '+');
+  }).join('  ');
+}
+
+// ── Init ─────────────────────────────────────────────────────
+_rebuildRegistry();
+console.log('[INIT] Shortcut Registry:', Object.keys(ShortcutRegistry).length, 'shortcuts loaded');
+
+// Expose global helpers for the shortcut editor UI
+if (typeof window !== 'undefined') {
+  window._kraftedRebuildShortcuts = _rebuildRegistry;
+  window.resetShortcutSC = resetShortcut;
+  window.resetAllShortcutsSC = resetAllShortcuts;
+}
+
+
 // ==== canvas-view.js ====
 
 
@@ -15922,15 +16104,359 @@ function hideCtx() { if (ctxMenu) ctxMenu.style.display = 'none'; }
 // ==== help.js ====
 
 // ============================================================
-//  HELP PANEL — hotkeys & function guide
+//  HELP PANEL — hotkeys, guide & shortcut editor
+//  v5.4 R79 — tabs: Guide | Shortcuts
 // ============================================================
+
 function showHelp() {
-  const overlay = document.getElementById('help-overlay');
-  if (overlay) overlay.style.display = 'flex';
+  var overlay = document.getElementById('help-overlay');
+  if (!overlay) return;
+  // Build content on first show; reuse on subsequent shows.
+  if (!overlay._built) _buildHelpContent(overlay);
+  overlay.style.display = 'flex';
+  // Default to the Guide tab
+  _switchTab('guide');
 }
+
 function hideHelp() {
-  const overlay = document.getElementById('help-overlay');
+  var overlay = document.getElementById('help-overlay');
   if (overlay) overlay.style.display = 'none';
+}
+
+// ── Internal ─────────────────────────────────────────────────
+
+function _buildHelpContent(overlay) {
+  overlay._built = true;
+  // Clear existing inline content
+  overlay.innerHTML = '';
+
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#14142a;border:1px solid rgba(0,229,255,0.3);border-radius:16px;padding:24px 28px;max-width:720px;max-height:85vh;overflow-y:auto;color:#e0e0e0;font-family:Inter,sans-serif;box-shadow:0 24px 80px rgba(0,0,0,0.6);width:90vw;';
+
+  // Header
+  var header = document.createElement('div');
+  header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;';
+  var title = document.createElement('h2');
+  title.style.cssText = 'margin:0;font-size:22px;font-weight:700;color:#00e5ff;letter-spacing:0.5px;';
+  title.textContent = 'KRAFTED — Help';
+  var closeBtn = document.createElement('button');
+  closeBtn.innerHTML = '&times;';
+  closeBtn.style.cssText = 'background:none;border:none;color:#888;font-size:24px;cursor:pointer;padding:0 4px;';
+  closeBtn.onclick = hideHelp;
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+  box.appendChild(header);
+
+  // Tabs
+  var tabs = document.createElement('div');
+  tabs.style.cssText = 'display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);';
+  ['guide','shortcuts'].forEach(function(tabId){
+    var t = document.createElement('button');
+    t.className = 'help-tab';
+    t.setAttribute('data-tab', tabId);
+    t.textContent = tabId === 'guide' ? '📖 Guide' : '⌨️ Shortcuts';
+    t.style.cssText = 'background:none;border:none;color:#888;padding:8px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;';
+    t.onclick = function(){ _switchTab(tabId); };
+    tabs.appendChild(t);
+  });
+  box.appendChild(tabs);
+
+  // Tab panels container
+  var panels = document.createElement('div');
+  panels.id = 'help-panels';
+
+  // ── GUIDE TAB ──────────────────────────────────────────────
+  var guidePanel = document.createElement('div');
+  guidePanel.id = 'help-panel-guide';
+  guidePanel.className = 'help-panel';
+  guidePanel.innerHTML = _guideHTML();
+  panels.appendChild(guidePanel);
+
+  // ── SHORTCUTS TAB ──────────────────────────────────────────
+  var scPanel = document.createElement('div');
+  scPanel.id = 'help-panel-shortcuts';
+  scPanel.className = 'help-panel';
+  scPanel.style.display = 'none';
+  scPanel.innerHTML = '<div style="text-align:center;color:#888;padding:20px;">Loading shortcuts…</div>';
+  panels.appendChild(scPanel);
+
+  box.appendChild(panels);
+
+  // Footer
+  var footer = document.createElement('p');
+  footer.style.cssText = 'margin-top:20px;font-size:10px;color:#555;text-align:center;';
+  footer.textContent = 'Krafted v5.4 — by Joker Head Studios';
+  box.appendChild(footer);
+
+  overlay.appendChild(box);
+  overlay.onclick = function(ev){ if (ev.target === overlay) hideHelp(); };
+}
+
+function _guideHTML() {
+  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">' +
+    '<div>' +
+      '<h3 style="color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Tools</h3>' +
+      '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
+        '<tr><td style="padding:4px 0;color:#888;">V</td><td style="padding:4px 0;">Select & Move</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">T</td><td style="padding:4px 0;">Text Tool</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+D</td><td style="padding:4px 0;">Draw (pen/arrow/box)</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">E</td><td style="padding:4px 0;">Export Area</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">C</td><td style="padding:4px 0;">Capture Area</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Shift+C</td><td style="padding:4px 0;">Screen Capture</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">X</td><td style="padding:4px 0;">Free Shape Cut</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">L</td><td style="padding:4px 0;">Lasso Cut</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">M</td><td style="padding:4px 0;">Mind Map</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">R</td><td style="padding:4px 0;">Relation Line</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+L</td><td style="padding:4px 0;">Add Link</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">H</td><td style="padding:4px 0;">Help / Shortcuts</td></tr>' +
+      '</table>' +
+    '</div>' +
+    '<div>' +
+      '<h3 style="color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Actions</h3>' +
+      '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
+        '<tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Z</td><td style="padding:4px 0;">Undo</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Y</td><td style="padding:4px 0;">Redo</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+S</td><td style="padding:4px 0;">Save Board</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+O</td><td style="padding:4px 0;">Open Board</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+G</td><td style="padding:4px 0;">Group</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Shift+G</td><td style="padding:4px 0;">Ungroup</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Shift+D</td><td style="padding:4px 0;">Duplicate</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Shift+U</td><td style="padding:4px 0;">Tidy Selected</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Shift+T</td><td style="padding:4px 0;">Translate EN→中文</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">G</td><td style="padding:4px 0;">Toggle Grid</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Shift+F</td><td style="padding:4px 0;">Fullscreen</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">F</td><td style="padding:4px 0;">Frame Selection</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Del</td><td style="padding:4px 0;">Delete Selected</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Space (hold)</td><td style="padding:4px 0;">Pan Canvas</td></tr>' +
+      '</table>' +
+    '</div>' +
+  '</div>' +
+  '<div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">' +
+    '<h3 style="color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Mouse / Touch</h3>' +
+    '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
+      '<tr><td style="padding:4px 0;color:#888;">Scroll Wheel</td><td style="padding:4px 0;">Zoom in/out</td></tr>' +
+      '<tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Wheel</td><td style="padding:4px 0;">Zoom (modifier key)</td></tr>' +
+      '<tr><td style="padding:4px 0;color:#888;">Middle-drag</td><td style="padding:4px 0;">Pan canvas</td></tr>' +
+      '<tr><td style="padding:4px 0;color:#888;">Right-click item</td><td style="padding:4px 0;">Context menu</td></tr>' +
+      (Platform.trackpad ?
+        '<tr><td style="padding:4px 0;color:#888;">Pinch (trackpad)</td><td style="padding:4px 0;">Zoom (natural)</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Two-finger drag</td><td style="padding:4px 0;">Pan (trackpad)</td></tr>'
+      : '') +
+    '</table>' +
+  '</div>';
+}
+
+// ── Tab switching ────────────────────────────────────────────
+function _switchTab(tabId) {
+  var tabs = document.querySelectorAll('#help-overlay .help-tab');
+  tabs.forEach(function(t){
+    t.style.color = t.getAttribute('data-tab') === tabId ? '#00e5ff' : '#888';
+    t.style.borderBottomColor = t.getAttribute('data-tab') === tabId ? '#00e5ff' : 'transparent';
+  });
+  var panels = document.querySelectorAll('#help-panels .help-panel');
+  panels.forEach(function(p){ p.style.display = 'none'; });
+  var panel = document.getElementById('help-panel-' + tabId);
+  if (panel) panel.style.display = '';
+
+  // Build shortcut editor on first visit
+  if (tabId === 'shortcuts' && !panel._built) {
+    _buildShortcutEditor(panel);
+    panel._built = true;
+  }
+}
+
+// ── Shortcut Editor ──────────────────────────────────────────
+function _buildShortcutEditor(panel) {
+  var reg = (typeof window !== 'undefined' && window.ShortcutRegistry) ? window.ShortcutRegistry : {};
+  var defaults = (typeof window !== 'undefined' && window.DEFAULT_SHORTCUTS) ? window.DEFAULT_SHORTCUTS : [];
+
+  // Build a lookup for defaults
+  var defaultMap = {};
+  defaults.forEach(function(d){ defaultMap[d.id] = d; });
+
+  // Group by category
+  var cats = {};
+  var catOrder = ['Tools','Edit','File','Group','Arrange','Navigation','Translate','Media'];
+  catOrder.forEach(function(c){ cats[c] = []; });
+  Object.keys(reg).forEach(function(id){
+    var e = reg[id];
+    var cat = e.category || 'Other';
+    if (!cats[cat]) { cats[cat] = []; catOrder.push(cat); }
+    cats[cat].push(e);
+  });
+
+  var html = '';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+  html += '<span style="font-size:11px;color:#888;">Click a shortcut to rebind — press the new key combo, then Enter to save or Esc to cancel.</span>';
+  html += '<button onclick="if(window._kraftedResetAllShortcuts){window._kraftedResetAllShortcuts()}" style="background:rgba(255,80,80,0.15);border:1px solid rgba(255,80,80,0.3);color:#ff5050;font-size:11px;padding:4px 10px;border-radius:4px;cursor:pointer;">Reset All</button>';
+  html += '</div>';
+
+  catOrder.forEach(function(cat){
+    var entries = cats[cat];
+    if (!entries || !entries.length) return;
+    html += '<h4 style="color:#00e5ff;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 6px;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:4px;">' + cat + '</h4>';
+    html += '<table style="width:100%;font-size:12px;border-collapse:collapse;">';
+    entries.forEach(function(e){
+      var def = defaultMap[e.id];
+      var defaultKeys = null;
+      if (def) {
+        defaultKeys = (Platform.mac && def.macKeys) ? def.macKeys : def.keys;
+      }
+      var isCustom = !!e.userDefined;
+      var keyStr = _formatKeyCombo(e.keys);
+      var defStr = defaultKeys ? _formatKeyCombo(defaultKeys) : '';
+      html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.03);">';
+      html += '<td style="padding:6px 8px 6px 0;color:#e0e0e0;white-space:nowrap;">' + e.label + '</td>';
+      html += '<td style="padding:6px 4px;color:' + (isCustom ? '#7c8cf0' : '#888') + ';font-family:monospace;font-size:11px;white-space:nowrap;cursor:pointer;" class="sc-key" data-id="' + e.id + '" title="Click to rebind">' + keyStr + '</td>';
+      if (isCustom) {
+        html += '<td style="padding:6px 4px;"><button class="sc-reset" data-id="' + e.id + '" title="Reset to default (' + defStr + ')" style="background:none;border:none;color:#ff5050;font-size:14px;cursor:pointer;padding:0 4px;">↩</button></td>';
+      } else {
+        html += '<td style="padding:6px 4px;"></td>';
+      }
+      html += '</tr>';
+    });
+    html += '</table>';
+  });
+
+  panel.innerHTML = html;
+
+  // ── Wire up click handlers ──────────────────────────────────
+  panel.querySelectorAll('.sc-key').forEach(function(el){
+    el.addEventListener('click', function(){
+      var id = el.getAttribute('data-id');
+      _startKeyCapture(el, id);
+    });
+  });
+  panel.querySelectorAll('.sc-reset').forEach(function(el){
+    el.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      var id = el.getAttribute('data-id');
+      if (typeof window._kraftedResetShortcut === 'function') {
+        window._kraftedResetShortcut(id);
+        _rebuildShortcutPanel(panel);
+      }
+    });
+  });
+
+  // Global reset
+  window._kraftedResetAllShortcuts = function(){
+    if (typeof window._kraftedResetAllSC === 'function') {
+      window._kraftedResetAllSC();
+      _rebuildShortcutPanel(panel);
+    }
+  };
+  window._kraftedResetShortcut = function(id){
+    if (typeof window.resetShortcutSC === 'function') {
+      window.resetShortcutSC(id);
+    }
+  };
+}
+
+// ── Key capture mode ─────────────────────────────────────────
+var _captureState = null;
+
+function _startKeyCapture(el, id) {
+  if (_captureState) {
+    _captureState.el.style.outline = '';
+    _captureState.el.style.background = '';
+  }
+  _captureState = { el: el, id: id };
+  el.style.outline = '2px solid #7c8cf0';
+  el.style.background = 'rgba(124,140,240,0.15)';
+  el.textContent = 'Press keys…';
+
+  // Capture next keydown
+  function _onCapture(e) {
+    if (e.key === 'Escape') {
+      _cancelCapture();
+      return;
+    }
+    if (e.key === 'Enter') {
+      _commitCapture();
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    // Build key object
+    var k = {
+      key: e.key,
+      ctrl: e.ctrlKey,
+      shift: e.shiftKey,
+      alt: e.altKey,
+      meta: e.metaKey,
+    };
+    _captureState.keys = [k];
+    el.textContent = _formatKeyCombo([k]);
+  }
+
+  function _commitCapture() {
+    document.removeEventListener('keydown', _onCapture, true);
+    if (_captureState && _captureState.keys && _captureState.keys.length > 0) {
+      var id = _captureState.id;
+      var keys = _captureState.keys;
+      // Persist
+      try {
+        var overrides = {};
+        try { var raw = localStorage.getItem('krafted_shortcuts'); if (raw) overrides = JSON.parse(raw); } catch(e){}
+        overrides[id] = keys;
+        localStorage.setItem('krafted_shortcuts', JSON.stringify(overrides));
+      } catch(e){}
+      // Rebuild registry
+      if (typeof window._kraftedRebuildShortcuts === 'function') {
+        window._kraftedRebuildShortcuts();
+      }
+    }
+    _clearCapture();
+  }
+
+  function _cancelCapture() {
+    document.removeEventListener('keydown', _onCapture, true);
+    _clearCapture();
+  }
+
+  document.addEventListener('keydown', _onCapture, true);
+  window._captureCommit = _commitCapture;
+  window._captureCancel = _cancelCapture;
+}
+
+function _clearCapture() {
+  if (_captureState) {
+    _captureState.el.style.outline = '';
+    _captureState.el.style.background = '';
+    _captureState = null;
+    // Rebuild the panel to show updated keys
+    var panel = document.getElementById('help-panel-shortcuts');
+    if (panel) _rebuildShortcutPanel(panel);
+  }
+}
+
+function _rebuildShortcutPanel(panel) {
+  panel._built = false;
+  _buildShortcutEditor(panel);
+  panel._built = true;
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+function _formatKeyCombo(keys) {
+  if (!keys || !keys.length) return '—';
+  return keys.map(function(k){
+    var parts = [];
+    if (k.ctrl) parts.push(Platform.mac ? '⌃' : 'Ctrl');
+    if (k.meta) parts.push(Platform.mac ? '⌘' : 'Win');
+    if (k.alt) parts.push(Platform.mac ? '⌥' : 'Alt');
+    if (k.shift) parts.push(Platform.mac ? '⇧' : 'Shift');
+    var kn = k.key;
+    if (kn === ' ') kn = 'Space';
+    if (kn === 'ArrowUp') kn = '↑';
+    if (kn === 'ArrowDown') kn = '↓';
+    if (kn === 'ArrowLeft') kn = '←';
+    if (kn === 'ArrowRight') kn = '→';
+    if (kn === 'Escape') kn = 'Esc';
+    if (kn === 'Delete') kn = 'Del';
+    if (kn === 'Backspace') kn = '⌫';
+    parts.push(kn);
+    return parts.join(Platform.mac ? '' : '+');
+  }).join('  ');
 }
 
 
@@ -17210,6 +17736,122 @@ document.addEventListener('paste', e => {
 
 // ==== keyboard.js ====
 
+// ── Shortcut Registry dispatcher ─────────────────────────────
+// R79: lookup the active shortcut registry and dispatch the
+// matching action. Returns true if a shortcut was handled.
+// Called at the top of the keydown handler so user-customised
+// shortcuts always take priority over the legacy hardcoded
+// logic below.
+function _dispatchShortcut(e) {
+  var reg = (typeof window !== 'undefined' && window.ShortcutRegistry) ? window.ShortcutRegistry : {};
+  var matchedId = null;
+  var matchedKeys = null;
+  // Walk every shortcut; find the first one whose key combo matches.
+  var ids = Object.keys(reg);
+  for (var i = 0; i < ids.length; i++) {
+    var entry = reg[ids[i]];
+    if (!entry || !entry.keys) continue;
+    for (var j = 0; j < entry.keys.length; j++) {
+      var k = entry.keys[j];
+      // Match modifiers: ctrl OR meta is treated as "modifier key"
+      // (Cmd on Mac, Ctrl on Win). If the shortcut expects ctrl and
+      // the user pressed meta (or vice versa), we match — because
+      // Platform.zoomKey already maps Cmd→metaKey, Ctrl→ctrlKey.
+      var wantCtrl = !!k.ctrl;
+      var wantMeta = !!k.meta;
+      var wantShift = !!k.shift;
+      var wantAlt = !!k.alt;
+      var gotCtrl = !!e.ctrlKey;
+      var gotMeta = !!e.metaKey;
+      var gotShift = !!e.shiftKey;
+      var gotAlt = !!e.altKey;
+      // If the shortcut wants ctrl OR meta, accept either.
+      // If it wants BOTH, require both.
+      var modOk = true;
+      if (wantCtrl && wantMeta) {
+        modOk = gotCtrl && gotMeta;
+      } else if (wantCtrl || wantMeta) {
+        modOk = gotCtrl || gotMeta;
+      } else {
+        modOk = !gotCtrl && !gotMeta;
+      }
+      modOk = modOk && (wantShift === gotShift) && (wantAlt === gotAlt);
+      // Key match (case-insensitive for letters)
+      var keyOk = (k.key === e.key) || (k.key.toUpperCase && k.key.toLowerCase() === e.key.toLowerCase());
+      if (modOk && keyOk) {
+        matchedId = entry.id;
+        matchedKeys = entry.keys;
+        break;
+      }
+    }
+    if (matchedId) break;
+  }
+  if (!matchedId) return false;
+
+  // ── Dispatch action ────────────────────────────────────────
+  e.preventDefault();
+  switch (matchedId) {
+    // Tools
+    case 'tool-select':      setTool('select'); return true;
+    case 'tool-text':        setTool('text'); return true;
+    case 'tool-draw':        setTool('draw'); return true;
+    case 'tool-export':      setTool('export'); return true;
+    case 'tool-capture':     setTool('capture'); return true;
+    case 'tool-screen-cap':  captureScreen(); return true;
+    case 'tool-cut':         setTool('cut'); return true;
+    case 'tool-lasso':       setTool('lasso'); return true;
+    case 'tool-mindmap':     addMindMap(); return true;
+    case 'tool-relation':    setTool('relation'); return true;
+    case 'tool-link':        openLinkModal(); return true;
+    case 'tool-grid':        toggleGrid(); return true;
+    case 'tool-fullscreen':  toggleAppFullscreen(); return true;
+    case 'tool-frame-sel':   frameSelection(); return true;
+    // Edit
+    case 'edit-undo':        undo(); return true;
+    case 'edit-redo':        redo(); return true;
+    case 'edit-redo-alt':    redo(); return true;
+    case 'edit-copy':        copySelected(); return true;
+    case 'edit-paste':       return true; // handled by native paste event
+    case 'edit-duplicate':   duplicateSelected(); return true;
+    case 'edit-delete':      deleteSelected(); return true;
+    case 'edit-select-all':  state.selected.clear(); var all = []; [].push.apply(all, state.items); [].push.apply(all, state.texts); [].push.apply(all, state.todos||[]); [].push.apply(all, state.mindmaps||[]); all.forEach(function(i){ state.selected.add(i.id); }); refreshSelection(); return true;
+    // File
+    case 'file-save':        if (typeof saveBoard === 'function') saveBoard(); return true;
+    case 'file-save-as':     if (typeof setTool === 'function') setTool('capture'); return true; // Shift+Ctrl+S = screen cap
+    case 'file-open':        if (typeof loadBoard === 'function') loadBoard(); return true;
+    // Group
+    case 'group-group':      groupSelected(); return true;
+    case 'group-ungroup':    ungroupSelected(); return true;
+    // Arrange
+    case 'arrange-tidy':     tidySelection(); return true;
+    case 'arrange-tetris-up':    tetrisAlign('up'); return true;
+    case 'arrange-tetris-down':  tetrisAlign('down'); return true;
+    case 'arrange-tetris-left':  tetrisAlign('left'); return true;
+    case 'arrange-tetris-right': tetrisAlign('right'); return true;
+    case 'arrange-dist-h':   distributeItems('h'); return true;
+    case 'arrange-dist-v':   distributeItems('v'); return true;
+    case 'arrange-norm-size':  normalizeSize('size'); return true;
+    case 'arrange-norm-scale': normalizeSize('scale'); return true;
+    case 'arrange-norm-h':   normalizeSize('height'); return true;
+    case 'arrange-norm-w':   normalizeSize('width'); return true;
+    case 'arrange-stack':    stackItems(); return true;
+    // Navigation
+    case 'nav-pan-space':    state.spaceDown = true; viewport.style.cursor = 'grab'; return true;
+    case 'nav-help':         if (typeof showHelp === 'function') showHelp(); return true;
+    case 'nav-esc':          clearSelection(); hideCtx(); if (typeof hideHelp === 'function') hideHelp(); captureResultPanel.classList.remove('show'); _exitRelationTool(); if (state.tool !== 'select') setTool('select'); return true;
+    // Translate
+    case 'translate-en-zh':  translateSelectedText('en', 'zh'); return true;
+    // Media
+    case 'media-frame-left':       /* handled by existing logic */ return false;
+    case 'media-frame-right':      /* handled by existing logic */ return false;
+    case 'media-frame-10-left':    /* handled by existing logic */ return false;
+    case 'media-frame-10-right':   /* handled by existing logic */ return false;
+    case 'media-trim-i':           /* handled by existing logic */ return false;
+    case 'media-trim-o':           /* handled by existing logic */ return false;
+    default: return false;
+  }
+}
+
 // ============================================================
 //  KEYBOARD
 // ============================================================
@@ -17229,6 +17871,11 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') e.target.blur();
     return;
   }
+
+  // R79: try the shortcut registry first. If the user has remapped
+  // a shortcut, the registry dispatches it and the legacy hardcoded
+  // logic below is skipped for that key combo.
+  if (_dispatchShortcut(e)) return;
 
   if (e.key === ' ' && !state.spaceDown) {
     state.spaceDown = true;
