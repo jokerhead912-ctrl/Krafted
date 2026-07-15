@@ -250,7 +250,10 @@ export function buildManifest() {
     return d;
   });
   return {
-    _kraftedVersion: 4,
+    _kraftedVersion: 5,
+    schemaVersion: 5,
+    appVersion: '5.5.1',
+    _schemaNote: 'Krafted v5.5.1 format — backward compatible with v4+',
     _savedAt: new Date().toISOString(),
     items,
     texts: state.texts.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, highlightColor: t.highlightColor, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false, _textZoom: state.zoom })),
@@ -831,7 +834,116 @@ export function _dataUrlToBlobUrl(dataUrl) {
     return URL.createObjectURL(blob);
   } catch (e) { return ''; }
 }
+
+// ============================================================
+//  SCHEMA VERSIONING & MIGRATION
+// ============================================================
+//  Krafted 文件格式向後兼容系統。
+//
+//  每次改 manifest structure 時：
+//    1. bump CURRENT_SCHEMA_VERSION
+//    2. 加一個 migration function (e.g. migrateV4toV5)
+//    3. 將新 migration 加入 MIGRATIONS array
+//
+//  載入時自動行 migration chain，將舊版 data 升到最新版。
+//  如果載入到未來版本（比 CURRENT_SCHEMA_VERSION 更高），
+//  會彈 warning 但照 load（best-effort forward compatibility）。
+// ============================================================
+
+var CURRENT_SCHEMA_VERSION = 5;
+
+// Migration chain: each function transforms data from vN to vN+1
+// Order matters — they run sequentially from oldest to newest.
+var MIGRATIONS = [
+  // v4 → v5: add schemaVersion field, ensure all items have flipH/flipV
+  function migrateV4toV5(data) {
+    data.schemaVersion = 5;
+    data._kraftedVersion = 5;
+    // Ensure all items have flipH/flipV (added in v5)
+    (data.items || []).forEach(function(item) {
+      if (item.flipH === undefined) item.flipH = false;
+      if (item.flipV === undefined) item.flipV = false;
+    });
+    return data;
+  },
+  // v5 → v6 (future template):
+  // function migrateV5toV6(data) {
+  //   data.schemaVersion = 6;
+  //   data._kraftedVersion = 6;
+  //   // ... transform data ...
+  //   return data;
+  // },
+];
+
+// Detect the schema version from data.
+// Priority: schemaVersion > _kraftedVersion > assume v1
+function detectVersion(data) {
+  if (data.schemaVersion !== undefined && typeof data.schemaVersion === 'number') {
+    return data.schemaVersion;
+  }
+  if (data._kraftedVersion !== undefined && typeof data._kraftedVersion === 'number') {
+    return data._kraftedVersion;
+  }
+  // Legacy files without any version marker — treat as v1
+  return 1;
+}
+
+// Run the migration chain to bring data up to CURRENT_SCHEMA_VERSION.
+// Returns { data, migrated, warnings[] }
+function migrateData(data) {
+  var ver = detectVersion(data);
+  var warnings = [];
+  var migrated = false;
+
+  // Future version detection
+  if (ver > CURRENT_SCHEMA_VERSION) {
+    warnings.push(
+      '⚠️ 此檔案由較新版本 Krafted (v' + ver + ') 建立。' +
+      '當前版本為 v' + CURRENT_SCHEMA_VERSION + '。' +
+      '部分功能可能無法正確載入，建議更新 Krafted。'
+    );
+    // Still try to load — best-effort forward compatibility
+    console.warn('[Migration] Future version detected: v' + ver + ' > current v' + CURRENT_SCHEMA_VERSION);
+  }
+
+  // Run migrations sequentially from detected version to current
+  var startIdx = Math.max(0, ver - 1); // v1 → MIGRATIONS[0], v4 → MIGRATIONS[3]
+  for (var i = startIdx; i < MIGRATIONS.length && i < CURRENT_SCHEMA_VERSION - 1; i++) {
+    try {
+      data = MIGRATIONS[i](data);
+      migrated = true;
+      console.log('[Migration] v' + (i + 1) + ' → v' + (i + 2) + ' OK');
+    } catch (e) {
+      console.error('[Migration] v' + (i + 1) + ' → v' + (i + 2) + ' FAILED:', e);
+      warnings.push('⚠️ 資料遷移 v' + (i + 1) + '→v' + (i + 2) + ' 失敗：' + e.message);
+    }
+  }
+
+  return { data: data, migrated: migrated, warnings: warnings };
+}
+
+// ============================================================
+
 export function restoreBoard(data) {
+  // ── v5.5.1: schema migration ──
+  // Automatically upgrade old save files to the current schema version.
+  // This runs BEFORE any data processing, so all downstream code only
+  // ever sees the latest format. Warnings are shown as toasts.
+  var migration = migrateData(data);
+  if (migration.warnings.length > 0) {
+    migration.warnings.forEach(function(w) {
+      console.warn('[Load]', w);
+      if (typeof window.toast === 'function') window.toast(w);
+    });
+  }
+  if (migration.migrated) {
+    console.log('[Load] Data migrated from v' + detectVersion(data) + ' to v' + CURRENT_SCHEMA_VERSION);
+    if (typeof window.toast === 'function') {
+      window.toast('✅ 舊版檔案已自動升級至 v' + CURRENT_SCHEMA_VERSION);
+    }
+  }
+  data = migration.data;
+
   pushUndo();
   cleanupAllItems();
   state.items = []; state.texts = []; state.todos = []; state.mindmaps = []; state.selected.clear();
