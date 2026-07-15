@@ -17714,6 +17714,27 @@ document.addEventListener('paste', e => {
 // ==== keyboard.js ====
 
 // ── Shortcut Registry dispatcher ─────────────────────────────
+
+// v5.5.1: check whether the cursor is currently over a video frame
+// (.media-wrap) of any video item. Uses bounding-rect hit-test
+// because the video has pointer-events:none and .media-wrap is
+// transparent, so elementFromPoint penetrates straight through.
+function _videoUnderCursor() {
+  if (!state || !state.mouse || !state.items) return false;
+  var mx = state.mouse.x, my = state.mouse.y;
+  for (var i = 0; i < state.items.length; i++) {
+    var it = state.items[i];
+    if (!it || !it.video || !it.el || !it.el._annoDrawState) continue;
+    var mw = it.el.querySelector('.media-wrap');
+    if (!mw) continue;
+    var r = mw.getBoundingClientRect();
+    if (mx >= r.left && mx <= r.right && my >= r.top && my <= r.bottom) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // R79: lookup the active shortcut registry and dispatch the
 // matching action. Returns true if a shortcut was handled.
 // Called at the top of the keydown handler so user-customised
@@ -17767,8 +17788,14 @@ function _dispatchShortcut(e) {
 
   // ── Dispatch action ────────────────────────────────────────
   // edit-paste MUST NOT preventDefault — the native paste event needs
-  // to fire so paste-handler.js can read clipboardData. All other
-  // shortcuts prevent the default browser behavior.
+  // to fire so paste-handler.js can read clipboardData.
+  // tool-text / tool-draw: if cursor is over a video frame, bail out
+  // so the plain D/T handler can enter video annotation mode instead
+  // of switching the global canvas tool.
+  if (matchedId === 'tool-text' || matchedId === 'tool-draw') {
+    if (_videoUnderCursor()) return false; // let plain D/T handler take over
+  }
+  // All other shortcuts prevent the default browser behavior.
   if (matchedId !== 'edit-paste') e.preventDefault();
   switch (matchedId) {
     // Tools
@@ -18241,18 +18268,21 @@ document.addEventListener('keydown', e => {
         // need to click-select the video first. Just hover + press T/D.
         // Only consider the mouse on the VIDEO FRAME (.media-wrap), not
         // over the toolbar UI inside the video player.
-        if (!_selVidDT && state && state.mouse) {
-          var hoverEl = document.elementFromPoint(state.mouse.x, state.mouse.y);
-          if (hoverEl) {
-            var hoverMediaWrap = hoverEl.closest('.media-wrap');
-            if (hoverMediaWrap && state.items) {
-              for (var hi = 0; hi < state.items.length; hi++) {
-                var hit = state.items[hi];
-                if (hit && hit.video && hit.el && hit.el.contains(hoverMediaWrap) && hit.el._annoDrawState) {
-                  _selVidDT = hit;
-                  break;
-                }
-              }
+        // v5.5.1: Use bounding-rect hit-test instead of elementFromPoint
+        // because .media-wrap is transparent (no background) and the <video>
+        // has pointer-events:none, so elementFromPoint penetrates straight
+        // through to whatever is behind the video frame.
+        if (!_selVidDT && state && state.mouse && state.items) {
+          var mx = state.mouse.x, my = state.mouse.y;
+          for (var hi = 0; hi < state.items.length; hi++) {
+            var hit = state.items[hi];
+            if (!hit || !hit.video || !hit.el || !hit.el._annoDrawState) continue;
+            var mw = hit.el.querySelector('.media-wrap');
+            if (!mw) continue;
+            var r = mw.getBoundingClientRect();
+            if (mx >= r.left && mx <= r.right && my >= r.top && my <= r.bottom) {
+              _selVidDT = hit;
+              break;
             }
           }
         }
