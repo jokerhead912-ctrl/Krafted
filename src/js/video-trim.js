@@ -50,14 +50,17 @@ export function setupVideoTrim(item) {
 // or the in-player .media-time label. Persists across selections.
 export var videoTimeMode = (function() {
   try {
-    var saved = localStorage.getItem('krafted.videoTimeMode');
+    var saved = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted.videoTimeMode')) || localStorage.getItem('krafted.videoTimeMode');
     return (saved === 'time' || saved === 'frame') ? saved : 'time';
   } catch (e) { return 'time'; }
 })();
 export function setVideoTimeMode(mode) {
   if (mode !== 'time' && mode !== 'frame') return;
   videoTimeMode = mode;
-  try { localStorage.setItem('krafted.videoTimeMode', mode); } catch (e) {}
+  try {
+    localStorage.setItem('krafted.videoTimeMode', mode);
+    if (window.KraftedStorage) window.KraftedStorage.setItem('krafted.videoTimeMode', mode).catch(function(){});
+  } catch (e) {}
   refreshVideoPanelTimes();
 }
 export function getSelectedVideoItem() {

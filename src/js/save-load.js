@@ -506,6 +506,10 @@ export async function saveBoard() {
       console.log('[SAVE] Download fallback triggered');
       toast('Downloaded ' + fname + ' \u2192 Downloads folder (' + formatBytes(zipBlob.size) + ', ' + result.packed + ' media' + (result.skipped > 0 ? ', ' + result.skipped + ' skipped' : '') + ')');
     }
+    // Trigger auto-backup after successful save
+    if (window.KraftedStorage && window.KraftedStorage.onSaveComplete) {
+      window.KraftedStorage.onSaveComplete();
+    }
     console.log('[SAVE] done!');
   } catch (err) {
     console.error('[SAVE] FAILED:', err.name, err.message, err.stack);
@@ -1313,12 +1317,16 @@ export function restoreBoard(data) {
 export function scheduleAutoSave() {
   clearTimeout(state.autoSaveTimer);
   state.autoSaveTimer = setTimeout(() => {
-    try { localStorage.setItem('krafted_autosave', serializeBoard()); } catch(e) {}
+    try {
+      var val = serializeBoard();
+      localStorage.setItem('krafted_autosave', val);
+      if (window.KraftedStorage) window.KraftedStorage.setItem('krafted_autosave', val).catch(function(){});
+    } catch(e) {}
   }, 2000);
 }
 export function loadAutoSave() {
   try {
-    const data = localStorage.getItem('krafted_autosave');
+    const data = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_autosave')) || localStorage.getItem('krafted_autosave');
     if (data) { restoreBoard(JSON.parse(data)); toast('Auto-saved board restored'); }
   } catch(e) {}
 }

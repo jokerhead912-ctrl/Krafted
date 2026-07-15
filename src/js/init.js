@@ -30,7 +30,7 @@ showWelcome();
 window.addEventListener('load', async () => {
   // Restore autosave in background
   setTimeout(() => {
-    const saved = localStorage.getItem('krafted_autosave');
+    const saved = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_autosave')) || localStorage.getItem('krafted_autosave');
     if (saved) { try { restoreBoard(JSON.parse(saved)); } catch(e) {} }
   }, 100);
   // Show alt-pan status badge if enabled (MacBook trackpad mode)
@@ -55,7 +55,7 @@ export function newBoard() {
   G.drawStrokes.length = 0;
   state.pan = { x: 0, y: 0 };
   state.zoom = 1;
-  try { localStorage.removeItem('krafted_autosave'); } catch(e) {}
+  try { localStorage.removeItem('krafted_autosave'); if (window.KraftedStorage) window.KraftedStorage.removeItem('krafted_autosave').catch(function(){}); } catch(e) {}
   updateCanvas();
   redrawDrawLayer();
   refreshSelection();

@@ -208,14 +208,18 @@ export const DEFAULT_COLLAPSED_PROP_SECTIONS = new Set([
 ]);
 export function _loadPropSectionState() {
   try {
-    const raw = localStorage.getItem(PROP_SECTIONS_KEY);
+    const raw = (window.KraftedStorage && window.KraftedStorage.getItemSync(PROP_SECTIONS_KEY)) || localStorage.getItem(PROP_SECTIONS_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     return (parsed && typeof parsed === 'object') ? parsed : {};
   } catch (e) { return {}; }
 }
-export function _savePropSectionState(state) {
-  try { localStorage.setItem(PROP_SECTIONS_KEY, JSON.stringify(state || {})); } catch (e) {}
+export function _savePropSectionState(st) {
+  try {
+    var val = JSON.stringify(st || {});
+    localStorage.setItem(PROP_SECTIONS_KEY, val);
+    if (window.KraftedStorage) window.KraftedStorage.setItem(PROP_SECTIONS_KEY, val).catch(function(){});
+  } catch (e) {}
 }
 export function _applyPropSectionState() {
   // Resolution order for each section:

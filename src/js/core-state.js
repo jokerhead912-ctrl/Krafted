@@ -155,7 +155,7 @@ export const state = {
   // Auto-enabled on Mac; off by default on Windows/Linux to avoid clashing with system Alt+Click.
   altPanEnabled: (function() {
     try {
-      const saved = localStorage.getItem('krafted_alt_pan');
+      const saved = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_alt_pan')) || localStorage.getItem('krafted_alt_pan');
       if (saved !== null) return saved === '1';
     } catch (e) {}
     const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform) ||
@@ -169,7 +169,7 @@ export const state = {
   // Does NOT affect pinch-zoom (spread=in / pinch=out is universal).
   naturalScroll: (function() {
     try {
-      const saved = localStorage.getItem('krafted_natural_scroll');
+      const saved = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_natural_scroll')) || localStorage.getItem('krafted_natural_scroll');
       if (saved !== null) return saved === '1';
     } catch (e) {}
     // Auto-detect: Mac defaults to natural, Windows/Linux to traditional.
@@ -187,7 +187,7 @@ export const state = {
   // punchy). Default 1.10 — same magnitude as the old ±10% step.
   zoomStep: (function() {
     try {
-      const saved = parseFloat(localStorage.getItem('krafted_zoom_step'));
+      const saved = parseFloat((window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_zoom_step')) || localStorage.getItem('krafted_zoom_step'));
       if (isFinite(saved) && saved >= 1.01 && saved <= 1.50) return saved;
     } catch (e) {}
     return 1.10;
@@ -198,7 +198,7 @@ export const state = {
   // two gestures stay in proportion). Range: 0.0010 to 0.0120.
   pinchStep: (function() {
     try {
-      const saved = parseFloat(localStorage.getItem('krafted_pinch_step'));
+      const saved = parseFloat((window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_pinch_step')) || localStorage.getItem('krafted_pinch_step'));
       if (isFinite(saved) && saved >= 0.0010 && saved <= 0.0120) return saved;
     } catch (e) {}
     return 0.0028;

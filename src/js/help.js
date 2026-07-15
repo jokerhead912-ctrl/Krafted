@@ -296,9 +296,11 @@ function _startKeyCapture(el, id) {
       // Persist
       try {
         var overrides = {};
-        try { var raw = localStorage.getItem('krafted_shortcuts'); if (raw) overrides = JSON.parse(raw); } catch(e){}
+        try { var raw = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_shortcuts')) || localStorage.getItem('krafted_shortcuts'); if (raw) overrides = JSON.parse(raw); } catch(e){}
         overrides[id] = keys;
-        localStorage.setItem('krafted_shortcuts', JSON.stringify(overrides));
+        var val = JSON.stringify(overrides);
+        localStorage.setItem('krafted_shortcuts', val);
+        if (window.KraftedStorage) window.KraftedStorage.setItem('krafted_shortcuts', val).catch(function(){});
       } catch(e){}
       // Rebuild registry
       if (typeof window._kraftedRebuildShortcuts === 'function') {

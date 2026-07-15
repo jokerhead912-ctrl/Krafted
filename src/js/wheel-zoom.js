@@ -157,8 +157,14 @@ viewport.addEventListener('wheel', e => {
       // matches the previous default).
       state.pinchStep = (s - 1) * 0.026;
       valEl.textContent = pct + '%';
-      try { localStorage.setItem('krafted_zoom_step', String(s)); } catch (e) {}
-      try { localStorage.setItem('krafted_pinch_step', String(state.pinchStep)); } catch (e) {}
+      try {
+        localStorage.setItem('krafted_zoom_step', String(s));
+        localStorage.setItem('krafted_pinch_step', String(state.pinchStep));
+        if (window.KraftedStorage) {
+          window.KraftedStorage.setItem('krafted_zoom_step', String(s)).catch(function(){});
+          window.KraftedStorage.setItem('krafted_pinch_step', String(state.pinchStep)).catch(function(){});
+        }
+      } catch (e) {}
     });
     // Wire the 🎯 Frame button. Mirrors the F key shortcut so
     // users who never read the help modal still have a click target.
@@ -179,7 +185,11 @@ viewport.addEventListener('wheel', e => {
         cb.checked = state.naturalScroll;
         cb.addEventListener('change', function() {
           state.naturalScroll = cb.checked;
-          try { localStorage.setItem('krafted_natural_scroll', cb.checked ? '1' : '0'); } catch (e) {}
+          try {
+            var v = cb.checked ? '1' : '0';
+            localStorage.setItem('krafted_natural_scroll', v);
+            if (window.KraftedStorage) window.KraftedStorage.setItem('krafted_natural_scroll', v).catch(function(){});
+          } catch (e) {}
         });
       }
     } catch (e) {}

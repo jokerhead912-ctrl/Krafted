@@ -43,22 +43,29 @@ let lastExportArea = null;
 let exportBgColor = '#2a2a3e';
 let exportBgTransparent = false;
 try {
-  const saved = localStorage.getItem(EXPORT_BG_KEY);
+  const saved = (window.KraftedStorage && window.KraftedStorage.getItemSync(EXPORT_BG_KEY)) || localStorage.getItem(EXPORT_BG_KEY);
   if (saved && /^#[0-9a-fA-F]{6}$/.test(saved)) exportBgColor = saved;
-  const savedT = localStorage.getItem(EXPORT_BG_TRANS_KEY);
+  const savedT = (window.KraftedStorage && window.KraftedStorage.getItemSync(EXPORT_BG_TRANS_KEY)) || localStorage.getItem(EXPORT_BG_TRANS_KEY);
   if (savedT === '1') exportBgTransparent = true;
 } catch(e) {}
 export function setExportBg(color) {
   if (!/^#[0-9a-fA-F]{6}$/.test(color || '')) return;
   exportBgColor = color;
   exportBgTransparent = false;
-  try { localStorage.setItem(EXPORT_BG_KEY, color); localStorage.setItem(EXPORT_BG_TRANS_KEY, '0'); } catch(e) {}
+  try {
+    localStorage.setItem(EXPORT_BG_KEY, color); localStorage.setItem(EXPORT_BG_TRANS_KEY, '0');
+    if (window.KraftedStorage) { window.KraftedStorage.setItem(EXPORT_BG_KEY, color).catch(function(){}); window.KraftedStorage.setItem(EXPORT_BG_TRANS_KEY, '0').catch(function(){}); }
+  } catch(e) {}
   syncExportBgUI();
   rerenderExport();
 }
 export function setExportBgTransparent(on) {
   exportBgTransparent = !!on;
-  try { localStorage.setItem(EXPORT_BG_TRANS_KEY, on ? '1' : '0'); } catch(e) {}
+  try {
+    var v = on ? '1' : '0';
+    localStorage.setItem(EXPORT_BG_TRANS_KEY, v);
+    if (window.KraftedStorage) window.KraftedStorage.setItem(EXPORT_BG_TRANS_KEY, v).catch(function(){});
+  } catch(e) {}
   syncExportBgUI();
   rerenderExport();
 }

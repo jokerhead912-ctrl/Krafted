@@ -125,7 +125,11 @@ export function sanitizeTextHtml(html) {
 // Persists the choice in localStorage so the user's preference survives reloads.
 export function toggleAltPan() {
   state.altPanEnabled = !state.altPanEnabled;
-  try { localStorage.setItem('krafted_alt_pan', state.altPanEnabled ? '1' : '0'); } catch (e) {}
+  try {
+    var v = state.altPanEnabled ? '1' : '0';
+    localStorage.setItem('krafted_alt_pan', v);
+    if (window.KraftedStorage) window.KraftedStorage.setItem('krafted_alt_pan', v).catch(function(){});
+  } catch (e) {}
   toast('Alt+Left pan: ' + (state.altPanEnabled ? 'ON — hold Option and drag to pan' : 'OFF'));
   updateAltPanBadge();
 }

@@ -857,7 +857,10 @@ var I18N = (function() {
     updateLangButton();
 
     // Persist preference
-    try { localStorage.setItem('krafted_lang', currentLang); } catch(e) {}
+    try {
+      localStorage.setItem('krafted_lang', currentLang);
+      if (window.KraftedStorage) window.KraftedStorage.setItem('krafted_lang', currentLang).catch(function(){});
+    } catch(e) {}
 
     // Show toast
     if (typeof window.toast === 'function') {
@@ -912,7 +915,7 @@ var I18N = (function() {
   function init() {
     // Restore saved preference
     try {
-      var saved = localStorage.getItem('krafted_lang');
+      var saved = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_lang')) || localStorage.getItem('krafted_lang');
       if (saved === 'zh') {
         currentLang = 'en'; // toggleLang expects currentLang to be opposite
         // Delay to let DOM render first

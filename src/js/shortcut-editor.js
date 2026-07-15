@@ -89,14 +89,18 @@ export let ShortcutRegistry = {};
 
 function _loadOverrides() {
   try {
-    const raw = localStorage.getItem('krafted_shortcuts');
+    const raw = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_shortcuts')) || localStorage.getItem('krafted_shortcuts');
     if (raw) return JSON.parse(raw);
   } catch (e) {}
   return {};
 }
 
 function _saveOverrides(overrides) {
-  try { localStorage.setItem('krafted_shortcuts', JSON.stringify(overrides)); } catch (e) {}
+  try {
+    var val = JSON.stringify(overrides);
+    localStorage.setItem('krafted_shortcuts', val);
+    if (window.KraftedStorage) window.KraftedStorage.setItem('krafted_shortcuts', val).catch(function(){});
+  } catch (e) {}
 }
 
 // Build the active shortcut map from defaults + overrides.
@@ -143,6 +147,7 @@ export function setShortcut(id, keysArr) {
 // Reset ALL shortcuts to default
 export function resetAllShortcuts() {
   try { localStorage.removeItem('krafted_shortcuts'); } catch (e) {}
+  try { if (window.KraftedStorage) window.KraftedStorage.removeItem('krafted_shortcuts').catch(function(){}); } catch (e) {}
   _rebuildRegistry();
 }
 
