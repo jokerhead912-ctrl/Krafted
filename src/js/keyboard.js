@@ -530,7 +530,8 @@ document.addEventListener('keydown', e => {
   // T → toggle text mode (type text on video frame)
   // These are handled HERE (global handler) instead of the per-video
   // keydown listener (which had cross-platform issues on Windows).
-  // Skips when typing in an input. Works on the currently selected video.
+  // Skips when typing in an input.
+  // Priority: selected video > hovered video (no pre-select needed).
   if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
     if (e.key === 'd' || e.key === 'D' || e.key === 't' || e.key === 'T') {
       var aeDT = document.activeElement;
@@ -538,20 +539,36 @@ document.addEventListener('keydown', e => {
                    (aeDT.getAttribute && aeDT.getAttribute('contenteditable') === 'true'))) {
         // typing — let the character through
       } else {
-        // Find the selected video item
+        // Find video: selected first, then hovered
         var _selVidDT = null;
         if (state && state.selected && state.items) {
           state.selected.forEach(function(sid) {
+            if (_selVidDT) return;
             var it = state.items.find(function(i) { return i.id === sid; });
             if (it && it.video && it.el && it.el._annoDrawState) { _selVidDT = it; }
           });
         }
+        // v5.5: if no selected video, try hover detection — user shouldn't
+        // need to click-select the video first. Just hover + press T/D.
+        if (!_selVidDT && state && state.mouse) {
+          var hoverEl = document.elementFromPoint(state.mouse.x, state.mouse.y);
+          if (hoverEl) {
+            var hoverVideoWrap = hoverEl.closest('.item.has-media');
+            if (hoverVideoWrap && state.items) {
+              for (var hi = 0; hi < state.items.length; hi++) {
+                var hit = state.items[hi];
+                if (hit && hit.video && hit.el === hoverVideoWrap && hit.el._annoDrawState) {
+                  _selVidDT = hit;
+                  break;
+                }
+              }
+            }
+          }
+        }
         if (_selVidDT) {
           e.preventDefault();
           // Mark this T/D press as handled so the downstream canvas
-          // selection-aware handler (line 25069) doesn't double-toggle
-          // by running the same logic a second time when the mouse is
-          // hovering over the same selected video.
+          // selection-aware handler doesn't double-toggle.
           window.__kraftedTDKeyHandled = true;
           setTimeout(function(){ window.__kraftedTDKeyHandled = false; }, 0);
           var sDT = _selVidDT.el._annoDrawState;
@@ -762,23 +779,22 @@ document.addEventListener('keydown', e => {
     // Round 34: T is DOUBLE-MAPPED.
     //   • Main handler:  T → setTool('text') (canvas text mode)
     //   • Video handler:  T → enter video annotation text mode when
-    //     the mouse is over a selected video item.
-    // When the mouse is hovering over a selected video, pressing T
-    // should activate the video's own text annotation mode instead
-    // of the global canvas text tool.
+    //     the mouse is hovering over ANY video (selected or not).
+    // v5.5: removed the selected.size > 0 requirement — hover alone
+    // is enough. User shouldn't need to click-select first.
     var _hasVideoSelT = false;
     try {
-      // Skip if the global D/T key handler (line 24831) already handled
-      // this keypress — otherwise we double-toggle the mode.
+      // Skip if the plain D/T handler already handled this keypress
       if (window.__kraftedTDKeyHandled) { return; }
-      if (state && state.selected && state.selected.size > 0 && state.mouse) {
+      if (state && state.mouse) {
         var mouseEl = document.elementFromPoint(state.mouse.x, state.mouse.y);
         if (mouseEl) {
           var hitItem = mouseEl.closest('.item.has-media');
-          if (hitItem) {
-            state.selected.forEach(function(id) {
-              if (_hasVideoSelT) return;
-              var it = state.items.find(function(i) { return i.id === id; });
+          if (hitItem && state.items) {
+            // Find the video item whose el matches the hovered wrap
+            for (var ti = 0; ti < state.items.length; ti++) {
+              if (_hasVideoSelT) break;
+              var it = state.items[ti];
               if (it && (it.video || it.isVideo) && it.el === hitItem && it.el._annoDrawState) {
                 _hasVideoSelT = true;
                 // Toggle: if already in text mode, turn off; otherwise enter text mode
@@ -789,7 +805,7 @@ document.addEventListener('keydown', e => {
                 }
                 if (typeof it.el._applyDrawMode === 'function') it.el._applyDrawMode();
               }
-            });
+            }
           }
         }
       }
