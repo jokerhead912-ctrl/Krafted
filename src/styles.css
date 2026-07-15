@@ -1936,9 +1936,10 @@ body.dragging-file .media-anno-toolbar {
   box-shadow: 0 2px 8px rgba(0,0,0,0.5);
   border: 1px solid rgba(255,255,255,0.1);
 }
-.item.has-media .media-seek-bar:hover .media-seek-tooltip,
-.item.has-media .media-seek-bar.seeking .media-seek-tooltip {
-  display: flex;
+/* v5.5.1: hover tooltip on seek bar is disabled by request.
+   Was: .media-seek-bar:hover .media-seek-tooltip { display: flex; } */
+.item.has-media .media-seek-tooltip {
+  display: none !important;
 }
 .item.has-media .media-seek-tooltip .tt-frame {
   color: #a78bfa;
