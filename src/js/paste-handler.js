@@ -74,23 +74,49 @@ document.addEventListener('paste', e => {
   // copy. After 3s the system clipboard is trusted again so external
   // pastes (screenshots, browser copy-image) still work. This matches
   // the behavior of triggerPaste() (right-click / toolbar Paste).
-  // v5.5: also check WHAT the user is pasting — if the system clipboard
-  // has text/plain content and state.clipboard only has internal items
-  // (images/videos/text-items), don't intercept. The user likely copied
-  // text from another app (chat, browser, etc.) and wants it on canvas.
+  // v5.5: also check WHAT the user is pasting — if the incoming paste has
+  // text/plain content, compare it with the internal clipboard text content.
+  // If they differ (or internal clipboard has no text), let the external
+  // text paste fall through to the text handler below. This handles the
+  // case where the user copied a text-item in Krafted, then copied text
+  // from another app (WhatsApp, chat) and pastes — the old logic would
+  // incorrectly intercept and duplicate the Krafted text-item instead.
   {
     const recentCopy = state.clipboardTime && (Date.now() - state.clipboardTime) < 3000;
     if (state.clipboard && state.clipboard.length > 0 && recentCopy) {
-      // Check if the incoming paste has text — if so and our internal
-      // clipboard does NOT have text, it's an external text paste
+      // Check if the incoming paste has text — if so, compare with
+      // internal clipboard text to decide whether this is an external paste.
       let hasIncomingText = false;
       for (const item of items) {
         if (item.type === 'text/plain' || item.type === 'text/html') { hasIncomingText = true; break; }
       }
       const hasInternalText = state.clipboard.some(c => c.type === 'text');
-      if (hasIncomingText && !hasInternalText) {
-        // External text paste — let it fall through to text handler below
+      if (hasIncomingText) {
+        // Incoming paste has text. If internal clipboard has NO text,
+        // definitely external — fall through to text handler.
+        if (!hasInternalText) {
+          // External text paste — let it fall through to text handler below
+        } else {
+          // Both incoming and internal have text. Compare content to
+          // decide. e.clipboardData.getData('text/plain') is sync and
+          // returns the system clipboard text. If it differs from the
+          // internal clipboard's text content, it's an external paste.
+          let incomingText = '';
+          try { incomingText = (e.clipboardData.getData('text/plain') || '').trim(); } catch (_) {}
+          const internalText = state.clipboard
+            .filter(c => c.type === 'text')
+            .map(c => (c.content || '').trim())
+            .join('\n');
+          if (incomingText && incomingText !== internalText) {
+            // External text paste — content differs, let it fall through
+          } else {
+            e.preventDefault();
+            pasteClipboard();
+            return;
+          }
+        }
       } else {
+        // No incoming text — internal copy (images, videos, etc.)
         e.preventDefault();
         pasteClipboard();
         return;
