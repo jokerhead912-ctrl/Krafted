@@ -202,7 +202,7 @@ export function restoreSnapshot(snapStr) {
       mediaEl.playsInline = true;
       mediaEl.loop = true;
       mediaEl.muted = true;
-      mediaEl.preload = 'auto';  // auto-preload for smooth seeking
+      mediaEl.preload = 'metadata';  // v5.5: metadata-only to avoid memory spike on undo/redo
       // Round 58: restore manual FPS override from snapshot. Must happen
       // BEFORE buildMediaControls so the loadedmetadata handler sees
       // _kraftedFps already set and skips auto-detect (its `if (!mediaEl._kraftedFps)`

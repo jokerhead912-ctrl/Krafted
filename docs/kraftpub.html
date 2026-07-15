@@ -5398,7 +5398,7 @@ function restoreSnapshot(snapStr) {
       mediaEl.playsInline = true;
       mediaEl.loop = true;
       mediaEl.muted = true;
-      mediaEl.preload = 'auto';  // auto-preload for smooth seeking
+      mediaEl.preload = 'metadata';  // v5.5: metadata-only to avoid memory spike on undo/redo
       // Round 58: restore manual FPS override from snapshot. Must happen
       // BEFORE buildMediaControls so the loadedmetadata handler sees
       // _kraftedFps already set and skips auto-detect (its `if (!mediaEl._kraftedFps)`
@@ -17412,10 +17412,28 @@ viewport.addEventListener('drop', e => {
 document.addEventListener('paste', e => {
   if (!e.clipboardData) return;
 
-  // If user is actively typing inside a text-item (cursor inside, editing mode), let the browser handle it
+  // If user is actively typing inside a text-item (cursor inside, editing mode, HAS SELECTION),
+  // let the browser handle it. v5.5: only return if there's actually a caret/selection INSIDE the
+  // text-item — otherwise the user wants to paste on the canvas, so blur the text-item and fall
+  // through to our paste handler. Without this, any external text paste (when a stale text-item
+  // still has focus but no selection) is silently swallowed by the text-item's contentEditable.
   const ae = document.activeElement;
-  const isEditingText = ae && ae.contentEditable === 'true' && ae.classList.contains('text-item') && ae.classList.contains('editing');
-  if (isEditingText) return; // let default paste into text box
+  const isOurText = ae && ae.contentEditable === 'true' && ae.classList.contains('text-item');
+  if (isOurText) {
+    if (ae.classList.contains('editing')) {
+      const sel = window.getSelection();
+      let hasSelectionInText = false;
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        if (ae.contains(range.commonAncestorContainer)) {
+          hasSelectionInText = true;
+        }
+      }
+      if (hasSelectionInText) return; // genuine in-text paste — let browser handle
+      // No active selection in this text-item — blur it, handle paste on canvas
+      ae.blur();
+    }
+  }
 
   // If some other contentEditable is focused (but NOT our text-item), blur it first
   // so our paste handler can take over
