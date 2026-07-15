@@ -1,5 +1,5 @@
 import { distributeItems, normalizeSize, stackItems, tetrisAlign } from './alignment.js';
-import { captureScreen } from './capture.js';
+import { captureScreen, getPasteXY } from './capture.js';
 import { copySelected, duplicateSelected } from './clipboard.js';
 import { deleteSelected } from './delete.js';
 import { groupSelected, ungroupSelected } from './groups.js';
@@ -10,13 +10,13 @@ import { _deleteRelation, _exitRelationTool } from './relations.js';
 import { clearSelection, getSelectedItems, refreshSelection } from './selection.js';
 import { setTool } from './tools.js';
 import { translateSelectedText } from './translation.js';
-import { state, viewport, captureResultPanel } from './core-state.js';
+import { state, textTool, viewport, captureResultPanel } from './core-state.js';
 import { applyCutExtract, applyLassoExtract, cancelCut, cancelLasso, closeLasso, undoLassoPoint } from './cut-lasso.js';
 import { videoAnnoEnsure, videoAnnoGetItemUnderCursor, videoAnnoJumpToNextComment, videoAnnoJumpToPrevComment } from './frame-comments.js';
 import { pushUndo, redo, undo } from './undo-redo.js';
 import { tidySelection } from './layout-tidy.js';
 import { applyCrop, exitCrop, exitReframe } from './reframe-crop.js';
-import { openLinkModal, updateItemStyle } from './add-items.js';
+import { addLinkCard, addText, autoGrowTextItem, openLinkModal, updateItemStyle } from './add-items.js';
 import { frameSelection } from './canvas-view.js';
 import { saveBoard, scheduleAutoSave } from './save-load.js';
 import { formatTime, formatVideoTimeForLabel } from './video-trim.js';
@@ -473,7 +473,51 @@ document.addEventListener('keydown', e => {
     if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); redo(); return; }
     if (e.key === 'c' || e.key === 'C') { e.preventDefault(); copySelected(); return; }
-    if (e.key === 'v' || e.key === 'V') { /* Let browser paste event fire — handled by paste listener */ return; }
+    if (e.key === 'v' || e.key === 'V') {
+      e.preventDefault();
+      // v5.5: don't rely on native paste event (unreliable in some contexts).
+      // Read system clipboard via navigator.clipboard.readText() and handle it
+      // the same way the paste handler does.
+      try {
+        navigator.clipboard.readText().then(text => {
+          if (!text || !text.trim()) return;
+          const trimmed = text.trim();
+          // URL detection (same as paste-handler.js)
+          if (/^https?:\/\/[^\s]+$/i.test(trimmed) || /^www\.[^\s]+\.[a-z]{2,}/i.test(trimmed) ||
+              /^[a-z0-9-]+\.[a-z]{2,}[^\s]*$/i.test(trimmed)) {
+            let url = trimmed;
+            if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+            const { x, y } = getPasteXY();
+            addLinkCard(url, { x, y });
+            toast('Pasted link');
+          } else {
+            const { x, y } = getPasteXY();
+            const measureEl = document.createElement('span');
+            measureEl.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font:' +
+              textTool.size + 'px/1.5 ' + textTool.font;
+            document.body.appendChild(measureEl);
+            let widestLineW = 0;
+            for (const line of trimmed.split('\n')) {
+              measureEl.textContent = line;
+              widestLineW = Math.max(widestLineW, measureEl.offsetWidth);
+            }
+            document.body.removeChild(measureEl);
+            const initW = Math.min(520, Math.max(120, widestLineW + 40));
+            const tx = addText(x, y, trimmed, { noFocus: true, initW: initW });
+            requestAnimationFrame(() => {
+              autoGrowTextItem(tx);
+              refreshSelection();
+            });
+          }
+        }).catch(() => {
+          // clipboard readText failed (e.g. no permission) — try native paste
+          document.execCommand('paste');
+        });
+      } catch (e2) {
+        // Fallback: let native paste fire
+      }
+      return;
+    }
     if (e.key === 'd' || e.key === 'D') {
       e.preventDefault();
       if (e.shiftKey) { duplicateSelected(); return; }
