@@ -46,6 +46,18 @@ function _videoUnderCursor() {
   return false;
 }
 
+// v5.5.1: check whether any selected item is a video.
+function _videoSelected() {
+  if (!state || !state.selected || !state.items) return false;
+  var found = false;
+  state.selected.forEach(function(id) {
+    if (found) return;
+    var it = state.items.find(function(i) { return i.id === id; });
+    if (it && (it.video || it.isVideo)) found = true;
+  });
+  return found;
+}
+
 // R79: lookup the active shortcut registry and dispatch the
 // matching action. Returns true if a shortcut was handled.
 // Called at the top of the keydown handler so user-customised
@@ -154,7 +166,11 @@ function _dispatchShortcut(e) {
     case 'arrange-norm-w':   normalizeSize('width'); return true;
     case 'arrange-stack':    stackItems(); return true;
     // Navigation
-    case 'nav-pan-space':    state.spaceDown = true; viewport.style.cursor = 'grab'; return true;
+    case 'nav-pan-space':
+      // v5.5.1: if a video is selected, let the legacy spacebar handler
+      // (below) handle play/pause. Only pan if no video is selected.
+      if (_videoSelected()) return false;
+      state.spaceDown = true; viewport.style.cursor = 'grab'; return true;
     case 'nav-help':         if (typeof showHelp === 'function') showHelp(); return true;
     case 'nav-esc':          clearSelection(); hideCtx(); if (typeof hideHelp === 'function') hideHelp(); captureResultPanel.classList.remove('show'); _exitRelationTool(); if (state.tool !== 'select') setTool('select'); return true;
     // Translate
