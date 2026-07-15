@@ -127,6 +127,19 @@ for (const lib of libs) {
 // Prepend libs to main JS (libs execute first)
 allJS = libJS + '\n' + allJS;
 
+// Step 2b: Copy standalone sw.js to output directory (it must be a real
+// file — browsers reject blob: URL SW registration on secure origins).
+console.log('  🛡  Copying service worker...');
+const _swOutDir = path.dirname(OUTPUT);
+if (!fs.existsSync(_swOutDir)) fs.mkdirSync(_swOutDir, { recursive: true });
+const swSource = path.join(LIB_DIR, 'sw.js');
+if (fs.existsSync(swSource)) {
+  const swContent = fs.readFileSync(swSource, 'utf8');
+  const swDest = path.join(_swOutDir, 'sw.js');
+  fs.writeFileSync(swDest, swContent, 'utf8');
+  console.log(`     + sw.js (${swContent.length.toLocaleString()} bytes)`);
+}
+
 // Step 3: Read CSS
 console.log('  🎨 Reading CSS...');
 const cssPath = path.join(SRC_DIR, 'styles.css');
