@@ -14,6 +14,7 @@ const OUTPUT = process.argv[2] || path.join(__dirname, 'docs', 'kraftpub.html');
 // Dependency order — files that define functions used by others come first
 const JS_ORDER = [
   'core-state.js',
+  'i18n.js',
   'shortcut-editor.js',
   'canvas-view.js',
   'undo-redo.js',
