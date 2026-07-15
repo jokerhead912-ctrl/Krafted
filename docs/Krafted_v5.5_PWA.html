@@ -8600,7 +8600,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // would create a phantom stroke. Now we drop back to "off" so the
       // user can scrub/check other frames safely. To draw more, just
       // tap the draw button again — one stroke per tap.
-      _exitDrawMode();
+      // R79: if lockToPlayer is ON, stay in draw mode after the stroke.
+      if (!(window.G && window.G.lockToPlayer)) {
+        _exitDrawMode();
+      }
     }
     annoCanvas.addEventListener('pointerup', _endStroke);
     annoCanvas.addEventListener('pointercancel', _endStroke);
