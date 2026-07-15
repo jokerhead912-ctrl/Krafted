@@ -550,14 +550,16 @@ document.addEventListener('keydown', e => {
         }
         // v5.5: if no selected video, try hover detection — user shouldn't
         // need to click-select the video first. Just hover + press T/D.
+        // Only consider the mouse on the VIDEO FRAME (.media-wrap), not
+        // over the toolbar UI inside the video player.
         if (!_selVidDT && state && state.mouse) {
           var hoverEl = document.elementFromPoint(state.mouse.x, state.mouse.y);
           if (hoverEl) {
-            var hoverVideoWrap = hoverEl.closest('.item.has-media');
-            if (hoverVideoWrap && state.items) {
+            var hoverMediaWrap = hoverEl.closest('.media-wrap');
+            if (hoverMediaWrap && state.items) {
               for (var hi = 0; hi < state.items.length; hi++) {
                 var hit = state.items[hi];
-                if (hit && hit.video && hit.el === hoverVideoWrap && hit.el._annoDrawState) {
+                if (hit && hit.video && hit.el && hit.el.contains(hoverMediaWrap) && hit.el._annoDrawState) {
                   _selVidDT = hit;
                   break;
                 }
@@ -789,13 +791,20 @@ document.addEventListener('keydown', e => {
       if (state && state.mouse) {
         var mouseEl = document.elementFromPoint(state.mouse.x, state.mouse.y);
         if (mouseEl) {
-          var hitItem = mouseEl.closest('.item.has-media');
-          if (hitItem && state.items) {
-            // Find the video item whose el matches the hovered wrap
+          // v5.5: only enter video text mode when the mouse is over the
+          // actual VIDEO FRAME area (.media-wrap), NOT over the player's
+          // toolbar UI. Previously, hovering over the toolbar buttons
+          // (color picker, T/D, S/M/L size) would still register the
+          // closest('.item.has-media') match — so the keyboard T would
+          // hijack clicks meant for the toolbar. Now we require the
+          // mouse to be on the video frame itself.
+          var hitMediaWrap = mouseEl.closest('.media-wrap');
+          if (hitMediaWrap && state.items) {
+            // Find the video item whose el contains this media-wrap
             for (var ti = 0; ti < state.items.length; ti++) {
               if (_hasVideoSelT) break;
               var it = state.items[ti];
-              if (it && (it.video || it.isVideo) && it.el === hitItem && it.el._annoDrawState) {
+              if (it && (it.video || it.isVideo) && it.el && it.el.contains(hitMediaWrap) && it.el._annoDrawState) {
                 _hasVideoSelT = true;
                 // Toggle: if already in text mode, turn off; otherwise enter text mode
                 if (it.el._annoDrawState.mode === 'text') {
