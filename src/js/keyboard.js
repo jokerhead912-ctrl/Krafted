@@ -77,7 +77,10 @@ function _dispatchShortcut(e) {
   if (!matchedId) return false;
 
   // ── Dispatch action ────────────────────────────────────────
-  e.preventDefault();
+  // edit-paste MUST NOT preventDefault — the native paste event needs
+  // to fire so paste-handler.js can read clipboardData. All other
+  // shortcuts prevent the default browser behavior.
+  if (matchedId !== 'edit-paste') e.preventDefault();
   switch (matchedId) {
     // Tools
     case 'tool-select':      setTool('select'); return true;
