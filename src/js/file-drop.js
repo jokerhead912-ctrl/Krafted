@@ -159,8 +159,11 @@ export function _handleFileDrop(e, files) {
   const dropX0 = (e.clientX - state.pan.x) / state.zoom;
   const dropY0 = (e.clientY - state.pan.y) / state.zoom;
   // Process images SEQUENTIALLY (one at a time) to avoid memory crash on 20+ images.
-  // 20 parallel FileReader+Image decodes spike RAM (base64 strings + decoded bitmaps).
-  // We also push a single undo snapshot at batch start so one undo reverts the whole drop.
+  // v5.5: Use blob URLs instead of base64 data URLs. Blob URLs are 33% smaller
+  // in memory and won't bloat localStorage during auto-save (serializeBoard
+  // strips blob:/data: src). We still need Image() decode to get natural
+  // dimensions, but we pass the blob URL to addImage — the <img> element
+  // loads directly from the blob, no base64 overhead.
   if (imageFiles.length > 0) pushUndo();
   let imgIdx = 0;
   function processNextImage() {
@@ -169,28 +172,20 @@ export function _handleFileDrop(e, files) {
     const dropX = dropX0 + idx * 20;
     const dropY = dropY0 + idx * 20;
     const isLast = (imgIdx === imageFiles.length - 1);
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const img = new Image();
-      img.onload = () => {
-        addImage(ev.target.result, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
-        imgIdx++;
-        // Small delay so GC can reclaim the previous dataURL before the next one
-        setTimeout(processNextImage, 30);
-      };
-      img.onerror = () => {
-        // Skip and continue
-        imgIdx++;
-        setTimeout(processNextImage, 30);
-      };
-      img.src = ev.target.result;
-    };
-    reader.onerror = () => {
-      // Skip and continue
+    // Create blob URL for the image (persists until page unload or revoke)
+    const blobUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      addImage(blobUrl, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
       imgIdx++;
       setTimeout(processNextImage, 30);
     };
-    reader.readAsDataURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      imgIdx++;
+      setTimeout(processNextImage, 30);
+    };
+    img.src = blobUrl;
   }
   if (imageFiles.length > 0) {
     processNextImage();
@@ -214,7 +209,7 @@ export function _handleFileDrop(e, files) {
     const blobUrl = URL.createObjectURL(file);
     // Use preload=metadata on temp element to read dimensions, then clean up
     const videoEl = document.createElement('video');
-    videoEl.preload = 'auto';
+    videoEl.preload = 'metadata';  // v5.5: metadata-only to avoid memory spike
     videoEl.muted = true;
     videoEl.src = blobUrl;
     let done = false;

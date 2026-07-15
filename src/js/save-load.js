@@ -741,6 +741,10 @@ export async function loadBoardFile(event) {
 }
 
 // Backwards-compatible sync serialize (used by autosave)
+// v5.5: Strip ALL media src (blob: and data:) from auto-save to prevent
+// localStorage QuotaExceededError. A single 2MB image as base64 is ~2.7MB
+// in JSON — 2 images already exceed the 5MB localStorage limit. Auto-save
+// only needs layout metadata; media is reloaded from original files/kpak.
 export function serializeBoard() {
   return JSON.stringify({
     items: state.items.map(i => {
@@ -748,7 +752,9 @@ export function serializeBoard() {
         id: i.id,
         x: i.x, y: i.y, w: i.w, h: i.h, rot: i.rot, opacity: i.opacity,
         flipH: i.flipH, flipV: i.flipV, locked: i.locked, z: i.z,
-        src: i.src, natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, audioName: i.audioName || '',
+        // v5.5: Strip blob/data URLs — they're ephemeral and huge
+        src: (i.src && !i.src.startsWith('blob:') && !i.src.startsWith('data:')) ? i.src : '',
+        natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, audioName: i.audioName || '',
         filename: i.filename || '',
         cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH,
         brightness: i.brightness, contrast: i.contrast, saturate: i.saturate,
@@ -764,8 +770,12 @@ export function serializeBoard() {
         d.drawSize = i.drawSize; d.drawOpacity = i.drawOpacity;
         d.drawArrowHead = i.drawArrowHead;
       }
-      if (i.isVideo && i.src && i.src.startsWith('blob:')) {
+      // v5.5: Flag ephemeral media so restoreBoard knows src was stripped
+      if ((i.isVideo || i.isGif || i.isAudio) && i.src && (i.src.startsWith('blob:') || i.src.startsWith('data:'))) {
         d.src = ''; d.videoLost = true;
+      }
+      if (!i.isVideo && !i.isGif && !i.isAudio && i.src && (i.src.startsWith('blob:') || i.src.startsWith('data:'))) {
+        d.src = ''; d.imageLost = true;
       }
       return d;
     }),
@@ -826,6 +836,12 @@ export function restoreBoard(data) {
     try {
     // Skip video items whose blob: URL was lost on reload
     if (d.videoLost || (d.isVideo && !d.src && !d.mediaData)) return;
+    // v5.5: Skip image items whose blob URL was lost (auto-save stripped src).
+    // They'll show as a grey placeholder with dimensions preserved.
+    if (d.imageLost && !d.mediaData) {
+      // Still create the item so layout is preserved — just without the image
+      d.src = '';
+    }
     // Round 78: if we have embedded media, restore it as a blob URL
     // BEFORE the rest of the rebuild code references d.src. The
     // base64 decode runs synchronously inside dataUrlToBlobUrl, so by

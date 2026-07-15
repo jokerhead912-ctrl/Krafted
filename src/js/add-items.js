@@ -41,7 +41,7 @@ export function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
     mediaEl.playsInline = true;
     mediaEl.loop = true;
     mediaEl.muted = true;
-    mediaEl.preload = 'auto';  // auto-preload for smooth seeking
+    mediaEl.preload = 'metadata';  // v5.5: metadata-only preload saves memory; full load on play
     mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;';
     // Seek to first frame for thumbnail (metadata-only preload won't show a frame otherwise)
     mediaEl.addEventListener('loadedmetadata', () => {

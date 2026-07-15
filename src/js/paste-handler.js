@@ -261,17 +261,18 @@ document.addEventListener('paste', e => {
     }
     // Place on canvas at cursor
     const { x, y } = getPasteXY();
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const img = new Image();
-      img.onload = () => {
-        addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
-        toast('Pasted image ' + img.naturalWidth + 'x' + img.naturalHeight);
-      };
-      img.onerror = () => toast('Failed to paste image');
-      img.src = ev.target.result;
+    // v5.5: Use blob URL instead of base64 data URL to avoid memory bloat
+    const blobUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      addImage(blobUrl, img.naturalWidth, img.naturalHeight, x, y);
+      toast('Pasted image ' + img.naturalWidth + 'x' + img.naturalHeight);
     };
-    reader.readAsDataURL(blob);
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      toast('Failed to paste image');
+    };
+    img.src = blobUrl;
     return;
   }
 

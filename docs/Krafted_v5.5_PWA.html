@@ -6141,7 +6141,7 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
     mediaEl.playsInline = true;
     mediaEl.loop = true;
     mediaEl.muted = true;
-    mediaEl.preload = 'auto';  // auto-preload for smooth seeking
+    mediaEl.preload = 'metadata';  // v5.5: metadata-only preload saves memory; full load on play
     mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;';
     // Seek to first frame for thumbnail (metadata-only preload won't show a frame otherwise)
     mediaEl.addEventListener('loadedmetadata', () => {
@@ -17297,8 +17297,11 @@ function _handleFileDrop(e, files) {
   const dropX0 = (e.clientX - state.pan.x) / state.zoom;
   const dropY0 = (e.clientY - state.pan.y) / state.zoom;
   // Process images SEQUENTIALLY (one at a time) to avoid memory crash on 20+ images.
-  // 20 parallel FileReader+Image decodes spike RAM (base64 strings + decoded bitmaps).
-  // We also push a single undo snapshot at batch start so one undo reverts the whole drop.
+  // v5.5: Use blob URLs instead of base64 data URLs. Blob URLs are 33% smaller
+  // in memory and won't bloat localStorage during auto-save (serializeBoard
+  // strips blob:/data: src). We still need Image() decode to get natural
+  // dimensions, but we pass the blob URL to addImage — the <img> element
+  // loads directly from the blob, no base64 overhead.
   if (imageFiles.length > 0) pushUndo();
   let imgIdx = 0;
   function processNextImage() {
@@ -17307,28 +17310,20 @@ function _handleFileDrop(e, files) {
     const dropX = dropX0 + idx * 20;
     const dropY = dropY0 + idx * 20;
     const isLast = (imgIdx === imageFiles.length - 1);
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const img = new Image();
-      img.onload = () => {
-        addImage(ev.target.result, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
-        imgIdx++;
-        // Small delay so GC can reclaim the previous dataURL before the next one
-        setTimeout(processNextImage, 30);
-      };
-      img.onerror = () => {
-        // Skip and continue
-        imgIdx++;
-        setTimeout(processNextImage, 30);
-      };
-      img.src = ev.target.result;
-    };
-    reader.onerror = () => {
-      // Skip and continue
+    // Create blob URL for the image (persists until page unload or revoke)
+    const blobUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      addImage(blobUrl, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
       imgIdx++;
       setTimeout(processNextImage, 30);
     };
-    reader.readAsDataURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      imgIdx++;
+      setTimeout(processNextImage, 30);
+    };
+    img.src = blobUrl;
   }
   if (imageFiles.length > 0) {
     processNextImage();
@@ -17352,7 +17347,7 @@ function _handleFileDrop(e, files) {
     const blobUrl = URL.createObjectURL(file);
     // Use preload=metadata on temp element to read dimensions, then clean up
     const videoEl = document.createElement('video');
-    videoEl.preload = 'auto';
+    videoEl.preload = 'metadata';  // v5.5: metadata-only to avoid memory spike
     videoEl.muted = true;
     videoEl.src = blobUrl;
     let done = false;
@@ -17673,17 +17668,18 @@ document.addEventListener('paste', e => {
     }
     // Place on canvas at cursor
     const { x, y } = getPasteXY();
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const img = new Image();
-      img.onload = () => {
-        addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
-        toast('Pasted image ' + img.naturalWidth + 'x' + img.naturalHeight);
-      };
-      img.onerror = () => toast('Failed to paste image');
-      img.src = ev.target.result;
+    // v5.5: Use blob URL instead of base64 data URL to avoid memory bloat
+    const blobUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      addImage(blobUrl, img.naturalWidth, img.naturalHeight, x, y);
+      toast('Pasted image ' + img.naturalWidth + 'x' + img.naturalHeight);
     };
-    reader.readAsDataURL(blob);
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      toast('Failed to paste image');
+    };
+    img.src = blobUrl;
     return;
   }
 
@@ -26672,6 +26668,10 @@ async function loadBoardFile(event) {
 }
 
 // Backwards-compatible sync serialize (used by autosave)
+// v5.5: Strip ALL media src (blob: and data:) from auto-save to prevent
+// localStorage QuotaExceededError. A single 2MB image as base64 is ~2.7MB
+// in JSON — 2 images already exceed the 5MB localStorage limit. Auto-save
+// only needs layout metadata; media is reloaded from original files/kpak.
 function serializeBoard() {
   return JSON.stringify({
     items: state.items.map(i => {
@@ -26679,7 +26679,9 @@ function serializeBoard() {
         id: i.id,
         x: i.x, y: i.y, w: i.w, h: i.h, rot: i.rot, opacity: i.opacity,
         flipH: i.flipH, flipV: i.flipV, locked: i.locked, z: i.z,
-        src: i.src, natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, audioName: i.audioName || '',
+        // v5.5: Strip blob/data URLs — they're ephemeral and huge
+        src: (i.src && !i.src.startsWith('blob:') && !i.src.startsWith('data:')) ? i.src : '',
+        natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, audioName: i.audioName || '',
         filename: i.filename || '',
         cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH,
         brightness: i.brightness, contrast: i.contrast, saturate: i.saturate,
@@ -26695,8 +26697,12 @@ function serializeBoard() {
         d.drawSize = i.drawSize; d.drawOpacity = i.drawOpacity;
         d.drawArrowHead = i.drawArrowHead;
       }
-      if (i.isVideo && i.src && i.src.startsWith('blob:')) {
+      // v5.5: Flag ephemeral media so restoreBoard knows src was stripped
+      if ((i.isVideo || i.isGif || i.isAudio) && i.src && (i.src.startsWith('blob:') || i.src.startsWith('data:'))) {
         d.src = ''; d.videoLost = true;
+      }
+      if (!i.isVideo && !i.isGif && !i.isAudio && i.src && (i.src.startsWith('blob:') || i.src.startsWith('data:'))) {
+        d.src = ''; d.imageLost = true;
       }
       return d;
     }),
@@ -26757,6 +26763,12 @@ function restoreBoard(data) {
     try {
     // Skip video items whose blob: URL was lost on reload
     if (d.videoLost || (d.isVideo && !d.src && !d.mediaData)) return;
+    // v5.5: Skip image items whose blob URL was lost (auto-save stripped src).
+    // They'll show as a grey placeholder with dimensions preserved.
+    if (d.imageLost && !d.mediaData) {
+      // Still create the item so layout is preserved — just without the image
+      d.src = '';
+    }
     // Round 78: if we have embedded media, restore it as a blob URL
     // BEFORE the rest of the rebuild code references d.src. The
     // base64 decode runs synchronously inside dataUrlToBlobUrl, so by
