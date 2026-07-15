@@ -2,12 +2,12 @@
 // ============================================================
 //  STARTUP CHECKS
 // ============================================================
-console.log('[INIT] Krafted v5.4 loading...');
+console.log('[INIT] Krafted v5.5 loading...');
 console.log('[INIT] JSZip available:', typeof JSZip);
 console.log('[INIT] showSaveFilePicker available:', typeof window.showSaveFilePicker);
 // === COPYRIGHT — Krafted by Joker Head Studios ===
 console.log(
-  '%c Krafted v5.4 %c by Joker Head Studios ',
+  '%c Krafted v5.5 %c by Joker Head Studios ',
   'background:#7c8cf0;color:#000;font-weight:bold;padding:4px 8px;font-size:14px;',
   'background:#1a1a1a;color:#e8e8e8;padding:4px 8px;font-size:12px;'
 );

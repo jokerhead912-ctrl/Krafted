@@ -2,8 +2,8 @@
   if (!('serviceWorker' in navigator)) return;
   // Build the SW blob inline so it works from file:// or any origin
   const SW_CODE = `
-const CACHE_NAME = 'krafted-v5.4-${Date.now()}';
-const APP_VERSION = '5.4';
+const CACHE_NAME = 'krafted-v5.5-${Date.now()}';
+const APP_VERSION = '5.5';
 
 // Files to pre-cache on install
 const PRE_CACHE = [

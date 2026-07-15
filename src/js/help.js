@@ -84,7 +84,7 @@ function _buildHelpContent(overlay) {
   // Footer
   var footer = document.createElement('p');
   footer.style.cssText = 'margin-top:20px;font-size:10px;color:#555;text-align:center;';
-  footer.textContent = 'Krafted v5.4 — by Joker Head Studios';
+  footer.textContent = 'Krafted v5.5 — by Joker Head Studios';
   box.appendChild(footer);
 
   overlay.appendChild(box);
