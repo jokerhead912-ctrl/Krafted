@@ -41,12 +41,8 @@ export function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
     mediaEl.playsInline = true;
     mediaEl.loop = true;
     mediaEl.muted = true;
-    mediaEl.preload = 'metadata';  // v5.5: metadata-only preload saves memory; full load on play
+    mediaEl.preload = 'none';  // v5.5.1: no preload — only load when selected/hovered/played
     mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;';
-    // Seek to first frame for thumbnail (metadata-only preload won't show a frame otherwise)
-    mediaEl.addEventListener('loadedmetadata', () => {
-      if (mediaEl.currentTime < 0.05) mediaEl.currentTime = 0.1;
-    });
   } else {
     mediaEl = document.createElement('img');
     mediaEl.src = src;

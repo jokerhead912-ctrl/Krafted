@@ -70,6 +70,24 @@ viewport.addEventListener('pointercancel', e => {
 // pointer check, this catches the gesture on both MacBook and Windows
 // Precision Touchpads while still letting a true vertical mouse wheel zoom.
 viewport.addEventListener('wheel', e => {
+  // ── v5.5.1: fullscreen video frame scrub ──
+  // When a player is fullscreen, scroll wheel scrubs frame-by-frame
+  // instead of zooming the canvas. Ctrl+scroll still zooms.
+  var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+  if (fsEl && fsEl.classList.contains('media-wrap') && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    var vid = fsEl.querySelector('video');
+    if (vid && vid.duration && vid.readyState >= 2) {
+      var fps = vid._kraftedFps || 30;
+      var frameStep = e.shiftKey ? 10 : 1;
+      var delta = (e.deltaY > 0 || e.deltaX > 0) ? frameStep : -frameStep;
+      vid.currentTime = Math.max(0, Math.min(vid.duration, vid.currentTime + delta / fps));
+      // Trigger a seeked event for UI updates
+      vid.dispatchEvent(new Event('seeked'));
+      return;
+    }
+  }
+
   e.preventDefault();
   // ============================================================
   //  PLATFORM ROUTER — every branch is gated by Platform.* flags

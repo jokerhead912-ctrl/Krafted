@@ -6687,7 +6687,9 @@ function captureSnapshot() {
 }
 function pushUndo() {
   state.undoStack.push(captureSnapshot());
-  if (state.undoStack.length > 50) state.undoStack.shift();
+  // v5.5.1: cap undo history at 100 steps to prevent memory bloat
+  // on long sessions with large boards (each snapshot can be 1-5MB+)
+  while (state.undoStack.length > 100) state.undoStack.shift();
   state.redoStack = [];
   updateStatus();
 }
@@ -7030,6 +7032,11 @@ function refreshSelection() {
   } else {
     sel.forEach(item => {
       item.el.classList.add('selected');
+      // v5.5.1: lazy-load video when selected (preload="none" saves memory)
+      if (item.video && item.video.preload === 'none') {
+        item.video.preload = 'auto';
+        item.video.load();
+      }
       if (item.img) addHandles(item);
       else if (item.type === 'draw') addHandles(item);
       else if (item.video) {
@@ -7199,6 +7206,33 @@ function addTextHandles(tx) {
     el.dataset.textHandle = '1';
     hCont.appendChild(el);
   });
+}
+
+// ── v5.5.1: hover-based video lazy load ──────────────────────
+// When the mouse hovers over a video that hasn't been loaded yet
+// (preload="none"), trigger load so the user sees a thumbnail.
+var _videoLazyLoadObserver = null;
+function initVideoLazyLoad() {
+  if (_videoLazyLoadObserver) return;
+  var hoveredVideo = null;
+  document.addEventListener('mousemove', function(e) {
+    var el = document.elementFromPoint(e.clientX, e.clientY);
+    if (!el) return;
+    var itemEl = el.closest('.item.has-media');
+    if (!itemEl) {
+      if (hoveredVideo) { hoveredVideo = null; }
+      return;
+    }
+    // Avoid re-checking the same element every mousemove tick
+    if (itemEl === hoveredVideo) return;
+    hoveredVideo = itemEl;
+    // Find the video element inside
+    var vid = itemEl.querySelector('video');
+    if (vid && vid.preload === 'none') {
+      vid.preload = 'auto';
+      vid.load();
+    }
+  }, { passive: true });
 }
 
 
@@ -7507,12 +7541,8 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
     mediaEl.playsInline = true;
     mediaEl.loop = true;
     mediaEl.muted = true;
-    mediaEl.preload = 'metadata';  // v5.5: metadata-only preload saves memory; full load on play
+    mediaEl.preload = 'none';  // v5.5.1: no preload — only load when selected/hovered/played
     mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;';
-    // Seek to first frame for thumbnail (metadata-only preload won't show a frame otherwise)
-    mediaEl.addEventListener('loadedmetadata', () => {
-      if (mediaEl.currentTime < 0.05) mediaEl.currentTime = 0.1;
-    });
   } else {
     mediaEl = document.createElement('img');
     mediaEl.src = src;
@@ -10392,6 +10422,25 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     }
   });
   rightGroup.appendChild(fsBtn);
+
+  // v5.5.1: double-click video frame → toggle fullscreen
+  if (isVideo && !isGif) {
+    wrap.addEventListener('dblclick', function(ev) {
+      // Don't toggle if clicking on annotation canvas or controls
+      if (ev.target.closest && (ev.target.closest('canvas') || ev.target.closest('.media-anno-toolbar') || ev.target.closest('.media-comments-popover'))) return;
+      ev.stopPropagation();
+      ev.preventDefault();
+      var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fsEl) {
+        if (document.exitFullscreen) { document.exitFullscreen(); }
+        else if (document.webkitExitFullscreen) { document.webkitExitFullscreen(); }
+      } else {
+        if (wrap.requestFullscreen) { wrap.requestFullscreen(); }
+        else if (wrap.webkitRequestFullscreen) { wrap.webkitRequestFullscreen(); }
+      }
+    });
+  }
+
   // Sync the button icon on fullscreen change
   function _syncFsIcon() {
     var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
@@ -18526,6 +18575,24 @@ viewport.addEventListener('pointercancel', e => {
 // pointer check, this catches the gesture on both MacBook and Windows
 // Precision Touchpads while still letting a true vertical mouse wheel zoom.
 viewport.addEventListener('wheel', e => {
+  // ── v5.5.1: fullscreen video frame scrub ──
+  // When a player is fullscreen, scroll wheel scrubs frame-by-frame
+  // instead of zooming the canvas. Ctrl+scroll still zooms.
+  var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+  if (fsEl && fsEl.classList.contains('media-wrap') && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    var vid = fsEl.querySelector('video');
+    if (vid && vid.duration && vid.readyState >= 2) {
+      var fps = vid._kraftedFps || 30;
+      var frameStep = e.shiftKey ? 10 : 1;
+      var delta = (e.deltaY > 0 || e.deltaX > 0) ? frameStep : -frameStep;
+      vid.currentTime = Math.max(0, Math.min(vid.duration, vid.currentTime + delta / fps));
+      // Trigger a seeked event for UI updates
+      vid.dispatchEvent(new Event('seeked'));
+      return;
+    }
+  }
+
   e.preventDefault();
   // ============================================================
   //  PLATFORM ROUTER — every branch is gated by Platform.* flags
@@ -18798,6 +18865,73 @@ window.addEventListener('dragleave', function(e){
 // The welcome sits at z-index 99999999, full-screen, on top of the
 // viewport — without a shared handler, drops fired on the welcome
 // never reach the viewport's drop listener and the file is lost.
+
+// v5.5.1: folder drop handler — recursively reads all files from
+// a dropped folder (including subfolders) and imports them as a batch.
+function _handleEntryDrop(e, entries) {
+  var allFiles = [];
+  var pending = entries.length;
+
+  function readEntry(entry, path) {
+    if (entry.isFile) {
+      pending++;
+      entry.file(function(file) {
+        file._kraftedPath = path;
+        allFiles.push(file);
+        pending--;
+        if (pending === 0) _finishFolderImport(e, allFiles);
+      }, function(err) {
+        console.warn('[FileDrop] Failed to read file:', entry.name, err);
+        pending--;
+        if (pending === 0) _finishFolderImport(e, allFiles);
+      });
+    } else if (entry.isDirectory) {
+      var reader = entry.createReader();
+      var subPath = path ? path + '/' + entry.name : entry.name;
+      function readBatch() {
+        reader.readEntries(function(batch) {
+          if (batch.length === 0) {
+            pending--;
+            if (pending === 0) _finishFolderImport(e, allFiles);
+            return;
+          }
+          pending += batch.length;
+          batch.forEach(function(subEntry) { readEntry(subEntry, subPath); });
+          pending--; // this batch done
+          readBatch(); // continue reading (directory readers return max 100 entries)
+        }, function(err) {
+          console.warn('[FileDrop] Failed to read directory:', entry.name, err);
+          pending--;
+          if (pending === 0) _finishFolderImport(e, allFiles);
+        });
+      }
+      readBatch();
+    } else {
+      pending--;
+      if (pending === 0) _finishFolderImport(e, allFiles);
+    }
+  }
+
+  entries.forEach(function(entry) { readEntry(entry, ''); });
+}
+
+function _finishFolderImport(e, allFiles) {
+  if (allFiles.length === 0) return;
+  // Sort: images first, then videos, then audio
+  var images = [], videos = [], audios = [];
+  allFiles.forEach(function(f) {
+    if (f.type.startsWith('image/')) images.push(f);
+    else if (f.type.startsWith('video/')) videos.push(f);
+    else if (f.type.startsWith('audio/') || /\.(mp3|wav|aiff|aif|flac|ogg|m4a)$/i.test(f.name)) audios.push(f);
+  });
+  var sorted = images.concat(videos).concat(audios);
+  console.log('[FileDrop] Folder import: ' + sorted.length + ' files (' + images.length + ' images, ' + videos.length + ' videos, ' + audios.length + ' audio)');
+  if (typeof window.toast === 'function') {
+    window.toast('📁 Importing ' + sorted.length + ' files from folder...');
+  }
+  _handleFileDrop(e, sorted);
+}
+
 function _handleFileDrop(e, files) {
   // Separate images, videos, and audio files
   const imageFiles = [];
@@ -18917,6 +19051,20 @@ function _handleFileDrop(e, files) {
 viewport.addEventListener('drop', e => {
   e.preventDefault();
   hideWelcome();
+  // v5.5.1: detect folder drops via DataTransferItem.webkitGetAsEntry()
+  var items = e.dataTransfer.items;
+  if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+    var entries = [];
+    for (var i = 0; i < items.length; i++) {
+      var entry = items[i].webkitGetAsEntry();
+      if (entry) entries.push(entry);
+    }
+    if (entries.length > 0) {
+      _handleEntryDrop(e, entries);
+      return;
+    }
+  }
+  // Fallback: regular file drop
   const files = [...e.dataTransfer.files];
   if (files.length) _handleFileDrop(e, files);
 });
@@ -28939,6 +29087,7 @@ function loadAutoSave() {
 
 initTextToolbar();
 updateCanvas();
+initVideoLazyLoad();
 // ALWAYS show welcome page on load — user must click GET STARTED every time
 showWelcome();
 // Auto-save restore: if data exists, restore in background but keep welcome page visible
@@ -28952,6 +29101,26 @@ window.addEventListener('load', async () => {
   updateAltPanBadge();
 });
 window.addEventListener('resize', () => { updateCanvas(); if (cutState) updateCutTargetHighlight(); });
+
+// ── v5.5.1: Tab visibility → pause all videos ────────────────
+// Saves CPU and memory when the user switches tabs/apps.
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) {
+    document.querySelectorAll('.item.has-media video').forEach(function(vid) {
+      if (!vid.paused) {
+        vid._wasPlayingBeforeHidden = true;
+        vid.pause();
+      }
+    });
+  } else {
+    document.querySelectorAll('.item.has-media video').forEach(function(vid) {
+      if (vid._wasPlayingBeforeHidden) {
+        vid._wasPlayingBeforeHidden = false;
+        vid.play().catch(function(){});
+      }
+    });
+  }
+});
 
 // New Board — clear everything and show fresh welcome
 function newBoard() {

@@ -62,6 +62,11 @@ export function refreshSelection() {
   } else {
     sel.forEach(item => {
       item.el.classList.add('selected');
+      // v5.5.1: lazy-load video when selected (preload="none" saves memory)
+      if (item.video && item.video.preload === 'none') {
+        item.video.preload = 'auto';
+        item.video.load();
+      }
       if (item.img) addHandles(item);
       else if (item.type === 'draw') addHandles(item);
       else if (item.video) {
@@ -231,4 +236,31 @@ export function addTextHandles(tx) {
     el.dataset.textHandle = '1';
     hCont.appendChild(el);
   });
+}
+
+// ── v5.5.1: hover-based video lazy load ──────────────────────
+// When the mouse hovers over a video that hasn't been loaded yet
+// (preload="none"), trigger load so the user sees a thumbnail.
+var _videoLazyLoadObserver = null;
+export function initVideoLazyLoad() {
+  if (_videoLazyLoadObserver) return;
+  var hoveredVideo = null;
+  document.addEventListener('mousemove', function(e) {
+    var el = document.elementFromPoint(e.clientX, e.clientY);
+    if (!el) return;
+    var itemEl = el.closest('.item.has-media');
+    if (!itemEl) {
+      if (hoveredVideo) { hoveredVideo = null; }
+      return;
+    }
+    // Avoid re-checking the same element every mousemove tick
+    if (itemEl === hoveredVideo) return;
+    hoveredVideo = itemEl;
+    // Find the video element inside
+    var vid = itemEl.querySelector('video');
+    if (vid && vid.preload === 'none') {
+      vid.preload = 'auto';
+      vid.load();
+    }
+  }, { passive: true });
 }

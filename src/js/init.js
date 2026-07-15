@@ -8,6 +8,7 @@ import { updateAltPanBadge } from './text-sanitizer.js';
 import { updateCanvas } from './canvas-view.js';
 import { initTextToolbar } from './text-style.js';
 import { redrawDrawLayer } from './draw-layer.js';
+import { initVideoLazyLoad } from './selection.js';
 import { updateCutTargetHighlight } from './cut-lasso.js';
 import { formatBytes, restoreBoard } from './save-load.js';
 import { toast } from './ui-utils.js';
@@ -24,6 +25,7 @@ import { updateAltPanBadge } from './text-sanitizer.js';
 
 initTextToolbar();
 updateCanvas();
+initVideoLazyLoad();
 // ALWAYS show welcome page on load — user must click GET STARTED every time
 showWelcome();
 // Auto-save restore: if data exists, restore in background but keep welcome page visible
@@ -37,6 +39,26 @@ window.addEventListener('load', async () => {
   updateAltPanBadge();
 });
 window.addEventListener('resize', () => { updateCanvas(); if (cutState) updateCutTargetHighlight(); });
+
+// ── v5.5.1: Tab visibility → pause all videos ────────────────
+// Saves CPU and memory when the user switches tabs/apps.
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) {
+    document.querySelectorAll('.item.has-media video').forEach(function(vid) {
+      if (!vid.paused) {
+        vid._wasPlayingBeforeHidden = true;
+        vid.pause();
+      }
+    });
+  } else {
+    document.querySelectorAll('.item.has-media video').forEach(function(vid) {
+      if (vid._wasPlayingBeforeHidden) {
+        vid._wasPlayingBeforeHidden = false;
+        vid.play().catch(function(){});
+      }
+    });
+  }
+});
 
 // New Board — clear everything and show fresh welcome
 export function newBoard() {

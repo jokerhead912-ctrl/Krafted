@@ -125,7 +125,9 @@ export function captureSnapshot() {
 }
 export function pushUndo() {
   state.undoStack.push(captureSnapshot());
-  if (state.undoStack.length > 50) state.undoStack.shift();
+  // v5.5.1: cap undo history at 100 steps to prevent memory bloat
+  // on long sessions with large boards (each snapshot can be 1-5MB+)
+  while (state.undoStack.length > 100) state.undoStack.shift();
   state.redoStack = [];
   updateStatus();
 }

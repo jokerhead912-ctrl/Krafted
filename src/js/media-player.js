@@ -2140,6 +2140,25 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
     }
   });
   rightGroup.appendChild(fsBtn);
+
+  // v5.5.1: double-click video frame → toggle fullscreen
+  if (isVideo && !isGif) {
+    wrap.addEventListener('dblclick', function(ev) {
+      // Don't toggle if clicking on annotation canvas or controls
+      if (ev.target.closest && (ev.target.closest('canvas') || ev.target.closest('.media-anno-toolbar') || ev.target.closest('.media-comments-popover'))) return;
+      ev.stopPropagation();
+      ev.preventDefault();
+      var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fsEl) {
+        if (document.exitFullscreen) { document.exitFullscreen(); }
+        else if (document.webkitExitFullscreen) { document.webkitExitFullscreen(); }
+      } else {
+        if (wrap.requestFullscreen) { wrap.requestFullscreen(); }
+        else if (wrap.webkitRequestFullscreen) { wrap.webkitRequestFullscreen(); }
+      }
+    });
+  }
+
   // Sync the button icon on fullscreen change
   function _syncFsIcon() {
     var fsEl = document.fullscreenElement || document.webkitFullscreenElement;

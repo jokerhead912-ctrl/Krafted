@@ -143,6 +143,73 @@ window.addEventListener('dragleave', function(e){
 // The welcome sits at z-index 99999999, full-screen, on top of the
 // viewport — without a shared handler, drops fired on the welcome
 // never reach the viewport's drop listener and the file is lost.
+
+// v5.5.1: folder drop handler — recursively reads all files from
+// a dropped folder (including subfolders) and imports them as a batch.
+function _handleEntryDrop(e, entries) {
+  var allFiles = [];
+  var pending = entries.length;
+
+  function readEntry(entry, path) {
+    if (entry.isFile) {
+      pending++;
+      entry.file(function(file) {
+        file._kraftedPath = path;
+        allFiles.push(file);
+        pending--;
+        if (pending === 0) _finishFolderImport(e, allFiles);
+      }, function(err) {
+        console.warn('[FileDrop] Failed to read file:', entry.name, err);
+        pending--;
+        if (pending === 0) _finishFolderImport(e, allFiles);
+      });
+    } else if (entry.isDirectory) {
+      var reader = entry.createReader();
+      var subPath = path ? path + '/' + entry.name : entry.name;
+      function readBatch() {
+        reader.readEntries(function(batch) {
+          if (batch.length === 0) {
+            pending--;
+            if (pending === 0) _finishFolderImport(e, allFiles);
+            return;
+          }
+          pending += batch.length;
+          batch.forEach(function(subEntry) { readEntry(subEntry, subPath); });
+          pending--; // this batch done
+          readBatch(); // continue reading (directory readers return max 100 entries)
+        }, function(err) {
+          console.warn('[FileDrop] Failed to read directory:', entry.name, err);
+          pending--;
+          if (pending === 0) _finishFolderImport(e, allFiles);
+        });
+      }
+      readBatch();
+    } else {
+      pending--;
+      if (pending === 0) _finishFolderImport(e, allFiles);
+    }
+  }
+
+  entries.forEach(function(entry) { readEntry(entry, ''); });
+}
+
+function _finishFolderImport(e, allFiles) {
+  if (allFiles.length === 0) return;
+  // Sort: images first, then videos, then audio
+  var images = [], videos = [], audios = [];
+  allFiles.forEach(function(f) {
+    if (f.type.startsWith('image/')) images.push(f);
+    else if (f.type.startsWith('video/')) videos.push(f);
+    else if (f.type.startsWith('audio/') || /\.(mp3|wav|aiff|aif|flac|ogg|m4a)$/i.test(f.name)) audios.push(f);
+  });
+  var sorted = images.concat(videos).concat(audios);
+  console.log('[FileDrop] Folder import: ' + sorted.length + ' files (' + images.length + ' images, ' + videos.length + ' videos, ' + audios.length + ' audio)');
+  if (typeof window.toast === 'function') {
+    window.toast('📁 Importing ' + sorted.length + ' files from folder...');
+  }
+  _handleFileDrop(e, sorted);
+}
+
 export function _handleFileDrop(e, files) {
   // Separate images, videos, and audio files
   const imageFiles = [];
@@ -262,6 +329,20 @@ export function _handleFileDrop(e, files) {
 viewport.addEventListener('drop', e => {
   e.preventDefault();
   hideWelcome();
+  // v5.5.1: detect folder drops via DataTransferItem.webkitGetAsEntry()
+  var items = e.dataTransfer.items;
+  if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+    var entries = [];
+    for (var i = 0; i < items.length; i++) {
+      var entry = items[i].webkitGetAsEntry();
+      if (entry) entries.push(entry);
+    }
+    if (entries.length > 0) {
+      _handleEntryDrop(e, entries);
+      return;
+    }
+  }
+  // Fallback: regular file drop
   const files = [...e.dataTransfer.files];
   if (files.length) _handleFileDrop(e, files);
 });
