@@ -85,7 +85,13 @@ self.addEventListener('fetch', function(event) {
 // ===== MESSAGE: handle version check requests =====
 self.addEventListener('message', function(event) {
   if (event.data && event.data.type === 'GET_VERSION') {
-    event.ports[0].postMessage({ version: APP_VERSION });
+    // Only respond if the client sent a MessageChannel port
+    if (event.ports && event.ports[0]) {
+      event.ports[0].postMessage({ version: APP_VERSION });
+    } else if (event.source) {
+      // Fallback: reply directly to the source client
+      try { event.source.postMessage({ type: 'GET_VERSION_REPLY', version: APP_VERSION }); } catch (_) {}
+    }
   }
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
