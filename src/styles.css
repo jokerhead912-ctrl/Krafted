@@ -531,6 +531,48 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
 .media-fullscreen-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 .media-fullscreen-btn svg { flex-shrink: 0; }
 
+/* ── Fullscreen floating timeline (v5.5.1) ──────────────────── */
+/* Appears at the bottom of the screen when the player is fullscreen
+   and the mouse is near the bottom edge. Allows scrubbing without
+   exiting fullscreen. Auto-hides after 1.5s of inactivity. */
+.media-fs-timeline {
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 10;
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 24px 20px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 60%, transparent 100%);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.media-fs-timeline.visible {
+  opacity: 1; pointer-events: auto;
+}
+.fs-tl-track {
+  flex: 1; height: 6px; position: relative;
+  background: rgba(255,255,255,0.15); border-radius: 3px;
+  cursor: pointer;
+}
+.fs-tl-track:hover { height: 8px; }
+.fs-tl-fill {
+  position: absolute; top: 0; left: 0; height: 100%;
+  background: var(--accent, #7c8cf0); border-radius: 3px;
+  width: 0%; pointer-events: none;
+  transition: height 0.1s;
+}
+.fs-tl-thumb {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 6px rgba(0,0,0,0.5);
+  left: 0%; pointer-events: none;
+  opacity: 0; transition: opacity 0.15s;
+}
+.fs-tl-track:hover .fs-tl-thumb { opacity: 1; }
+.fs-tl-time {
+  flex-shrink: 0; font-size: 13px; font-weight: 500;
+  color: rgba(255,255,255,0.9); font-family: 'Inter', 'SF Mono', monospace;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+  min-width: 100px; text-align: right;
+}
+
 /* ── Cursor ring indicator (follows mouse on the annotation canvas) ── */
 /* Shows the user EXACTLY where they're drawing and which color/size,
    so they can see what they're doing on the paused frame. */

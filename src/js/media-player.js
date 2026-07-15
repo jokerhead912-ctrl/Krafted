@@ -2156,6 +2156,131 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
   }
   document.addEventListener('fullscreenchange', _syncFsIcon);
   document.addEventListener('webkitfullscreenchange', _syncFsIcon);
+
+  // ── Fullscreen floating timeline (v5.5.1) ──────────────────
+  // When the player is fullscreen, a slim timeline bar auto-shows
+  // when the mouse moves to the bottom ~60px of the screen. Lets
+  // the user scrub through the video without exiting fullscreen.
+  // Auto-hides after 1.5s of no mouse movement in the zone.
+  if (isVideo && !isGif) {
+    var fsTimeline = document.createElement('div');
+    fsTimeline.className = 'media-fs-timeline';
+    fsTimeline.innerHTML =
+      '<div class="fs-tl-track">' +
+        '<div class="fs-tl-fill"></div>' +
+        '<div class="fs-tl-thumb"></div>' +
+      '</div>' +
+      '<span class="fs-tl-time">0:00 / 0:00</span>';
+    wrap.appendChild(fsTimeline);
+
+    var fsTimelineVisible = false;
+    var fsTimelineTimer = null;
+    var fsTimelineDragging = false;
+
+    var fsTrack = fsTimeline.querySelector('.fs-tl-track');
+    var fsFill = fsTimeline.querySelector('.fs-tl-fill');
+    var fsThumb = fsTimeline.querySelector('.fs-tl-thumb');
+    var fsTimeLabel = fsTimeline.querySelector('.fs-tl-time');
+
+    function _showFsTimeline() {
+      if (!fsTimelineVisible) {
+        fsTimelineVisible = true;
+        fsTimeline.classList.add('visible');
+      }
+      clearTimeout(fsTimelineTimer);
+      fsTimelineTimer = setTimeout(_hideFsTimeline, 1500);
+    }
+
+    function _hideFsTimeline() {
+      if (!fsTimelineDragging && fsTimelineVisible) {
+        fsTimelineVisible = false;
+        fsTimeline.classList.remove('visible');
+      }
+    }
+
+    function _updateFsTimeline() {
+      if (!mediaEl || !mediaEl.duration) return;
+      var pct = mediaEl.duration > 0 ? (mediaEl.currentTime / mediaEl.duration) * 100 : 0;
+      fsFill.style.width = pct + '%';
+      fsThumb.style.left = pct + '%';
+      var cur = formatTime(mediaEl.currentTime);
+      var dur = formatTime(mediaEl.duration);
+      fsTimeLabel.textContent = cur + ' / ' + dur;
+    }
+
+    // Seek by clicking or dragging the track
+    function _fsSeekFromClientX(clientX) {
+      if (!mediaEl || !mediaEl.duration) return;
+      var tr = fsTrack.getBoundingClientRect();
+      var pct = Math.max(0, Math.min(1, (clientX - tr.left) / tr.width));
+      mediaEl.currentTime = pct * mediaEl.duration;
+      _updateFsTimeline();
+    }
+
+    fsTrack.addEventListener('mousedown', function(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      fsTimelineDragging = true;
+      _fsSeekFromClientX(ev.clientX);
+    });
+
+    document.addEventListener('mousemove', function(ev) {
+      if (fsTimelineDragging) {
+        _fsSeekFromClientX(ev.clientX);
+      }
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (fsTimelineDragging) {
+        fsTimelineDragging = false;
+        // restart auto-hide timer after drag
+        clearTimeout(fsTimelineTimer);
+        fsTimelineTimer = setTimeout(_hideFsTimeline, 1500);
+      }
+    });
+
+    // Show timeline when mouse is near the bottom of the wrap
+    wrap.addEventListener('mousemove', function(ev) {
+      var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fsEl !== wrap) return; // only in fullscreen
+      var wr = wrap.getBoundingClientRect();
+      var bottomZone = wr.bottom - 60; // bottom 60px
+      if (ev.clientY >= bottomZone) {
+        _showFsTimeline();
+      } else if (fsTimelineVisible && !fsTimelineDragging) {
+        // Mouse left the zone — start hide timer
+        clearTimeout(fsTimelineTimer);
+        fsTimelineTimer = setTimeout(_hideFsTimeline, 800);
+      }
+    });
+
+    // Update timeline position during playback
+    mediaEl.addEventListener('timeupdate', function() {
+      var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fsEl === wrap && fsTimelineVisible) {
+        _updateFsTimeline();
+      }
+    });
+
+    // Also update on fullscreen enter
+    document.addEventListener('fullscreenchange', function() {
+      var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fsEl === wrap) {
+        _updateFsTimeline();
+      } else {
+        _hideFsTimeline();
+      }
+    });
+    document.addEventListener('webkitfullscreenchange', function() {
+      var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fsEl === wrap) {
+        _updateFsTimeline();
+      } else {
+        _hideFsTimeline();
+      }
+    });
+  }
+
   // Clean mode exit notice — sits in the empty controls-bar area below
   // the player when clean mode is on (NOT overlaying the video).
   const cleanExit = document.createElement('div');
