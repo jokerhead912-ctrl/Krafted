@@ -474,69 +474,17 @@ document.addEventListener('keydown', e => {
     if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); redo(); return; }
     if (e.key === 'c' || e.key === 'C') { e.preventDefault(); copySelected(); return; }
     if (e.key === 'v' || e.key === 'V') {
-      // v5.5: use navigator.clipboard.readText() for direct text paste.
-      // This bypasses the paste event entirely so paste-handler.js's
-      // in-app-copy intercept doesn't interfere. readText() requires
-      // secure context (HTTPS) + user gesture — GitHub Pages satisfies both.
-      e.preventDefault();
-      navigator.clipboard.readText().then(text => {
-        if (!text || !text.trim()) return;
-        const trimmed = text.trim();
-        // URL detection (same as paste-handler.js)
-        if (/^https?:\/\/[^\s]+$/i.test(trimmed) || /^www\.[^\s]+\.[a-z]{2,}/i.test(trimmed) ||
-            /^[a-z0-9-]+\.[a-z]{2,}[^\s]*$/i.test(trimmed)) {
-          let url = trimmed;
-          if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-          const { x, y } = getPasteXY();
-          addLinkCard(url, { x, y });
-          toast('Pasted link');
-        } else {
-          const { x, y } = getPasteXY();
-          const measureEl = document.createElement('span');
-          measureEl.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font:' +
-            textTool.size + 'px/1.5 ' + textTool.font;
-          document.body.appendChild(measureEl);
-          let widestLineW = 0;
-          for (const line of trimmed.split('\n')) {
-            measureEl.textContent = line;
-            widestLineW = Math.max(widestLineW, measureEl.offsetWidth);
-          }
-          document.body.removeChild(measureEl);
-          const initW = Math.min(520, Math.max(120, widestLineW + 40));
-          const tx = addText(x, y, trimmed, { noFocus: true, initW: initW });
-          requestAnimationFrame(() => {
-            autoGrowTextItem(tx);
-            refreshSelection();
-          });
-        }
-      }).catch(() => {
-        // readText() failed — clipboard permission not granted or non-HTTPS.
-        // Try navigator.clipboard.read() as fallback, then dispatch a
-        // synthetic paste event for paste-handler.js to handle.
-        navigator.clipboard.read().then(clipItems => {
-          const dt = new DataTransfer();
-          const promises = [];
-          for (const ci of clipItems) {
-            for (const mime of ci.types) {
-              if (mime === 'text/plain') {
-                promises.push(
-                  ci.getType(mime).then(blob => blob.text().then(txt => {
-                    dt.items.add(txt, 'text/plain');
-                  }))
-                );
-              }
-            }
-          }
-          return Promise.all(promises).then(() => dt);
-        }).then(dt => {
-          if (dt.items.length > 0) {
-            const pasteEv = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
-            document.dispatchEvent(pasteEv);
-          }
-        }).catch(() => {
-          // All clipboard APIs failed — nothing we can do
-        });
-      });
+      // v5.5: don't intercept Ctrl+V — let the native paste event fire.
+      // paste-handler.js listens for the 'paste' event and handles text
+      // (creating text boxes), URLs (link cards), images, and files. The
+      // native paste event's clipboardData.getAsString() does NOT require
+      // clipboard-read permission — unlike navigator.clipboard.readText().
+      //
+      // The in-app copy intercept in paste-handler.js (3-second window)
+      // already checks whether the incoming paste has text while the
+      // internal clipboard doesn't — if so, it lets the external text
+      // paste fall through to the text handler. So we don't need to
+      // bypass it here.
       return;
     }
     if (e.key === 'd' || e.key === 'D') {
