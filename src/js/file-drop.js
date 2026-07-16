@@ -255,20 +255,45 @@ export function _handleFileDrop(e, files) {
     const dropX = dropX0 + idx * 20;
     const dropY = dropY0 + idx * 20;
     const isLast = (imgIdx === imageFiles.length - 1);
-    // Create blob URL for the image (persists until page unload or revoke)
-    const blobUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      addImage(blobUrl, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
+    // v5.5.2: Use FileReader → data URL instead of blob URL for Image().
+    // blob URLs created from `new File([bytes])` can fail to decode in
+    // some browser/OS combos (especially on Windows where the file bytes
+    // are raw disk data). data URLs are universally reliable.
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      const dataUrl = ev.target.result;
+      const img = new Image();
+      img.onload = function() {
+        addImage(dataUrl, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
+        imgIdx++;
+        setTimeout(processNextImage, 30);
+      };
+      img.onerror = function() {
+        console.warn('[FileDrop] Image decode failed, trying blob fallback:', file.name);
+        // Fallback: try blob URL directly
+        const blobUrl = URL.createObjectURL(file);
+        const img2 = new Image();
+        img2.onload = function() {
+          addImage(blobUrl, img2.naturalWidth, img2.naturalHeight, dropX, dropY, false, isLast);
+          imgIdx++;
+          setTimeout(processNextImage, 30);
+        };
+        img2.onerror = function() {
+          console.error('[FileDrop] Both data URL and blob URL failed for:', file.name);
+          toast('Failed to load image: ' + file.name);
+          imgIdx++;
+          setTimeout(processNextImage, 30);
+        };
+        img2.src = blobUrl;
+      };
+      img.src = dataUrl;
+    };
+    reader.onerror = function() {
+      console.error('[FileDrop] FileReader failed for:', file.name);
       imgIdx++;
       setTimeout(processNextImage, 30);
     };
-    img.onerror = () => {
-      URL.revokeObjectURL(blobUrl);
-      imgIdx++;
-      setTimeout(processNextImage, 30);
-    };
-    img.src = blobUrl;
+    reader.readAsDataURL(file);
   }
   if (imageFiles.length > 0) {
     processNextImage();
