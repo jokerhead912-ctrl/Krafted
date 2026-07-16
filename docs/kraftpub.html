@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Krafted v5.5</title>
+<title>Krafted v6.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3935,7 +3935,7 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
     <p class="welcome-sub">Professional reference board — images, video, audio, mind maps & more.</p>
     <button class="btn-primary btn-large" onclick="hideWelcome()">GET STARTED</button>
     <div class="welcome-creator">CREATED BY KINCHEUNG</div>
-    <div class="welcome-version" id="welcome-version">V 5 . 5</div>
+    <div class="welcome-version" id="welcome-version">V 6 . 0</div>
   </div>
 </div>
 
@@ -17919,8 +17919,16 @@ document.addEventListener('fullscreenchange', _syncAppFsIcon);
 document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
-console.log('%c[Krafted v5.5.11] Frame Text click isolation — when text editor is active, clicks on the video area no longer toggle play/pause. Space types a space character; play/pause resumes after commit/cancel.',
+var KRAFTED_VERSION = '6.0';
+console.log('%c[Krafted v' + KRAFTED_VERSION + '] Frame Text + Fullscreen polish — text editor works in fullscreen, keyboard/click isolation prevents video interference.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
+
+// Auto-sync welcome page version number from KRAFTED_VERSION.
+// Change KRAFTED_VERSION above and the welcome page updates automatically.
+(function _syncWelcomeVersion(){
+  var wv = document.getElementById('welcome-version');
+  if (wv) wv.textContent = 'V ' + KRAFTED_VERSION.split('.').join(' . ');
+})();
 
 
 // ==== ui-utils.js ====
