@@ -9093,11 +9093,18 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // the toolbar only shows up after the user explicitly presses the
     // draw button. The `drawToolbarHidden` flag is honoured when set
     // (legacy behaviour + a way to force-hide if the user wants), but
-    // Always show the panel next to the video.
-    annoToolbar.classList.remove('toolbar-hidden');
-  } catch (e) {
-    annoToolbar.classList.remove('toolbar-hidden');
-  }
+    // on a fresh video we start hidden.
+    try {
+      const _initItm = _getItem();
+      const _initAnno = (_initItm && _initItm.anno) ? _initItm.anno : null;
+      const _initState = el._annoDrawState;
+      // Default: hidden unless draw mode is on OR user has explicitly
+      // un-hidden it (drawToolbarHidden === false).
+      // Always show panel next to video.
+      annoToolbar.classList.remove('toolbar-hidden');
+    } catch (e) {
+      annoToolbar.classList.remove('toolbar-hidden');
+    }
 
     // Round 6: Move the toolbar OUT of the video wrap and into <body>
     // so it floats as a separate panel that NEVER overlaps the video.
@@ -9335,7 +9342,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // is off, the toolbar is hidden. When the user presses the draw
       // button (or any other tool button), the toolbar pops up. The
       // ✕ close button now just exits draw mode (equivalent to pressing
-      // the draw button again). Panel stays visible always.
+      // Panel stays visible always.
       if (annoToolbar) {
         annoToolbar.classList.remove('toolbar-hidden');
         if (s.mode !== 'off') {
