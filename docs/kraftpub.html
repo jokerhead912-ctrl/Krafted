@@ -1703,8 +1703,46 @@ body.dragging-file .media-anno-toolbar {
   font-variant-numeric: tabular-nums;
   white-space: nowrap; flex-shrink: 0;
 }
-/* ── Over Comment section (v5.5.9: removed per user request) ── */
-.media-anno-popover.list .over-wrap { display: none !important; }
+/* ── Over Comment section ──
+   Sits between the add-input row and the comments list. Persistent
+   free-form text that gets included in the exported HTML report as an
+   "Overall Comment" block at the top. The user can collapse it via the
+   label header to save vertical space. */
+.media-anno-popover.list .over-wrap {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+.media-anno-popover.list .over-wrap.collapsed .over-input { display: none; }
+.media-anno-popover.list .over-wrap.collapsed { padding-bottom: 2px; }
+.media-anno-popover.list .over-head {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10.5px;
+  cursor: pointer;
+  user-select: none; -webkit-user-select: none;
+}
+.media-anno-popover.list .over-head .over-label {
+  font-weight: 700; color: var(--accent);
+  letter-spacing: 0.2px;
+}
+.media-anno-popover.list .over-head .over-hint {
+  color: var(--text-subtle); font-size: 9px;
+  font-weight: 400;
+  margin-left: auto;
+}
+.media-anno-popover.list .over-input {
+  width: 100%; min-height: 38px; max-height: 140px;
+  resize: vertical;
+  background: var(--input-bg, #1a1a1a);
+  border: 1px solid var(--border); color: var(--text);
+  border-radius: 5px; font-size: 12px; line-height: 1.45;
+  padding: 6px 9px; font-family: inherit; outline: none;
+  box-sizing: border-box;
+}
+.media-anno-popover.list .over-input:focus { border-color: var(--accent); }
+.media-anno-popover.list .over-input::placeholder {
   color: var(--text-subtle); font-style: italic; opacity: 0.7;
 }
 .media-anno-popover.list .list-body {
@@ -11381,8 +11419,45 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   addInputRow.appendChild(snapBtn);
   addInputRow.appendChild(addHint);
   listPopover.appendChild(addInputRow);
-  // v5.5.9: Over Comment section removed per user request.
-  // The DOM element is not created; CSS hides it if stale markup exists.
+  // ── "Over Comment" section ──
+  // A free-form text field for an overall comment that gets included in
+  // the exported HTML report (not attached to any specific frame). Lives
+  // in the popover between the add-input row and the comments list so
+  // the user can type/edit it any time. Persists per video on item.anno.
+  const overWrap = document.createElement('div');
+  overWrap.className = 'over-wrap';
+  const overHead = document.createElement('div');
+  overHead.className = 'over-head';
+  overHead.innerHTML = '<span class="over-label">📝 (overall comment)</span>' +
+    '<span class="over-hint">shown at top of export</span>';
+  const overInput = document.createElement('textarea');
+  overInput.className = 'over-input';
+  overInput.rows = 2;
+  overInput.placeholder = 'Optional — overall comment for the whole review (e.g. summary, key points, instructions)…';
+  overInput.spellcheck = true;
+  // Stop popover drag from triggering when interacting with the textarea
+  overInput.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
+  overInput.addEventListener('click', function(ev){ ev.stopPropagation(); });
+  // Save on input (debounced) + on blur
+  let _overSaveTimer = null;
+  overInput.addEventListener('input', function(){
+    if (_overSaveTimer) clearTimeout(_overSaveTimer);
+    _overSaveTimer = setTimeout(_saveOver, 300);
+  });
+  overInput.addEventListener('blur', _saveOver);
+  function _saveOver() {
+    if (_overSaveTimer) { clearTimeout(_overSaveTimer); _overSaveTimer = null; }
+    const itm = _getItem();
+    if (!itm) return;
+    const anno = videoAnnoEnsure(itm);
+    const v = overInput.value;
+    if ((anno.overComment || '') === v) return;
+    anno.overComment = v;
+    try { scheduleAutoSave(); } catch (e) {}
+  }
+  overWrap.appendChild(overHead);
+  overWrap.appendChild(overInput);
+  listPopover.appendChild(overWrap);
   // Scrollable list of comments
   const listBody = document.createElement('div');
   listBody.className = 'list-body';
@@ -11445,9 +11520,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     const _anno2 = _itm2 && _itm2.anno ? _itm2.anno : null;
     const _comments2 = _anno2 && Array.isArray(_anno2.comments) ? _anno2.comments : [];
     const nComments = _comments2.length;
-    // v5.5.9: over-wrap removed, chromeH simplified
+    // Detect over-wrap state so chromeH is accurate. When the user
+    // expands the overall-comment textarea, the chrome grows by ~100px.
+    const _overWrap = listPopover.querySelector('.over-wrap');
+    const _overCollapsed = _overWrap ? _overWrap.classList.contains('collapsed') : true;
+    const _overInputH = (!_overCollapsed && _overWrap) ? Math.min(140, _overWrap.querySelector('.over-input')?.offsetHeight || 60) : 0;
     const cardH = listPopover.classList.contains('minimized') ? 56 : 140;
-    const chromeH = 40 /* head */ + 40 /* add-row */ + 19 /* popover padding */ + 18 /* gaps */;
+    const chromeH = 40 /* head */ + 40 /* add-row */ + 16 /* over-head + padding */ + _overInputH + 19 /* popover padding */ + 18 /* 3 inter-section gaps */;
     const autoHeight = (nComments * cardH) + chromeH;
     const maxH = Math.floor(window.innerHeight * 0.92);
     const minPanelH = 100;
@@ -11670,7 +11749,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         const fIdx = Math.round((mediaEl.currentTime || 0) * fps);
         addHint.textContent = 'f ' + fIdx;
       } catch (e) { addHint.textContent = 'f —'; }
-      // v5.5.9: over comment removed
+      // Load the over-comment value (if any) into the textarea so the
+      // user can see and edit the existing comment
+      try {
+        const itm2 = _getItem();
+        const anno2 = (itm2 && itm2.anno) ? itm2.anno : null;
+        overInput.value = (anno2 && anno2.overComment) ? anno2.overComment : '';
+      } catch (e) { overInput.value = ''; }
       // Focus the add input so the user can start typing immediately
       setTimeout(() => { try { addInput.focus(); } catch (e) {} }, 30);
       // Round 28.5: glue the popover to its video — follow move + scale
@@ -11738,10 +11823,20 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       _popoverTrackWinHandler = null;
     }
   }
-  // v5.5.9: over comment section removed
-  // v5.5.9: over comment removed — _getOverComment returns empty
+  // Click on the over-comment header toggles collapse (hide textarea to save space)
+  overHead.addEventListener('click', function(ev){
+    overWrap.classList.toggle('collapsed');
+  });
+  // Expose helpers for the export flow so it can read the latest over comment
+  // and the original file name. The export function may be called when the
+  // popover is closed, in which case it reads from the saved state directly.
   function _getOverComment() {
-    return '';
+    // Prefer the in-DOM textarea (most recent edit) over the saved state
+    const domVal = overInput && ('value' in overInput) ? overInput.value : null;
+    if (domVal != null && domVal !== '') return domVal;
+    const itm = _getItem();
+    const anno = (itm && itm.anno) ? itm.anno : null;
+    return (anno && anno.overComment) ? anno.overComment : '';
   }
   function _getOriginalFileName() {
     const itm = _getItem();
