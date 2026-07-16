@@ -241,10 +241,25 @@
         });
 
         tx.oncomplete = function() {
-          // Mark migration done
-          store.put({ key: SCHEMA_KEY, value: String(SCHEMA_VERSION), updated: Date.now() });
-          console.log('[KraftedStorage] Migration complete: ' + count + ' keys');
-          resolve(count);
+          // v5.5.2: open a NEW transaction for the schema marker — the
+          // current tx has already completed and `store.put()` here
+          // throws "transaction has finished". Was crashing the migration
+          // path with an uncaught error.
+          try {
+            var tx2 = db.transaction(STORE_NAME, 'readwrite');
+            tx2.objectStore(STORE_NAME).put({ key: SCHEMA_KEY, value: String(SCHEMA_VERSION), updated: Date.now() });
+            tx2.oncomplete = function() {
+              console.log('[KraftedStorage] Migration complete: ' + count + ' keys');
+              resolve(count);
+            };
+            tx2.onerror = function(e) {
+              console.error('[KraftedStorage] Migration mark error:', e.target.error);
+              resolve(count);
+            };
+          } catch (e) {
+            console.error('[KraftedStorage] Migration mark failed:', e);
+            resolve(count);
+          }
         };
         tx.onerror = function(e) {
           console.error('[KraftedStorage] Migration tx error:', e.target.error);

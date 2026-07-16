@@ -35,15 +35,19 @@ viewport.addEventListener('contextmenu', e => {
 // the drop is being received.
 const _welcomeEl = document.getElementById('welcome');
 if (_welcomeEl) {
+  // v5.5.2: dragover MUST unconditionally preventDefault so the browser
+  // allows a drop. _isFileDrag cannot be used during dragover/dragenter
+  // because dataTransfer.types is empty for security reasons in those
+  // phases (only populated during 'drop'). Without this, dragging any
+  // file over the welcome (z-index 99999999) is silently rejected.
   _welcomeEl.addEventListener('dragover', function(e){
-    if (_isFileDrag(e)) { e.preventDefault(); }
+    e.preventDefault();
   });
   _welcomeEl.addEventListener('drop', function(e){
-    if (!_isFileDrag(e)) return;
     e.preventDefault();
     hideWelcome();
-    const files = [...e.dataTransfer.files];
-    if (files.length) _handleFileDrop(e, files);
+    const files = e.dataTransfer.files;
+    if (files && files.length) _handleFileDrop(e, [...files]);
   });
 }
 
@@ -57,14 +61,26 @@ viewport.addEventListener('dragover', e => { e.preventDefault(); });
 // or get out of sync).
 let _fileDragDepth = 0;
 export function _isFileDrag(e) {
-  // Only react when the drag actually carries files (not text/internal
-  // reordering of items, which we don't want to hide the panel for).
+  // v5.5.2: dataTransfer.types is EMPTY during dragover/dragenter in
+  // most browsers for security. Fall back to checking items.length
+  // (which IS populated) or files.length. Without this, the dragenter
+  // handler never triggers → welcome stays visible → drop fails.
   if (!e || !e.dataTransfer) return false;
-  const types = e.dataTransfer.types;
-  if (!types) return false;
-  for (let i = 0; i < types.length; i++) {
-    if (types[i] === 'Files') return true;
+  // Check items first (works during dragover/dragenter)
+  if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+    for (let i = 0; i < e.dataTransfer.items.length; i++) {
+      if (e.dataTransfer.items[i].kind === 'file') return true;
+    }
   }
+  // Check types (works during drop/paste)
+  const types = e.dataTransfer.types;
+  if (types && types.length) {
+    for (let i = 0; i < types.length; i++) {
+      if (types[i] === 'Files') return true;
+    }
+  }
+  // Check files (sometimes populated even when types is empty)
+  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) return true;
   return false;
 }
 document.addEventListener('dragenter', function(e){
