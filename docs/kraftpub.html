@@ -470,6 +470,7 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
   touch-action: none;
   cursor: crosshair;
   box-sizing: border-box;
+  will-change: transform;      /* v5.5.7: GPU layer for smooth zoom sync */
 }
 .item.has-media.draw-mode .media-anno-canvas {
   pointer-events: auto;       /* on when in draw mode */
@@ -7562,7 +7563,7 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
     mediaEl.loop = true;
     mediaEl.muted = true;
     mediaEl.preload = 'none';  // v5.5.1: no preload — only load when selected/hovered/played
-    mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;';
+    mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;will-change:transform;';
   } else {
     mediaEl = document.createElement('img');
     mediaEl.src = src;
@@ -12766,13 +12767,17 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     });
 
     // Time update → fill + labels
+    // v5.5.7: throttle to ~15fps (skip if < 60ms since last update)
+    // timeupdate fires at ~4Hz during playback — the fill bar and
+    // time labels don't need to update that often. Rounding the
+    // percentage to 0.5% steps also avoids layout thrash.
     mediaEl.addEventListener('timeupdate', function() {
       if (!mediaEl.duration) return;
-      // Don't fight the user mid-seek — let the drag own the fill bar.
-      // timeupdate keeps firing while the video is paused, and the drag's
-      // updateSeekUI is what should win until mouseup.
       if (seeking) return;
-      var pct = (mediaEl.currentTime / mediaEl.duration * 100);
+      var now = performance.now();
+      if (mediaEl._lastTimeUpdate && now - mediaEl._lastTimeUpdate < 60) return;
+      mediaEl._lastTimeUpdate = now;
+      var pct = Math.round(mediaEl.currentTime / mediaEl.duration * 200) / 2;
       fill.style.width = pct + '%';
       tCur.textContent = fmt(mediaEl.currentTime);
       refreshInPlayerTrimUI();
@@ -21098,11 +21103,14 @@ document.addEventListener('mousemove', e => {
     if (videoEl) {
       videoEl.style.transform = 'scale(' + zoom + ') translate(' + panX + 'px, ' + panY + 'px)';
       videoEl.style.transformOrigin = 'center center';
-      // v5.5.7: sync annoCanvas transform so draw strokes follow video zoom/pan
-      const annoCanvas = d.item.el && d.item.el.querySelector('.media-anno-canvas');
-      if (annoCanvas) {
-        annoCanvas.style.transform = videoEl.style.transform;
-        annoCanvas.style.transformOrigin = 'center center';
+      // v5.5.7: sync annoCanvas transform so draw strokes follow video zoom/pan.
+      // Cache the canvas ref on the item to avoid querySelector on every mousemove.
+      if (!d.item._annoCanvas) {
+        d.item._annoCanvas = d.item.el && d.item.el.querySelector('.media-anno-canvas');
+      }
+      if (d.item._annoCanvas) {
+        d.item._annoCanvas.style.transform = videoEl.style.transform;
+        d.item._annoCanvas.style.transformOrigin = 'center center';
       }
     }
     return;
