@@ -10464,6 +10464,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           mediaEl.style.transform = '';
           mediaEl.style.transformOrigin = '';
         }
+        // v5.5.7: reset annoCanvas transform too
+        if (annoCanvas) {
+          annoCanvas.style.transform = '';
+          annoCanvas.style.transformOrigin = '';
+        }
         return;
       }
       var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
@@ -21087,6 +21092,12 @@ document.addEventListener('mousemove', e => {
     if (videoEl) {
       videoEl.style.transform = 'scale(' + zoom + ') translate(' + panX + 'px, ' + panY + 'px)';
       videoEl.style.transformOrigin = 'center center';
+      // v5.5.7: sync annoCanvas transform so draw strokes follow video zoom/pan
+      const annoCanvas = d.item.el && d.item.el.querySelector('.media-anno-canvas');
+      if (annoCanvas) {
+        annoCanvas.style.transform = videoEl.style.transform;
+        annoCanvas.style.transformOrigin = 'center center';
+      }
     }
     return;
   }
