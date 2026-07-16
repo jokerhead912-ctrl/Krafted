@@ -155,12 +155,16 @@ body.is-dragging .item-handle, body.is-dragging .item-rot { display:none !import
 }
 .item.has-media .media-info-bar .ib-name {
   color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  min-width: 0; max-width: 280px;
+  min-width: 0; max-width: 180px;
+  /* v5.5.7: 1fr flex behaviour so the filename shares the row with
+     frame/time/fps instead of claiming up to 280px and pushing the
+     frame counter off-screen after Tidy narrows the item. */
+  flex: 1 1 auto;
 }
 .item.has-media .media-info-bar .ib-sep {
   color: #444; flex-shrink: 0;
 }
-.item.has-media .media-info-bar .ib-frame { color: #00e5ff; flex-shrink: 0; }
+.item.has-media .media-info-bar .ib-frame { color: #00e5ff; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item.has-media .media-info-bar .ib-time  { color: #fff;   flex-shrink: 0; }
 .item.has-media .media-info-bar .ib-fps   { color: #888;   flex-shrink: 0; }
 /* ── High-DPI auto-scale for player controls ──
@@ -245,11 +249,16 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
   padding: 6px 10px; min-height: 40px; box-sizing: border-box;
   flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
   scrollbar-width: thin;
-  /* v5.5.5: prevent controls from shrinking below readable size.
-     When the user resizes the player smaller, the controls bar keeps
-     its minimum width and scrolls horizontally instead of shrinking
-     buttons and the seek bar down to illegible sizes. */
-  min-width: 420px;
+  /* v5.5.7: NO hard min-width here. A fixed 420px floor used to force the
+     controls bar wider than the parent .item after Tidy shrank the
+     video to ~280px wide, which then overflowed the .item container
+     and visually tore the layout (controls spilled out, video
+     aspect-ratio squashed, info bar floated free). Let the row
+     shrink to fit the item; ResizeObserver below flips `.compact`
+     on at 420px so the seek bar + buttons remain readable, and the
+     row scrolls horizontally if its content is still too wide. */
+  min-width: 0;
+  flex-shrink: 1;
 }
 /* Compact mode (Round 94): applied via ResizeObserver when the player
    is too narrow for the full seek bar + labeled buttons to coexist
@@ -7453,9 +7462,19 @@ function tidySelection() {
     }
 
     // Scale to uniform column width, preserve aspect ratio
-    var scale = COL_W / ssi.w;
-    var newW = COL_W;
-    var newH = ssi.h * scale;
+    // v5.5.7: when there's only ONE item, don't squeeze it to COL_W —
+    // that destroys wide videos/images and forces the controls bar
+    // (min content width) to overflow the container. Keep the
+    // original size and only recenter it.
+    var scale, newW, newH;
+    if (selItems.length === 1) {
+      newW = ssi.w;
+      newH = ssi.h;
+    } else {
+      scale = COL_W / ssi.w;
+      newW = COL_W;
+      newH = ssi.h * scale;
+    }
 
     // Store scaled dimensions for framing
     ssi._newW = newW;
@@ -9341,6 +9360,14 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           try {
         if (annoToolbar) {
           annoToolbar.classList.toggle('toolbar-hidden', s.mode === 'off');
+          // v5.5.7: re-position the toolbar next to the video when it
+          // becomes visible. The toolbar defaults to top:0;left:0 in CSS,
+          // and _positionToolbar() skips hidden toolbars — so without
+          // this call the toolbar appears at the top-left corner of the
+          // screen (invisible to the user, who's looking at the video).
+          if (s.mode !== 'off') {
+            try { _positionToolbar(); } catch (e) {}
+          }
         }
       } catch (e) {}
       // Round 31: re-sync the 📌 Follow button so it reflects the
@@ -15074,6 +15101,19 @@ async function videoAnnoSendToBoard() {
     try { v.currentTime = prevTime; } catch (e) {}
     if (!wasPaused) { try { v.play().catch(() => {}); } catch (e) {} }
   }
+  // ── 1.5) Read the overall comment from the popover (or saved) ──
+  // v5.5.7: Send-to-Board now also exports the (overall comment) the
+  // user typed in the popover — same as HTML Export does. Without this,
+  // the user had to manually copy/paste the summary above the storyboard
+  // every time. Now it becomes the FIRST text item at the top of the
+  // layout so it reads as a header for the whole review.
+  let overComment = '';
+  try {
+    if (item.el && item.el._getOverComment) overComment = item.el._getOverComment() || '';
+  } catch (e) {}
+  if (!overComment && anno.overComment) overComment = anno.overComment;
+  overComment = String(overComment || '').trim();
+
   // ── 2) Layout params — 2-COLUMN storyboard, Figma-style ─────────
   // Round 68 redesign (user ref @image#1): the previous version was a
   // single tall column of 360x203 images + 440-wide text blocks. That
@@ -15158,6 +15198,48 @@ async function videoAnnoSendToBoard() {
   // Anchor: right edge of the video, aligned to the top of the video
   const startX = (item.x + item.w) + COL_GAP;
   const startY = item.y;
+  // ── 2.5) Render the (overall comment) as a header above the grid ──
+  // v5.5.7: the user types an overall comment in the popover (e.g.
+  // "summary, key points"). Export (HTML) already bundles it. Send
+  // to Board now does the same — the text becomes a labelled yellow
+  // text box spanning both columns, sitting ABOVE the first row.
+  // We do this AFTER the layout param block so we know PAIR_W and
+  // can size the box to span the full 2-column width. The body is
+  // collapsed to a single newline-collapsed string so the height
+  // matches the text content.
+  const newItemIds = [];
+  if (overComment) {
+    const headerW = COLS * PAIR_W + (COLS - 1) * COL_GAP;
+    const headerHtml =
+      '<div style="color:rgba(255,210,90,0.95);font-size:18px;font-weight:700;letter-spacing:0.04em;margin-bottom:6px;">📝 (overall comment)</div>' +
+      '<div style="color:#ffffff;font-size:20px;line-height:1.45;white-space:pre-wrap;word-break:break-word;">' +
+        (typeof escapeHTML === 'function' ? escapeHTML(overComment) : overComment.replace(/[<>&]/g, function(c){
+          return ({'<':'&lt;','>':'&gt;','&':'&amp;'})[c];
+        })) +
+      '</div>';
+    const headerItem = addText(startX, startY, '', { noFocus: true, initW: 50 });
+    if (headerItem) {
+      headerItem.el.innerHTML = headerHtml;
+      // Auto-fit to the full 2-column span so the header reads as
+      // one banner over the whole storyboard. Use autoGrowTextItem
+      // (the standard helper) with a minW that forces the full width.
+      if (typeof autoGrowTextItem === 'function') {
+        headerItem.w = Math.max(headerW, 320);
+        autoGrowTextItem(headerItem);
+      } else if (typeof autoFitTextItem === 'function') {
+        autoFitTextItem(headerItem, { minW: headerW, maxW: headerW });
+      }
+      headerItem._autoGrowLocked = true;
+      newItemIds.push(headerItem.id);
+      // Push the storyboard grid down so the first row starts BELOW
+      // the header (with a comfortable gap). We bump BOTH columns'
+      // starting Y by the header height + gap so the layout stays
+      // symmetrical.
+      const headerH = (headerItem.h || 0) + 28;
+      colY[0] = startY + headerH;
+      colY[1] = startY + headerH;
+    }
+  }
   // ── 3) Capture pre-batch state for a single-undo batch ────────
   // Each addImage / addText below pushes its own snapshot. After the
   // batch we collapse all those intermediate snapshots down to one
@@ -15166,7 +15248,6 @@ async function videoAnnoSendToBoard() {
   // to the board" = one action).
   const preBatchSnap = captureSnapshot();
   const initialUndoLen = state.undoStack.length;
-  const newItemIds = [];
   // Per-column running Y. Each column advances its OWN Y as pairs
   // are added, so a 6-line text in row 3 of the left column doesn't
   // push the right column's row 3 down — they stay independent.
