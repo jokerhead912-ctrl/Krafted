@@ -9277,7 +9277,25 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // the draw button again).
           try {
         if (annoToolbar) {
+          const wasHidden = annoToolbar.classList.contains('toolbar-hidden');
           annoToolbar.classList.toggle('toolbar-hidden', s.mode === 'off');
+          // Bugfix: when unhiding the toolbar, force a reposition so it
+          // doesn't end up at (0,0) or off-screen. The rAF follow loop
+          // skips _positionToolbar while hidden, and toolbarPos may point
+          // to a stale off-screen location from a previous session.
+          if (wasHidden && s.mode !== 'off') {
+            // Reset stale toolbarPos so the follow loop re-anchors to
+            // the video instead of jumping to a saved off-screen spot.
+            if (el._annoDrawState && el._annoDrawState.toolbarPos) {
+              el._annoDrawState.toolbarPos = null;
+            }
+            // Defer reposition by one rAF so the browser has laid out
+            // the now-visible toolbar (offsetWidth/Height are 0 while
+            // display:none, and toggle is sync but layout may lag).
+            requestAnimationFrame(function(){
+              try { _positionToolbar(); } catch (_ePos) {}
+            });
+          }
         }
       } catch (e) {}
       // Round 31: re-sync the 📌 Follow button so it reflects the
