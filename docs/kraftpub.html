@@ -155,12 +155,16 @@ body.is-dragging .item-handle, body.is-dragging .item-rot { display:none !import
 }
 .item.has-media .media-info-bar .ib-name {
   color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  min-width: 0; max-width: 280px;
+  min-width: 0; max-width: 180px;
+  /* v5.5.7: 1fr flex behaviour so the filename shares the row with
+     frame/time/fps instead of claiming up to 280px and pushing the
+     frame counter off-screen after Tidy narrows the item. */
+  flex: 1 1 auto;
 }
 .item.has-media .media-info-bar .ib-sep {
   color: #444; flex-shrink: 0;
 }
-.item.has-media .media-info-bar .ib-frame { color: #00e5ff; flex-shrink: 0; }
+.item.has-media .media-info-bar .ib-frame { color: #00e5ff; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item.has-media .media-info-bar .ib-time  { color: #fff;   flex-shrink: 0; }
 .item.has-media .media-info-bar .ib-fps   { color: #888;   flex-shrink: 0; }
 /* ── High-DPI auto-scale for player controls ──
@@ -245,6 +249,16 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
   padding: 6px 10px; min-height: 40px; box-sizing: border-box;
   flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
   scrollbar-width: thin;
+  /* v5.5.7: NO hard min-width here. A fixed 420px floor used to force the
+     controls bar wider than the parent .item after Tidy shrank the
+     video to ~280px wide, which then overflowed the .item container
+     and visually tore the layout (controls spilled out, video
+     aspect-ratio squashed, info bar floated free). Let the row
+     shrink to fit the item; ResizeObserver below flips `.compact`
+     on at 420px so the seek bar + buttons remain readable, and the
+     row scrolls horizontally if its content is still too wide. */
+  min-width: 0;
+  flex-shrink: 1;
 }
 /* Compact mode (Round 94): applied via ResizeObserver when the player
    is too narrow for the full seek bar + labeled buttons to coexist
@@ -465,6 +479,7 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
   touch-action: none;
   cursor: crosshair;
   box-sizing: border-box;
+  will-change: transform;      /* v5.5.7: GPU layer for smooth zoom sync */
 }
 .item.has-media.draw-mode .media-anno-canvas {
   pointer-events: auto;       /* on when in draw mode */
@@ -630,15 +645,23 @@ body.video-draw-mode .media-anno-cursor-ring { display: block; }
    All content stays within the panel bounds — nothing can overflow past
    the cyan border. */
 .media-anno-toolbar {
-  position: fixed; top: 0; left: 0;
-  z-index: 9999999;
+  position: absolute; top: 0; left: 0;
+  /* v5.5.7: was position:fixed on document.body — broke inside sandbox
+     webview iframes where `fixed` is relative to the iframe viewport
+     instead of the top-level window. Now positioned relative to the
+     .item container so it follows the video during zoom/pan. */
+  z-index: 100000;
   display: flex; flex-direction: column; gap: 4px; align-items: center;
-  background: rgba(20,20,24,0.96);
-  border: 1px solid rgba(0,229,255,0.4);
+  background: rgba(20,20,24,0.98);
+  border: 2px solid rgba(0,229,255,0.6);
   border-radius: 9px; padding: 6px;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.7);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.9), 0 0 0 1px rgba(0,229,255,0.3);
   font-size: 12px; user-select: none;
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  /* v5.5.7: !important to win over any sandbox-quirk CSS that might
+     be hiding the toolbar (e.g. weird overflow rules in webview). */
+  opacity: 1 !important;
+  visibility: visible !important;
   /* Round 12: width driven by the content, but constrained. The color
      picker (widest element at ~120px) sets the natural width. */
   width: calc(132px * var(--tb-scale, 1));
@@ -5041,6 +5064,63 @@ function isPanTrigger(e) {
   return false;
 }
 
+// v5.5.7: cache DOM refs for frame-step UI updates to avoid
+// querySelector on every arrow keypress (major perf win).
+function _cacheFrameStepRefs(item) {
+  if (!item || !item.el || item.el._fsCached) return;
+  var el = item.el;
+  el._fsCached = true;
+  el._fsSeekFill = el.querySelector('.media-seek-fill');
+  el._fsTimeCur = el.querySelector('.media-time-cur');
+  el._fsFrameDisplay = el.querySelector('.media-frame-display');
+  if (el._fsFrameDisplay) {
+    el._fsFcCur = el._fsFrameDisplay.querySelector('.fc-cur');
+    el._fsFcTotal = el._fsFrameDisplay.querySelector('.fc-total');
+    el._fsFcTime = el._fsFrameDisplay.querySelector('.fc-time');
+  }
+  el._fsInfoBar = el.querySelector('.media-info-bar');
+  if (el._fsInfoBar) {
+    el._fsIbFcur = el._fsInfoBar.querySelector('.ib-fcur');
+    el._fsIbFtot = el._fsInfoBar.querySelector('.ib-ftot');
+    el._fsIbTime = el._fsInfoBar.querySelector('.ib-time');
+    el._fsIbFps = el._fsInfoBar.querySelector('.ib-fps');
+  }
+}
+function _updateFrameStepUI(item, time) {
+  if (!item || !item.el) return;
+  var el = item.el;
+  var vid = item.video;
+  if (!vid) return;
+  var dur = vid.duration || 1;
+  var fps = vid._kraftedFps || 30;
+  var pct = (time / dur) * 100;
+  if (el._fsSeekFill) el._fsSeekFill.style.width = pct + '%';
+  if (el._fsTimeCur) el._fsTimeCur.textContent = formatVideoTimeForLabel(el, vid, time);
+  if (el._fsFrameDisplay) {
+    var fIdx = Math.max(0, Math.round(time * fps));
+    var fTotal = Math.max(0, Math.round((isFinite(vid.duration) ? vid.duration : 0) * fps));
+    var m = Math.floor(time / 60);
+    var s = Math.floor(time % 60);
+    var cs = Math.floor((time - Math.floor(time)) * 100);
+    var ts = m + ':' + (s < 10 ? '0' : '') + s + '.' + (cs < 10 ? '0' : '') + cs;
+    if (el._fsFcCur) el._fsFcCur.textContent = 'F ' + fIdx;
+    if (el._fsFcTotal) el._fsFcTotal.textContent = '/ ' + fTotal;
+    if (el._fsFcTime) el._fsFcTime.textContent = ts;
+  }
+  if (el._fsInfoBar) {
+    var fIdx2 = Math.max(0, Math.round(time * fps));
+    var fTotal2 = Math.max(0, Math.round((isFinite(vid.duration) ? vid.duration : 0) * fps));
+    var m2 = Math.floor(time / 60);
+    var s2 = Math.floor(time % 60);
+    var cs2 = Math.floor((time - Math.floor(time)) * 100);
+    var ts2 = m2 + ':' + (s2 < 10 ? '0' : '') + s2 + '.' + (cs2 < 10 ? '0' : '') + cs2;
+    if (el._fsIbFcur) el._fsIbFcur.textContent = 'F ' + fIdx2;
+    if (el._fsIbFtot) el._fsIbFtot.textContent = '/ ' + fTotal2;
+    if (el._fsIbTime) el._fsIbTime.textContent = ts2;
+    if (el._fsIbFps) el._fsIbFps.textContent = fps + ' fps';
+  }
+}
+
 const textTool = {
   font: 'Arial', size: 24, bold: false, italic: false, underline: false, strike: false,
   highlight: false, shadow: false, bg: false, outline: false, uppercase: false,
@@ -7390,9 +7470,19 @@ function tidySelection() {
     }
 
     // Scale to uniform column width, preserve aspect ratio
-    var scale = COL_W / ssi.w;
-    var newW = COL_W;
-    var newH = ssi.h * scale;
+    // v5.5.7: when there's only ONE item, don't squeeze it to COL_W —
+    // that destroys wide videos/images and forces the controls bar
+    // (min content width) to overflow the container. Keep the
+    // original size and only recenter it.
+    var scale, newW, newH;
+    if (selItems.length === 1) {
+      newW = ssi.w;
+      newH = ssi.h;
+    } else {
+      scale = COL_W / ssi.w;
+      newW = COL_W;
+      newH = ssi.h * scale;
+    }
 
     // Store scaled dimensions for framing
     ssi._newW = newW;
@@ -7557,7 +7647,7 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
     mediaEl.loop = true;
     mediaEl.muted = true;
     mediaEl.preload = 'none';  // v5.5.1: no preload — only load when selected/hovered/played
-    mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;';
+    mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;will-change:transform;';
   } else {
     mediaEl = document.createElement('img');
     mediaEl.src = src;
@@ -8942,24 +9032,30 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     actionRow.appendChild(doneBtn);
     col2.appendChild(actionRow);
 
-    // Close button (✕) — exits draw mode but panel stays visible.
+    // Round 5: close button (✕) at the bottom of col2. Round 19:
+    // exits draw mode entirely (equivalent to pressing the draw button
+    // again). The toolbar is now tied to draw mode so hiding it means
+    // leaving draw mode. Legacy `drawToolbarHidden` flag is still
+    // honoured as a force-hide if set elsewhere.
     const closeRow = document.createElement('div');
     closeRow.className = 'toolbar-row toolbar-row-close';
     const toolbarCloseBtn = document.createElement('button');
     toolbarCloseBtn.className = 'toolbar-close';
     toolbarCloseBtn.innerHTML = '&#10005;'; // ✕
-    toolbarCloseBtn.title = 'Exit draw mode (panel stays visible)';
+    toolbarCloseBtn.title = 'Exit draw mode (press the draw button again to come back)';
     toolbarCloseBtn.addEventListener('click', function(ev){
       ev.stopPropagation();
       const s = el._annoDrawState;
       if (!s) return;
+      // Exit draw mode — this also hides the toolbar via _applyDrawMode.
       s.mode = 'off';
       _applyDrawMode();
       try {
         const itm = _getItem();
-        if (itm && itm.anno) itm.anno.drawToolbarHidden = false;
+        if (itm && itm.anno) itm.anno.drawToolbarHidden = true;
       } catch (e) {}
       try { scheduleAutoSave(); } catch (e) {}
+      try { toast('Draw mode off — press the draw button to start again'); } catch (e) {}
     });
     closeRow.appendChild(toolbarCloseBtn);
 
@@ -8997,14 +9093,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // the toolbar only shows up after the user explicitly presses the
     // draw button. The `drawToolbarHidden` flag is honoured when set
     // (legacy behaviour + a way to force-hide if the user wants), but
-    // on a fresh video we start hidden.
-    try {
-      // Always show the annotation panel next to the video.
-      // The user asked for it to stay visible at all times — no auto-hide.
-      annoToolbar.classList.remove('toolbar-hidden');
-    } catch (e) {
-      annoToolbar.classList.remove('toolbar-hidden');
-    }
+    // Always show the panel next to the video.
+    annoToolbar.classList.remove('toolbar-hidden');
+  } catch (e) {
+    annoToolbar.classList.remove('toolbar-hidden');
+  }
 
     // Round 6: Move the toolbar OUT of the video wrap and into <body>
     // so it floats as a separate panel that NEVER overlaps the video.
@@ -9015,13 +9108,20 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // draw toolbar on undo/delete. Without this, the toolbar (which lives
     // on body) was leaking across undos — the user reported "the draw
     // panel stays on the screen" after Ctrl+Z.
-    // Round 76: toolbar stays on document.body. The Fullscreen API hides
-    // everything outside the fullscreen element's subtree, so the toolbar
-    // is AUTO-HIDDEN in fullscreen — exactly what the user wants (clean
-    // video view, no floating panels). The cursor ring, text editor, and
-    // translate button are inside wrap so they remain usable in fullscreen.
-    document.body.appendChild(annoToolbar);
+    // v5.5.7: append toolbar to the .item container (NOT document.body)
+    // so position:absolute tracks the item during zoom/pan, and the
+    // toolbar stays visible inside sandbox webview iframes where
+    // position:fixed on body is relative to the iframe, not the window.
+    // The Fullscreen API still hides the toolbar because it's inside
+    // the .item subtree (which gets fullscreened) — the toolbar auto-
+    // hides in fullscreen, same as before.
+    el.appendChild(annoToolbar);
     el._annoToolbar = annoToolbar;
+    // v5.5.7: also stash on the item object so cleanupAllItems can
+    // find it (the item object doesn't always have `.el` during
+    // teardown — it uses `i._annoToolbar` directly).
+    const itm = _getItem();
+    if (itm) itm._annoToolbar = annoToolbar;
 
     // ── Drag handle at the top of the toolbar ──
     // Lets the user move the floating toolbar anywhere on screen.
@@ -9045,68 +9145,41 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     function _positionToolbar() {
       if (!annoToolbar) return;
       if (annoToolbar.classList.contains('toolbar-hidden')) return;
+      // v5.5.7: toolbar is now position:absolute inside the .item container,
+      // so we position relative to the .item element (not the viewport).
+      // wrap.getBoundingClientRect() gives us the video's screen-space
+      // position; we convert to item-local by subtracting the item's BCR.
       const r = wrap.getBoundingClientRect();
-      if (!r || r.width === 0 || r.height === 0) return; // video not visible
-      // Compute scale from the shorter side of the video (so the
-      // toolbar doesn't get HUGE on a wide but short player).
+      if (!r || r.width === 0 || r.height === 0) return;
+      const elRect = el.getBoundingClientRect();
+      // Compute scale from the shorter side of the video
       const ref = Math.min(r.width, r.height);
-      // Round 10: bumped the scale up slightly so the toolbar is
-      // easier to read on the 100px-wide color picker. Was 0.65–1.35,
-      // now 0.75–1.5. Also bumped the base reference so the toolbar
-      // doesn't shrink too aggressively on small players.
       let scale = 0.75 + Math.max(0, Math.min(1, (ref - 280) / 620)) * 0.75;
       scale = Math.round(scale * 100) / 100;
       annoToolbar.style.setProperty('--tb-scale', String(scale));
-      // Round 12: make the draw panel the SAME HEIGHT as the video
-      // player so they read as a single unit. We use `height` (not
-      // min-height) so the panel is exactly r.height — no content
-      // can push it taller and break the visual alignment. The
-      // flex layout (margin-top:auto on the close row) keeps the
-      // close button anchored to the bottom when the panel is
-      // taller than its content; when content is taller than the
-      // panel, overflow:hidden on the toolbar clips it cleanly.
-      // Round 12: make the draw panel the SAME HEIGHT as the video
-      // player so they read as a single unit. We use `height` (not
-      // min-height) so the panel is exactly r.height — no content
-      // can push it taller and break the visual alignment. The
-      // flex layout (margin-top:auto on the close row) keeps the
-      // close button anchored to the bottom when the panel is
-      // taller than its content; when content is taller than the
-      // panel, overflow:hidden on the toolbar clips it cleanly.
       annoToolbar.style.height = r.height + 'px';
       const tw = annoToolbar.offsetWidth || 110;
       const th = annoToolbar.offsetHeight || 240;
-      // If the user has dragged the toolbar, respect their custom position
-      // (we store the offset from the viewport origin, not the video)
+      // If user dragged toolbar, respect custom position (stored relative to item)
       if (el._annoDrawState && el._annoDrawState.toolbarPos) {
         const p = el._annoDrawState.toolbarPos;
-        // Clamp to viewport so it doesn't go off-screen
-        const cx = Math.max(4, Math.min(window.innerWidth - tw - 4, p.x));
-        const cy = Math.max(4, Math.min(window.innerHeight - th - 4, p.y));
-        annoToolbar.style.left = cx + 'px';
-        annoToolbar.style.top = cy + 'px';
+        annoToolbar.style.left = p.x + 'px';
+        annoToolbar.style.top = p.y + 'px';
         return;
       }
-      // Round 10 (revised): place the toolbar to the LEFT of the video
-      // and vertically CENTERED on the video (Photoshop / Figma side
-      // panel pattern). Falls back to the right side (also centered)
-      // if there's no room on the left, and finally to the top if
-      // neither side has room.
-      let left = r.left - tw - 10;
-      let top = r.top + Math.max(0, (r.height - th) / 2);
-      // If no room on the left, try the right (vertically centered)
-      if (left < 8) {
-        left = r.right + 10;
-        top = r.top + Math.max(0, (r.height - th) / 2);
-      }
-      // If still no room (video is full-width), position at the top
-      if (left + tw > window.innerWidth - 8) {
-        left = r.left;
-        top = r.top - th - 10;
-      }
-      // Clamp to viewport
-      left = Math.max(4, Math.min(window.innerWidth - tw - 4, left));
-      top = Math.max(4, Math.min(window.innerHeight - th - 4, top));
+      // v5.5.7: place INSIDE the .item to the RIGHT of the video
+      // (overlapping the right edge of the video), vertically centered.
+      // The toolbar must stay inside the .item bbox because the
+      // .item may be inside a clipped ancestor (sandbox webview
+      // iframe + #viewport with overflow:hidden). If it overflowed
+      // the .item, it'd be clipped to invisible.
+      const itemW = elRect.width;
+      const itemH = elRect.height;
+      let left = itemW - tw - 4;
+      let top = Math.max(2, (itemH - th) / 2);
+      // Final clamp
+      left = Math.max(2, Math.min(itemW - tw - 2, left));
+      top = Math.max(2, Math.min(itemH - th - 2, top));
       annoToolbar.style.left = left + 'px';
       annoToolbar.style.top = top + 'px';
     }
@@ -9142,10 +9215,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       ev.preventDefault();
       const dx = ev.clientX - _tbDragStartX;
       const dy = ev.clientY - _tbDragStartY;
-      const tw = annoToolbar.offsetWidth || 48;
-      const th = annoToolbar.offsetHeight || 220;
-      const nx = Math.max(4, Math.min(window.innerWidth - tw - 4, _tbStartLeft + dx));
-      const ny = Math.max(4, Math.min(window.innerHeight - th - 4, _tbStartTop + dy));
+      // v5.5.7: toolbar is position:absolute inside .item, so coordinates
+      // are item-relative, not viewport-relative. Convert client delta
+      // to item-local delta by dividing by the canvas zoom (since the
+      // item itself is scaled by state.zoom).
+      const z = Math.max(0.02, Math.min(10, state.zoom || 1));
+      const nx = _tbStartLeft + dx / z;
+      const ny = _tbStartTop + dy / z;
       annoToolbar.style.left = nx + 'px';
       annoToolbar.style.top = ny + 'px';
     }
@@ -9241,59 +9317,30 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // path (e.g. a stray global keypress), force it back to 'select'
       // while the video's draw mode is on. This prevents the white board
       // draw toolbar from painting over the video and blocking input.
-      // Save the board tool so we can restore it when exiting video draw
-      // mode. Only touch the board state when it's actually 'draw' — we
-      // must NOT unconditionally set state.tool = 'select' because that
-      // kills unrelated board tools (text, crop, etc.).
-      var _savedBoardTool = null;
       if (s.mode !== 'off') {
         try {
           if (typeof state !== 'undefined' && state && state.tool === 'draw') {
-            _savedBoardTool = 'draw';
-            // Use setTool so the UI (#draw-toolbar, toolbar buttons, etc.)
-            // stays in sync with the state change.
-            if (typeof setTool === 'function') setTool('select');
-            else state.tool = 'select';
+            // Use a direct reset that doesn't re-trigger our key handler.
+            state.tool = 'select';
+            const drawToolbar = document.getElementById('draw-toolbar');
+            if (drawToolbar) drawToolbar.classList.remove('active');
           }
         } catch (e) {}
-      } else {
-        // Exiting video draw mode — restore the board draw tool if we
-        // took it away earlier. The saved-tool marker lives on el so it
-        // survives across multiple _applyDrawMode calls.
-        try {
-          if (el._annoDrawState && el._annoDrawState._tookBoardDraw) {
-            el._annoDrawState._tookBoardDraw = false;
-            if (typeof setTool === 'function') setTool('draw');
-          }
-        } catch (e) {}
-      }
-      // Stash the flag so the exit branch above can restore it.
-      if (_savedBoardTool === 'draw' && el._annoDrawState) {
-        el._annoDrawState._tookBoardDraw = true;
       }
       // Pause the video when entering draw mode (so strokes line up with the frame)
       if (s.mode !== 'off' && !mediaEl.paused) {
         try { mediaEl.pause(); } catch (e) {}
       }
-      // Panel stays visible always — user requested persistent display.
-      // Only reposition when entering draw mode (to handle stale toolbarPos).
+      // Round 19: tie toolbar visibility to draw mode. When draw mode
+      // is off, the toolbar is hidden. When the user presses the draw
+      // button (or any other tool button), the toolbar pops up. The
+      // ✕ close button now just exits draw mode (equivalent to pressing
+      // the draw button again). Panel stays visible always.
       if (annoToolbar) {
-        // Always ensure visible
         annoToolbar.classList.remove('toolbar-hidden');
-        annoToolbar.style.display = '';
-        // Clear stale flags so downstream sync doesn't re-hide
-        try {
-          const itm = _getItem();
-          if (itm && itm.anno) itm.anno.drawToolbarHidden = false;
-        } catch (e) {}
-        // Reset stale toolbarPos when entering draw mode
-        if (s.mode !== 'off' && el._annoDrawState && el._annoDrawState.toolbarPos) {
-          el._annoDrawState.toolbarPos = null;
-        }
-        // Reposition when entering draw mode
         if (s.mode !== 'off') {
-          requestAnimationFrame(function(){
-            try { _positionToolbar(); } catch (_ePos) {}
+          requestAnimationFrame(function() {
+            try { _positionToolbar(); } catch (e) {}
           });
         }
       }
@@ -9384,7 +9431,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       if (!stk || !stk.points || stk.points.length === 0) return;
       ctx.strokeStyle = stk.color;
       ctx.fillStyle = stk.color;
-      ctx.lineWidth = stk.size;
+      // v5.5.7: scale stroke width by video zoom so strokes look
+      // consistent at any zoom level — zoom in = thicker lines,
+      // zoom out = thinner lines, matching the video content scale.
+      var zoom = 1;
+      var item = el._item;
+      if (item && item._videoZoom !== undefined) zoom = item._videoZoom;
+      ctx.lineWidth = stk.size * zoom;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       const pts = stk.points.map(p => [p[0] * cw, p[1] * ch]);
@@ -10456,12 +10509,33 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   rightGroup.appendChild(fsBtn);
 
   // v5.5.1: double-click video frame → toggle fullscreen
+  // v5.5.6: if video is zoomed in, double-click FIRST resets zoom to
+  // 100%. A second double-click (after reset) toggles fullscreen as
+  // before. This is the most intuitive way to "go back to normal" —
+  // same gesture (double-click), contextual behavior.
   if (isVideo && !isGif) {
     wrap.addEventListener('dblclick', function(ev) {
       // Don't toggle if clicking on annotation canvas or controls
       if (ev.target.closest && (ev.target.closest('canvas') || ev.target.closest('.media-anno-toolbar') || ev.target.closest('.media-comments-popover'))) return;
       ev.stopPropagation();
       ev.preventDefault();
+      // v5.5.6: if zoomed, reset zoom first
+      var item = el._item;
+      if (item && item._videoZoom !== undefined && item._videoZoom !== 1) {
+        item._videoZoom = 1;
+        item._videoPanX = 0;
+        item._videoPanY = 0;
+        if (mediaEl) {
+          mediaEl.style.transform = '';
+          mediaEl.style.transformOrigin = '';
+        }
+        // v5.5.7: reset annoCanvas transform too
+        if (annoCanvas) {
+          annoCanvas.style.transform = '';
+          annoCanvas.style.transformOrigin = '';
+        }
+        return;
+      }
       var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
       if (fsEl) {
         if (document.exitFullscreen) { document.exitFullscreen(); }
@@ -11654,21 +11728,12 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         const _sbann = (_sbitm && _sbitm.anno) ? _sbitm.anno : null;
         // Round 19: tie visibility to draw mode — hidden when off.
         const _modeOff = !(el._annoDrawState && el._annoDrawState.mode && el._annoDrawState.mode !== 'off');
-        // Bugfix: when draw mode is ON, never hide the toolbar — the
-        // persisted drawToolbarHidden flag may be stale (set by a previous
-        // ✕ close) and should not override the current active draw mode.
-        const _hidden = _modeOff ? true : (_sbann && _sbann.drawToolbarHidden ? false : false);
-        // Simplified: toolbar is hidden ONLY when draw mode is off.
-        // The drawToolbarHidden flag is only used for the show-toolbar
-        // button below — it should NOT force-hide the toolbar when the
-        // user is actively drawing.
-        if (_modeOff) {
+        const _hidden = _modeOff || (_sbann && _sbann.drawToolbarHidden);
+        if (_hidden) {
           showToolbarBtn.classList.remove('hidden');
         } else {
           showToolbarBtn.classList.add('hidden');
         }
-        // Panel stays visible always — never hide via popover sync.
-        // The drawToolbarHidden flag only controls the show-toolbar button.
       } catch (e) {}
       // Update the add-hint with the current frame
       try {
@@ -12756,13 +12821,17 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     });
 
     // Time update → fill + labels
+    // v5.5.7: throttle to ~15fps (skip if < 60ms since last update)
+    // timeupdate fires at ~4Hz during playback — the fill bar and
+    // time labels don't need to update that often. Rounding the
+    // percentage to 0.5% steps also avoids layout thrash.
     mediaEl.addEventListener('timeupdate', function() {
       if (!mediaEl.duration) return;
-      // Don't fight the user mid-seek — let the drag own the fill bar.
-      // timeupdate keeps firing while the video is paused, and the drag's
-      // updateSeekUI is what should win until mouseup.
       if (seeking) return;
-      var pct = (mediaEl.currentTime / mediaEl.duration * 100);
+      var now = performance.now();
+      if (mediaEl._lastTimeUpdate && now - mediaEl._lastTimeUpdate < 60) return;
+      mediaEl._lastTimeUpdate = now;
+      var pct = Math.round(mediaEl.currentTime / mediaEl.duration * 200) / 2;
       fill.style.width = pct + '%';
       tCur.textContent = fmt(mediaEl.currentTime);
       refreshInPlayerTrimUI();
@@ -15002,6 +15071,19 @@ async function videoAnnoSendToBoard() {
     try { v.currentTime = prevTime; } catch (e) {}
     if (!wasPaused) { try { v.play().catch(() => {}); } catch (e) {} }
   }
+  // ── 1.5) Read the overall comment from the popover (or saved) ──
+  // v5.5.7: Send-to-Board now also exports the (overall comment) the
+  // user typed in the popover — same as HTML Export does. Without this,
+  // the user had to manually copy/paste the summary above the storyboard
+  // every time. Now it becomes the FIRST text item at the top of the
+  // layout so it reads as a header for the whole review.
+  let overComment = '';
+  try {
+    if (item.el && item.el._getOverComment) overComment = item.el._getOverComment() || '';
+  } catch (e) {}
+  if (!overComment && anno.overComment) overComment = anno.overComment;
+  overComment = String(overComment || '').trim();
+
   // ── 2) Layout params — 2-COLUMN storyboard, Figma-style ─────────
   // Round 68 redesign (user ref @image#1): the previous version was a
   // single tall column of 360x203 images + 440-wide text blocks. That
@@ -15086,6 +15168,48 @@ async function videoAnnoSendToBoard() {
   // Anchor: right edge of the video, aligned to the top of the video
   const startX = (item.x + item.w) + COL_GAP;
   const startY = item.y;
+  // ── 2.5) Render the (overall comment) as a header above the grid ──
+  // v5.5.7: the user types an overall comment in the popover (e.g.
+  // "summary, key points"). Export (HTML) already bundles it. Send
+  // to Board now does the same — the text becomes a labelled yellow
+  // text box spanning both columns, sitting ABOVE the first row.
+  // We do this AFTER the layout param block so we know PAIR_W and
+  // can size the box to span the full 2-column width. The body is
+  // collapsed to a single newline-collapsed string so the height
+  // matches the text content.
+  const newItemIds = [];
+  if (overComment) {
+    const headerW = COLS * PAIR_W + (COLS - 1) * COL_GAP;
+    const headerHtml =
+      '<div style="color:rgba(255,210,90,0.95);font-size:18px;font-weight:700;letter-spacing:0.04em;margin-bottom:6px;">📝 (overall comment)</div>' +
+      '<div style="color:#ffffff;font-size:20px;line-height:1.45;white-space:pre-wrap;word-break:break-word;">' +
+        (typeof escapeHTML === 'function' ? escapeHTML(overComment) : overComment.replace(/[<>&]/g, function(c){
+          return ({'<':'&lt;','>':'&gt;','&':'&amp;'})[c];
+        })) +
+      '</div>';
+    const headerItem = addText(startX, startY, '', { noFocus: true, initW: 50 });
+    if (headerItem) {
+      headerItem.el.innerHTML = headerHtml;
+      // Auto-fit to the full 2-column span so the header reads as
+      // one banner over the whole storyboard. Use autoGrowTextItem
+      // (the standard helper) with a minW that forces the full width.
+      if (typeof autoGrowTextItem === 'function') {
+        headerItem.w = Math.max(headerW, 320);
+        autoGrowTextItem(headerItem);
+      } else if (typeof autoFitTextItem === 'function') {
+        autoFitTextItem(headerItem, { minW: headerW, maxW: headerW });
+      }
+      headerItem._autoGrowLocked = true;
+      newItemIds.push(headerItem.id);
+      // Push the storyboard grid down so the first row starts BELOW
+      // the header (with a comfortable gap). We bump BOTH columns'
+      // starting Y by the header height + gap so the layout stays
+      // symmetrical.
+      const headerH = (headerItem.h || 0) + 28;
+      colY[0] = startY + headerH;
+      colY[1] = startY + headerH;
+    }
+  }
   // ── 3) Capture pre-batch state for a single-undo batch ────────
   // Each addImage / addText below pushes its own snapshot. After the
   // batch we collapse all those intermediate snapshots down to one
@@ -15094,7 +15218,6 @@ async function videoAnnoSendToBoard() {
   // to the board" = one action).
   const preBatchSnap = captureSnapshot();
   const initialUndoLen = state.undoStack.length;
-  const newItemIds = [];
   // Per-column running Y. Each column advances its OWN Y as pairs
   // are added, so a 6-line text in row 3 of the left column doesn't
   // push the right column's row 3 down — they stay independent.
@@ -18801,9 +18924,15 @@ if (_welcomeEl) {
   // file over the welcome (z-index 99999999) is silently rejected.
   _welcomeEl.addEventListener('dragover', function(e){
     e.preventDefault();
+    // v5.5.3: MUST set dropEffect to 'copy' — without this some browsers
+    // (especially Windows Chrome) will refuse to fire the drop event even
+    // though preventDefault() was called.
+    e.dataTransfer.dropEffect = 'copy';
   });
   _welcomeEl.addEventListener('drop', function(e){
     e.preventDefault();
+    e.stopPropagation(); // v5.5.3: prevent bubbling to document-level handlers
+    console.log('[FileDrop] Welcome received drop, files:', e.dataTransfer.files.length);
     hideWelcome();
     const files = e.dataTransfer.files;
     if (files && files.length) _handleFileDrop(e, [...files]);
@@ -18811,7 +18940,42 @@ if (_welcomeEl) {
 }
 
 // DRAG & DROP FILES
-viewport.addEventListener('dragover', e => { e.preventDefault(); });
+// v5.5.3: GLOBAL capture-phase listeners on window. This is the LAST
+// line of defense — if for any reason the welcome/viewport listeners
+// are not receiving the event (extension interference, wrong target,
+// timing race with hideWelcome), this catch-all WILL fire and route
+// the file to _handleFileDrop.
+window.addEventListener('dragover', function(e){
+  // Only react to file drags (use the items check, types is empty here)
+  if (e.dataTransfer && e.dataTransfer.items) {
+    for (let i = 0; i < e.dataTransfer.items.length; i++) {
+      if (e.dataTransfer.items[i].kind === 'file') {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        // Hide welcome immediately so user sees visual feedback
+        const w = document.getElementById('welcome');
+        if (w && w._welcomeHiddenByDrag !== true && w.style.display !== 'none') {
+          try { hideWelcome(); } catch (err) {}
+        }
+        return;
+      }
+    }
+  }
+  // No files detected — also preventDefault to allow drop fallback
+  e.preventDefault();
+}, true);
+window.addEventListener('drop', function(e){
+  try { console.log('[FileDrop] window capture-phase drop, files:', e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0); } catch (err) {}
+  e.preventDefault();
+  e.stopPropagation();
+  const files = e.dataTransfer && e.dataTransfer.files;
+  if (files && files.length) {
+    try { hideWelcome(); } catch (err) {}
+    try { _handleFileDrop(e, [...files]); } catch (err) { console.warn('[FileDrop] window handler error:', err); }
+  }
+}, true);
+
+viewport.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
 // Round 13: auto-hide the draw panel while a file is being dragged in,
 // so the panel doesn't sit on top of the drop target and "trap" the
 // cursor / block the drop. The panel reappears once the drag leaves
@@ -18986,6 +19150,7 @@ function _finishFolderImport(e, allFiles) {
 }
 
 function _handleFileDrop(e, files) {
+  console.log('[FileDrop] _handleFileDrop called with', files.length, 'files');
   // Separate images, videos, and audio files
   const imageFiles = [];
   const videoFiles = [];
@@ -19801,8 +19966,7 @@ document.addEventListener('keydown', e => {
   // to the frame-step logic, which is what the user expects.
   if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
       !e.ctrlKey && !e.metaKey && !e.altKey) {
-    // Don't steal arrow keys from a text input / contenteditable (e.g.
-    // editing a text item) — those need arrow keys for cursor movement.
+    // Don't steal arrow keys from a text input / contenteditable
     var ae = e.target;
     var isTyping = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' ||
                           (ae.getAttribute && ae.getAttribute('contenteditable') === 'true'));
@@ -19816,25 +19980,14 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
       var vid = vidItem.video;
       if (!vid.paused) vid.pause();
-      // Detect frame duration: try metadata, fallback to adaptive
       if (!vid._kraftedFps) {
         var detectedFps = 30;
-        // Method 1: getVideoPlaybackQuality (Chrome/Edge)
         if (vid.getVideoPlaybackQuality) {
-          try {
-            var q = vid.getVideoPlaybackQuality();
-            if (q.totalVideoFrames > 0 && vid.duration > 0) {
-              detectedFps = Math.round(q.totalVideoFrames / vid.duration);
-            }
-          } catch(ex) {}
+          try { var q = vid.getVideoPlaybackQuality(); if (q.totalVideoFrames > 0 && vid.duration > 0) detectedFps = Math.round(q.totalVideoFrames / vid.duration); } catch(ex) {}
         }
-        // Method 2: heuristic based on video height (common rates)
         if (detectedFps <= 0 || detectedFps > 120) {
           var h = vid.videoHeight || 0;
-          if (h >= 2160)      detectedFps = 60;  // 4K often 60fps
-          else if (h >= 1080) detectedFps = 30;  // 1080p often 30fps
-          else if (h >= 720)  detectedFps = 30;  // 720p often 30fps
-          else                  detectedFps = 24;  // lower res often 24fps
+          if (h >= 2160) detectedFps = 60; else if (h >= 1080) detectedFps = 30; else if (h >= 720) detectedFps = 30; else detectedFps = 24;
         }
         vid._kraftedFps = Math.max(12, Math.min(120, detectedFps));
       }
@@ -19844,83 +19997,12 @@ document.addEventListener('keydown', e => {
       var targetTime = e.key === 'ArrowLeft'
         ? Math.max(0, vid.currentTime - delta)
         : Math.min(vid.duration || 1e9, vid.currentTime + delta);
-      // Instant UI update: update seek bar + time label + frame-code
-      // overlay immediately. Format respects the per-item display mode
-      // (0:00 vs f 1234) for the in-bar label, while the cinema-style
-      // overlay ALWAYS shows F + time together (its own format).
-      (function() {
-        var item = vidItem;
-        if (item && item.el) {
-          var bar = item.el.querySelector('.media-seek-fill');
-          var tCur = item.el.querySelector('.media-time-cur');
-          if (bar) bar.style.width = (targetTime / (vid.duration || 1) * 100) + '%';
-          if (tCur) {
-            tCur.textContent = formatVideoTimeForLabel(item.el, vid, targetTime);
-          }
-          // Round 57: keep the cinema frame/timecode overlay in sync
-          // with the optimistic target. Same calc as the timeupdate
-          // listener so the overlay and the in-bar label agree.
-          var fcd = item.el.querySelector('.media-frame-display');
-          if (fcd) {
-            var _fps = vid._kraftedFps || 30;
-            var _dur = isFinite(vid.duration) ? vid.duration : 0;
-            var _fIdx = Math.max(0, Math.round(targetTime * _fps));
-            var _fTotal = Math.max(0, Math.round(_dur * _fps));
-            var _m = Math.floor(targetTime / 60);
-            var _sec = Math.floor(targetTime % 60);
-            var _cs = Math.floor((targetTime - Math.floor(targetTime)) * 100);
-            var _timeStr = _m + ':' + (_sec < 10 ? '0' : '') + _sec + '.' + (_cs < 10 ? '0' : '') + _cs;
-            var _fcCur = fcd.querySelector('.fc-cur');
-            var _fcTotal = fcd.querySelector('.fc-total');
-            var _fcTime = fcd.querySelector('.fc-time');
-            if (_fcCur)   _fcCur.textContent = 'F ' + _fIdx;
-            if (_fcTotal) _fcTotal.textContent = '/ ' + _fTotal;
-            if (_fcTime)  _fcTime.textContent = _timeStr;
-            // Round 68: sync the info bar too
-            var _ib = item.el.querySelector('.media-info-bar');
-            if (_ib) {
-              var _ibFcur = _ib.querySelector('.ib-fcur');
-              var _ibFtot = _ib.querySelector('.ib-ftot');
-              var _ibTime = _ib.querySelector('.ib-time');
-              var _ibFps  = _ib.querySelector('.ib-fps');
-              if (_ibFcur) _ibFcur.textContent = 'F ' + _fIdx;
-              if (_ibFtot) _ibFtot.textContent = '/ ' + _fTotal;
-              if (_ibTime) _ibTime.textContent = _timeStr;
-              if (_ibFps)  _ibFps.textContent = _fps + ' fps';
-            }
-          }
-        }
-      })();
-      // Round 57: REMOVED the 30ms trailing debounce. It added
-      // perceptible latency on the first press (you'd feel a 30ms
-      // gap before the seek actually fired), which made frame-step
-      // feel "slow and not smooth". Now we fire the seek IMMEDIATELY
-      // on every keypress, and use a simple in-flight lock so rapid
-      // OS key-repeat doesn't pile overlapping seeks onto the
-      // browser (which is what makes seeks feel laggy). If the user
-      // presses the key again while a seek is still in flight, we
-      // remember ONE queued target — the seeked handler will pick it
-      // up after the current seek completes. This is the same
-      // pattern NLEs use for jog-wheel input: coalesce at the
-      // browser boundary, not before it.
-      //
-      // We also use `requestVideoFrameCallback` (RVFC) when
-      // available. RVFC fires on the actual rendered video frame,
-      // so the seek lands on a frame boundary instead of mid-frame.
-      // Combined with the in-flight lock, this makes frame-step
-      // feel truly frame-accurate at the video's natural rate.
-      // Frame-step: seek immediately. On Windows, `seeked` can be
-      // slower to fire than on Mac, causing the _seekInFlight lock
-      // to stall rapid key-repeat. For frame-step we bypass the lock
-      // entirely — each arrow press is a discrete seek that directly
-      // sets currentTime. The browser naturally coalesces rapid
-      // currentTime writes, so this stays smooth without the lock.
+      // v5.5.7: cache DOM refs on vidItem.el to avoid querySelector on every keypress
+      _cacheFrameStepRefs(vidItem);
+      _updateFrameStepUI(vidItem, targetTime);
       clearTimeout(vid._seekTimer);
       vid._seeking = true;
       vid.currentTime = targetTime;
-      // On seeked: clear flag, process pending target if different.
-      // Also include a safety net: if `seeked` doesn't fire within 500ms,
-      // clear _seeking so the NEXT arrow press isn't blocked.
       if (!vid._seekedListener) {
         vid._seekedListener = true;
         var clearSeekingSafety = function() {
@@ -19929,71 +20011,10 @@ document.addEventListener('keydown', e => {
         vid.addEventListener('seeked', function() {
           clearSeekingSafety();
           vid._seeking = false;
-          // Sync UI to actual currentTime (in case instant update was off).
-          // Use formatVideoTimeForLabel so the user's chosen display mode
-          // (0:00 vs f 1234) is preserved after a seek completes.
-          var item = state.items.find(function(it) { return it.video === vid; });
-          if (item && item.el) {
-            var bar = item.el.querySelector('.media-seek-fill');
-            var tCur = item.el.querySelector('.media-time-cur');
-            var pct = vid.duration ? vid.currentTime / vid.duration : 0;
-            if (bar) bar.style.width = (pct * 100) + '%';
-            if (tCur) {
-              tCur.textContent = formatVideoTimeForLabel(item.el, vid, vid.currentTime);
-            }
-            // Round 57: also sync the cinema frame/timecode overlay to
-            // the actual currentTime after a seek. The optimistic
-            // update in the keydown handler used the requested target,
-            // which on a keyframe-snap codec might differ from where
-            // the browser actually landed. Re-sync to the real value
-            // so the overlay never lies about which frame is shown.
-            var fcd = item.el.querySelector('.media-frame-display');
-            if (fcd) {
-              var _fps = vid._kraftedFps || 30;
-              var _dur = isFinite(vid.duration) ? vid.duration : 0;
-              var _fIdx = Math.max(0, Math.round(vid.currentTime * _fps));
-              var _fTotal = Math.max(0, Math.round(_dur * _fps));
-              var _m = Math.floor(vid.currentTime / 60);
-              var _sec = Math.floor(vid.currentTime % 60);
-              var _cs = Math.floor((vid.currentTime - Math.floor(vid.currentTime)) * 100);
-              var _timeStr = _m + ':' + (_sec < 10 ? '0' : '') + _sec + '.' + (_cs < 10 ? '0' : '') + _cs;
-              var _fcCur = fcd.querySelector('.fc-cur');
-              var _fcTotal = fcd.querySelector('.fc-total');
-              var _fcTime = fcd.querySelector('.fc-time');
-              if (_fcCur)   _fcCur.textContent = 'F ' + _fIdx;
-              if (_fcTotal) _fcTotal.textContent = '/ ' + _fTotal;
-              if (_fcTime)  _fcTime.textContent = _timeStr;
-              // Round 68: sync the info bar too (post-seek re-sync)
-              var _ib2 = item.el.querySelector('.media-info-bar');
-              if (_ib2) {
-                var _ibFcur2 = _ib2.querySelector('.ib-fcur');
-                var _ibFtot2 = _ib2.querySelector('.ib-ftot');
-                var _ibTime2 = _ib2.querySelector('.ib-time');
-                var _ibFps2  = _ib2.querySelector('.ib-fps');
-                if (_ibFcur2) _ibFcur2.textContent = 'F ' + _fIdx;
-                if (_ibFtot2) _ibFtot2.textContent = '/ ' + _fTotal;
-                if (_ibTime2) _ibTime2.textContent = _timeStr;
-                if (_ibFps2)  _ibFps2.textContent = _fps + ' fps';
-              }
-            }
-          }
-          // v3.8 fix: removed the chain re-seek block that tried to seek
-          // again if currentTime didn't exactly match _seekTarget. The
-          // browser's keyframe-snap means currentTime can never land at
-          // the exact 1/30s target, so the chain looped forever and
-          // caused the visible "jump back" after every arrow press.
-          // We now accept whatever position the browser actually lands
-          // on (which the seeked event has already synced the UI to
-          // above). For a typical video, this lands on the nearest
-          // keyframe — coarser than frame-accurate, but stable.
-          //
-          // Frame-step is now lock-free (see keydown handler above).
+          _updateFrameStepUI(vidItem, vid.currentTime);
         });
         vid.addEventListener('ended', function() { vid._seeking = false; clearSeekingSafety(); });
       }
-      // Per-seek safety: if `seeked` doesn't fire within 500ms of a
-      // pending seek, clear `_seeking` so the next arrow press isn't
-      // blocked. This protects against the seeked event being lost.
       if (vid._seekSafetyTimer) clearTimeout(vid._seekSafetyTimer);
       vid._seekSafetyTimer = setTimeout(function() {
         vid._seeking = false;
@@ -20493,6 +20514,40 @@ viewport.addEventListener('mousedown', e => {
   hideCtx();
   if (e.target.closest('#toolbar') || e.target.closest('#props') || e.target.closest('#text-toolbar') || e.target.closest('#draw-toolbar') || e.target.closest('#ctx-menu') || e.target.closest('#export-modal') || e.target.closest('#gif-modal') || e.target.closest('#cut-panel') || e.target.closest('#lasso-panel') || e.target.closest('#text-quick-bar')) return;
 
+  // v5.5.6: Alt + Middle-button drag on selected video → internal zoom/pan
+  // (Premiere-style Program Monitor zoom). Only activates when:
+  //   - Alt is held AND middle button (e.button===1)
+  //   - The target is inside a .has-media item that is currently selected
+  //   - That item has a <video> element
+  // This intercepts BEFORE isPanTrigger (middle button alone would pan the
+  // canvas) and BEFORE item drag (click on video area would move the item).
+  if (e.altKey && e.button === 1) {
+    const mediaItem = e.target.closest('.item.has-media');
+    if (mediaItem) {
+      const item = state.items.find(i => i.el === mediaItem);
+      if (item && item.video && state.selected.has(item.id)) {
+        if (e.cancelable) e.preventDefault();
+        // Initialize video zoom state if not present
+        if (item._videoZoom === undefined) {
+          item._videoZoom = 1;
+          item._videoPanX = 0;
+          item._videoPanY = 0;
+        }
+        state.dragging = {
+          type: 'videoZoom',
+          item: item,
+          startX: e.clientX,
+          startY: e.clientY,
+          origZoom: item._videoZoom,
+          origPanX: item._videoPanX,
+          origPanY: item._videoPanY
+        };
+        viewport.style.cursor = 'move';
+        return;
+      }
+    }
+  }
+
   // Relation mode: intercept clicks to pick two items
   if (state.tool === 'relation') {
     _handleRelationClick(e.target);
@@ -20991,6 +21046,40 @@ document.addEventListener('mousemove', e => {
     return;
   }
 
+  // v5.5.6: VIDEO INTERNAL ZOOM/PAN (Alt + Middle-button drag)
+  // Premiere-style Program Monitor zoom. Dragging vertically zooms the
+  // video content in/out; dragging horizontally pans. The .item container
+  // size and controls are completely unaffected — only the <video> element
+  // inside .media-wrap gets a CSS transform.
+  if (state.dragging && state.dragging.type === 'videoZoom') {
+    const d = state.dragging;
+    const dy = e.clientY - d.startY;
+    const dx = e.clientX - d.startX;
+    // Vertical drag → zoom (1px = 0.005 zoom factor, feels responsive)
+    // Pull DOWN (positive dy) = zoom IN. Pull UP (negative dy) = zoom OUT.
+    const zoom = Math.max(0.25, Math.min(8, d.origZoom + dy * 0.008));
+    // Horizontal drag → pan (pixels in video-local space, adjusted for zoom)
+    const panSensitivity = 0.5;
+    const panX = d.origPanX + dx * panSensitivity;
+    const panY = d.origPanY; // vertical pan not used (zoom handles Y)
+    // Apply transform to the <video> element
+    const videoEl = d.item.video;
+    if (videoEl) {
+      videoEl.style.transform = 'scale(' + zoom + ') translate(' + panX + 'px, ' + panY + 'px)';
+      videoEl.style.transformOrigin = 'center center';
+      // v5.5.7: sync annoCanvas transform so draw strokes follow video zoom/pan.
+      // Cache the canvas ref on the item to avoid querySelector on every mousemove.
+      if (!d.item._annoCanvas) {
+        d.item._annoCanvas = d.item.el && d.item.el.querySelector('.media-anno-canvas');
+      }
+      if (d.item._annoCanvas) {
+        d.item._annoCanvas.style.transform = videoEl.style.transform;
+        d.item._annoCanvas.style.transformOrigin = 'center center';
+      }
+    }
+    return;
+  }
+
   // CROP DRAG — move crop window or resize via handle
   if (state.dragging && (state.dragging.type === 'crop-move' || state.dragging.type === 'crop-resize') && state.cropping) {
     const d = state.dragging;
@@ -21480,6 +21569,24 @@ document.addEventListener('mouseup', e => {
     G.potentialTextDrag = null;
   }
   if (state.dragging) {
+    // v5.5.6: video internal zoom/pan end — commit zoom/pan to item state
+    if (state.dragging.type === 'videoZoom') {
+      const d = state.dragging;
+      const videoEl = d.item.video;
+      if (videoEl) {
+        // Read the final transform back and store as item state
+        const t = videoEl.style.transform;
+        const m = t.match(/scale\(([\d.]+)\)\s*translate\(([\-\d.]+)px,\s*([\-\d.]+)px\)/);
+        if (m) {
+          d.item._videoZoom = parseFloat(m[1]);
+          d.item._videoPanX = parseFloat(m[2]);
+          d.item._videoPanY = parseFloat(m[3]);
+        }
+      }
+      state.dragging = null;
+      viewport.style.cursor = '';
+      return;
+    }
     // Reframe drag end — keep mode active, just end the drag
     if (state.dragging.type === 'reframe') {
       state.dragging = null;
