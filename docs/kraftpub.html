@@ -10444,12 +10444,28 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   rightGroup.appendChild(fsBtn);
 
   // v5.5.1: double-click video frame → toggle fullscreen
+  // v5.5.6: if video is zoomed in, double-click FIRST resets zoom to
+  // 100%. A second double-click (after reset) toggles fullscreen as
+  // before. This is the most intuitive way to "go back to normal" —
+  // same gesture (double-click), contextual behavior.
   if (isVideo && !isGif) {
     wrap.addEventListener('dblclick', function(ev) {
       // Don't toggle if clicking on annotation canvas or controls
       if (ev.target.closest && (ev.target.closest('canvas') || ev.target.closest('.media-anno-toolbar') || ev.target.closest('.media-comments-popover'))) return;
       ev.stopPropagation();
       ev.preventDefault();
+      // v5.5.6: if zoomed, reset zoom first
+      var item = el._item;
+      if (item && item._videoZoom !== undefined && item._videoZoom !== 1) {
+        item._videoZoom = 1;
+        item._videoPanX = 0;
+        item._videoPanY = 0;
+        if (mediaEl) {
+          mediaEl.style.transform = '';
+          mediaEl.style.transformOrigin = '';
+        }
+        return;
+      }
       var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
       if (fsEl) {
         if (document.exitFullscreen) { document.exitFullscreen(); }
