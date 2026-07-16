@@ -9360,6 +9360,25 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           try {
         if (annoToolbar) {
           annoToolbar.classList.toggle('toolbar-hidden', s.mode === 'off');
+          // v5.5.7: re-position the toolbar next to the video when it
+          // becomes visible. Without this call the toolbar stays at
+          // top:0;left:0 (CSS default) and never moves to the video,
+          // because _positionToolbar() is a no-op while the toolbar
+          // is hidden (the initial position is set on first build,
+          // but the toolbar is hidden then, so it never runs). We
+          // use requestAnimationFrame to wait one frame so the
+          // toolbar has a real offsetWidth after display flips from
+          // none to flex — otherwise tw=0 and the position math
+          // places the toolbar off-screen.
+          if (s.mode !== 'off') {
+            try {
+              requestAnimationFrame(function() {
+                try { _positionToolbar(); } catch (e) {}
+              });
+            } catch (e) {
+              try { _positionToolbar(); } catch (e) {}
+            }
+          }
         }
       } catch (e) {}
       // Round 31: re-sync the 📌 Follow button so it reflects the
