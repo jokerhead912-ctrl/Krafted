@@ -9092,16 +9092,12 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // Apply persisted hidden state. Round 19: default is now hidden —
     // the toolbar only shows up after the user explicitly presses the
     // draw button. The `drawToolbarHidden` flag is honoured when set
-    // v5.5.9: always force toolbar visible on init with inline styles.
-    // Class-based toggles may fail in sandbox webview rendering engine.
+    // v5.5.9: toolbar starts hidden, shown only when draw mode activates.
     try {
-      annoToolbar.classList.remove('toolbar-hidden');
-      annoToolbar.style.setProperty('display', 'flex', 'important');
-      annoToolbar.style.setProperty('visibility', 'visible', 'important');
-      annoToolbar.style.setProperty('opacity', '1', 'important');
-      annoToolbar.style.setProperty('pointer-events', 'auto', 'important');
+      annoToolbar.classList.add('toolbar-hidden');
+      annoToolbar.style.setProperty('display', 'none', 'important');
     } catch (e) {
-      annoToolbar.classList.remove('toolbar-hidden');
+      annoToolbar.classList.add('toolbar-hidden');
     }
 
     // Round 6: Move the toolbar OUT of the video wrap and into <body>
@@ -9337,23 +9333,23 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       if (s.mode !== 'off' && !mediaEl.paused) {
         try { mediaEl.pause(); } catch (e) {}
       }
-      // v5.5.9: FORCE toolbar visibility with inline styles.
-      // Sandbox webview may not respect CSS class toggles reliably,
-      // so we brute-force display/visibility/opacity on the element
-      // style attribute itself. This bypasses any cascade/stacking
-      // context quirks in the sandbox rendering engine.
+      // v5.5.9: toolbar visibility tied to draw mode.
+      // Draw mode ON → toolbar shows (inline force).
+      // Draw mode OFF → toolbar hides.
+      // Sandbox webview needs inline !important to guarantee rendering.
       if (annoToolbar) {
-        annoToolbar.classList.remove('toolbar-hidden');
-        // v5.5.9: inline force — guarantees visibility regardless
-        // of CSS cascade or sandbox rendering quirks.
-        annoToolbar.style.setProperty('display', 'flex', 'important');
-        annoToolbar.style.setProperty('visibility', 'visible', 'important');
-        annoToolbar.style.setProperty('opacity', '1', 'important');
-        annoToolbar.style.setProperty('pointer-events', 'auto', 'important');
         if (s.mode !== 'off') {
+          annoToolbar.classList.remove('toolbar-hidden');
+          annoToolbar.style.setProperty('display', 'flex', 'important');
+          annoToolbar.style.setProperty('visibility', 'visible', 'important');
+          annoToolbar.style.setProperty('opacity', '1', 'important');
+          annoToolbar.style.setProperty('pointer-events', 'auto', 'important');
           requestAnimationFrame(function() {
             try { _positionToolbar(); } catch (e) {}
           });
+        } else {
+          annoToolbar.classList.add('toolbar-hidden');
+          annoToolbar.style.setProperty('display', 'none', 'important');
         }
       }
       // Round 31: re-sync the 📌 Follow button so it reflects the
