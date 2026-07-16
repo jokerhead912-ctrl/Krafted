@@ -13706,16 +13706,17 @@ function videoAnnoGetCurrentFrame() {
 
 function videoAnnoAddComment(text, targetItem) {
   const t = (text || '').trim();
-  // Empty text is allowed — user can add a snap-only frame comment
-  // Round 13 fix: allow caller to pass in a specific item so the popover
-  // (which belongs to ONE video) can add to its own video instead of
-  // whichever video happens to be selected at click time. With multiple
-  // videos on the board, videoAnnoGetSelected() can return a different
-  // video than the one the popover is anchored to, and the comment
-  // would silently land on the wrong one.
   const item = targetItem || videoAnnoGetSelected();
   if (!item) { toast('Select a video first'); return; }
   if (!item.video) { toast('Video not ready yet — wait for it to load'); return; }
+  // v5.5.9: force-commit any open text editor BEFORE capturing.
+  // On sandbox webview the blur event may not fire reliably, so
+  // text typed via the T tool might still be in the DOM editor
+  // when the user clicks "Add Comment". We commit it now so the
+  // stroke lands in strokesByFrame before the snapshot capture.
+  if (item.el && item.el._commitTextEditor && item.el._textEditorEl) {
+    try { item.el._commitTextEditor(true); } catch(e) {}
+  }
   const anno = videoAnnoEnsure(item);
   const fps = (typeof getCurrentFps === 'function') ? getCurrentFps() : (item.video._kraftedFps || 30);
   const frame = Math.max(0, Math.floor((item.video.currentTime || 0) * fps));
