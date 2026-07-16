@@ -9764,8 +9764,12 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         var targetW = Math.max(20, Math.min(140, Math.ceil(naturalW)));
         editor.style.width = targetW + 'px';
       });
-      // Enter to commit, Shift+Enter for newline, Esc to cancel
+      // Enter to commit, Shift+Enter for newline, Esc to cancel.
+      // CRITICAL: stopPropagation on EVERY keydown so keystrokes
+      // (space, arrows, etc.) don't leak through to the video player
+      // and cause play/pause/seek while the user is typing.
       editor.addEventListener('keydown', function(ke){
+        ke.stopPropagation();
         if (ke.key === 'Enter' && !ke.shiftKey) {
           ke.preventDefault();
           _commitTextEditor();
@@ -9774,6 +9778,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           _cancelTextEditor();
         }
       });
+      // Block keyup too — some video players also respond to keyup
+      // for space (play/pause toggle). Without this, the video can
+      // still jump even though keydown is stopped.
+      editor.addEventListener('keyup', function(ke){ ke.stopPropagation(); });
       // Click-outside to commit
       editor.addEventListener('blur', function(){
         // Use a microtask so the click that triggered the blur
@@ -17907,7 +17915,7 @@ document.addEventListener('fullscreenchange', _syncAppFsIcon);
 document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
-console.log('%c[Krafted v5.5.10] Fullscreen Frame Text — T tool now works inside fullscreen player. Text editor and translate button are appended to the fullscreen element subtree so they render correctly.',
+console.log('%c[Krafted v5.5.11] Frame Text keyboard isolation — stopPropagation on keydown+keyup prevents video play/pause/seek while typing. Text editor now blocks all keystrokes from leaking to the player.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
 
