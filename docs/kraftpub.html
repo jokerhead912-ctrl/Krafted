@@ -9032,30 +9032,19 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     actionRow.appendChild(doneBtn);
     col2.appendChild(actionRow);
 
-    // Round 5: close button (✕) at the bottom of col2. Round 19:
-    // exits draw mode entirely (equivalent to pressing the draw button
-    // again). The toolbar is now tied to draw mode so hiding it means
-    // leaving draw mode. Legacy `drawToolbarHidden` flag is still
-    // honoured as a force-hide if set elsewhere.
-    const closeRow = document.createElement('div');
-    closeRow.className = 'toolbar-row toolbar-row-close';
-    const toolbarCloseBtn = document.createElement('button');
-    toolbarCloseBtn.className = 'toolbar-close';
-    toolbarCloseBtn.innerHTML = '&#10005;'; // ✕
-    toolbarCloseBtn.title = 'Exit draw mode (press the draw button again to come back)';
+    // Close button (✕) — exits draw mode but panel stays visible.
+    toolbarCloseBtn.title = 'Exit draw mode (panel stays visible)';
     toolbarCloseBtn.addEventListener('click', function(ev){
       ev.stopPropagation();
       const s = el._annoDrawState;
       if (!s) return;
-      // Exit draw mode — this also hides the toolbar via _applyDrawMode.
       s.mode = 'off';
       _applyDrawMode();
       try {
         const itm = _getItem();
-        if (itm && itm.anno) itm.anno.drawToolbarHidden = true;
+        if (itm && itm.anno) itm.anno.drawToolbarHidden = false;
       } catch (e) {}
       try { scheduleAutoSave(); } catch (e) {}
-      try { toast('Draw mode off — press the draw button to start again'); } catch (e) {}
     });
     closeRow.appendChild(toolbarCloseBtn);
 
@@ -9089,26 +9078,12 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
 
     col2.appendChild(closeRow);
 
-    // Apply persisted hidden state. Round 19: default is now hidden —
-    // the toolbar only shows up after the user explicitly presses the
-    // draw button. The `drawToolbarHidden` flag is honoured when set
-    // (legacy behaviour + a way to force-hide if the user wants), but
-    // on a fresh video we start hidden.
+    // Always show the annotation panel next to the video.
+    // The user asked for it to stay visible at all times — no auto-hide.
     try {
-      const _initItm = _getItem();
-      const _initAnno = (_initItm && _initItm.anno) ? _initItm.anno : null;
-      const _initState = el._annoDrawState;
-      // Default: hidden unless draw mode is on OR user has explicitly
-      // un-hidden it (drawToolbarHidden === false).
-      const _startHidden = !(_initState && _initState.mode && _initState.mode !== 'off')
-        && (_initAnno ? _initAnno.drawToolbarHidden !== false : true);
-      if (_startHidden) {
-        annoToolbar.classList.add('toolbar-hidden');
-      } else {
-        annoToolbar.classList.remove('toolbar-hidden');
-      }
+      annoToolbar.classList.remove('toolbar-hidden');
     } catch (e) {
-      annoToolbar.classList.add('toolbar-hidden');
+      annoToolbar.classList.remove('toolbar-hidden');
     }
 
     // Round 6: Move the toolbar OUT of the video wrap and into <body>
@@ -9329,49 +9304,60 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // path (e.g. a stray global keypress), force it back to 'select'
       // while the video's draw mode is on. This prevents the white board
       // draw toolbar from painting over the video and blocking input.
+      // Save the board tool so we can restore it when exiting video draw
+      // mode. Only touch the board state when it's actually 'draw' — we
+      // must NOT unconditionally set state.tool = 'select' because that
+      // kills unrelated board tools (text, crop, etc.).
+      var _savedBoardTool = null;
       if (s.mode !== 'off') {
         try {
           if (typeof state !== 'undefined' && state && state.tool === 'draw') {
-            // Use a direct reset that doesn't re-trigger our key handler.
-            state.tool = 'select';
-            const drawToolbar = document.getElementById('draw-toolbar');
-            if (drawToolbar) drawToolbar.classList.remove('active');
+            _savedBoardTool = 'draw';
+            // Use setTool so the UI (#draw-toolbar, toolbar buttons, etc.)
+            // stays in sync with the state change.
+            if (typeof setTool === 'function') setTool('select');
+            else state.tool = 'select';
           }
         } catch (e) {}
+      } else {
+        // Exiting video draw mode — restore the board draw tool if we
+        // took it away earlier.
+        try {
+          if (el._annoDrawState && el._annoDrawState._tookBoardDraw) {
+            el._annoDrawState._tookBoardDraw = false;
+            if (typeof setTool === 'function') setTool('draw');
+          }
+        } catch (e) {}
+      }
+      // Stash the flag so the exit branch above can restore it.
+      if (_savedBoardTool === 'draw' && el._annoDrawState) {
+        el._annoDrawState._tookBoardDraw = true;
       }
       // Pause the video when entering draw mode (so strokes line up with the frame)
       if (s.mode !== 'off' && !mediaEl.paused) {
         try { mediaEl.pause(); } catch (e) {}
       }
-      // Round 19: tie toolbar visibility to draw mode. When draw mode
-      // is off, the toolbar is hidden. When the user presses the draw
-      // button (or any other tool button), the toolbar pops up. The
-      // ✕ close button now just exits draw mode (equivalent to pressing
-      // the draw button again).
+      // Panel stays visible always — user requested persistent display.
+      // Only reposition when entering draw mode (to handle stale toolbarPos).
+      if (annoToolbar) {
+        // Always ensure visible
+        annoToolbar.classList.remove('toolbar-hidden');
+        // Clear stale flags so downstream sync doesn't re-hide
+        try {
+          const itm = _getItem();
+          if (itm && itm.anno) itm.anno.drawToolbarHidden = false;
+        } catch (e) {}
+        // Reposition when entering draw mode
+        if (s.mode !== 'off') {
           try {
-        if (annoToolbar) {
-          annoToolbar.classList.toggle('toolbar-hidden', s.mode === 'off');
-          // v5.5.7: re-position the toolbar next to the video when it
-          // becomes visible. Without this call the toolbar stays at
-          // top:0;left:0 (CSS default) and never moves to the video,
-          // because _positionToolbar() is a no-op while the toolbar
-          // is hidden (the initial position is set on first build,
-          // but the toolbar is hidden then, so it never runs). We
-          // use requestAnimationFrame to wait one frame so the
-          // toolbar has a real offsetWidth after display flips from
-          // none to flex — otherwise tw=0 and the position math
-          // places the toolbar off-screen.
-          if (s.mode !== 'off') {
-            try {
-              requestAnimationFrame(function() {
-                try { _positionToolbar(); } catch (e) {}
-              });
-            } catch (e) {
+            requestAnimationFrame(function() {
               try { _positionToolbar(); } catch (e) {}
-            }
+            });
+          } catch (e) {
+            try { _positionToolbar(); } catch (e) {}
           }
         }
-      } catch (e) {}
+      }
       // Round 31: re-sync the 📌 Follow button so it reflects the
       // current detach state (toolbarPos is preserved across hide/show).
       try { _syncToolbarFollowBtn(); } catch (e) {}
@@ -11756,16 +11742,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         const _sbann = (_sbitm && _sbitm.anno) ? _sbitm.anno : null;
         // Round 19: tie visibility to draw mode — hidden when off.
         const _modeOff = !(el._annoDrawState && el._annoDrawState.mode && el._annoDrawState.mode !== 'off');
-        const _hidden = _modeOff || (_sbann && _sbann.drawToolbarHidden);
-        if (_hidden) {
+        // Panel stays visible always — never hide via popover sync.
+        // The drawToolbarHidden flag only controls the show-toolbar button.
+        if (_modeOff) {
           showToolbarBtn.classList.remove('hidden');
         } else {
           showToolbarBtn.classList.add('hidden');
         }
-        // Also sync the actual toolbar's class (in case it drifted)
-        try {
-          if (annoToolbar) annoToolbar.classList.toggle('toolbar-hidden', !!_hidden);
-        } catch (e) {}
       } catch (e) {}
       // Update the add-hint with the current frame
       try {
