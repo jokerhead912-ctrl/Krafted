@@ -58,6 +58,41 @@ if (_welcomeEl) {
 }
 
 // DRAG & DROP FILES
+// v5.5.3: GLOBAL capture-phase listeners on window. This is the LAST
+// line of defense — if for any reason the welcome/viewport listeners
+// are not receiving the event (extension interference, wrong target,
+// timing race with hideWelcome), this catch-all WILL fire and route
+// the file to _handleFileDrop.
+window.addEventListener('dragover', function(e){
+  // Only react to file drags (use the items check, types is empty here)
+  if (e.dataTransfer && e.dataTransfer.items) {
+    for (let i = 0; i < e.dataTransfer.items.length; i++) {
+      if (e.dataTransfer.items[i].kind === 'file') {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        // Hide welcome immediately so user sees visual feedback
+        const w = document.getElementById('welcome');
+        if (w && w._welcomeHiddenByDrag !== true && w.style.display !== 'none') {
+          try { hideWelcome(); } catch (err) {}
+        }
+        return;
+      }
+    }
+  }
+  // No files detected — also preventDefault to allow drop fallback
+  e.preventDefault();
+}, true);
+window.addEventListener('drop', function(e){
+  console.log('[FileDrop] window capture-phase drop, files:', e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0);
+  e.preventDefault();
+  e.stopPropagation();
+  const files = e.dataTransfer && e.dataTransfer.files;
+  if (files && files.length) {
+    try { hideWelcome(); } catch (err) {}
+    _handleFileDrop(e, [...files]);
+  }
+}, true);
+
 viewport.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
 // Round 13: auto-hide the draw panel while a file is being dragged in,
 // so the panel doesn't sit on top of the drop target and "trap" the
