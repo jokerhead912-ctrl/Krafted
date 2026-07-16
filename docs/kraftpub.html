@@ -11977,6 +11977,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     }
     function _compositeThumbStrokes(ctx, comment, cw, ch) {
       var strokes = comment.annoStrokes;
+      // v5.5.9 debug: log strokes to console so user can verify
+      if (strokes && strokes.length) {
+        console.log('[thumb] compositing ' + strokes.length + ' strokes for comment ' + (comment.frame||'?') + ':', strokes.map(function(s){ return s.type + (s.text ? ':"'+s.text+'"' : ''); }));
+      }
       if (!strokes || !strokes.length) return;
       var sx = cw, sy = ch;
       strokes.forEach(function(stk) {
@@ -13873,6 +13877,8 @@ function videoAnnoAddComment(text, targetItem) {
       });
     }
   }
+  // v5.5.9 debug
+  console.log('[addComment] strokes count:', strokes.length, 'types:', strokes.map(function(s){ return s.type + (s.text ? ':"'+s.text.substring(0,20)+'"' : ''); }));
   let snapshot = '';
   try {
     snapshot = videoAnnoCaptureSnapshot(item.video, SNAPPY_SNAP_MAX_W, strokes);
