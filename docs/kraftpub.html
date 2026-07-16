@@ -5047,6 +5047,63 @@ function isPanTrigger(e) {
   return false;
 }
 
+// v5.5.7: cache DOM refs for frame-step UI updates to avoid
+// querySelector on every arrow keypress (major perf win).
+function _cacheFrameStepRefs(item) {
+  if (!item || !item.el || item.el._fsCached) return;
+  var el = item.el;
+  el._fsCached = true;
+  el._fsSeekFill = el.querySelector('.media-seek-fill');
+  el._fsTimeCur = el.querySelector('.media-time-cur');
+  el._fsFrameDisplay = el.querySelector('.media-frame-display');
+  if (el._fsFrameDisplay) {
+    el._fsFcCur = el._fsFrameDisplay.querySelector('.fc-cur');
+    el._fsFcTotal = el._fsFrameDisplay.querySelector('.fc-total');
+    el._fsFcTime = el._fsFrameDisplay.querySelector('.fc-time');
+  }
+  el._fsInfoBar = el.querySelector('.media-info-bar');
+  if (el._fsInfoBar) {
+    el._fsIbFcur = el._fsInfoBar.querySelector('.ib-fcur');
+    el._fsIbFtot = el._fsInfoBar.querySelector('.ib-ftot');
+    el._fsIbTime = el._fsInfoBar.querySelector('.ib-time');
+    el._fsIbFps = el._fsInfoBar.querySelector('.ib-fps');
+  }
+}
+function _updateFrameStepUI(item, time) {
+  if (!item || !item.el) return;
+  var el = item.el;
+  var vid = item.video;
+  if (!vid) return;
+  var dur = vid.duration || 1;
+  var fps = vid._kraftedFps || 30;
+  var pct = (time / dur) * 100;
+  if (el._fsSeekFill) el._fsSeekFill.style.width = pct + '%';
+  if (el._fsTimeCur) el._fsTimeCur.textContent = formatVideoTimeForLabel(el, vid, time);
+  if (el._fsFrameDisplay) {
+    var fIdx = Math.max(0, Math.round(time * fps));
+    var fTotal = Math.max(0, Math.round((isFinite(vid.duration) ? vid.duration : 0) * fps));
+    var m = Math.floor(time / 60);
+    var s = Math.floor(time % 60);
+    var cs = Math.floor((time - Math.floor(time)) * 100);
+    var ts = m + ':' + (s < 10 ? '0' : '') + s + '.' + (cs < 10 ? '0' : '') + cs;
+    if (el._fsFcCur) el._fsFcCur.textContent = 'F ' + fIdx;
+    if (el._fsFcTotal) el._fsFcTotal.textContent = '/ ' + fTotal;
+    if (el._fsFcTime) el._fsFcTime.textContent = ts;
+  }
+  if (el._fsInfoBar) {
+    var fIdx2 = Math.max(0, Math.round(time * fps));
+    var fTotal2 = Math.max(0, Math.round((isFinite(vid.duration) ? vid.duration : 0) * fps));
+    var m2 = Math.floor(time / 60);
+    var s2 = Math.floor(time % 60);
+    var cs2 = Math.floor((time - Math.floor(time)) * 100);
+    var ts2 = m2 + ':' + (s2 < 10 ? '0' : '') + s2 + '.' + (cs2 < 10 ? '0' : '') + cs2;
+    if (el._fsIbFcur) el._fsIbFcur.textContent = 'F ' + fIdx2;
+    if (el._fsIbFtot) el._fsIbFtot.textContent = '/ ' + fTotal2;
+    if (el._fsIbTime) el._fsIbTime.textContent = ts2;
+    if (el._fsIbFps) el._fsIbFps.textContent = fps + ' fps';
+  }
+}
+
 const textTool = {
   font: 'Arial', size: 24, bold: false, italic: false, underline: false, strike: false,
   highlight: false, shadow: false, bg: false, outline: false, uppercase: false,
@@ -19858,8 +19915,7 @@ document.addEventListener('keydown', e => {
   // to the frame-step logic, which is what the user expects.
   if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
       !e.ctrlKey && !e.metaKey && !e.altKey) {
-    // Don't steal arrow keys from a text input / contenteditable (e.g.
-    // editing a text item) — those need arrow keys for cursor movement.
+    // Don't steal arrow keys from a text input / contenteditable
     var ae = e.target;
     var isTyping = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' ||
                           (ae.getAttribute && ae.getAttribute('contenteditable') === 'true'));
@@ -19873,25 +19929,14 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
       var vid = vidItem.video;
       if (!vid.paused) vid.pause();
-      // Detect frame duration: try metadata, fallback to adaptive
       if (!vid._kraftedFps) {
         var detectedFps = 30;
-        // Method 1: getVideoPlaybackQuality (Chrome/Edge)
         if (vid.getVideoPlaybackQuality) {
-          try {
-            var q = vid.getVideoPlaybackQuality();
-            if (q.totalVideoFrames > 0 && vid.duration > 0) {
-              detectedFps = Math.round(q.totalVideoFrames / vid.duration);
-            }
-          } catch(ex) {}
+          try { var q = vid.getVideoPlaybackQuality(); if (q.totalVideoFrames > 0 && vid.duration > 0) detectedFps = Math.round(q.totalVideoFrames / vid.duration); } catch(ex) {}
         }
-        // Method 2: heuristic based on video height (common rates)
         if (detectedFps <= 0 || detectedFps > 120) {
           var h = vid.videoHeight || 0;
-          if (h >= 2160)      detectedFps = 60;  // 4K often 60fps
-          else if (h >= 1080) detectedFps = 30;  // 1080p often 30fps
-          else if (h >= 720)  detectedFps = 30;  // 720p often 30fps
-          else                  detectedFps = 24;  // lower res often 24fps
+          if (h >= 2160) detectedFps = 60; else if (h >= 1080) detectedFps = 30; else if (h >= 720) detectedFps = 30; else detectedFps = 24;
         }
         vid._kraftedFps = Math.max(12, Math.min(120, detectedFps));
       }
@@ -19901,83 +19946,12 @@ document.addEventListener('keydown', e => {
       var targetTime = e.key === 'ArrowLeft'
         ? Math.max(0, vid.currentTime - delta)
         : Math.min(vid.duration || 1e9, vid.currentTime + delta);
-      // Instant UI update: update seek bar + time label + frame-code
-      // overlay immediately. Format respects the per-item display mode
-      // (0:00 vs f 1234) for the in-bar label, while the cinema-style
-      // overlay ALWAYS shows F + time together (its own format).
-      (function() {
-        var item = vidItem;
-        if (item && item.el) {
-          var bar = item.el.querySelector('.media-seek-fill');
-          var tCur = item.el.querySelector('.media-time-cur');
-          if (bar) bar.style.width = (targetTime / (vid.duration || 1) * 100) + '%';
-          if (tCur) {
-            tCur.textContent = formatVideoTimeForLabel(item.el, vid, targetTime);
-          }
-          // Round 57: keep the cinema frame/timecode overlay in sync
-          // with the optimistic target. Same calc as the timeupdate
-          // listener so the overlay and the in-bar label agree.
-          var fcd = item.el.querySelector('.media-frame-display');
-          if (fcd) {
-            var _fps = vid._kraftedFps || 30;
-            var _dur = isFinite(vid.duration) ? vid.duration : 0;
-            var _fIdx = Math.max(0, Math.round(targetTime * _fps));
-            var _fTotal = Math.max(0, Math.round(_dur * _fps));
-            var _m = Math.floor(targetTime / 60);
-            var _sec = Math.floor(targetTime % 60);
-            var _cs = Math.floor((targetTime - Math.floor(targetTime)) * 100);
-            var _timeStr = _m + ':' + (_sec < 10 ? '0' : '') + _sec + '.' + (_cs < 10 ? '0' : '') + _cs;
-            var _fcCur = fcd.querySelector('.fc-cur');
-            var _fcTotal = fcd.querySelector('.fc-total');
-            var _fcTime = fcd.querySelector('.fc-time');
-            if (_fcCur)   _fcCur.textContent = 'F ' + _fIdx;
-            if (_fcTotal) _fcTotal.textContent = '/ ' + _fTotal;
-            if (_fcTime)  _fcTime.textContent = _timeStr;
-            // Round 68: sync the info bar too
-            var _ib = item.el.querySelector('.media-info-bar');
-            if (_ib) {
-              var _ibFcur = _ib.querySelector('.ib-fcur');
-              var _ibFtot = _ib.querySelector('.ib-ftot');
-              var _ibTime = _ib.querySelector('.ib-time');
-              var _ibFps  = _ib.querySelector('.ib-fps');
-              if (_ibFcur) _ibFcur.textContent = 'F ' + _fIdx;
-              if (_ibFtot) _ibFtot.textContent = '/ ' + _fTotal;
-              if (_ibTime) _ibTime.textContent = _timeStr;
-              if (_ibFps)  _ibFps.textContent = _fps + ' fps';
-            }
-          }
-        }
-      })();
-      // Round 57: REMOVED the 30ms trailing debounce. It added
-      // perceptible latency on the first press (you'd feel a 30ms
-      // gap before the seek actually fired), which made frame-step
-      // feel "slow and not smooth". Now we fire the seek IMMEDIATELY
-      // on every keypress, and use a simple in-flight lock so rapid
-      // OS key-repeat doesn't pile overlapping seeks onto the
-      // browser (which is what makes seeks feel laggy). If the user
-      // presses the key again while a seek is still in flight, we
-      // remember ONE queued target — the seeked handler will pick it
-      // up after the current seek completes. This is the same
-      // pattern NLEs use for jog-wheel input: coalesce at the
-      // browser boundary, not before it.
-      //
-      // We also use `requestVideoFrameCallback` (RVFC) when
-      // available. RVFC fires on the actual rendered video frame,
-      // so the seek lands on a frame boundary instead of mid-frame.
-      // Combined with the in-flight lock, this makes frame-step
-      // feel truly frame-accurate at the video's natural rate.
-      // Frame-step: seek immediately. On Windows, `seeked` can be
-      // slower to fire than on Mac, causing the _seekInFlight lock
-      // to stall rapid key-repeat. For frame-step we bypass the lock
-      // entirely — each arrow press is a discrete seek that directly
-      // sets currentTime. The browser naturally coalesces rapid
-      // currentTime writes, so this stays smooth without the lock.
+      // v5.5.7: cache DOM refs on vidItem.el to avoid querySelector on every keypress
+      _cacheFrameStepRefs(vidItem);
+      _updateFrameStepUI(vidItem, targetTime);
       clearTimeout(vid._seekTimer);
       vid._seeking = true;
       vid.currentTime = targetTime;
-      // On seeked: clear flag, process pending target if different.
-      // Also include a safety net: if `seeked` doesn't fire within 500ms,
-      // clear _seeking so the NEXT arrow press isn't blocked.
       if (!vid._seekedListener) {
         vid._seekedListener = true;
         var clearSeekingSafety = function() {
@@ -19986,71 +19960,10 @@ document.addEventListener('keydown', e => {
         vid.addEventListener('seeked', function() {
           clearSeekingSafety();
           vid._seeking = false;
-          // Sync UI to actual currentTime (in case instant update was off).
-          // Use formatVideoTimeForLabel so the user's chosen display mode
-          // (0:00 vs f 1234) is preserved after a seek completes.
-          var item = state.items.find(function(it) { return it.video === vid; });
-          if (item && item.el) {
-            var bar = item.el.querySelector('.media-seek-fill');
-            var tCur = item.el.querySelector('.media-time-cur');
-            var pct = vid.duration ? vid.currentTime / vid.duration : 0;
-            if (bar) bar.style.width = (pct * 100) + '%';
-            if (tCur) {
-              tCur.textContent = formatVideoTimeForLabel(item.el, vid, vid.currentTime);
-            }
-            // Round 57: also sync the cinema frame/timecode overlay to
-            // the actual currentTime after a seek. The optimistic
-            // update in the keydown handler used the requested target,
-            // which on a keyframe-snap codec might differ from where
-            // the browser actually landed. Re-sync to the real value
-            // so the overlay never lies about which frame is shown.
-            var fcd = item.el.querySelector('.media-frame-display');
-            if (fcd) {
-              var _fps = vid._kraftedFps || 30;
-              var _dur = isFinite(vid.duration) ? vid.duration : 0;
-              var _fIdx = Math.max(0, Math.round(vid.currentTime * _fps));
-              var _fTotal = Math.max(0, Math.round(_dur * _fps));
-              var _m = Math.floor(vid.currentTime / 60);
-              var _sec = Math.floor(vid.currentTime % 60);
-              var _cs = Math.floor((vid.currentTime - Math.floor(vid.currentTime)) * 100);
-              var _timeStr = _m + ':' + (_sec < 10 ? '0' : '') + _sec + '.' + (_cs < 10 ? '0' : '') + _cs;
-              var _fcCur = fcd.querySelector('.fc-cur');
-              var _fcTotal = fcd.querySelector('.fc-total');
-              var _fcTime = fcd.querySelector('.fc-time');
-              if (_fcCur)   _fcCur.textContent = 'F ' + _fIdx;
-              if (_fcTotal) _fcTotal.textContent = '/ ' + _fTotal;
-              if (_fcTime)  _fcTime.textContent = _timeStr;
-              // Round 68: sync the info bar too (post-seek re-sync)
-              var _ib2 = item.el.querySelector('.media-info-bar');
-              if (_ib2) {
-                var _ibFcur2 = _ib2.querySelector('.ib-fcur');
-                var _ibFtot2 = _ib2.querySelector('.ib-ftot');
-                var _ibTime2 = _ib2.querySelector('.ib-time');
-                var _ibFps2  = _ib2.querySelector('.ib-fps');
-                if (_ibFcur2) _ibFcur2.textContent = 'F ' + _fIdx;
-                if (_ibFtot2) _ibFtot2.textContent = '/ ' + _fTotal;
-                if (_ibTime2) _ibTime2.textContent = _timeStr;
-                if (_ibFps2)  _ibFps2.textContent = _fps + ' fps';
-              }
-            }
-          }
-          // v3.8 fix: removed the chain re-seek block that tried to seek
-          // again if currentTime didn't exactly match _seekTarget. The
-          // browser's keyframe-snap means currentTime can never land at
-          // the exact 1/30s target, so the chain looped forever and
-          // caused the visible "jump back" after every arrow press.
-          // We now accept whatever position the browser actually lands
-          // on (which the seeked event has already synced the UI to
-          // above). For a typical video, this lands on the nearest
-          // keyframe — coarser than frame-accurate, but stable.
-          //
-          // Frame-step is now lock-free (see keydown handler above).
+          _updateFrameStepUI(vidItem, vid.currentTime);
         });
         vid.addEventListener('ended', function() { vid._seeking = false; clearSeekingSafety(); });
       }
-      // Per-seek safety: if `seeked` doesn't fire within 500ms of a
-      // pending seek, clear `_seeking` so the next arrow press isn't
-      // blocked. This protects against the seeked event being lost.
       if (vid._seekSafetyTimer) clearTimeout(vid._seekSafetyTimer);
       vid._seekSafetyTimer = setTimeout(function() {
         vid._seeking = false;
