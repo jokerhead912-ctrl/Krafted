@@ -245,6 +245,11 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
   padding: 6px 10px; min-height: 40px; box-sizing: border-box;
   flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
   scrollbar-width: thin;
+  /* v5.5.5: prevent controls from shrinking below readable size.
+     When the user resizes the player smaller, the controls bar keeps
+     its minimum width and scrolls horizontally instead of shrinking
+     buttons and the seek bar down to illegible sizes. */
+  min-width: 420px;
 }
 /* Compact mode (Round 94): applied via ResizeObserver when the player
    is too narrow for the full seek bar + labeled buttons to coexist
