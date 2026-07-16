@@ -10170,6 +10170,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     if (dx*dx + dy*dy > 25) _clickDragged = true; // 5px threshold, squared
   });
   wrap.addEventListener('click', function(ev) {
+    // v5.5.11: when the Frame Text editor is active, clicks should
+    // NOT toggle play/pause. The user is typing — clicking the editor
+    // or the video behind it should not start/stop playback.
+    if (el._textEditorEl) return;
     if (_clickDragged) {
       _clickDownX = null; _clickDownY = null; _clickDragged = false;
       return;
@@ -17915,7 +17919,7 @@ document.addEventListener('fullscreenchange', _syncAppFsIcon);
 document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
-console.log('%c[Krafted v5.5.11] Frame Text keyboard isolation — stopPropagation on keydown+keyup prevents video play/pause/seek while typing. Text editor now blocks all keystrokes from leaking to the player.',
+console.log('%c[Krafted v5.5.11] Frame Text click isolation — when text editor is active, clicks on the video area no longer toggle play/pause. Space types a space character; play/pause resumes after commit/cancel.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
 
