@@ -645,12 +645,13 @@ body.video-draw-mode .media-anno-cursor-ring { display: block; }
    All content stays within the panel bounds — nothing can overflow past
    the cyan border. */
 .media-anno-toolbar {
-  position: absolute; top: 0; left: 0;
-  /* v5.5.7: was position:fixed on document.body — broke inside sandbox
-     webview iframes where `fixed` is relative to the iframe viewport
-     instead of the top-level window. Now positioned relative to the
-     .item container so it follows the video during zoom/pan. */
-  z-index: 100000;
+  position: fixed; top: 0; left: 0;
+  /* v5.5.8: position:fixed on document.body, tracking video BCR.
+     Sandbox webview renders .item-internal absolute differently
+     (possibly transform stacking context). Back to body with
+     viewport-relative fixed positioning — always in top-level
+     stacking context so it never gets clipped. */
+  z-index: 2147483647;
   display: flex; flex-direction: column; gap: 4px; align-items: center;
   background: rgba(20,20,24,0.98);
   border: 2px solid rgba(0,229,255,0.6);
@@ -9115,14 +9116,12 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // draw toolbar on undo/delete. Without this, the toolbar (which lives
     // on body) was leaking across undos — the user reported "the draw
     // panel stays on the screen" after Ctrl+Z.
-    // v5.5.7: append toolbar to the .item container (NOT document.body)
-    // so position:absolute tracks the item during zoom/pan, and the
-    // toolbar stays visible inside sandbox webview iframes where
-    // position:fixed on body is relative to the iframe, not the window.
-    // The Fullscreen API still hides the toolbar because it's inside
-    // the .item subtree (which gets fullscreened) — the toolbar auto-
-    // hides in fullscreen, same as before.
-    el.appendChild(annoToolbar);
+    // v5.5.8: append toolbar to document.body (NOT .item).
+    // position:fixed on body is viewport-relative and bypasses
+    // the .item's transform stacking context which sandbox webview
+    // renders incorrectly. Toolbar tracks video BCR via _positionToolbar
+    // which recalculates on zoom/pan/resize.
+    document.body.appendChild(annoToolbar);
     el._annoToolbar = annoToolbar;
     // v5.5.7: also stash on the item object so cleanupAllItems can
     // find it (the item object doesn't always have `.el` during
@@ -9152,13 +9151,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     function _positionToolbar() {
       if (!annoToolbar) return;
       if (annoToolbar.classList.contains('toolbar-hidden')) return;
-      // v5.5.7: toolbar is now position:absolute inside the .item container,
-      // so we position relative to the .item element (not the viewport).
-      // wrap.getBoundingClientRect() gives us the video's screen-space
-      // position; we convert to item-local by subtracting the item's BCR.
+      // v5.5.8: toolbar is position:fixed on document.body, so we
+      // position using viewport coordinates from wrap.getBoundingClientRect().
+      // No item-local conversion needed — left/top are clientX/clientY.
       const r = wrap.getBoundingClientRect();
       if (!r || r.width === 0 || r.height === 0) return;
-      const elRect = el.getBoundingClientRect();
       // Compute scale from the shorter side of the video
       const ref = Math.min(r.width, r.height);
       let scale = 0.75 + Math.max(0, Math.min(1, (ref - 280) / 620)) * 0.75;
@@ -9167,26 +9164,28 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       annoToolbar.style.height = r.height + 'px';
       const tw = annoToolbar.offsetWidth || 110;
       const th = annoToolbar.offsetHeight || 240;
-      // If user dragged toolbar, respect custom position (stored relative to item)
+      // If user dragged toolbar, respect custom position (viewport-relative)
       if (el._annoDrawState && el._annoDrawState.toolbarPos) {
         const p = el._annoDrawState.toolbarPos;
         annoToolbar.style.left = p.x + 'px';
         annoToolbar.style.top = p.y + 'px';
         return;
       }
-      // v5.5.7: place INSIDE the .item to the RIGHT of the video
-      // (overlapping the right edge of the video), vertically centered.
-      // The toolbar must stay inside the .item bbox because the
-      // .item may be inside a clipped ancestor (sandbox webview
-      // iframe + #viewport with overflow:hidden). If it overflowed
-      // the .item, it'd be clipped to invisible.
-      const itemW = elRect.width;
-      const itemH = elRect.height;
-      let left = itemW - tw - 4;
-      let top = Math.max(2, (itemH - th) / 2);
-      // Final clamp
-      left = Math.max(2, Math.min(itemW - tw - 2, left));
-      top = Math.max(2, Math.min(itemH - th - 2, top));
+      // v5.5.8: place to the RIGHT of the video in viewport space.
+      // Default: right edge of video + 4px gap, vertically centered.
+      let left = r.right + 4;
+      let top = r.top + Math.max(0, (r.height - th) / 2);
+      // If toolbar would overflow the right edge, try LEFT side
+      if (left + tw > window.innerWidth - 8) {
+        left = r.left - tw - 4;
+      }
+      // If still overflowing (very wide video), put inside-right
+      if (left < 4) {
+        left = r.right - tw - 4;
+      }
+      // Clamp to viewport
+      left = Math.max(4, Math.min(window.innerWidth - tw - 4, left));
+      top = Math.max(4, Math.min(window.innerHeight - th - 4, top));
       annoToolbar.style.left = left + 'px';
       annoToolbar.style.top = top + 'px';
     }
@@ -9194,11 +9193,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     try { _positionToolbar(); } catch (e) {}
     // Reposition on window resize
     window.addEventListener('resize', _positionToolbar);
-    // Round 52: expose the toolbar's re-positioner on the el so the global
-    // canvas-update hook (pan, zoom, item-move) can call it. The toolbar
-    // is appended to <body> at position: fixed, so it needs to track the
-    // video's screen-pixel size — when the canvas zooms, the video's
-    // BCR changes, and the toolbar's --tb-scale + left/top must follow.
+    // Round 52 / v5.5.8: toolbar is position:fixed on document.body.
+    // When canvas zooms/pans, the video's BCR changes, so the toolbar
+    // must re-track. Exposed on el so the global canvas-update hook can call it.
     el._repositionAnnoToolbar = _positionToolbar;
 
     // ── Drag logic for the floating toolbar ──
@@ -9222,13 +9219,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       ev.preventDefault();
       const dx = ev.clientX - _tbDragStartX;
       const dy = ev.clientY - _tbDragStartY;
-      // v5.5.7: toolbar is position:absolute inside .item, so coordinates
-      // are item-relative, not viewport-relative. Convert client delta
-      // to item-local delta by dividing by the canvas zoom (since the
-      // item itself is scaled by state.zoom).
-      const z = Math.max(0.02, Math.min(10, state.zoom || 1));
-      const nx = _tbStartLeft + dx / z;
-      const ny = _tbStartTop + dy / z;
+      // v5.5.8: toolbar is position:fixed on body (viewport-relative).
+      // Drag delta is in client pixels, same coordinate space.
+      const nx = _tbStartLeft + dx;
+      const ny = _tbStartTop + dy;
       annoToolbar.style.left = nx + 'px';
       annoToolbar.style.top = ny + 'px';
     }
