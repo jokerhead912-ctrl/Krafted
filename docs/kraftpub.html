@@ -9730,7 +9730,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // the natural text width, then clamps between minW(60) and maxW(420).
       var _mirror = document.createElement('span');
       _mirror.style.cssText = 'position:absolute;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;pointer-events:none;left:-9999px;top:-9999px;';
-      document.body.appendChild(_mirror);
+      var _mirrorParent = el.querySelector('.media-wrap') || document.body;
+      _mirrorParent.appendChild(_mirror);
       editor._mirror = _mirror; // stash for cleanup
       // Run once immediately to fit the placeholder width
       (function(){
@@ -9781,13 +9782,14 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           if (el._textEditorEl === editor) _commitTextEditor();
         }, 80);
       });
-      // Round 75.2: append editor to wrap (the fullscreen target)
+      // Round 75.2: append editor to the fullscreen target (wrap)
       // instead of document.body so the text editor is visible when
-      // the player is in fullscreen. Same fix as the annotation
-      // toolbar and cursor ring. The editor uses position:fixed so
-      // it escapes ancestor overflow:hidden and anchors to the
-      // viewport/fullscreen viewport identically.
-      document.body.appendChild(editor);
+      // the player is in fullscreen. The Fullscreen API only renders
+      // the fullscreen element's subtree. The editor uses position:fixed
+      // so it anchors to the viewport/fullscreen viewport identically
+      // regardless of which parent it lives under.
+      var _editorWrap = el.querySelector('.media-wrap') || document.body;
+      _editorWrap.appendChild(editor);
       el._textEditorEl = editor;
       // Make the text editor draggable so the user can reposition it
       // after it spawns at the video centre (T-key shortcut).
@@ -9909,7 +9911,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // Round 75.2: append translate button to wrap (the fullscreen
       // target), not document.body — same reason as the editor: the
       // Fullscreen API only renders the fullscreen element's subtree.
-      document.body.appendChild(trBtn);
+      var _trParent = el.querySelector('.media-wrap') || document.body;
+      _trParent.appendChild(trBtn);
       // Stash on the editor so _commit / _cancel can tear it down cleanly
       editor._trBtn = trBtn;
       editor._positionTrBtn = positionTrBtn;
@@ -17904,7 +17907,7 @@ document.addEventListener('fullscreenchange', _syncAppFsIcon);
 document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
-console.log('%c[Krafted v5.5] Fullscreen feature loaded — press F to toggle',
+console.log('%c[Krafted v5.5.10] Fullscreen Frame Text — T tool now works inside fullscreen player. Text editor and translate button are appended to the fullscreen element subtree so they render correctly.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
 
