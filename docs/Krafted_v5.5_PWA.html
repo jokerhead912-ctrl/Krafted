@@ -11681,16 +11681,26 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         const _sbann = (_sbitm && _sbitm.anno) ? _sbitm.anno : null;
         // Round 19: tie visibility to draw mode — hidden when off.
         const _modeOff = !(el._annoDrawState && el._annoDrawState.mode && el._annoDrawState.mode !== 'off');
-        const _hidden = _modeOff || (_sbann && _sbann.drawToolbarHidden);
-        if (_hidden) {
+        // Bugfix: when draw mode is ON, never hide the toolbar — the
+        // persisted drawToolbarHidden flag may be stale (set by a previous
+        // ✕ close) and should not override the current active draw mode.
+        const _hidden = _modeOff ? true : (_sbann && _sbann.drawToolbarHidden ? false : false);
+        // Simplified: toolbar is hidden ONLY when draw mode is off.
+        // The drawToolbarHidden flag is only used for the show-toolbar
+        // button below — it should NOT force-hide the toolbar when the
+        // user is actively drawing.
+        if (_modeOff) {
           showToolbarBtn.classList.remove('hidden');
         } else {
           showToolbarBtn.classList.add('hidden');
         }
-        // Also sync the actual toolbar's class (in case it drifted)
-        try {
-          if (annoToolbar) annoToolbar.classList.toggle('toolbar-hidden', !!_hidden);
-        } catch (e) {}
+        // Only sync toolbar class when draw mode is off — never hide
+        // the toolbar while the user is actively drawing on a frame.
+        if (_modeOff) {
+          try {
+            if (annoToolbar) annoToolbar.classList.add('toolbar-hidden');
+          } catch (e) {}
+        }
       } catch (e) {}
       // Update the add-hint with the current frame
       try {
