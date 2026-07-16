@@ -9172,18 +9172,16 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         annoToolbar.style.top = p.y + 'px';
         return;
       }
-      // v5.5.7: place INSIDE the .item to the RIGHT of the video
-      // (overlapping the right edge of the video), vertically centered.
-      // The toolbar must stay inside the .item bbox because the
-      // .item may be inside a clipped ancestor (sandbox webview
-      // iframe + #viewport with overflow:hidden). If it overflowed
-      // the .item, it'd be clipped to invisible.
+      // v5.5.9: place toolbar to the LEFT of the video (outside .item).
+      // Toolbar sits left of the video content area, vertically centered.
+      // Negative left means it extends beyond .item's left edge — this
+      // is fine as long as parent containers don't overflow:hidden it.
       const itemW = elRect.width;
       const itemH = elRect.height;
-      let left = itemW - tw - 4;
+      // Toolbar goes on the LEFT side, outside the video
+      let left = -(tw + 4);
       let top = Math.max(2, (itemH - th) / 2);
-      // Final clamp
-      left = Math.max(2, Math.min(itemW - tw - 2, left));
+      // Clamp: keep toolbar within reason
       top = Math.max(2, Math.min(itemH - th - 2, top));
       annoToolbar.style.left = left + 'px';
       annoToolbar.style.top = top + 'px';
