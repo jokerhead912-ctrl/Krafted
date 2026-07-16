@@ -11944,16 +11944,108 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // Top row: thumbnail + main content
     const rowTop = document.createElement('div');
     rowTop.className = 'comment-row-top';
-    // Snapshot thumbnail (captured at add time)
+    // Snapshot thumbnail — v5.5.9: re-composite strokes on top
+    // of the snapshot so text annotations are always visible.
+    // The original c.snapshot may not have text strokes baked in
+    // if capture happened before the text editor was committed.
     const thumb = document.createElement('div');
-    thumb.className = 'comment-thumb' + (c.snapshot ? '' : ' no-snap');
-    if (c.snapshot) {
-      var thumbImg = document.createElement('img');
-      thumbImg.src = c.snapshot;
-      thumbImg.alt = 'Frame ' + (c.frame || 0);
-      thumb.appendChild(thumbImg);
+    thumb.className = 'comment-thumb' + (c.snapshot || (c.annoStrokes && c.annoStrokes.length) ? '' : ' no-snap');
+    if (c.snapshot || (c.annoStrokes && c.annoStrokes.length)) {
+      // Build a small canvas thumbnail: snapshot as background,
+      // strokes composited on top. This mirrors the lightbox logic
+      // but at thumbnail size (160x90 CSS, 320x180 canvas for retina).
+      var _tc = document.createElement('canvas');
+      _tc.width = 320; _tc.height = 180;
+      _tc.style.width = '100%'; _tc.style.height = '100%';
+      _tc.style.objectFit = 'contain';
+      _tc.style.backgroundColor = '#000';
+      var _tctx = _tc.getContext('2d');
+      // Draw snapshot if available
+      if (c.snapshot) {
+        var _timg = new Image();
+        _timg.onload = function() {
+          try { _tctx.drawImage(_timg, 0, 0, 320, 180); } catch(e) {}
+          _compositeThumbStrokes(_tctx, c, 320, 180);
+        };
+        _timg.src = c.snapshot;
+      } else {
+        _compositeThumbStrokes(_tctx, c, 320, 180);
+      }
+      thumb.appendChild(_tc);
     } else {
       thumb.textContent = '—';
+    }
+    function _compositeThumbStrokes(ctx, comment, cw, ch) {
+      var strokes = comment.annoStrokes;
+      if (!strokes || !strokes.length) return;
+      var sx = cw, sy = ch;
+      strokes.forEach(function(stk) {
+        if (!stk || !stk.points || stk.points.length === 0) return;
+        ctx.strokeStyle = stk.color || '#ff4444';
+        ctx.fillStyle = stk.color || '#ff4444';
+        var sw = Math.max(1, (stk.size || 4) * Math.min(sx, sy) / 400);
+        ctx.lineWidth = sw;
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        var pts = stk.points.map(function(p) { return [p[0] * sx, p[1] * sy]; });
+        if (stk.type === 'pen') {
+          if (pts.length < 2) return;
+          ctx.beginPath();
+          pts.forEach(function(p, i) { i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]); });
+          ctx.stroke();
+        } else if (stk.type === 'arrow') {
+          if (pts.length < 2) return;
+          var x0 = pts[0][0], y0 = pts[0][1];
+          var x1 = pts[pts.length-1][0], y1 = pts[pts.length-1][1];
+          ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+          var angle = Math.atan2(y1-y0, x1-x0);
+          var headLen = Math.max(4, sw * 2.5);
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x1 - headLen*Math.cos(angle-Math.PI/6), y1 - headLen*Math.sin(angle-Math.PI/6));
+          ctx.lineTo(x1 - headLen*Math.cos(angle+Math.PI/6), y1 - headLen*Math.sin(angle+Math.PI/6));
+          ctx.closePath(); ctx.fill();
+        } else if (stk.type === 'box') {
+          if (pts.length < 2) return;
+          var bx0 = pts[0][0], by0 = pts[0][1];
+          var bx1 = pts[pts.length-1][0], by1 = pts[pts.length-1][1];
+          ctx.strokeRect(Math.min(bx0,bx1), Math.min(by0,by1), Math.abs(bx1-bx0), Math.abs(by1-by0));
+        } else if (stk.type === 'circle') {
+          if (pts.length < 2) return;
+          var cx0 = pts[0][0], cy0 = pts[0][1];
+          var cx1 = pts[pts.length-1][0], cy1 = pts[pts.length-1][1];
+          var ccx = (cx0+cx1)/2, ccy = (cy0+cy1)/2;
+          var crx = Math.max(0.5, Math.abs(cx1-cx0)/2);
+          var cry = Math.max(0.5, Math.abs(cy1-cy0)/2);
+          ctx.beginPath(); ctx.ellipse(ccx, ccy, crx, cry, 0, 0, Math.PI*2); ctx.stroke();
+        } else if (stk.type === 'text') {
+          var tx = pts[0][0], ty = pts[0][1];
+          var txt = (stk.text || '').trim();
+          if (!txt) return;
+          var fontSize = Math.max(8, (stk.size || 4) * 3);
+          ctx.font = '600 ' + fontSize + 'px -apple-system, system-ui, sans-serif';
+          ctx.textBaseline = 'top';
+          var metrics = ctx.measureText(txt);
+          var padX = 3, padY = 2;
+          var bgW = metrics.width + padX*2;
+          var bgH = fontSize*1.15 + padY*2;
+          ctx.save();
+          ctx.fillStyle = 'rgba(0,0,0,0.55)';
+          var rx = 3;
+          ctx.beginPath();
+          ctx.moveTo(tx+rx, ty); ctx.lineTo(tx+bgW-rx, ty);
+          ctx.quadraticCurveTo(tx+bgW, ty, tx+bgW, ty+rx);
+          ctx.lineTo(tx+bgW, ty+bgH-rx);
+          ctx.quadraticCurveTo(tx+bgW, ty+bgH, tx+bgW-rx, ty+bgH);
+          ctx.lineTo(tx+rx, ty+bgH);
+          ctx.quadraticCurveTo(tx, ty+bgH, tx, ty+bgH-rx);
+          ctx.lineTo(tx, ty+rx);
+          ctx.quadraticCurveTo(tx, ty, tx+rx, ty);
+          ctx.closePath(); ctx.fill();
+          ctx.restore();
+          ctx.fillStyle = stk.color || '#fff';
+          ctx.fillText(txt, tx+padX, ty+padY);
+        }
+      });
     }
     // Frame number badge overlaid on the thumbnail's bottom-left
     const thumbFrame = document.createElement('span');
@@ -15032,6 +15124,81 @@ function autoFitTextItem(tx, opts) {
   updateAutoFitPaper();
 }
 
+// v5.5.9: helper — composite annotation strokes onto a canvas.
+// Used by both thumbnail render and Board export to ensure text
+// annotations are always visible even if c.snapshot doesn't have them.
+function _compositeStrokesOnCanvas(ctx, strokes, cw, ch) {
+  if (!strokes || !strokes.length) return;
+  var sx = cw, sy = ch;
+  strokes.forEach(function(stk) {
+    if (!stk || !stk.points || stk.points.length === 0) return;
+    ctx.strokeStyle = stk.color || '#ff4444';
+    ctx.fillStyle = stk.color || '#ff4444';
+    var sw = Math.max(1.5, (stk.size || 4) * Math.min(sx, sy) / 400);
+    ctx.lineWidth = sw;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    var pts = stk.points.map(function(p) { return [p[0] * sx, p[1] * sy]; });
+    if (stk.type === 'pen') {
+      if (pts.length < 2) return;
+      ctx.beginPath();
+      pts.forEach(function(p, i) { i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]); });
+      ctx.stroke();
+    } else if (stk.type === 'arrow') {
+      if (pts.length < 2) return;
+      var x0 = pts[0][0], y0 = pts[0][1];
+      var x1 = pts[pts.length-1][0], y1 = pts[pts.length-1][1];
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      var angle = Math.atan2(y1-y0, x1-x0);
+      var headLen = Math.max(6, sw * 2.5);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 - headLen*Math.cos(angle-Math.PI/6), y1 - headLen*Math.sin(angle-Math.PI/6));
+      ctx.lineTo(x1 - headLen*Math.cos(angle+Math.PI/6), y1 - headLen*Math.sin(angle+Math.PI/6));
+      ctx.closePath(); ctx.fill();
+    } else if (stk.type === 'box') {
+      if (pts.length < 2) return;
+      var bx0 = pts[0][0], by0 = pts[0][1];
+      var bx1 = pts[pts.length-1][0], by1 = pts[pts.length-1][1];
+      ctx.strokeRect(Math.min(bx0,bx1), Math.min(by0,by1), Math.abs(bx1-bx0), Math.abs(by1-by0));
+    } else if (stk.type === 'circle') {
+      if (pts.length < 2) return;
+      var cx0 = pts[0][0], cy0 = pts[0][1];
+      var cx1 = pts[pts.length-1][0], cy1 = pts[pts.length-1][1];
+      var ccx = (cx0+cx1)/2, ccy = (cy0+cy1)/2;
+      var crx = Math.max(0.5, Math.abs(cx1-cx0)/2);
+      var cry = Math.max(0.5, Math.abs(cy1-cy0)/2);
+      ctx.beginPath(); ctx.ellipse(ccx, ccy, crx, cry, 0, 0, Math.PI*2); ctx.stroke();
+    } else if (stk.type === 'text') {
+      var tx = pts[0][0], ty = pts[0][1];
+      var txt = (stk.text || '').trim();
+      if (!txt) return;
+      var fontSize = Math.max(10, (stk.size || 4) * 4);
+      ctx.font = '600 ' + fontSize + 'px -apple-system, system-ui, sans-serif';
+      ctx.textBaseline = 'top';
+      var metrics = ctx.measureText(txt);
+      var padX = 5, padY = 3;
+      var bgW = metrics.width + padX*2;
+      var bgH = fontSize*1.15 + padY*2;
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      var rx = 4;
+      ctx.beginPath();
+      ctx.moveTo(tx+rx, ty); ctx.lineTo(tx+bgW-rx, ty);
+      ctx.quadraticCurveTo(tx+bgW, ty, tx+bgW, ty+rx);
+      ctx.lineTo(tx+bgW, ty+bgH-rx);
+      ctx.quadraticCurveTo(tx+bgW, ty+bgH, tx+bgW-rx, ty+bgH);
+      ctx.lineTo(tx+rx, ty+bgH);
+      ctx.quadraticCurveTo(tx, ty+bgH, tx, ty+bgH-rx);
+      ctx.lineTo(tx, ty+rx);
+      ctx.quadraticCurveTo(tx, ty, tx+rx, ty);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = stk.color || '#fff';
+      ctx.fillText(txt, tx+padX, ty+padY);
+    }
+  });
+}
+
 async function videoAnnoSendToBoard() {
   const item = videoAnnoGetSelected();
   if (!item) { toast('Select a video first'); return; }
@@ -15071,9 +15238,25 @@ async function videoAnnoSendToBoard() {
   const wasPaused = v.paused;
   const SNAP_MAX_W = 0; // 0 = use video native resolution
   const captureOne = (c) => new Promise((resolve) => {
-    // Fast path: c.snapshot exists and is a valid data URL → use it
+    // v5.5.9: re-composite annoStrokes on top of snapshot.
+    // c.snapshot may not have text annotations baked in if the
+    // text editor wasn't committed before capture. We always
+    // re-render strokes so text appears on both thumbnails and Board.
+    var _hasStrokes = c.annoStrokes && c.annoStrokes.length;
     if (c.snapshot && c.snapshot.startsWith('data:image/')) {
-      resolve(c.snapshot);
+      if (!_hasStrokes) { resolve(c.snapshot); return; }
+      // Re-composite strokes onto the snapshot
+      var _img = new Image();
+      _img.onload = function() {
+        var _c = document.createElement('canvas');
+        _c.width = _img.naturalWidth; _c.height = _img.naturalHeight;
+        var _ctx = _c.getContext('2d');
+        try { _ctx.drawImage(_img, 0, 0); } catch(e) {}
+        _compositeStrokesOnCanvas(_ctx, c.annoStrokes, _c.width, _c.height);
+        resolve(_c.toDataURL('image/jpeg', 0.85));
+      };
+      _img.onerror = function() { resolve(c.snapshot); };
+      _img.src = c.snapshot;
       return;
     }
     // Slow path: legacy comments without a baked-in snapshot, OR
