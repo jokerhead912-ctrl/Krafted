@@ -18825,13 +18825,13 @@ window.addEventListener('dragover', function(e){
   e.preventDefault();
 }, true);
 window.addEventListener('drop', function(e){
-  console.log('[FileDrop] window capture-phase drop, files:', e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0);
+  try { console.log('[FileDrop] window capture-phase drop, files:', e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0); } catch (err) {}
   e.preventDefault();
   e.stopPropagation();
   const files = e.dataTransfer && e.dataTransfer.files;
   if (files && files.length) {
     try { hideWelcome(); } catch (err) {}
-    _handleFileDrop(e, [...files]);
+    try { _handleFileDrop(e, [...files]); } catch (err) { console.warn('[FileDrop] window handler error:', err); }
   }
 }, true);
 
@@ -20518,6 +20518,40 @@ viewport.addEventListener('mousedown', e => {
   hideCtx();
   if (e.target.closest('#toolbar') || e.target.closest('#props') || e.target.closest('#text-toolbar') || e.target.closest('#draw-toolbar') || e.target.closest('#ctx-menu') || e.target.closest('#export-modal') || e.target.closest('#gif-modal') || e.target.closest('#cut-panel') || e.target.closest('#lasso-panel') || e.target.closest('#text-quick-bar')) return;
 
+  // v5.5.6: Alt + Middle-button drag on selected video → internal zoom/pan
+  // (Premiere-style Program Monitor zoom). Only activates when:
+  //   - Alt is held AND middle button (e.button===1)
+  //   - The target is inside a .has-media item that is currently selected
+  //   - That item has a <video> element
+  // This intercepts BEFORE isPanTrigger (middle button alone would pan the
+  // canvas) and BEFORE item drag (click on video area would move the item).
+  if (e.altKey && e.button === 1) {
+    const mediaItem = e.target.closest('.item.has-media');
+    if (mediaItem) {
+      const item = state.items.find(i => i.el === mediaItem);
+      if (item && item.video && state.selected.has(item.id)) {
+        if (e.cancelable) e.preventDefault();
+        // Initialize video zoom state if not present
+        if (item._videoZoom === undefined) {
+          item._videoZoom = 1;
+          item._videoPanX = 0;
+          item._videoPanY = 0;
+        }
+        state.dragging = {
+          type: 'videoZoom',
+          item: item,
+          startX: e.clientX,
+          startY: e.clientY,
+          origZoom: item._videoZoom,
+          origPanX: item._videoPanX,
+          origPanY: item._videoPanY
+        };
+        viewport.style.cursor = 'move';
+        return;
+      }
+    }
+  }
+
   // Relation mode: intercept clicks to pick two items
   if (state.tool === 'relation') {
     _handleRelationClick(e.target);
@@ -21016,6 +21050,31 @@ document.addEventListener('mousemove', e => {
     return;
   }
 
+  // v5.5.6: VIDEO INTERNAL ZOOM/PAN (Alt + Middle-button drag)
+  // Premiere-style Program Monitor zoom. Dragging vertically zooms the
+  // video content in/out; dragging horizontally pans. The .item container
+  // size and controls are completely unaffected — only the <video> element
+  // inside .media-wrap gets a CSS transform.
+  if (state.dragging && state.dragging.type === 'videoZoom') {
+    const d = state.dragging;
+    const dy = e.clientY - d.startY;
+    const dx = e.clientX - d.startX;
+    // Vertical drag → zoom (1px = 0.005 zoom factor, feels responsive)
+    // Pull DOWN (positive dy) = zoom IN. Pull UP (negative dy) = zoom OUT.
+    const zoom = Math.max(0.25, Math.min(8, d.origZoom + dy * 0.008));
+    // Horizontal drag → pan (pixels in video-local space, adjusted for zoom)
+    const panSensitivity = 0.5;
+    const panX = d.origPanX + dx * panSensitivity;
+    const panY = d.origPanY; // vertical pan not used (zoom handles Y)
+    // Apply transform to the <video> element
+    const videoEl = d.item.video;
+    if (videoEl) {
+      videoEl.style.transform = 'scale(' + zoom + ') translate(' + panX + 'px, ' + panY + 'px)';
+      videoEl.style.transformOrigin = 'center center';
+    }
+    return;
+  }
+
   // CROP DRAG — move crop window or resize via handle
   if (state.dragging && (state.dragging.type === 'crop-move' || state.dragging.type === 'crop-resize') && state.cropping) {
     const d = state.dragging;
@@ -21505,6 +21564,24 @@ document.addEventListener('mouseup', e => {
     G.potentialTextDrag = null;
   }
   if (state.dragging) {
+    // v5.5.6: video internal zoom/pan end — commit zoom/pan to item state
+    if (state.dragging.type === 'videoZoom') {
+      const d = state.dragging;
+      const videoEl = d.item.video;
+      if (videoEl) {
+        // Read the final transform back and store as item state
+        const t = videoEl.style.transform;
+        const m = t.match(/scale\(([\d.]+)\)\s*translate\(([\-\d.]+)px,\s*([\-\d.]+)px\)/);
+        if (m) {
+          d.item._videoZoom = parseFloat(m[1]);
+          d.item._videoPanX = parseFloat(m[2]);
+          d.item._videoPanY = parseFloat(m[3]);
+        }
+      }
+      state.dragging = null;
+      viewport.style.cursor = '';
+      return;
+    }
     // Reframe drag end — keep mode active, just end the drag
     if (state.dragging.type === 'reframe') {
       state.dragging = null;
