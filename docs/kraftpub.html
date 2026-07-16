@@ -13741,7 +13741,45 @@ function videoAnnoAddComment(text, targetItem) {
   // selected video may be different from the target, causing strokes from
   // the wrong frame to be captured (empty or mismatched).
   const _frame = frame;
-  const strokes = (drawState && drawState.strokesByFrame) ? (drawState.strokesByFrame[_frame] || []) : [];
+  // v5.5.9: merge strokes from ALL frames, not just the current one.
+  // Text annotations placed on frame 0 won't appear in a comment added
+  // on frame 37 unless we aggregate. The user expects ALL visible
+  // annotations to be captured in the snapshot regardless of which
+  // frame they were drawn on.
+  let strokes = [];
+  if (drawState && drawState.strokesByFrame) {
+    const sbf = drawState.strokesByFrame;
+    for (var _fk in sbf) {
+      if (sbf[_fk] && sbf[_fk].length) {
+        strokes = strokes.concat(sbf[_fk]);
+      }
+    }
+    // Also include current frame strokes (may have been set as alias)
+    if (sbf[_frame] && sbf[_frame].length) {
+      // already included via loop above, but dedupe just in case
+      var _existingIds = {};
+      strokes.forEach(function(s){ if(s._id) _existingIds[s._id]=true; });
+      sbf[_frame].forEach(function(s){
+        if (!s._id || !_existingIds[s._id]) strokes.push(s);
+      });
+    }
+  }
+  // v5.5.9: also grab any uncommitted text editor content.
+  // If the user typed text but hasn't blurred/Enter'd yet, the
+  // text is still in the DOM editor, not in strokesByFrame.
+  if (item.el && item.el._textEditorEl && item.el._textEditorEl.value) {
+    var _edText = item.el._textEditorEl.value.trim();
+    if (_edText) {
+      strokes.push({
+        type: 'text',
+        color: (drawState && drawState.color) || '#ffffff',
+        size: (drawState && drawState.size) || 4,
+        text: _edText,
+        points: [[0.5, 0.3]],
+        _id: 'ed-' + Date.now(),
+      });
+    }
+  }
   let snapshot = '';
   try {
     snapshot = videoAnnoCaptureSnapshot(item.video, SNAPPY_SNAP_MAX_W, strokes);
