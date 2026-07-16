@@ -9372,7 +9372,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       if (!stk || !stk.points || stk.points.length === 0) return;
       ctx.strokeStyle = stk.color;
       ctx.fillStyle = stk.color;
-      ctx.lineWidth = stk.size;
+      // v5.5.7: scale stroke width by video zoom so strokes look
+      // consistent at any zoom level — zoom in = thicker lines,
+      // zoom out = thinner lines, matching the video content scale.
+      var zoom = 1;
+      var item = el._item;
+      if (item && item._videoZoom !== undefined) zoom = item._videoZoom;
+      ctx.lineWidth = stk.size * zoom;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       const pts = stk.points.map(p => [p[0] * cw, p[1] * ch]);
