@@ -650,14 +650,18 @@ body.video-draw-mode .media-anno-cursor-ring { display: block; }
      webview iframes where `fixed` is relative to the iframe viewport
      instead of the top-level window. Now positioned relative to the
      .item container so it follows the video during zoom/pan. */
-  z-index: 6;
+  z-index: 100000;
   display: flex; flex-direction: column; gap: 4px; align-items: center;
-  background: rgba(20,20,24,0.96);
-  border: 1px solid rgba(0,229,255,0.4);
+  background: rgba(20,20,24,0.98);
+  border: 2px solid rgba(0,229,255,0.6);
   border-radius: 9px; padding: 6px;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.7);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.9), 0 0 0 1px rgba(0,229,255,0.3);
   font-size: 12px; user-select: none;
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  /* v5.5.7: !important to win over any sandbox-quirk CSS that might
+     be hiding the toolbar (e.g. weird overflow rules in webview). */
+  opacity: 1 !important;
+  visibility: visible !important;
   /* Round 12: width driven by the content, but constrained. The color
      picker (widest element at ~120px) sets the natural width. */
   width: calc(132px * var(--tb-scale, 1));
