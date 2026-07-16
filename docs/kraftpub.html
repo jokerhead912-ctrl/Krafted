@@ -18779,9 +18779,15 @@ if (_welcomeEl) {
   // file over the welcome (z-index 99999999) is silently rejected.
   _welcomeEl.addEventListener('dragover', function(e){
     e.preventDefault();
+    // v5.5.3: MUST set dropEffect to 'copy' — without this some browsers
+    // (especially Windows Chrome) will refuse to fire the drop event even
+    // though preventDefault() was called.
+    e.dataTransfer.dropEffect = 'copy';
   });
   _welcomeEl.addEventListener('drop', function(e){
     e.preventDefault();
+    e.stopPropagation(); // v5.5.3: prevent bubbling to document-level handlers
+    console.log('[FileDrop] Welcome received drop, files:', e.dataTransfer.files.length);
     hideWelcome();
     const files = e.dataTransfer.files;
     if (files && files.length) _handleFileDrop(e, [...files]);
@@ -18789,7 +18795,7 @@ if (_welcomeEl) {
 }
 
 // DRAG & DROP FILES
-viewport.addEventListener('dragover', e => { e.preventDefault(); });
+viewport.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
 // Round 13: auto-hide the draw panel while a file is being dragged in,
 // so the panel doesn't sit on top of the drop target and "trap" the
 // cursor / block the drop. The panel reappears once the drag leaves
@@ -18964,6 +18970,7 @@ function _finishFolderImport(e, allFiles) {
 }
 
 function _handleFileDrop(e, files) {
+  console.log('[FileDrop] _handleFileDrop called with', files.length, 'files');
   // Separate images, videos, and audio files
   const imageFiles = [];
   const videoFiles = [];
