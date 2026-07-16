@@ -9256,15 +9256,35 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // path (e.g. a stray global keypress), force it back to 'select'
       // while the video's draw mode is on. This prevents the white board
       // draw toolbar from painting over the video and blocking input.
+      // Save the board tool so we can restore it when exiting video draw
+      // mode. Only touch the board state when it's actually 'draw' — we
+      // must NOT unconditionally set state.tool = 'select' because that
+      // kills unrelated board tools (text, crop, etc.).
+      var _savedBoardTool = null;
       if (s.mode !== 'off') {
         try {
           if (typeof state !== 'undefined' && state && state.tool === 'draw') {
-            // Use a direct reset that doesn't re-trigger our key handler.
-            state.tool = 'select';
-            const drawToolbar = document.getElementById('draw-toolbar');
-            if (drawToolbar) drawToolbar.classList.remove('active');
+            _savedBoardTool = 'draw';
+            // Use setTool so the UI (#draw-toolbar, toolbar buttons, etc.)
+            // stays in sync with the state change.
+            if (typeof setTool === 'function') setTool('select');
+            else state.tool = 'select';
           }
         } catch (e) {}
+      } else {
+        // Exiting video draw mode — restore the board draw tool if we
+        // took it away earlier. The saved-tool marker lives on el so it
+        // survives across multiple _applyDrawMode calls.
+        try {
+          if (el._annoDrawState && el._annoDrawState._tookBoardDraw) {
+            el._annoDrawState._tookBoardDraw = false;
+            if (typeof setTool === 'function') setTool('draw');
+          }
+        } catch (e) {}
+      }
+      // Stash the flag so the exit branch above can restore it.
+      if (_savedBoardTool === 'draw' && el._annoDrawState) {
+        el._annoDrawState._tookBoardDraw = true;
       }
       // Pause the video when entering draw mode (so strokes line up with the frame)
       if (s.mode !== 'off' && !mediaEl.paused) {
@@ -9275,29 +9295,35 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // button (or any other tool button), the toolbar pops up. The
       // ✕ close button now just exits draw mode (equivalent to pressing
       // the draw button again).
+      if (annoToolbar) {
+        if (s.mode === 'off') {
+          annoToolbar.classList.add('toolbar-hidden');
+        } else {
+          // Unhide aggressively: remove the hidden class AND force
+          // display back to flex. The hidden class uses display:none!
+          // important, and other code paths (popover sync, _setListOpen)
+          // may re-add toolbar-hidden based on a stale drawToolbarHidden
+          // flag. We also clear drawToolbarHidden so downstream sync
+          // helpers don't immediately re-hide the toolbar.
+          annoToolbar.classList.remove('toolbar-hidden');
+          annoToolbar.style.display = '';  // clear any inline display:none
           try {
-        if (annoToolbar) {
-          const wasHidden = annoToolbar.classList.contains('toolbar-hidden');
-          annoToolbar.classList.toggle('toolbar-hidden', s.mode === 'off');
-          // Bugfix: when unhiding the toolbar, force a reposition so it
-          // doesn't end up at (0,0) or off-screen. The rAF follow loop
-          // skips _positionToolbar while hidden, and toolbarPos may point
-          // to a stale off-screen location from a previous session.
-          if (wasHidden && s.mode !== 'off') {
-            // Reset stale toolbarPos so the follow loop re-anchors to
-            // the video instead of jumping to a saved off-screen spot.
-            if (el._annoDrawState && el._annoDrawState.toolbarPos) {
-              el._annoDrawState.toolbarPos = null;
-            }
-            // Defer reposition by one rAF so the browser has laid out
-            // the now-visible toolbar (offsetWidth/Height are 0 while
-            // display:none, and toggle is sync but layout may lag).
-            requestAnimationFrame(function(){
-              try { _positionToolbar(); } catch (_ePos) {}
-            });
+            const itm = _getItem();
+            if (itm && itm.anno) itm.anno.drawToolbarHidden = false;
+          } catch (e) {}
+          // Reset stale toolbarPos so the follow loop re-anchors to
+          // the video instead of jumping to a saved off-screen spot.
+          if (el._annoDrawState && el._annoDrawState.toolbarPos) {
+            el._annoDrawState.toolbarPos = null;
           }
+          // Defer reposition by one rAF so the browser has laid out
+          // the now-visible toolbar (offsetWidth/Height are 0 while
+          // display:none, and toggle is sync but layout may lag).
+          requestAnimationFrame(function(){
+            try { _positionToolbar(); } catch (_ePos) {}
+          });
         }
-      } catch (e) {}
+      }
       // Round 31: re-sync the 📌 Follow button so it reflects the
       // current detach state (toolbarPos is preserved across hide/show).
       try { _syncToolbarFollowBtn(); } catch (e) {}
