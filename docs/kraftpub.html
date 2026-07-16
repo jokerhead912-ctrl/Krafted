@@ -3337,8 +3337,8 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
   <button onclick="setTool('select')" id="mt-select" class="active" title="Select">👆</button>
   <button onclick="setTool('pan')" id="mt-pan" title="Pan">✋</button>
   <span class="mt-sep"></span>
-  <button onclick="setTool('text')" id="mt-text" title="Text">T</button>
-  <button onclick="setTool('draw')" id="mt-draw" title="Draw">✏️</button>
+  <button onclick="setTool('text')" id="mt-text" title="Board Text">T</button>
+  <button onclick="setTool('draw')" id="mt-draw" title="Board Pen">✏️</button>
 </div>
 <div id="mobile-toolbar-right">
   <button onclick="document.getElementById('file-input').click()" title="Add Image">📷</button>
@@ -3361,8 +3361,8 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
 <!-- TOOLBAR -->
 <div id="toolbar">
   <button onclick="setTool('select')" id="btn-select" class="active" title="Select & Move (V)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2l5 12 1.5-4.5L14 8 3 2z"/></svg> <span class="tb-label">Select</span></button>
-  <button onclick="setTool('text')" onmousedown="event.preventDefault()" id="btn-text" title="Add Text (T)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4V3h10v1M8 3v10M6 13h4"/></svg> <span class="tb-label">Text</span></button>
-  <button onclick="setTool('draw')" id="btn-draw" title="Draw (Ctrl+D)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2l3 3-8 8H3v-3l8-8z"/><path d="M9.5 3.5l3 3"/></svg> <span class="tb-label">Draw</span></button>
+  <button onclick="setTool('text')" onmousedown="event.preventDefault()" id="btn-text" title="Board Text (T)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4V3h10v1M8 3v10M6 13h4"/></svg> <span class="tb-label">Board Text</span></button>
+  <button onclick="setTool('draw')" id="btn-draw" title="Board Pen (Ctrl+D)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2l3 3-8 8H3v-3l8-8z"/><path d="M9.5 3.5l3 3"/></svg> <span class="tb-label">Board Pen</span></button>
   <button onclick="setTool('export')" id="btn-export" title="Export PNG (E)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5h2l1-2h6l1 2h2v8H2V5z"/><circle cx="8" cy="9" r="2.5"/></svg> <span class="tb-label">Export</span></button>
   <button onclick="setTool('capture')" id="btn-capture" title="Capture Area (C) | Screen Capture (Shift+C)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5V2h3M14 5V2h-3M2 11v3h3M14 11v3h-3"/><circle cx="8" cy="8" r="1.5"/></svg> <span class="tb-label">Capture</span></button>
   <button onclick="setTool('cut')" id="btn-cut" title="Free Shape Cut (X)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="11" r="2"/><circle cx="4" cy="4" r="2"/><path d="M5.5 5L14 12M5.5 10L14 3"/></svg> <span class="tb-label">Cut</span></button>
@@ -5414,7 +5414,7 @@ var I18N = (function() {
     'KRAFTED — Hotkeys & Guide': 'KRAFTED — 快捷鍵與指南',
     'Tools': '工具',
     'Select & Move': '選擇移動',
-    'Text Tool': '文字工具',
+    'Board Text': '畫板文字',
     'Draw (pen/arrow/box)': '繪圖 (筆/箭頭/方框)',
     'Export Area (drag select)': '導出區域 (拖曳選取)',
     'Capture Area': '截圖區域',
@@ -5895,7 +5895,7 @@ var I18N = (function() {
     '⌨️ Shortcuts': '⌨️ 快捷鍵',
     'Krafted v5.5 — by Joker Head Studios': 'Krafted v5.5 — Joker Head Studios',
     'Help / Shortcuts': '幫助 / 快捷鍵',
-    'Draw Tool': '繪圖工具',
+    'Board Pen': '畫板畫筆',
     'Export Area': '導出區域',
     'Add Link Card': '加入連結卡片',
     'Redo (Shift+Undo)': '重做 (Shift+復原)',
@@ -6231,8 +6231,8 @@ if (document.readyState === 'loading') {
 const DEFAULT_SHORTCUTS = [
   // === TOOLS ===
   { id: 'tool-select',     category: 'Tools', label: 'Select & Move',            keys: [{ key: 'v' }] },
-  { id: 'tool-text',       category: 'Tools', label: 'Text Tool',                keys: [{ key: 't' }] },
-  { id: 'tool-draw',       category: 'Tools', label: 'Draw Tool',                keys: [{ key: 'd', ctrl: true }], macKeys: [{ key: 'd', meta: true }] },
+  { id: 'tool-text',       category: 'Tools', label: 'Board Text',               keys: [{ key: 't' }] },
+  { id: 'tool-draw',       category: 'Tools', label: 'Board Pen',                keys: [{ key: 'd', ctrl: true }], macKeys: [{ key: 'd', meta: true }] },
   { id: 'tool-export',     category: 'Tools', label: 'Export Area',              keys: [{ key: 'e' }] },
   { id: 'tool-capture',    category: 'Tools', label: 'Capture Area',             keys: [{ key: 'c' }] },
   { id: 'tool-screen-cap', category: 'Tools', label: 'Screen Capture',           keys: [{ key: 'c', shift: true }] },
@@ -8691,7 +8691,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     modeRow3.className = 'toolbar-row toolbar-row-modes3';
     const textBtn = document.createElement('button');
     textBtn.innerHTML = '&#84;'; // T
-    textBtn.title = 'Text mode — click on the video to place a text annotation';
+    textBtn.title = 'Frame Text (T) — click on clip to place text';
     textBtn.addEventListener('click', function(){
       const s = el._annoDrawState;
       s.mode = (s.mode === 'text') ? 'off' : 'text';
@@ -10222,7 +10222,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     drawBtn = document.createElement('div');
     drawBtn.className = 'media-draw-btn';
     drawBtn.innerHTML = '&#9998;&#65039;'; // ✏️
-    drawBtn.title = 'Draw on the frame (D) — arrows / freehand annotations saved with the next comment';
+    drawBtn.title = 'Frame Draw (D) — arrows / freehand on this clip';
     leftGroup.appendChild(drawBtn);
     // Draw button click — toggle draw mode (off → arrow → pen → off).
     // Wired up here (instead of in the earlier annotation-toolbar block)
