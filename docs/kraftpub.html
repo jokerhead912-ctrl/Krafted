@@ -11216,11 +11216,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       return true;
     });
     if (toTranslate.length === 0) { try { toast('All comments already have a translation'); } catch (e) {} return; }
-    // Confirm with the user (so they don't accidentally trigger this on 50 comments)
-    if (toTranslate.length > 1) {
-      const ok = window.confirm('Translate ' + toTranslate.length + ' comments?\n(This will make ~' + toTranslate.length + ' API calls, one per comment, sequential)');
-      if (!ok) return;
-    }
+    // v6.0: removed the window.confirm dialog — it blocked in sandbox
+    // webviews and silently returned false, cancelling the bulk
+    // translate. Show a short toast instead so the user knows what's
+    // about to happen, and a 1.5s grace period before starting.
+    try { toast('Translating ' + toTranslate.length + ' comments…'); } catch (e) {}
     translateAllBtn.disabled = true;
     const origLabel = translateAllBtn.innerHTML;
     let done = 0, failed = 0;
