@@ -17974,7 +17974,7 @@ document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
 var KRAFTED_VERSION = '6.0';
-console.log('%c[Krafted v' + KRAFTED_VERSION + '] Translate API — switched to Google gtx (race 2 endpoints, fastest wins). Lingva/MyMemory removed (CORS + 429 since 2026).',
+console.log('%c[Krafted v' + KRAFTED_VERSION + '] Translate API — switched to MyMemory direct (CORS enabled). Google gtx dead (404). Promise.any race + JSONP fallback.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
 // Auto-sync welcome page version number from KRAFTED_VERSION.
@@ -28057,14 +28057,17 @@ async function translateText(text, fromLang, toLang) {
   const chunks = splitTextChunks(text, 500);
   let combined = '';
 
-  // 2) Try a list of providers. We use Promise.race among the working
-  //    fetch providers (Lingva/MyMemory dropped — CORS + rate-limited in
-  //    2026) so the fastest one wins, instead of waiting 6s per failure.
-  //    Google Translate's unofficial gtx endpoint is reliable from
-  //    browser contexts and has no CORS issue.
+  // 2) Try a list of providers. MyMemory direct is CORS-enabled
+  //    (Access-Control-Allow-Origin: *) and free with no key. Google
+  //    gtx is now 404 (shut down in 2025) so we use MyMemory as primary
+  //    with JSONP proxy fallback. Promise.race lets the fastest response
+  //    win instead of waiting 6s per provider to fail.
   const fetchProviders = [
-    { name: 'Google',   build: (chunk) => ({ url: 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + sl + '&tl=' + tl + '&dt=t&q=' + encodeURIComponent(chunk), parse: parseGoogle }) },
-    { name: 'Google2',  build: (chunk) => ({ url: 'https://clients5.google.com/translate_a/single?client=dict-chrome-ex&sl=' + sl + '&tl=' + tl + '&dt=t&q=' + encodeURIComponent(chunk), parse: parseGoogle }) },
+    { name: 'MyMemory', build: (chunk) => ({ url: 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(chunk) + '&langpair=' + sl + '|' + tl, parse: parseMyMemory }) },
+    { name: 'MyMemory de', build: (chunk) => ({ url: 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(chunk) + '&de=kincheung%40kraft.app&langpair=' + sl + '|' + tl, parse: parseMyMemory }) },
+  ];
+  const jsonpProviders = [
+    { name: 'MyMemory+JSONP', build: (chunk) => ({ url: 'https://jsonp.afeld.me/?callback=__mmcb&url=' + encodeURIComponent('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(chunk) + '&langpair=' + sl + '|' + tl), parse: parseMyMemory }) },
   ];
 
   const fetchWithTimeout = (url, ms) => Promise.race([
@@ -28072,23 +28075,34 @@ async function translateText(text, fromLang, toLang) {
     new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
   ]);
 
-  // For each chunk, race all providers. First to return a non-empty
-  // translation wins. The other requests stay in flight until they
-  // finish naturally (browser aborts when the page unloads) — we
-  // don't abort them mid-flight to avoid extra delay / connection cost.
+  // For each chunk, race fetch providers. If all fail, fall back to JSONP.
   try {
     combined = '';
     for (const chunk of chunks) {
-      const reqs = fetchProviders.map(p => {
-        const req = p.build(chunk);
-        return fetchWithTimeout(req.url, 6000)
-          .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
-          .then(data => { const part = req.parse(data); if (!part) throw new Error('empty'); return { name: p.name, part }; })
-          .catch(e => { throw new Error('[' + p.name + '] ' + e.message); });
-      });
-      // Race the providers — first success wins
-      const winner = await Promise.any(reqs);
-      combined += winner.part + ' ';
+      let gotPart = '';
+      try {
+        const reqs = fetchProviders.map(p => {
+          const req = p.build(chunk);
+          return fetchWithTimeout(req.url, 6000)
+            .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+            .then(data => { const part = req.parse(data); if (!part) throw new Error('empty'); return part; })
+            .catch(e => { throw e; });
+        });
+        // Promise.any resolves with the first successful result
+        gotPart = await Promise.any(reqs);
+      } catch (e1) {
+        // All fetch providers failed — try JSONP fallback
+        for (const p of jsonpProviders) {
+          try {
+            const req = p.build(chunk);
+            const data = await jsonpRequest(req.url, 7000);
+            const part = req.parse(data);
+            if (part) { gotPart = part; break; }
+          } catch (e2) { console.warn('[' + p.name + ']', e2.message); }
+        }
+        if (!gotPart) throw new Error('all providers failed for chunk: ' + chunk.slice(0, 40));
+      }
+      combined += gotPart + ' ';
     }
     combined = combined.trim();
     if (combined) {
