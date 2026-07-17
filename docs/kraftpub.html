@@ -19341,63 +19341,44 @@ window.addEventListener('drop', function(e){
   }
   if (!url) return;
   try { hideWelcome(); } catch (err) {}
-  // ── Drag = auto Copy Image + Paste ──
-  // Fetch real image bytes via CORS proxy → write to clipboard as
-  // ClipboardItem → fire synthetic paste event. Krafted's paste
-  // handler sees image/* MIME and processes it exactly like the user
-  // right-clicked "Copy Image" then Ctrl+V. No special path needed.
-  toast('Copying image to board…');
+  // Fetch real image bytes via CORS proxy → convert to data URL →
+  // addImage directly. Data URL is same-origin, zero CORS forever.
+  // This is functionally identical to "Copy Image → Paste" but done
+  // in one drag gesture.
+  toast('Fetching image…');
   fetch('https://images.weserv.nl/?url=' + encodeURIComponent(url))
     .then(res => {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.blob();
     })
     .then(blob => {
-      // Write image to system clipboard — this is the same as
-      // right-click → Copy Image in any browser.
-      return navigator.clipboard.write([
-        new ClipboardItem({ [blob.type || 'image/png']: blob })
-      ]);
-    })
-    .then(() => {
-      toast('Copied! Pasting…');
-      // Now simulate a paste event. Krafted's paste handler reads
-      // from the clipboard (which now has real image data).
-      // Set mouse position for paste placement
-      G.lastScreenX = e.clientX;
-      G.lastScreenY = e.clientY;
-      // We can't directly fire a synthetic paste event that reads
-      // from clipboard (security). Instead, use the blob we already
-      // have and feed it as a File to _handleFileDrop — same result,
-      // same code path.
-      // Re-fetch the blob from the clipboard? No — use the same blob.
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          addImage(ev.target.result, img.naturalWidth, img.naturalHeight,
+            (e.clientX - state.pan.x) / state.zoom,
+            (e.clientY - state.pan.y) / state.zoom);
+          toast('Pasted image');
+        };
+        img.onerror = () => toast('Failed to decode image');
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(blob);
     })
     .catch(err => {
-      console.log('[FileDrop] clipboard write failed:', err.message);
-      // Clipboard write may fail (non-HTTPS, permission denied).
-      // Fall back: directly addImage with the proxied URL.
-      toast('Clipboard blocked — adding directly…');
-      fetch('https://images.weserv.nl/?url=' + encodeURIComponent(url))
-        .then(res => res.blob())
-        .then(blob => {
-          const reader = new FileReader();
-          reader.onload = ev => {
-            const img = new Image();
-            img.onload = () => {
-              addImage(ev.target.result, img.naturalWidth, img.naturalHeight,
-                (e.clientX - state.pan.x) / state.zoom,
-                (e.clientY - state.pan.y) / state.zoom);
-              toast('Pasted image');
-            };
-            img.onerror = () => toast('Failed to decode image');
-            img.src = ev.target.result;
-          };
-          reader.readAsDataURL(blob);
-        })
-        .catch(e2 => {
-          console.log('[FileDrop] all paths failed:', e2.message);
-          toast('Image could not be loaded');
-        });
+      console.log('[FileDrop] proxy fetch failed:', err.message);
+      // Last resort: hotlink with no CORS check
+      const img = new Image();
+      img.onload = () => {
+        if (typeof maskImageCache !== 'undefined') maskImageCache[url] = { img: null };
+        addImage(url, img.naturalWidth, img.naturalHeight,
+          (e.clientX - state.pan.x) / state.zoom,
+          (e.clientY - state.pan.y) / state.zoom);
+        toast('Pasted image (hotlinked)');
+      };
+      img.onerror = () => toast('Image could not be loaded');
+      img.src = url;
     });
 }, true);
 }, true);
