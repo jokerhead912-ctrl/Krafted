@@ -21799,7 +21799,14 @@ document.addEventListener('mousemove', e => {
       if (d.item.el && d.item.el.classList.contains('todo-item')) d.item._resized = true;
       // Mark text-items as user-resized so autoGrowTextItem respects the width
       // and only grows height on input (prevents width jumping on type).
-      if (d.item.el && d.item.el.classList.contains('text-item')) d.item.userResized = true;
+      if (d.item.el && d.item.el.classList.contains('text-item')) {
+        d.item.userResized = true;
+        // Scale font size proportionally with box dimensions (geometric mean)
+        if (d.item.size && d.origW > 0 && d.origH > 0) {
+          d.item.size = Math.round(d.item.size * Math.sqrt((w / d.origW) * (h / d.origH)));
+          applyTextProps(d.item);
+        }
+      }
     }
     // Cache scale factors and pivot for group members
     const scaleX = w / d.origW;
@@ -21826,7 +21833,14 @@ document.addEventListener('mousemove', e => {
           el.style.transform = 'translate(' + a.x + 'px, ' + a.y + 'px) rotate(' + (a.item.rot || 0) + 'deg)';
           // Mark resized flags so other systems know this was a user drag
           if (el.classList.contains('todo-item')) a.item._resized = true;
-          if (el.classList.contains('text-item')) a.item.userResized = true;
+          if (el.classList.contains('text-item')) {
+            a.item.userResized = true;
+            // Scale font size proportionally with box dimensions
+            if (a.item.size && a.origW > 0 && a.origH > 0) {
+              a.item.size = Math.round(a.item.size * Math.sqrt((a.w / a.origW) * (a.h / a.origH)));
+              applyTextProps(a.item);
+            }
+          }
         });
         // Keep any open annotation popovers parallel to the video as the
         // selection is resized (popovers anchor to .media-wrap rect)
@@ -21863,6 +21877,11 @@ document.addEventListener('mousemove', e => {
           mel.style.width = member.w + 'px';
           mel.style.height = member.h + 'px';
           mel.style.transform = 'translate(' + member.x + 'px, ' + member.y + 'px) rotate(' + (member.rot || 0) + 'deg)';
+          // Scale font size for text items in the group
+          if (mel.classList.contains('text-item') && member.size && mOrigW > 0 && mOrigH > 0) {
+            member.size = Math.round(member.size * Math.sqrt((member.w / mOrigW) * (member.h / mOrigH)));
+            applyTextProps(member);
+          }
         });
         updateGroupBorder(d._group);
       }
