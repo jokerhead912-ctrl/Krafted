@@ -9694,10 +9694,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       const editor = document.createElement('textarea');
       editor.className = 'media-anno-text-editor';
       editor.placeholder = 'Type…';
-      // v6.0: ~square starting size — 5 rows × 80px wide gives roughly
-      // 80×80-100px box. The user wanted aspect ratio close to 1:1.
-      editor.rows = 5;
-      editor.cols = 12;
+      // v6.0: no rows attribute — it fights with the auto-grow height
+      // logic and causes the editor to jump tall on first keystroke.
+      // We control initial size via style.width/minHeight instead.
       editor.value = '';
       // Position it at the click point in viewport coords. The editor
       // is `position: fixed` and is NOT inside the canvas zoom/pan
@@ -9726,10 +9725,12 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // border+padding naturally creates a small gap which is fine.
       editor.style.left = px + 'px';
       editor.style.top = py + 'px';
-      // v6.0: start ~square. With 5 rows, the textarea is ~80-100px tall
-      // so an 80px starting width keeps aspect ratio close to 1:1.
+      // v6.0: start with a comfortable initial size. No rows attribute
+      // (that conflicts with scrollHeight auto-grow and causes height
+      //  jumps). Width starts at 80px, height auto-grows from 1 line.
       editor.style.width = '80px';
       editor.style.minHeight = '30px';
+      editor.style.maxHeight = '300px';
       // Color: copy from current draw state
       editor.style.color = s.color || '#fff';
       // Stash the normalised point for later commit
@@ -9764,9 +9765,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         editor.style.width = targetW + 'px';
       })();
       editor.addEventListener('input', function(){
-        // Height: auto-grow
+        // Height: auto-grow, clamped between minHeight (30) and maxHeight (300).
+        // Must set to 'auto' first so scrollHeight reflects actual content height.
         editor.style.height = 'auto';
-        editor.style.height = (editor.scrollHeight + 4) + 'px';
+        var newH = Math.max(30, Math.min(300, editor.scrollHeight + 4));
+        editor.style.height = newH + 'px';
         // Width: measure via mirror span
         var txt = editor.value || editor.placeholder || '';
         var fs = editor.style.font || window.getComputedStyle(editor).font || '14px sans-serif';
