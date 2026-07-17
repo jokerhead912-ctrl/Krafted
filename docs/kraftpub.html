@@ -11199,30 +11199,27 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   snapTranslateAllBtn.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
   async function snapTranslateAll(ev) {
     ev.stopPropagation(); ev.preventDefault();
+    console.log('[snapTranslateAll] called');
     // v6.0: force-commit any open inline-edit before bulk translate.
-    // Same race-condition fix as the single translate button.
     try {
       var _anyEditable = listBody.querySelector('.media-anno-comment-text[contenteditable="true"]');
-      if (_anyEditable) _anyEditable.blur();
+      if (_anyEditable) { _anyEditable.blur(); console.log('[snapTranslateAll] force-blurred inline editor'); }
     } catch (e) {}
     const itm = _getItem();
-    if (!itm) return;
+    if (!itm) { console.warn('[snapTranslateAll] no item — abort'); return; }
+    console.log('[snapTranslateAll] item.id=' + itm.id);
     const ann = videoAnnoEnsure(itm);
     const list = Array.isArray(ann.comments) ? ann.comments : [];
+    console.log('[snapTranslateAll] total comments: ' + list.length);
     if (list.length === 0) { try { toast('No comments to translate'); } catch (e) {} return; }
-    // Filter to comments that need translation (have text, no current translation
-    // OR a translation that matches the source language — i.e. stale)
+    // Filter to comments that need translation
     const toTranslate = list.filter(c => {
       if (!c || !c.text) return false;
-      // Skip if translation matches text (no-op)
       if (c.translation && c.translation === c.text) return false;
       return true;
     });
+    console.log('[snapTranslateAll] toTranslate count: ' + toTranslate.length);
     if (toTranslate.length === 0) { try { toast('All comments already have a translation'); } catch (e) {} return; }
-    // v6.0: removed the window.confirm dialog — it blocked in sandbox
-    // webviews and silently returned false, cancelling the bulk
-    // translate. Show a short toast instead so the user knows what's
-    // about to happen.
     try { toast('Translating ' + toTranslate.length + ' comments…'); } catch (e) {}
     snapTranslateAllBtn.disabled = true;
     const origLabel = snapTranslateAllBtn.innerHTML;
@@ -11232,6 +11229,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       const fromLang = hasCjk ? 'zh' : 'en';
       const toLang = hasCjk ? 'en' : 'zh';
       snapTranslateAllBtn.innerHTML = '🌐→中 ' + (done + 1) + '/' + toTranslate.length;
+      console.log('[snapTranslateAll] #' + (done+failed+1) + ' text="' + c.text.slice(0,30) + '" ' + fromLang + '→' + toLang);
       try {
         const translated = await translateText(c.text, fromLang, toLang);
         if (translated && translated !== c.text) {
@@ -11239,12 +11237,17 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           c.translationDir = fromLang + '-' + toLang;
           if (!c.originalText) c.originalText = c.text;
           done++;
-        } else { failed++; }
+          console.log('[snapTranslateAll]   OK → "' + translated.slice(0,30) + '"');
+        } else {
+          failed++;
+          console.log('[snapTranslateAll]   NO CHANGE — same as source');
+        }
       } catch (e) {
-        console.warn('snapTranslateAll: failed for comment', c.id, e);
+        console.warn('[snapTranslateAll]   FAILED:', e.message);
         failed++;
       }
     }
+    console.log('[snapTranslateAll] done=' + done + ', failed=' + failed);
     try { scheduleAutoSave(); } catch (e) {}
     try { _refreshListBody(); } catch (e) {}
     try { if (itm && itm.el && itm.el._refreshSeekMarkers) itm.el._refreshSeekMarkers(); } catch (e) {}
@@ -16282,16 +16285,20 @@ async function snapSingleTranslate(id, _explicitItem) {
   // Accepts an explicit item so the popover (which has its own _item
   // on the el) can translate even when no video is currently selected
   // in the canvas. Falls back to videoAnnoGetSelected().
+  console.log('[snapSingleTranslate] called, id=' + id + ', hasExplicit=' + !!_explicitItem);
   const item = _explicitItem || videoAnnoGetSelected();
-  if (!item) return;
+  if (!item) { console.warn('[snapSingleTranslate] no item found — abort'); return; }
+  console.log('[snapSingleTranslate] item.id=' + item.id);
   const anno = videoAnnoEnsure(item);
   const c = anno.comments.find(x => x.id === id);
-  if (!c || !c.text) { try { toast('No comment to translate'); } catch(e) {} return; }
+  if (!c || !c.text) { console.warn('[snapSingleTranslate] comment not found or empty text — abort'); try { toast('No comment to translate'); } catch(e) {} return; }
+  console.log('[snapSingleTranslate] text="' + c.text.slice(0, 40) + '", hasTranslation=' + !!c.translation);
   // Detect direction: if text contains CJK, translate zh→en; otherwise en→zh
   const hasCjk = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(c.text);
   const fromLang = hasCjk ? 'zh' : 'en';
   const toLang = hasCjk ? 'en' : 'zh';
   const langLabel = toLang === 'zh' ? '中文' : 'English';
+  console.log('[snapSingleTranslate] direction: ' + fromLang + '→' + toLang);
   // Visual loading state
   const el = document.querySelector('[data-anno-comment-id="' + id + '"] .media-anno-comment-translation');
   if (el) { el.classList.add('loading'); el.textContent = 'Translating…'; }
@@ -16301,10 +16308,14 @@ async function snapSingleTranslate(id, _explicitItem) {
     let translated = null;
     if (typeof translationCache !== 'undefined' && translationCache.has(cacheKey)) {
       translated = translationCache.get(cacheKey);
+      console.log('[snapSingleTranslate] cache hit: "' + (translated||'').slice(0,40) + '"');
     } else {
+      console.log('[snapSingleTranslate] calling translateText("' + c.text.slice(0,40) + '", ' + fromLang + ', ' + toLang + ')');
       translated = await translateText(c.text, fromLang, toLang);
+      console.log('[snapSingleTranslate] translateText returned: "' + (translated||'').slice(0,40) + '"');
     }
     if (translated && translated !== c.text) {
+      console.log('[snapSingleTranslate] SUCCESS — setting translation');
       c.translation = translated;
       c.translationDir = fromLang + '-' + toLang;
       scheduleAutoSave();
@@ -16317,11 +16328,12 @@ async function snapSingleTranslate(id, _explicitItem) {
       }
       toast('Translated to ' + langLabel);
     } else {
+      console.log('[snapSingleTranslate] NO CHANGE — translated="' + (translated||'').slice(0,40) + '", c.text="' + (c.text||'').slice(0,40) + '"');
       if (el) { el.classList.remove('loading'); el.textContent = 'No translation available'; }
       toast('Translation returned no change');
     }
   } catch (err) {
-    console.warn('Comment translation failed:', err);
+    console.warn('[snapSingleTranslate] ERROR:', err);
     if (el) { el.classList.remove('loading'); el.textContent = 'Translation failed — try again'; }
     toast('Translation failed');
   }
@@ -28051,6 +28063,48 @@ async function translateSelectedText(fromLang, toLang) {
     btns.forEach(b => { b.textContent = origTexts.get(b); b.disabled = false; });
   }
 }
+
+// ── v6.0: translate test harness (run in DevTools console) ──
+// Usage:
+//   _testTranslate()             — quick test (en→zh: "hello world")
+//   _testTranslate('你好')       — test zh→en
+//   _testTranslate('bonjour')    — test en→zh (French detected as en, MyMemory handles)
+//   _testBulkTranslate()         — test bulk translate with 3 fake comments
+// Results are logged to console AND shown as a toast.
+window._testTranslate = async function(text) {
+  if (!text) text = 'hello world';
+  const hasCjk = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(text);
+  const fromLang = hasCjk ? 'zh' : 'en';
+  const toLang = hasCjk ? 'en' : 'zh';
+  console.log('[_testTranslate] "' + text + '" ' + fromLang + '→' + toLang);
+  try {
+    const result = await translateText(text, fromLang, toLang);
+    console.log('[_testTranslate] RESULT: "' + result + '"');
+    if (typeof toast === 'function') toast('OK: ' + result);
+    return result;
+  } catch (e) {
+    console.error('[_testTranslate] FAILED:', e.message);
+    if (typeof toast === 'function') toast('FAIL: ' + e.message);
+    throw e;
+  }
+};
+window._testBulkTranslate = async function() {
+  var samples = ['hello world', 'good morning', 'thank you'];
+  console.log('[_testBulkTranslate] ' + samples.length + ' samples');
+  var ok = 0, fail = 0;
+  for (var s of samples) {
+    try {
+      var r = await translateText(s, 'en', 'zh');
+      if (r && r !== s) { console.log('[_testBulkTranslate]   OK: "' + s + '" → "' + r + '"'); ok++; }
+      else { console.log('[_testBulkTranslate]   NO CHANGE: "' + s + '"'); fail++; }
+    } catch (e) {
+      console.error('[_testBulkTranslate]   ERROR:', e.message); fail++;
+    }
+  }
+  console.log('[_testBulkTranslate] done: ' + ok + ' ok, ' + fail + ' failed');
+  if (typeof toast === 'function') toast('Bulk test: ' + ok + '/' + samples.length + ' ok');
+};
+// ── end test harness ──
 
 async function translateText(text, fromLang, toLang) {
   const sl = fromLang === 'zh' ? 'zh-CN' : fromLang;
