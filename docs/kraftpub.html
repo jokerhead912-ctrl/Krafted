@@ -9694,7 +9694,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       const editor = document.createElement('textarea');
       editor.className = 'media-anno-text-editor';
       editor.placeholder = 'Type…';
-      editor.rows = 1;
+      editor.rows = 2;
       editor.value = '';
       // Position it at the click point in viewport coords. The editor
       // is `position: fixed` and is NOT inside the canvas zoom/pan
@@ -9720,10 +9720,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       editor.style.font = '600 ' + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
       editor.style.left = (px - 2) + 'px';
       editor.style.top = (py - 1) + 'px';
-      // v6.0: start with a comfortable width (180px) so the editor is
-      // immediately usable — previously started at 20px (just a tiny pill)
-      // and the user couldn't see the placeholder or know what to type.
-      editor.style.width = '180px';
+      // v6.0: start with a usable width (60px) and 2-row height.
+      // Previously 180px was too wide, 20px was too narrow.
+      editor.style.width = '60px';
       // Color: copy from current draw state
       editor.style.color = s.color || '#fff';
       // Stash the normalised point for later commit
@@ -9748,9 +9747,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         _mirror.style.letterSpacing = window.getComputedStyle(editor).letterSpacing;
         _mirror.textContent = txt;
         var naturalW = _mirror.getBoundingClientRect().width + pw + 2;
-        // v6.0: wider min (180px, was 20) and max (420, was 140) so the
-        // editor is comfortable to type in from the moment it appears.
-        var targetW = Math.max(180, Math.min(420, Math.ceil(naturalW)));
+        // v6.0: min 60px, max 140px (width reduced to 1/3 of previous, height doubled via rows=2)
+        var targetW = Math.max(60, Math.min(140, Math.ceil(naturalW)));
         editor.style.width = targetW + 'px';
       })();
       editor.addEventListener('input', function(){
@@ -9766,7 +9764,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         _mirror.style.letterSpacing = window.getComputedStyle(editor).letterSpacing;
         _mirror.textContent = txt;
         var naturalW = _mirror.getBoundingClientRect().width + pw + 2; // +2 for border
-        var targetW = Math.max(180, Math.min(420, Math.ceil(naturalW)));
+        var targetW = Math.max(60, Math.min(140, Math.ceil(naturalW)));
         editor.style.width = targetW + 'px';
       });
       // Enter to commit, Shift+Enter for newline, Esc to cancel.
