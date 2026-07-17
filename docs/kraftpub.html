@@ -19356,7 +19356,10 @@ window.addEventListener('drop', function(e){
       reader.onload = ev => {
         const img = new Image();
         img.onload = () => {
-          addImage(ev.target.result, img.naturalWidth, img.naturalHeight,
+          // Scale down to 50% for comfortable viewing
+          const dw = Math.round(img.naturalWidth / 2);
+          const dh = Math.round(img.naturalHeight / 2);
+          addImage(ev.target.result, dw, dh,
             (e.clientX - state.pan.x) / state.zoom,
             (e.clientY - state.pan.y) / state.zoom);
           toast('Pasted image');
@@ -19372,7 +19375,9 @@ window.addEventListener('drop', function(e){
       const img = new Image();
       img.onload = () => {
         if (typeof maskImageCache !== 'undefined') maskImageCache[url] = { img: null };
-        addImage(url, img.naturalWidth, img.naturalHeight,
+        const dw = Math.round(img.naturalWidth / 2);
+        const dh = Math.round(img.naturalHeight / 2);
+        addImage(url, dw, dh,
           (e.clientX - state.pan.x) / state.zoom,
           (e.clientY - state.pan.y) / state.zoom);
         toast('Pasted image (hotlinked)');
