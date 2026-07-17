@@ -11196,6 +11196,12 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   translateAllBtn.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
   translateAllBtn.addEventListener('click', async function(ev){
     ev.stopPropagation(); ev.preventDefault();
+    // v6.0: force-commit any open inline-edit before bulk translate.
+    // Same race-condition fix as the single translate button.
+    try {
+      var _anyEditable = listBody.querySelector('.media-anno-comment-text[contenteditable="true"]');
+      if (_anyEditable) _anyEditable.blur();
+    } catch (e) {}
     const itm = _getItem();
     if (!itm) return;
     const ann = videoAnnoEnsure(itm);
@@ -12168,7 +12174,25 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     tBtn.className = 'tr';
     tBtn.textContent = '🌐';
     tBtn.title = 'Translate';
-    tBtn.onclick = function(ev){ ev.stopPropagation(); try { if (typeof videoAnnoTranslateComment === 'function') videoAnnoTranslateComment(c.id); } catch(e){} };
+    tBtn.onclick = function(ev){
+      ev.stopPropagation();
+      // v6.0: if the comment body is in inline-edit mode, force-blur
+      // it FIRST to commit any pending text changes. Otherwise the
+      // blur handler races with the async translate, can clear the
+      // translation, and the re-render after translate shows the
+      // original text with no translation. By committing inline edits
+      // before translate, we guarantee c.text is stable.
+      try {
+        var _b = ev.target.closest('.media-anno-comment');
+        if (_b) {
+          var _body = _b.querySelector('.media-anno-comment-text');
+          if (_body && _body.getAttribute('contenteditable') === 'true') {
+            _body.blur();
+          }
+        }
+      } catch (e) {}
+      try { if (typeof videoAnnoTranslateComment === 'function') videoAnnoTranslateComment(c.id); } catch(e) {}
+    };
     actions.appendChild(tBtn);
     // Delete
     const delBtn = document.createElement('button');
