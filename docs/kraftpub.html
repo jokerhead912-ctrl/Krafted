@@ -17920,7 +17920,7 @@ document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
 var KRAFTED_VERSION = '6.0';
-console.log('%c[Krafted v' + KRAFTED_VERSION + '] Frame Text + Fullscreen polish — text editor works in fullscreen, keyboard/click isolation prevents video interference.',
+console.log('%c[Krafted v' + KRAFTED_VERSION + '] Download Source File fix — videos now download with their original filename (e.g. "myclip.mp4") instead of "video_<timestamp>.<guid>". Blob: URLs no longer produce unopenable files.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
 // Auto-sync welcome page version number from KRAFTED_VERSION.
@@ -28194,15 +28194,39 @@ function exportMediaSelected() {
         ext = item.src.split('.').pop().split('?')[0] || 'mp3';
       }
     } else if (item.isVideo) {
-      name = 'video_' + Date.now();
+      // Use the original video filename if available (e.g. "myclip.mp4"),
+      // otherwise fall back to "video_<timestamp>". Previously this
+      // was hardcoded to "video_" + Date.now() which always lost the
+      // original name, and for blob: URLs the .split('.').pop() trick
+      // picked up the trailing GUID as a bogus extension, producing
+      // files like "video_1784253900344.io_d9ea9eb3-...cacb3c0b9eda"
+      // that Windows couldn't open because there was no real .mp4
+      // extension and the GUID confused the type-detection.
+      name = item.filename || ('video_' + Date.now());
       if (item.src.startsWith('data:')) {
         const m = item.src.match(/^data:video\/(\w+)/);
         if (m) ext = m[1];
       } else {
-        ext = item.src.split('.').pop().split('?')[0] || 'mp4';
+        // For non-data URLs, prefer the real extension after the last
+        // slash. For blob: URLs (blob:https://host/<uuid>) there is no
+        // useful extension in the path, so validate the candidate is a
+        // plausible 2-5 char ext; otherwise default to 'mp4' for video.
+        try {
+          const u = new URL(item.src, location.href);
+          const parts = u.pathname.split('.');
+          if (parts.length > 1) {
+            const candidate = parts[parts.length - 1].toLowerCase();
+            if (/^[a-z0-9]{2,5}$/.test(candidate)) ext = candidate;
+            else ext = 'mp4';
+          } else {
+            ext = 'mp4';
+          }
+        } catch (e) {
+          ext = 'mp4';
+        }
       }
     } else if (item.src) {
-      name = 'image_' + Date.now();
+      name = item.filename || ('image_' + Date.now());
       if (item.src.startsWith('data:')) {
         const m = item.src.match(/^data:image\/(\w+)/);
         if (m) ext = m[1];
