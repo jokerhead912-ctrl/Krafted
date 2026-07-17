@@ -9735,7 +9735,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // the natural text width, then clamps between minW(180) and maxW(420).
       var _mirror = document.createElement('span');
       _mirror.style.cssText = 'position:absolute;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;pointer-events:none;left:-9999px;top:-9999px;';
-      var _mirrorParent = el.querySelector('.media-wrap') || document.body;
+      // Same parent choice as the editor (body for normal, fullscreen
+      // element for fullscreen). The mirror is `position:absolute` so
+      // it always renders in whatever subtree its parent is in.
+      var _mirrorFs = document.fullscreenElement || document.webkitFullscreenElement;
+      var _mirrorParent = _mirrorFs || document.body;
       _mirrorParent.appendChild(_mirror);
       editor._mirror = _mirror; // stash for cleanup
       // Run once immediately to fit the placeholder width
@@ -9796,14 +9800,24 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           if (el._textEditorEl === editor) _commitTextEditor();
         }, 80);
       });
-      // Round 75.2: append editor to the fullscreen target (wrap)
-      // instead of document.body so the text editor is visible when
-      // the player is in fullscreen. The Fullscreen API only renders
-      // the fullscreen element's subtree. The editor uses position:fixed
-      // so it anchors to the viewport/fullscreen viewport identically
-      // regardless of which parent it lives under.
-      var _editorWrap = el.querySelector('.media-wrap') || document.body;
-      _editorWrap.appendChild(editor);
+      // v6.0: pick the right parent for the editor.
+      // - Normal mode: append to document.body. The .item ancestor has
+      //   `transform: translate3d(...)` for pan/zoom, which would break
+      //   `position: fixed` (the editor would be relative to .item).
+      // - Fullscreen mode: append to the fullscreen element (wrap),
+      //   because the Fullscreen API only renders the fullscreen
+      //   element's subtree — body children are hidden in fullscreen.
+      //   But in fullscreen, .item's transform doesn't break the
+      //   editor because the wrap is the fullscreen element and
+      //   `position: fixed` is relative to the fullscreen viewport.
+      var _fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      var _editorParent;
+      if (_fsEl) {
+        _editorParent = _fsEl; // fullscreen subtree
+      } else {
+        _editorParent = document.body;
+      }
+      _editorParent.appendChild(editor);
       el._textEditorEl = editor;
       // Make the text editor draggable so the user can reposition it
       // after it spawns at the video centre (T-key shortcut).
@@ -9922,10 +9936,12 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           refreshTrBtnLabel();
         }
       });
-      // Round 75.2: append translate button to wrap (the fullscreen
-      // target), not document.body — same reason as the editor: the
-      // Fullscreen API only renders the fullscreen element's subtree.
-      var _trParent = el.querySelector('.media-wrap') || document.body;
+      // v6.0: append translate button to body (normal) or fullscreen
+      // element (fullscreen) — same as the editor. Use body, not
+      // .media-wrap, so the button's `position:fixed` isn't broken by
+      // the .item's transform.
+      var _trFs = document.fullscreenElement || document.webkitFullscreenElement;
+      var _trParent = _trFs || document.body;
       _trParent.appendChild(trBtn);
       // Stash on the editor so _commit / _cancel can tear it down cleanly
       editor._trBtn = trBtn;
@@ -17926,7 +17942,7 @@ document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
 var KRAFTED_VERSION = '6.0';
-console.log('%c[Krafted v' + KRAFTED_VERSION + '] Frame Text editor — default width increased to 180px (was 20px). No more tiny pill box on spawn.',
+console.log('%c[Krafted v' + KRAFTED_VERSION + '] Frame Text position fix — editor + translate button now append to body (was .media-wrap). The .item transform: translate3d was breaking position:fixed, sending the editor to wrong screen locations.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
 // Auto-sync welcome page version number from KRAFTED_VERSION.
