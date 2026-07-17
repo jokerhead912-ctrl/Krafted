@@ -11195,7 +11195,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   const snapTranslateAllBtn = document.createElement('button');
   snapTranslateAllBtn.className = 'head-btn bulk-translate';
   snapTranslateAllBtn.innerHTML = '🌐→中 All';
-  snapTranslateAllBtn.title = 'Translate every snap comment in the popover to the other language (sequential, ~1s per comment)';
+  snapTranslateAllBtn.title = 'snapTranslateAll — translate every snap comment to the other language (sequential, ~1s per comment)';
   snapTranslateAllBtn.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
   async function snapTranslateAll(ev) {
     ev.stopPropagation(); ev.preventDefault();
@@ -12177,7 +12177,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     const tBtn = document.createElement('button');
     tBtn.className = 'tr';
     tBtn.textContent = '🌐';
-    tBtn.title = 'Translate';
+    tBtn.title = 'snapSingleTranslate';
     tBtn.onclick = function(ev){
       ev.stopPropagation();
       // v6.0: if the comment body is in inline-edit mode, force-blur
