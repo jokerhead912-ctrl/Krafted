@@ -2301,7 +2301,7 @@ body.dragging-file .media-anno-toolbar {
 #link-modal .link-loading .spinner { width:14px; height:14px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
 /* Text handle container — sibling of text-item, NOT a child (so contentEditable stays clean) */
-.text-handles { position:absolute; pointer-events:none; }
+.text-handles { position:absolute; pointer-events:none; z-index: 99999; }
 .text-handles .item-handle { pointer-events:auto; }
 /* GROUP BORDER */
 .group-border { position:absolute; pointer-events:none; border:2px dashed; border-radius:4px; z-index:0; transition:all 0.1s; }
@@ -18005,7 +18005,7 @@ document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
 var KRAFTED_VERSION = '6.0';
-console.log('%c[Krafted v' + KRAFTED_VERSION + '] Wacom/XPPen Alt+drag pan — in draw mode (Board Pen / Frame Draw), hold Alt and drag to pan/zoom the canvas. Select mode Alt pan still controlled by altPanEnabled setting.',
+console.log('%c[Krafted v' + KRAFTED_VERSION + '] Text item handle z-index raised to 99999 — previously the right-side handles (NE/SE/E/W) could be hidden behind sibling items. Refresh the popover/comment list to re-render.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
 // Auto-sync welcome page version number from KRAFTED_VERSION.
