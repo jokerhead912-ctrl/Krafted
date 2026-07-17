@@ -27996,7 +27996,7 @@ function fetchImageFromURL(url, x, y) {
   console.log('[fetchImageFromURL] start:', url);
   try { hideWelcome(); } catch (err) {}
   toast('Fetching image…');
-  // Try direct fetch (works if server has CORS headers or same-origin)
+  // 1) Try direct fetch (works if server has CORS headers or same-origin)
   fetch(url, { mode: 'cors' })
     .then(res => {
       console.log('[fetchImageFromURL] fetch response status:', res.status);
@@ -28018,32 +28018,111 @@ function fetchImageFromURL(url, x, y) {
       reader.readAsDataURL(blob);
     })
     .catch(err => {
-      console.log('[fetchImageFromURL] direct fetch failed, trying fallback:', err.message);
-      // CORS blocked — fall back to img tag + canvas conversion
+      console.log('[fetchImageFromURL] direct fetch failed:', err.message);
+      // 2) Try fallback img tag (no CORS) — works if server allows hotlink
       const img = new Image();
-      img.crossOrigin = 'anonymous';
       img.onload = () => {
-        console.log('[fetchImageFromURL] fallback img loaded');
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        try {
-          const dataUrl = canvas.toDataURL('image/png');
-          addImage(dataUrl, img.naturalWidth, img.naturalHeight, x, y);
-          toast('Pasted image from URL (CORS fallback)');
-        } catch (e) {
-          console.log('[fetchImageFromURL] canvas tainted, using URL directly');
-          // Tainted canvas — use the URL directly as src
-          addImage(url, img.naturalWidth, img.naturalHeight, x, y);
-          toast('Pasted image from URL (linked)');
+        console.log('[fetchImageFromURL] fallback img loaded (no CORS)');
+        // Use URL directly as image src — Krafted's addImage will store it
+        addImage(url, img.naturalWidth, img.naturalHeight, x, y);
+        toast('Pasted image from URL (hotlink)');
+      };
+      img.onerror = () => {
+        console.log('[fetchImageFromURL] hotlink also failed, trying CORS proxy');
+        // 3) Try CORS proxy — last resort, only if user opted in
+        if (typeof state !== 'undefined' && state.allowCorsProxy) {
+          tryCorsProxy(url, x, y);
+        } else {
+          toast('Image blocked by CORS. Enable "CORS proxy" in settings to fetch cross-origin images.');
+          console.log('[fetchImageFromURL] user has not enabled CORS proxy — giving up');
         }
       };
-      img.onerror = () => { console.log('[fetchImageFromURL] fallback img also failed'); toast('Failed to load image from URL'); };
       img.src = url;
     });
 }
+
+// Last-resort: fetch through a public CORS proxy. Only invoked if the user
+// has explicitly enabled state.allowCorsProxy in settings (privacy: the proxy
+// sees the URL you're fetching). Uses images.weserv.nl as the primary proxy
+// (designed for image hotlinking, no rate limit on free tier) with
+// corsproxy.io as fallback.
+// To enable, run in console: kraftedEnableCorsProxy()
+function tryCorsProxy(url, x, y) {
+  const proxy = 'https://images.weserv.nl/?url=' + encodeURIComponent(url);
+  console.log('[tryCorsProxy]', proxy);
+  toast('Fetching via CORS proxy…');
+  fetch(proxy)
+    .then(res => {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.blob();
+    })
+    .then(blob => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
+          toast('Pasted image (via proxy)');
+        };
+        img.onerror = () => { toast('Proxy returned invalid image'); };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(blob);
+    })
+    .catch(err => {
+      console.log('[tryCorsProxy] weserv failed:', err.message);
+      // Fallback proxy
+      const fallback = 'https://corsproxy.io/?' + encodeURIComponent(url);
+      fetch(fallback)
+        .then(res => res.blob())
+        .then(blob => {
+          const reader = new FileReader();
+          reader.onload = ev => {
+            const img = new Image();
+            img.onload = () => {
+              addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
+              toast('Pasted image (via fallback proxy)');
+            };
+            img.onerror = () => { toast('Proxy returned invalid image'); };
+            img.src = ev.target.result;
+          };
+          reader.readAsDataURL(blob);
+        })
+    .catch(e2 => {
+      console.log('[tryCorsProxy] fallback also failed:', e2.message);
+      toast('All CORS proxies failed. Image cannot be loaded.');
+    });
+  });
+}
+
+// Console command: enable CORS proxy for cross-origin image paste.
+// Persists in localStorage. To disable: kraftedDisableCorsProxy()
+window.kraftedEnableCorsProxy = function() {
+  try {
+    if (typeof state === 'undefined') state = {};
+    state.allowCorsProxy = true;
+    localStorage.setItem('krafted-allow-cors-proxy', '1');
+    console.log('[Krafted] CORS proxy ENABLED. Cross-origin image paste will use images.weserv.nl as fallback.');
+    toast('CORS proxy enabled — try paste again');
+  } catch (e) { console.warn(e); }
+};
+window.kraftedDisableCorsProxy = function() {
+  try {
+    if (typeof state === 'undefined') state = {};
+    state.allowCorsProxy = false;
+    localStorage.removeItem('krafted-allow-cors-proxy');
+    console.log('[Krafted] CORS proxy DISABLED.');
+    toast('CORS proxy disabled');
+  } catch (e) { console.warn(e); }
+};
+// Load on init
+try {
+  if (localStorage.getItem('krafted-allow-cors-proxy') === '1') {
+    if (typeof state === 'undefined') state = {};
+    state.allowCorsProxy = true;
+    console.log('[Krafted] CORS proxy enabled from localStorage');
+  }
+} catch (e) {}
 
 // Helper: toggle "capturing" mode — hides all media UI (per-item controls bar,
 // type badge, global media player) so they don't bleed into the captured image
