@@ -17974,7 +17974,7 @@ document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
 var KRAFTED_VERSION = '6.0';
-console.log('%c[Krafted v' + KRAFTED_VERSION + '] Frame Text position fix — editor + translate button now append to body (was .media-wrap). The .item transform: translate3d was breaking position:fixed, sending the editor to wrong screen locations.',
+console.log('%c[Krafted v' + KRAFTED_VERSION + '] Translate API — switched to Google gtx (race 2 endpoints, fastest wins). Lingva/MyMemory removed (CORS + 429 since 2026).',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
 // Auto-sync welcome page version number from KRAFTED_VERSION.
@@ -28057,16 +28057,14 @@ async function translateText(text, fromLang, toLang) {
   const chunks = splitTextChunks(text, 500);
   let combined = '';
 
-  // 2) Try a list of providers, JSONP first (works from file://) then fetch
-  //    Each provider is given a 7s budget. We try fetch providers in parallel
-  //    with JSONP ones so the fastest one wins.
-  const jsonpProviders = [
-    { name: 'MyMemory+JSONP', build: (chunk) => ({ url: 'https://jsonp.afeld.me/?callback=__mmcb&url=' + encodeURIComponent('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(chunk) + '&langpair=' + sl + '|' + tl), parse: parseMyMemory }) },
-    { name: 'MyMemory direct', build: (chunk) => ({ url: 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(chunk) + '&langpair=' + sl + '|' + tl, parse: parseMyMemory }) },
-  ];
+  // 2) Try a list of providers. We use Promise.race among the working
+  //    fetch providers (Lingva/MyMemory dropped — CORS + rate-limited in
+  //    2026) so the fastest one wins, instead of waiting 6s per failure.
+  //    Google Translate's unofficial gtx endpoint is reliable from
+  //    browser contexts and has no CORS issue.
   const fetchProviders = [
-    { name: 'Lingva',   build: (chunk) => ({ url: 'https://lingva.ml/api/v1/' + sl + '/' + tl + '/' + encodeURIComponent(chunk), parse: parseLingva }) },
     { name: 'Google',   build: (chunk) => ({ url: 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + sl + '&tl=' + tl + '&dt=t&q=' + encodeURIComponent(chunk), parse: parseGoogle }) },
+    { name: 'Google2',  build: (chunk) => ({ url: 'https://clients5.google.com/translate_a/single?client=dict-chrome-ex&sl=' + sl + '&tl=' + tl + '&dt=t&q=' + encodeURIComponent(chunk), parse: parseGoogle }) },
   ];
 
   const fetchWithTimeout = (url, ms) => Promise.race([
@@ -28074,44 +28072,30 @@ async function translateText(text, fromLang, toLang) {
     new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
   ]);
 
-  // Try each provider (sequentially), translate all chunks with the first that works
-  for (const p of jsonpProviders) {
-    try {
-      combined = '';
-      for (const chunk of chunks) {
+  // For each chunk, race all providers. First to return a non-empty
+  // translation wins. The other requests stay in flight until they
+  // finish naturally (browser aborts when the page unloads) — we
+  // don't abort them mid-flight to avoid extra delay / connection cost.
+  try {
+    combined = '';
+    for (const chunk of chunks) {
+      const reqs = fetchProviders.map(p => {
         const req = p.build(chunk);
-        const data = await jsonpRequest(req.url, 7000);
-        const part = req.parse(data);
-        if (part) combined += part + ' ';
-      }
-      combined = combined.trim();
-      if (combined) {
-        translationCache.set(cacheKey, combined);
-        return combined;
-      }
-    } catch (e) { console.warn('[' + p.name + ']', e.message); }
-  }
-
-  for (const p of fetchProviders) {
-    try {
-      combined = '';
-      let ok = true;
-      for (const chunk of chunks) {
-        const req = p.build(chunk);
-        const resp = await fetchWithTimeout(req.url, 6000);
-        if (!resp.ok) { ok = false; break; }
-        const data = await resp.json();
-        const part = req.parse(data);
-        if (!part) { ok = false; break; }
-        combined += part + ' ';
-      }
-      if (ok && combined.trim()) {
-        combined = combined.trim();
-        translationCache.set(cacheKey, combined);
-        return combined;
-      }
-    } catch (e) { console.warn('[' + p.name + ']', e.message); }
-  }
+        return fetchWithTimeout(req.url, 6000)
+          .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+          .then(data => { const part = req.parse(data); if (!part) throw new Error('empty'); return { name: p.name, part }; })
+          .catch(e => { throw new Error('[' + p.name + '] ' + e.message); });
+      });
+      // Race the providers — first success wins
+      const winner = await Promise.any(reqs);
+      combined += winner.part + ' ';
+    }
+    combined = combined.trim();
+    if (combined) {
+      translationCache.set(cacheKey, combined);
+      return combined;
+    }
+  } catch (e) { console.warn('[translate]', e.message); }
 
   throw new Error('All providers failed');
 }
