@@ -17920,7 +17920,7 @@ document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
 var KRAFTED_VERSION = '6.0';
-console.log('%c[Krafted v' + KRAFTED_VERSION + '] Download Source File fix — videos now download with their original filename (e.g. "myclip.mp4") instead of "video_<timestamp>.<guid>". Blob: URLs no longer produce unopenable files.',
+console.log('%c[Krafted v' + KRAFTED_VERSION + '] Load .kpak — viewport now auto-fits to loaded items. Previously, a zoomed-in session would leave freshly-loaded items tiny/off-screen until manual reset.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
 // Auto-sync welcome page version number from KRAFTED_VERSION.
@@ -29160,6 +29160,15 @@ function restoreBoard(data) {
   pushUndo();
   cleanupAllItems();
   state.items = []; state.texts = []; state.todos = []; state.mindmaps = []; state.selected.clear();
+  // Reset viewport transform so the loaded board renders at 100% zoom,
+  // centered. Without this, a previously-zoomed-in session would leave
+  // the freshly-loaded items tiny (the zoom shrinks every .item element
+  // including the media controls) and the user would have to find and
+  // click the zoom-reset button manually. We leave the actual zoom-to-
+  // fit for the end of restoreBoard (after items exist) so it can size
+  // to the loaded bbox.
+  state.zoom = 1;
+  state.pan = { x: 0, y: 0 };
   G.nextZ = 1; let maxId = 0;
   data.items.forEach(d => {
     try {
@@ -29600,6 +29609,34 @@ function restoreBoard(data) {
   updateCanvas();
   redrawDrawLayer();
   _frozenGifs.clear();
+  // v6.0: fit-to-content after load. If the user was previously zoomed
+  // in on a different board, the loaded items would render at the wrong
+  // scale / off-screen. Compute the bounding box of all loaded items
+  // and frame the viewport so the user sees them on first paint.
+  try {
+    var allLoaded = [].concat(state.items, state.texts, state.todos || [], state.mindmaps || []);
+    if (allLoaded.length > 0) {
+      var _minX = Infinity, _minY = Infinity, _maxX = -Infinity, _maxY = -Infinity;
+      allLoaded.forEach(function(it) {
+        if (it.x < _minX) _minX = it.x;
+        if (it.y < _minY) _minY = it.y;
+        if (it.x + it.w > _maxX) _maxX = it.x + it.w;
+        if (it.y + it.h > _maxY) _maxY = it.y + it.h;
+      });
+      if (isFinite(_minX) && isFinite(_maxX)) {
+        var _cx = (_minX + _maxX) / 2;
+        var _cy = (_minY + _maxY) / 2;
+        var _bw = Math.max(1, _maxX - _minX);
+        var _bh = Math.max(1, _maxY - _minY);
+        var _sw = window.innerWidth, _sh = window.innerHeight;
+        var _z = Math.min(_sw / (_bw * 1.24), _sh / (_bh * 1.24));
+        state.zoom = Math.max(0.02, Math.min(10, _z));
+        state.pan.x = _sw / 2 - _cx * state.zoom;
+        state.pan.y = _sh / 2 - _cy * state.zoom;
+        updateCanvas();
+      }
+    }
+  } catch (e) { console.warn('[restoreBoard] fit-to-content failed:', e); }
   updateMediaBar();
   // Render mask overlays for restored items
   state.items.forEach(item => {
