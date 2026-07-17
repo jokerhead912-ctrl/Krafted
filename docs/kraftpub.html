@@ -21801,9 +21801,9 @@ document.addEventListener('mousemove', e => {
       // and only grows height on input (prevents width jumping on type).
       if (d.item.el && d.item.el.classList.contains('text-item')) {
         d.item.userResized = true;
-        // Scale font size proportionally with box dimensions (geometric mean)
+        // Scale font size proportionally with box dimensions (arithmetic mean — gentler than geometric)
         if (d.item.size && d.origW > 0 && d.origH > 0) {
-          d.item.size = Math.round(d.item.size * Math.sqrt((w / d.origW) * (h / d.origH)));
+          d.item.size = Math.round(d.item.size * ((w / d.origW + h / d.origH) / 2));
           applyTextProps(d.item);
         }
       }
@@ -21837,7 +21837,7 @@ document.addEventListener('mousemove', e => {
             a.item.userResized = true;
             // Scale font size proportionally with box dimensions
             if (a.item.size && a.origW > 0 && a.origH > 0) {
-              a.item.size = Math.round(a.item.size * Math.sqrt((a.w / a.origW) * (a.h / a.origH)));
+              a.item.size = Math.round(a.item.size * ((a.w / a.origW + a.h / a.origH) / 2));
               applyTextProps(a.item);
             }
           }
@@ -21879,7 +21879,7 @@ document.addEventListener('mousemove', e => {
           mel.style.transform = 'translate(' + member.x + 'px, ' + member.y + 'px) rotate(' + (member.rot || 0) + 'deg)';
           // Scale font size for text items in the group
           if (mel.classList.contains('text-item') && member.size && mOrigW > 0 && mOrigH > 0) {
-            member.size = Math.round(member.size * Math.sqrt((member.w / mOrigW) * (member.h / mOrigH)));
+            member.size = Math.round(member.size * ((member.w / mOrigW + member.h / mOrigH) / 2));
             applyTextProps(member);
           }
         });
