@@ -19321,21 +19321,16 @@ window.addEventListener('drop', function(e){
     try { _handleFileDrop(e, [...files]); } catch (err) { console.warn('[FileDrop] window handler error:', err); }
     return;
   }
-  // ── Cross-origin drag: no files, but dataTransfer may have URL/HTML ──
-  // When dragging an image from another website, e.dataTransfer.files is
-  // empty (security), but we can get the URL from text/uri-list or text/html.
+  // ── Cross-origin drag: no files, but dataTransfer may have URL ──
   const dt = e.dataTransfer;
   if (!dt) return;
   let url = null;
-  // 1) text/uri-list (most browsers expose this for cross-origin image drag)
   if (dt.getData) {
     const uriList = dt.getData('text/uri-list');
     if (uriList) {
-      // text/uri-list is newline-separated, may have comments (#) — first non-comment line
       const lines = uriList.split(/\r?\n/).map(s => s.trim()).filter(s => s && !s.startsWith('#'));
       if (lines.length) url = lines[0];
     }
-    // 2) text/html (some browsers expose <img src> here)
     if (!url) {
       const html = dt.getData('text/html');
       if (html) {
@@ -19344,13 +19339,34 @@ window.addEventListener('drop', function(e){
       }
     }
   }
-  if (url) {
-    try { hideWelcome(); } catch (err) {}
-    // Use drop position directly (more reliable than getPasteXY for drag)
-    const cx = (e.clientX - state.pan.x) / state.zoom;
-    const cy = (e.clientY - state.pan.y) / state.zoom;
-    fetchImageFromURL(url, cx, cy);
-  }
+  if (!url) return;
+  try { hideWelcome(); } catch (err) {}
+  // Fetch the image (no-cors → opaque blob), then feed it to Krafted's
+  // normal file-drop handler. This reuses the battle-tested path that
+  // handles screenshots, file paste, drag-and-drop from Explorer, etc.
+  // The blob is wrapped in a fake DataTransfer and passed to _handleFileDrop.
+  toast('Fetching image…');
+  fetch(url, { mode: 'no-cors' })
+    .then(res => res.blob())
+    .then(blob => {
+      const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/gif' ? 'gif' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+      const file = new File([blob], 'dropped-image.' + ext, { type: blob.type || 'image/jpeg' });
+      // Build a minimal fake event with the file in dataTransfer.files
+      const fakeEv = {
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        dataTransfer: { files: [file], types: ['Files'] }
+      };
+      // Position for paste placement
+      G.lastScreenX = e.clientX;
+      G.lastScreenY = e.clientY;
+      _handleFileDrop(fakeEv, [file]);
+      toast('Pasted image');
+    })
+    .catch(err => {
+      console.log('[FileDrop] fetch failed:', err.message);
+      toast('Failed to fetch image');
+    });
 }, true);
 
 viewport.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
