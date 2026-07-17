@@ -19916,6 +19916,7 @@ document.addEventListener('paste', e => {
                 imgUrl = trimmed;
               }
             }
+            console.log('[Paste] imgUrl detected:', imgUrl, 'itemType:', itemType);
             if (imgUrl) {
               const { x, y } = getPasteXY();
               fetchImageFromURL(imgUrl, x, y);
@@ -27963,14 +27964,17 @@ function getPasteXY() {
 // (which works for most public images but won't give us the raw bytes — we use
 // a canvas to convert to data URL for persistence).
 function fetchImageFromURL(url, x, y) {
+  console.log('[fetchImageFromURL] start:', url);
   toast('Fetching image…');
   // Try direct fetch (works if server has CORS headers or same-origin)
   fetch(url, { mode: 'cors' })
     .then(res => {
+      console.log('[fetchImageFromURL] fetch response status:', res.status);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.blob();
     })
     .then(blob => {
+      console.log('[fetchImageFromURL] got blob size:', blob.size);
       const reader = new FileReader();
       reader.onload = ev => {
         const img = new Image();
@@ -27978,16 +27982,18 @@ function fetchImageFromURL(url, x, y) {
           addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
           toast('Pasted image from URL');
         };
-        img.onerror = () => { toast('Failed to decode image'); };
+        img.onerror = () => { console.log('[fetchImageFromURL] data URL img decode failed'); toast('Failed to decode image'); };
         img.src = ev.target.result;
       };
       reader.readAsDataURL(blob);
     })
-    .catch(() => {
+    .catch(err => {
+      console.log('[fetchImageFromURL] direct fetch failed, trying fallback:', err.message);
       // CORS blocked — fall back to img tag + canvas conversion
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
+        console.log('[fetchImageFromURL] fallback img loaded');
         const canvas = document.createElement('canvas');
         canvas.width = img.naturalWidth;
         canvas.height = img.naturalHeight;
@@ -27998,12 +28004,13 @@ function fetchImageFromURL(url, x, y) {
           addImage(dataUrl, img.naturalWidth, img.naturalHeight, x, y);
           toast('Pasted image from URL (CORS fallback)');
         } catch (e) {
+          console.log('[fetchImageFromURL] canvas tainted, using URL directly');
           // Tainted canvas — use the URL directly as src
           addImage(url, img.naturalWidth, img.naturalHeight, x, y);
           toast('Pasted image from URL (linked)');
         }
       };
-      img.onerror = () => { toast('Failed to load image from URL'); };
+      img.onerror = () => { console.log('[fetchImageFromURL] fallback img also failed'); toast('Failed to load image from URL'); };
       img.src = url;
     });
 }
