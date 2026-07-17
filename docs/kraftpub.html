@@ -9622,6 +9622,16 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     annoCanvas.addEventListener('pointerdown', function(ev) {
       const s = el._annoDrawState;
       if (s.mode === 'off') return;
+      // v6.0: Alt + pen/stylus → pan/zoom canvas instead of drawing.
+      // Wacom/XPPen users need a way to navigate the board while in
+      // draw mode without switching to the select tool. Alt is the
+      // industry standard modifier (Photoshop, Blender, Premiere).
+      // We release pointer capture and let the event bubble up to
+      // the viewport's pan handler.
+      if (ev.altKey) {
+        try { annoCanvas.releasePointerCapture(ev.pointerId); } catch (e) {}
+        return; // let the event bubble to viewport mousedown for pan
+      }
       ev.preventDefault();
       ev.stopPropagation();
       // Round 12: text mode is single-click (no drag). Spawn an
@@ -17995,7 +18005,7 @@ document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
 var KRAFTED_VERSION = '6.0';
-console.log('%c[Krafted v' + KRAFTED_VERSION + '] Translate API — switched to MyMemory direct (CORS enabled). Google gtx dead (404). Promise.any race + JSONP fallback.',
+console.log('%c[Krafted v' + KRAFTED_VERSION + '] Wacom/XPPen Alt+drag pan — in draw mode (Board Pen / Frame Draw), hold Alt and drag to pan/zoom the canvas. Select mode Alt pan still controlled by altPanEnabled setting.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
 // Auto-sync welcome page version number from KRAFTED_VERSION.
@@ -19223,8 +19233,11 @@ viewport.addEventListener('mousedown', e => {
   // Desktop (IS_TOUCH_DEVICE === false) behavior is completely untouched.
   if (IS_TOUCH_DEVICE) return;
 
-  // Catches middle-button (e.button===1) and Alt+Left (button===0 + altKey, Mac trackpad fallback)
-  if (e.button === 1 || (state.altPanEnabled && e.button === 0 && e.altKey)) {
+  // v6.0: Alt + Left button pans:
+  //   - In draw mode: ALWAYS pan (Wacom/XPPen navigation).
+  //   - In select mode: only if altPanEnabled is ON (Mac trackpad).
+  // Catches middle-button (e.button===1) as well.
+  if (e.button === 1 || (e.button === 0 && e.altKey && (state.tool === 'draw' || state.altPanEnabled))) {
     if (e.cancelable) e.preventDefault();
     state.dragging = { type: 'pan', startX: e.clientX - state.pan.x, startY: e.clientY - state.pan.y };
     viewport.classList.add('grabbing');
@@ -21082,6 +21095,10 @@ viewport.addEventListener('mousedown', e => {
 
   // DRAW TOOL
   if (state.tool === 'draw') {
+    // v6.0: Alt key is reserved for pan/zoom — do NOT start a stroke.
+    // Wacom/XPPen users hold Alt + drag to pan the canvas while in
+    // draw mode (industry standard: Photoshop, Blender, Premiere).
+    if (e.altKey) return;
     const wx = (e.clientX - state.pan.x) / state.zoom;
     const wy = (e.clientY - state.pan.y) / state.zoom;
     // Check if hovering on an existing stroke — start move
