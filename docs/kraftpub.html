@@ -9720,14 +9720,17 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       editor.style.font = '600 ' + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
       editor.style.left = (px - 2) + 'px';
       editor.style.top = (py - 1) + 'px';
-      editor.style.width = '20px'; // start small, auto-grow on input
+      // v6.0: start with a comfortable width (180px) so the editor is
+      // immediately usable — previously started at 20px (just a tiny pill)
+      // and the user couldn't see the placeholder or know what to type.
+      editor.style.width = '180px';
       // Color: copy from current draw state
       editor.style.color = s.color || '#fff';
       // Stash the normalised point for later commit
       editor._annoPt = pt;
       // Auto-grow width & height as the user types.
       // Uses a hidden mirror <span> with identical styling to measure
-      // the natural text width, then clamps between minW(60) and maxW(420).
+      // the natural text width, then clamps between minW(180) and maxW(420).
       var _mirror = document.createElement('span');
       _mirror.style.cssText = 'position:absolute;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;pointer-events:none;left:-9999px;top:-9999px;';
       var _mirrorParent = el.querySelector('.media-wrap') || document.body;
@@ -9745,7 +9748,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         _mirror.style.letterSpacing = window.getComputedStyle(editor).letterSpacing;
         _mirror.textContent = txt;
         var naturalW = _mirror.getBoundingClientRect().width + pw + 2;
-        var targetW = Math.max(20, Math.min(140, Math.ceil(naturalW)));
+        // v6.0: wider min (180px, was 20) and max (420, was 140) so the
+        // editor is comfortable to type in from the moment it appears.
+        var targetW = Math.max(180, Math.min(420, Math.ceil(naturalW)));
         editor.style.width = targetW + 'px';
       })();
       editor.addEventListener('input', function(){
@@ -9761,7 +9766,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         _mirror.style.letterSpacing = window.getComputedStyle(editor).letterSpacing;
         _mirror.textContent = txt;
         var naturalW = _mirror.getBoundingClientRect().width + pw + 2; // +2 for border
-        var targetW = Math.max(20, Math.min(140, Math.ceil(naturalW)));
+        var targetW = Math.max(180, Math.min(420, Math.ceil(naturalW)));
         editor.style.width = targetW + 'px';
       });
       // Enter to commit, Shift+Enter for newline, Esc to cancel.
@@ -17920,7 +17925,7 @@ document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
 var KRAFTED_VERSION = '6.0';
-console.log('%c[Krafted v' + KRAFTED_VERSION + '] Load .kpak — viewport now auto-fits to loaded items. Previously, a zoomed-in session would leave freshly-loaded items tiny/off-screen until manual reset.',
+console.log('%c[Krafted v' + KRAFTED_VERSION + '] Frame Text editor — default width increased to 180px (was 20px). No more tiny pill box on spawn.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
 // Auto-sync welcome page version number from KRAFTED_VERSION.
