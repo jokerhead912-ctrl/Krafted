@@ -9718,8 +9718,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // (max(14, size*5)) so what-you-see matches what-you-get.
       const fontSize = Math.max(14, (s.size || 4) * 5);
       editor.style.font = '600 ' + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
-      editor.style.left = (px - 2) + 'px';
-      editor.style.top = (py - 1) + 'px';
+      // v6.0: remove the -2/-1 padding compensation — it caused the
+      // editor to appear offset from the click point. The textarea
+      // border+padding naturally creates a small gap which is fine.
+      editor.style.left = px + 'px';
+      editor.style.top = py + 'px';
       // v6.0: start with a usable width (60px) and 2-row height.
       // Previously 180px was too wide, 20px was too narrow.
       editor.style.width = '60px';
