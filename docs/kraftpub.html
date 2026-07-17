@@ -19356,9 +19356,9 @@ window.addEventListener('drop', function(e){
       reader.onload = ev => {
         const img = new Image();
         img.onload = () => {
-          // Scale down to 50% for comfortable viewing
-          const dw = Math.round(img.naturalWidth / 2);
-          const dh = Math.round(img.naturalHeight / 2);
+          // Max 360px wide for comfortable drag-drop viewing
+          const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
+          const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
           addImage(ev.target.result, dw, dh,
             (e.clientX - state.pan.x) / state.zoom,
             (e.clientY - state.pan.y) / state.zoom);
@@ -19375,8 +19375,8 @@ window.addEventListener('drop', function(e){
       const img = new Image();
       img.onload = () => {
         if (typeof maskImageCache !== 'undefined') maskImageCache[url] = { img: null };
-        const dw = Math.round(img.naturalWidth / 2);
-        const dh = Math.round(img.naturalHeight / 2);
+        const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
+        const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
         addImage(url, dw, dh,
           (e.clientX - state.pan.x) / state.zoom,
           (e.clientY - state.pan.y) / state.zoom);
