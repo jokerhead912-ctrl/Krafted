@@ -11189,12 +11189,15 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // Skips comments that already have a translation, but the user can clear
   // them individually first if they want a fresh translation. Sequential
   // calls (not parallel) to avoid hammering the translation API.
-  const translateAllBtn = document.createElement('button');
-  translateAllBtn.className = 'head-btn bulk-translate';
-  translateAllBtn.innerHTML = '🌐→中 All';
-  translateAllBtn.title = 'Translate every comment to the other language at once (sequential, ~1s per comment)';
-  translateAllBtn.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
-  translateAllBtn.addEventListener('click', async function(ev){
+  // v6.0: renamed from translateAllBtn → snapTranslateAllBtn. The
+  // handler is hoisted to a named function snapTranslateAll so it
+  // can be found/replaced in the codebase via a unique identifier.
+  const snapTranslateAllBtn = document.createElement('button');
+  snapTranslateAllBtn.className = 'head-btn bulk-translate';
+  snapTranslateAllBtn.innerHTML = '🌐→中 All';
+  snapTranslateAllBtn.title = 'Translate every snap comment in the popover to the other language (sequential, ~1s per comment)';
+  snapTranslateAllBtn.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
+  async function snapTranslateAll(ev) {
     ev.stopPropagation(); ev.preventDefault();
     // v6.0: force-commit any open inline-edit before bulk translate.
     // Same race-condition fix as the single translate button.
@@ -11219,16 +11222,16 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // v6.0: removed the window.confirm dialog — it blocked in sandbox
     // webviews and silently returned false, cancelling the bulk
     // translate. Show a short toast instead so the user knows what's
-    // about to happen, and a 1.5s grace period before starting.
+    // about to happen.
     try { toast('Translating ' + toTranslate.length + ' comments…'); } catch (e) {}
-    translateAllBtn.disabled = true;
-    const origLabel = translateAllBtn.innerHTML;
+    snapTranslateAllBtn.disabled = true;
+    const origLabel = snapTranslateAllBtn.innerHTML;
     let done = 0, failed = 0;
     for (const c of toTranslate) {
       const hasCjk = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(c.text);
       const fromLang = hasCjk ? 'zh' : 'en';
       const toLang = hasCjk ? 'en' : 'zh';
-      translateAllBtn.innerHTML = '🌐→中 ' + (done + 1) + '/' + toTranslate.length;
+      snapTranslateAllBtn.innerHTML = '🌐→中 ' + (done + 1) + '/' + toTranslate.length;
       try {
         const translated = await translateText(c.text, fromLang, toLang);
         if (translated && translated !== c.text) {
@@ -11238,17 +11241,18 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           done++;
         } else { failed++; }
       } catch (e) {
-        console.warn('Bulk translate failed for comment', c.id, e);
+        console.warn('snapTranslateAll: failed for comment', c.id, e);
         failed++;
       }
     }
     try { scheduleAutoSave(); } catch (e) {}
     try { _refreshListBody(); } catch (e) {}
-    try { if (item && item.el && item.el._refreshSeekMarkers) item.el._refreshSeekMarkers(); } catch (e) {}
-    translateAllBtn.innerHTML = origLabel;
-    translateAllBtn.disabled = false;
+    try { if (itm && itm.el && itm.el._refreshSeekMarkers) itm.el._refreshSeekMarkers(); } catch (e) {}
+    snapTranslateAllBtn.innerHTML = origLabel;
+    snapTranslateAllBtn.disabled = false;
     try { toast('Translated ' + done + ' / ' + toTranslate.length + (failed ? ' (' + failed + ' failed)' : '')); } catch (e) {}
-  });
+  }
+  snapTranslateAllBtn.addEventListener('click', snapTranslateAll);
   // Round 5: "Clear all" button — wipes all comments for this video.
   // Asks for confirmation first.
   const clearAllBtn = document.createElement('button');
@@ -11365,7 +11369,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // minimize so the user can reach it without hunting. Hidden by default.
   listHead.appendChild(followBtn);
   // Round 5: bulk translate + clear all buttons sit right next to the show-toolbar button
-  listHead.appendChild(translateAllBtn);
+  listHead.appendChild(snapTranslateAllBtn);
   listHead.appendChild(clearAllBtn);
   listHead.appendChild(sendToBoardBtn);
   listHead.appendChild(exportBtn);
@@ -12191,7 +12195,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           }
         }
       } catch (e) {}
-      try { if (typeof videoAnnoTranslateComment === 'function') videoAnnoTranslateComment(c.id, el._item); } catch(e) {}
+      try { if (typeof snapSingleTranslate === 'function') snapSingleTranslate(c.id, el._item); } catch(e) {}
     };
     actions.appendChild(tBtn);
     // Delete
@@ -16272,10 +16276,12 @@ function videoAnnoOpenLightbox(c) {
   try { document.body.style.overflow = 'hidden'; } catch (e) {}
 }
 
-async function videoAnnoTranslateComment(id, _explicitItem) {
-  // v6.0: accept an explicit item so the popover (which has its own
-  // _item on the el) can translate even when no video is currently
-  // selected in the canvas. Fall back to videoAnnoGetSelected().
+async function snapSingleTranslate(id, _explicitItem) {
+  // v6.0: renamed from videoAnnoTranslateComment. This handles the
+  // "Translate" button on a single snap comment card in the popover.
+  // Accepts an explicit item so the popover (which has its own _item
+  // on the el) can translate even when no video is currently selected
+  // in the canvas. Falls back to videoAnnoGetSelected().
   const item = _explicitItem || videoAnnoGetSelected();
   if (!item) return;
   const anno = videoAnnoEnsure(item);
@@ -16413,7 +16419,7 @@ function videoAnnoRefreshCommentList(item, highlightId) {
     head.querySelector('.frame-no').onclick = (e) => { e.stopPropagation(); videoAnnoJumpToComment(c.id); };
     head.querySelector('.time-no').onclick = (e) => { e.stopPropagation(); videoAnnoJumpToComment(c.id); };
     head.querySelector('.goto').onclick = (e) => { e.stopPropagation(); try { videoAnnoJumpToComment(c.id); } catch(e){} };
-    head.querySelector('.tr-btn').onclick = (e) => { e.stopPropagation(); videoAnnoTranslateComment(c.id); };
+    head.querySelector('.tr-btn').onclick = (e) => { e.stopPropagation(); snapSingleTranslate(c.id); };
     head.querySelector('.del').onclick = (e) => { e.stopPropagation(); videoAnnoDeleteComment(c.id); };
     main.appendChild(head);
 
