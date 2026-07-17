@@ -21191,7 +21191,7 @@ viewport.addEventListener('mousedown', e => {
           multiData = { bbox: bb, pivotX, pivotY, handleOrigX, handleOrigY, snaps, dir };
         }
       }
-      state.dragging = { type: 'resize', item, dir, startX: e.clientX, startY: e.clientY, origW: item.w, origH: item.h, origX: item.x, origY: item.y, origSize: item.size || 16, _rafId: null, _mediaWrap: cachedMediaWrap, _group: cachedGroup, _members: cachedMembers, _multi: multiData };
+      state.dragging = { type: 'resize', item, dir, startX: e.clientX, startY: e.clientY, origW: item.w, origH: item.h, origX: item.x, origY: item.y, _rafId: null, _mediaWrap: cachedMediaWrap, _group: cachedGroup, _members: cachedMembers, _multi: multiData };
       document.body.classList.add('is-dragging');
       document.querySelectorAll('.item-handle, .item-rot').forEach(el => el.remove());
       // Round 67 — also wipe the empty union multi-select container left
@@ -21787,7 +21787,7 @@ document.addEventListener('mousemove', e => {
         const nx = M.pivotX + (s.x - M.pivotX) * scaleX;
         const ny = M.pivotY + (s.y - M.pivotY) * scaleY;
         s.item.x = nx; s.item.y = ny; s.item.w = nw; s.item.h = nh;
-        return { item: s.item, x: nx, y: ny, w: nw, h: nh, origW: s.w, origH: s.h, origSize: s.item.size || 16, wrapEl: s.wrapEl };
+        return { item: s.item, x: nx, y: ny, w: nw, h: nh, origW: s.w, origH: s.h, wrapEl: s.wrapEl };
       });
       multiApply = applies;
     }
@@ -21801,14 +21801,8 @@ document.addEventListener('mousemove', e => {
       // and only grows height on input (prevents width jumping on type).
       if (d.item.el && d.item.el.classList.contains('text-item')) {
         d.item.userResized = true;
-        // Scale font size proportionally — clamped to [90%, 200%] of original.
-        // Shrinking: font only goes down to 90% then stays; box keeps shrinking, text wraps.
-        // Growing: font grows up to 2× then stops.
-        if (d.item.size && d.origW > 0 && d.origH > 0) {
-          const raw = d.origSize * ((w / d.origW + h / d.origH) / 2);
-          d.item.size = Math.round(Math.min(d.origSize * 2, Math.max(d.origSize * 0.9, raw)));
-          applyTextProps(d.item);
-        }
+        // Font size is independent of box resize — user changes it manually in text props.
+        // Box resize only affects dimensions; text wraps naturally.
       }
     }
     // Cache scale factors and pivot for group members
@@ -21838,11 +21832,6 @@ document.addEventListener('mousemove', e => {
           if (el.classList.contains('todo-item')) a.item._resized = true;
           if (el.classList.contains('text-item')) {
             a.item.userResized = true;
-            if (a.item.size && a.origW > 0 && a.origH > 0 && a.origSize) {
-              const raw = a.origSize * ((a.w / a.origW + a.h / a.origH) / 2);
-              a.item.size = Math.round(Math.min(a.origSize * 2, Math.max(a.origSize * 0.9, raw)));
-              applyTextProps(a.item);
-            }
           }
         });
         // Keep any open annotation popovers parallel to the video as the
@@ -21871,7 +21860,6 @@ document.addEventListener('mousemove', e => {
           const mOrigY = member._origY !== undefined ? member._origY : (member._origY = member.y);
           const mOrigW = member._origW !== undefined ? member._origW : (member._origW = member.w);
           const mOrigH = member._origH !== undefined ? member._origH : (member._origH = member.h);
-          const mOrigSize = member._origSize !== undefined ? member._origSize : (member._origSize = (member.size || 16));
           member.x = pivotX + (mOrigX - pivotX) * scaleX;
           member.y = pivotY + (mOrigY - pivotY) * scaleY;
           member.w = Math.max(5, mOrigW * scaleX);
@@ -21881,12 +21869,6 @@ document.addEventListener('mousemove', e => {
           mel.style.width = member.w + 'px';
           mel.style.height = member.h + 'px';
           mel.style.transform = 'translate(' + member.x + 'px, ' + member.y + 'px) rotate(' + (member.rot || 0) + 'deg)';
-          // Scale font size for text items in the group
-          if (mel.classList.contains('text-item') && member.size && mOrigW > 0 && mOrigH > 0) {
-            const raw = mOrigSize * ((member.w / mOrigW + member.h / mOrigH) / 2);
-            member.size = Math.round(Math.min(mOrigSize * 2, Math.max(mOrigSize * 0.9, raw)));
-            applyTextProps(member);
-          }
         });
         updateGroupBorder(d._group);
       }
