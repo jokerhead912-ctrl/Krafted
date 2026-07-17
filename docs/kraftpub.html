@@ -19341,32 +19341,50 @@ window.addEventListener('drop', function(e){
   }
   if (!url) return;
   try { hideWelcome(); } catch (err) {}
-  // Fetch the image (no-cors → opaque blob), then feed it to Krafted's
-  // normal file-drop handler. This reuses the battle-tested path that
-  // handles screenshots, file paste, drag-and-drop from Explorer, etc.
-  // The blob is wrapped in a fake DataTransfer and passed to _handleFileDrop.
+  // Strategy: try CORS proxy first (gives us real bytes, no CORS issues
+  // downstream). Fall back to hotlink (which works for some servers but
+  // triggers repeated CORS warnings on re-render).
   toast('Fetching image…');
-  fetch(url, { mode: 'no-cors' })
-    .then(res => res.blob())
-    .then(blob => {
-      const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/gif' ? 'gif' : blob.type === 'image/webp' ? 'webp' : 'jpg';
-      const file = new File([blob], 'dropped-image.' + ext, { type: blob.type || 'image/jpeg' });
-      // Build a minimal fake event with the file in dataTransfer.files
-      const fakeEv = {
-        preventDefault: () => {},
-        stopPropagation: () => {},
-        dataTransfer: { files: [file], types: ['Files'] }
-      };
-      // Position for paste placement
-      G.lastScreenX = e.clientX;
-      G.lastScreenY = e.clientY;
-      _handleFileDrop(fakeEv, [file]);
-      toast('Pasted image');
-    })
-    .catch(err => {
-      console.log('[FileDrop] fetch failed:', err.message);
-      toast('Failed to fetch image');
-    });
+  const placeImage = (src, w, h, via) => {
+    G.lastScreenX = e.clientX;
+    G.lastScreenY = e.clientY;
+    addImage(src, w, h,
+      (e.clientX - state.pan.x) / state.zoom,
+      (e.clientY - state.pan.y) / state.zoom);
+    toast('Pasted image' + (via ? ' (' + via + ')' : ''));
+  };
+  if (typeof state === 'undefined' || state.allowCorsProxy) {
+    // Use CORS proxy — get real bytes as blob, convert to data URL via FileReader.
+    // Data URL is same-origin → no CORS ever.
+    fetch('https://images.weserv.nl/?url=' + encodeURIComponent(url))
+      .then(res => res.blob())
+      .then(blob => {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const img = new Image();
+          img.onload = () => placeImage(ev.target.result, img.naturalWidth, img.naturalHeight, 'via proxy');
+          img.onerror = () => toast('Proxy returned invalid image');
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(blob);
+      })
+      .catch(err => {
+        console.log('[FileDrop] proxy failed, trying hotlink:', err.message);
+        hotlinkFallback();
+      });
+  } else {
+    hotlinkFallback();
+  }
+  function hotlinkFallback() {
+    const img = new Image();
+    img.onload = () => {
+      if (typeof maskImageCache !== 'undefined') maskImageCache[url] = { img: null };
+      placeImage(url, img.naturalWidth, img.naturalHeight, 'hotlinked');
+    };
+    img.onerror = () => toast('Image load failed');
+    img.src = url;
+  }
+}, true);
 }, true);
 
 viewport.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
@@ -28158,12 +28176,18 @@ window.kraftedDisableCorsProxy = function() {
     toast('CORS proxy disabled');
   } catch (e) { console.warn(e); }
 };
-// Load on init
+// Load on init — default to ENABLED so cross-origin image drag/paste
+// just works. The proxy (images.weserv.nl) only sees the image URL,
+// not user content. Users can opt out via kraftedDisableCorsProxy().
 try {
-  if (localStorage.getItem('krafted-allow-cors-proxy') === '1') {
+  if (localStorage.getItem('krafted-allow-cors-proxy') === '0') {
+    if (typeof state === 'undefined') state = {};
+    state.allowCorsProxy = false;
+    console.log('[Krafted] CORS proxy DISABLED (user preference)');
+  } else {
     if (typeof state === 'undefined') state = {};
     state.allowCorsProxy = true;
-    console.log('[Krafted] CORS proxy enabled from localStorage');
+    console.log('[Krafted] CORS proxy enabled (default). Disable: kraftedDisableCorsProxy()');
   }
 } catch (e) {}
 
