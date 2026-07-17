@@ -19897,6 +19897,31 @@ document.addEventListener('paste', e => {
         try {
             let trimmed = raw.trim();
             if (!trimmed) return;
+
+            // ── Cross-origin image URL paste ──
+            // When user copies an image from another website, the clipboard
+            // usually contains text/html (with <img src>) or text/plain (URL).
+            // The image/* MIME type is often missing cross-origin. Detect
+            // image URLs here and fetch + embed them directly.
+            let imgUrl = null;
+            if (itemType === 'text/html') {
+              // Try to extract <img src> from HTML clipboard
+              const imgMatch = raw.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
+              if (imgMatch) imgUrl = imgMatch[1];
+            }
+            if (!imgUrl && /^https?:\/\/[^\s]+$/i.test(trimmed)) {
+              // Plain-text URL — check if it looks like an image
+              const lc = trimmed.toLowerCase();
+              if (/\.(png|jpg|jpeg|gif|webp|svg|bmp|avif|ico)(\?.*)?$/i.test(lc)) {
+                imgUrl = trimmed;
+              }
+            }
+            if (imgUrl) {
+              const { x, y } = getPasteXY();
+              fetchImageFromURL(imgUrl, x, y);
+              return;
+            }
+
             // If it's HTML or RTF, strip tags/formatting for plain text
             if (itemType === 'text/html' || itemType === 'text/richtext' || itemType === 'text/rtf') {
               trimmed = trimmed.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
@@ -27930,6 +27955,57 @@ function getPasteXY() {
     x: (G.lastScreenX - state.pan.x) / state.zoom,
     y: (G.lastScreenY - state.pan.y) / state.zoom
   };
+}
+
+// Fetch an image from a URL and embed it on the canvas.
+// Used for cross-origin paste (copy image from another website → paste into Krafted).
+// Tries direct fetch first; if CORS-blocked, falls back to an image element load
+// (which works for most public images but won't give us the raw bytes — we use
+// a canvas to convert to data URL for persistence).
+function fetchImageFromURL(url, x, y) {
+  toast('Fetching image…');
+  // Try direct fetch (works if server has CORS headers or same-origin)
+  fetch(url, { mode: 'cors' })
+    .then(res => {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.blob();
+    })
+    .then(blob => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
+          toast('Pasted image from URL');
+        };
+        img.onerror = () => { toast('Failed to decode image'); };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(blob);
+    })
+    .catch(() => {
+      // CORS blocked — fall back to img tag + canvas conversion
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        try {
+          const dataUrl = canvas.toDataURL('image/png');
+          addImage(dataUrl, img.naturalWidth, img.naturalHeight, x, y);
+          toast('Pasted image from URL (CORS fallback)');
+        } catch (e) {
+          // Tainted canvas — use the URL directly as src
+          addImage(url, img.naturalWidth, img.naturalHeight, x, y);
+          toast('Pasted image from URL (linked)');
+        }
+      };
+      img.onerror = () => { toast('Failed to load image from URL'); };
+      img.src = url;
+    });
 }
 
 // Helper: toggle "capturing" mode — hides all media UI (per-item controls bar,
