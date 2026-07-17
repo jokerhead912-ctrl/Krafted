@@ -28027,24 +28027,36 @@ function fetchImageFromURL(url, x, y) {
     })
     .catch(err => {
       console.log('[fetchImageFromURL] direct fetch failed:', err.message);
-      // 2) Fallback: load via img tag (no CORS). Mark the URL as
-      // no-CORS in maskImageCache so getCachedImagePixels() won't retry
-      // the load and re-trigger the browser's CORS warning.
+      // 2) Fallback: load via img tag (no CORS). Then convert to data
+      // URL via fetch(no-cors) so the embedded image is same-origin
+      // and never triggers CORS again on re-render.
       const img = new Image();
       img.onload = () => {
         console.log('[fetchImageFromURL] hotlink img loaded:', img.naturalWidth, 'x', img.naturalHeight);
-        // Pre-mark mask cache as failed BEFORE addImage — addImage's
-        // downstream mask render will then see the failed marker and
-        // skip its own CORS load attempt.
+        // Pre-mark mask cache as failed BEFORE addImage
         if (typeof maskImageCache !== 'undefined') {
           maskImageCache[url] = { img: null };
         }
-        addImage(url, img.naturalWidth, img.naturalHeight, x, y);
-        toast('Pasted image (hotlinked)');
+        // Try fetch(no-cors) to get the bytes — opaque response still
+        // gives us a Blob, which we convert to objectURL. This avoids
+        // any future CORS check since objectURL is same-origin.
+        fetch(url, { mode: 'no-cors' })
+          .then(res => res.blob())
+          .then(blob => {
+            const objUrl = URL.createObjectURL(blob);
+            addImage(objUrl, img.naturalWidth, img.naturalHeight, x, y);
+            toast('Pasted image (hotlinked)');
+          })
+          .catch(() => {
+            // Even blob conversion failed — fall back to direct URL.
+            // The browser's <img> cache will at least make re-renders
+            // not re-trigger CORS for this src.
+            addImage(url, img.naturalWidth, img.naturalHeight, x, y);
+            toast('Pasted image (hotlinked)');
+          });
       };
       img.onerror = () => {
         console.log('[fetchImageFromURL] hotlink also failed, trying CORS proxy');
-        // 3) Try CORS proxy — last resort, only if user opted in
         if (typeof state !== 'undefined' && state.allowCorsProxy) {
           tryCorsProxy(url, x, y);
         } else {
