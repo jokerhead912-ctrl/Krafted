@@ -12191,7 +12191,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           }
         }
       } catch (e) {}
-      try { if (typeof videoAnnoTranslateComment === 'function') videoAnnoTranslateComment(c.id); } catch(e) {}
+      try { if (typeof videoAnnoTranslateComment === 'function') videoAnnoTranslateComment(c.id, el._item); } catch(e) {}
     };
     actions.appendChild(tBtn);
     // Delete
@@ -16272,12 +16272,15 @@ function videoAnnoOpenLightbox(c) {
   try { document.body.style.overflow = 'hidden'; } catch (e) {}
 }
 
-async function videoAnnoTranslateComment(id) {
-  const item = videoAnnoGetSelected();
+async function videoAnnoTranslateComment(id, _explicitItem) {
+  // v6.0: accept an explicit item so the popover (which has its own
+  // _item on the el) can translate even when no video is currently
+  // selected in the canvas. Fall back to videoAnnoGetSelected().
+  const item = _explicitItem || videoAnnoGetSelected();
   if (!item) return;
   const anno = videoAnnoEnsure(item);
   const c = anno.comments.find(x => x.id === id);
-  if (!c || !c.text) return;
+  if (!c || !c.text) { try { toast('No comment to translate'); } catch(e) {} return; }
   // Detect direction: if text contains CJK, translate zh→en; otherwise en→zh
   const hasCjk = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(c.text);
   const fromLang = hasCjk ? 'zh' : 'en';
