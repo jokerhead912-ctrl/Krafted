@@ -19312,13 +19312,42 @@ window.addEventListener('dragover', function(e){
   e.preventDefault();
 }, true);
 window.addEventListener('drop', function(e){
-  try { console.log('[FileDrop] window capture-phase drop, files:', e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0); } catch (err) {}
+  try { console.log('[FileDrop] window capture-phase drop, files:', e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0, 'types:', e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types).join(',') : ''); } catch (err) {}
   e.preventDefault();
   e.stopPropagation();
   const files = e.dataTransfer && e.dataTransfer.files;
   if (files && files.length) {
     try { hideWelcome(); } catch (err) {}
     try { _handleFileDrop(e, [...files]); } catch (err) { console.warn('[FileDrop] window handler error:', err); }
+    return;
+  }
+  // ── Cross-origin drag: no files, but dataTransfer may have URL/HTML ──
+  // When dragging an image from another website, e.dataTransfer.files is
+  // empty (security), but we can get the URL from text/uri-list or text/html.
+  const dt = e.dataTransfer;
+  if (!dt) return;
+  let url = null;
+  // 1) text/uri-list (most browsers expose this for cross-origin image drag)
+  if (dt.getData) {
+    const uriList = dt.getData('text/uri-list');
+    if (uriList) {
+      // text/uri-list is newline-separated, may have comments (#) — first non-comment line
+      const lines = uriList.split(/\r?\n/).map(s => s.trim()).filter(s => s && !s.startsWith('#'));
+      if (lines.length) url = lines[0];
+    }
+    // 2) text/html (some browsers expose <img src> here)
+    if (!url) {
+      const html = dt.getData('text/html');
+      if (html) {
+        const m = html.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
+        if (m) url = m[1];
+      }
+    }
+  }
+  if (url) {
+    try { hideWelcome(); } catch (err) {}
+    const { x, y } = getPasteXY();
+    fetchImageFromURL(url, x, y);
   }
 }, true);
 
@@ -27965,6 +27994,7 @@ function getPasteXY() {
 // a canvas to convert to data URL for persistence).
 function fetchImageFromURL(url, x, y) {
   console.log('[fetchImageFromURL] start:', url);
+  try { hideWelcome(); } catch (err) {}
   toast('Fetching image…');
   // Try direct fetch (works if server has CORS headers or same-origin)
   fetch(url, { mode: 'cors' })
