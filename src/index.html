@@ -40,7 +40,7 @@
   <button onclick="document.getElementById('file-input').click()" title="Add Image">📷</button>
   <button onclick="document.getElementById('file-input-video').click()" title="Add Video">🎬</button>
   <span class="mt-sep"></span>
-  <button onclick="(window.showDirectoryPicker?quickSave:saveBoard)()" title="Quick Save">💾</button>
+  <button onclick="saveBoard()" title="Save">💾</button>
   <button onclick="zoomToFit()" title="Fit">⊡</button>
 </div>
 
@@ -77,8 +77,7 @@
   <button onclick="groupSelected()" title="Group Selected (Ctrl+G)" id="btn-group"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg> <span class="tb-label">Group</span></button>
   <button onclick="ungroupSelected()" title="Ungroup (Ctrl+Shift+G)" id="btn-ungroup"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="1.5" width="4" height="4" rx="0.5"/><rect x="10.5" y="10.5" width="4" height="4" rx="0.5"/><path d="M7 4h5v5" stroke-dasharray="1.5 1.5"/></svg> <span class="tb-label">Ungroup</span></button>
   <div class="sep"></div>
-  <button onclick="(window.showDirectoryPicker?quickSave:saveBoard)()" class="tb-primary" title="Quick Save (Ctrl+S) — save to your set folder"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8l2 2v8H3V3z"/><path d="M6 3v3h4V3M6 13V9h4v4"/></svg> <span class="tb-label">Save</span></button>
-  <button onclick="(window.showDirectoryPicker?quickSaveAs:saveBoard)()" title="Set Save Folder — pick a folder for quick save" style="padding:4px 6px;font-size:11px;line-height:1;" id="btn-set-folder">📁</button>
+  <button onclick="saveBoard()" class="tb-primary" title="Save Board (Ctrl+S)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8l2 2v8H3V3z"/><path d="M6 3v3h4V3M6 13V9h4v4"/></svg> <span class="tb-label">Save</span></button>
   <button onclick="toggleAppFullscreen()" id="btn-fullscreen" class="tb-primary" title="Fullscreen (Shift+F)">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v4M3 3h4M3 3l4 4M13 13v-4M13 13H9M13 13l-4-4"/></svg>
     <span class="tb-label">Full</span>
