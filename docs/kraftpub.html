@@ -22222,7 +22222,10 @@ document.addEventListener('mouseup', e => {
     const stroke = G.currentStroke;
     G.currentStroke = null;
     // Convert completed stroke into a draw item (selectable, groupable, deletable)
-    if (stroke.points.length >= 2 && stroke.mode !== 'eraser') {
+    // ONLY when continuous draw is OFF. When continuous draw is ON, all strokes
+    // stay on the draw layer as a single visual group — no per-stroke items —
+    // so the board doesn't fill up with one-tap items during sketching.
+    if (!drawTool.continuous && stroke.points.length >= 2 && stroke.mode !== 'eraser') {
       createDrawItem(stroke);
     }
     // R79: push an undo snapshot so undo walks back ONE stroke at a
@@ -22237,6 +22240,8 @@ document.addEventListener('mouseup', e => {
     // draw mode so the user can immediately start the next stroke
     // without having to click the draw button again. The cursor
     // stays as crosshair and the draw toolbar stays visible.
+    // Strokes stay on the draw layer (not converted to items) so the
+    // user can sketch freely without filling the board with one-tap items.
     if (drawTool.continuous) {
       // Keep draw mode active — don't switch back to select
       setTool('draw');
@@ -24779,7 +24784,7 @@ function hitTestStrokes(wx, wy) {
   const sy = wy * state.zoom + state.pan.y;
   // Check in reverse order (topmost first)
   for (let i = G.drawStrokes.length - 1; i >= 0; i--) {
-    const s = strokes[i];
+    const s = G.drawStrokes[i];
     if (s.mode === 'eraser') continue;
     if (s.mode === 'pen' && s.points.length >= 2) {
       for (let j = 1; j < s.points.length; j++) {
