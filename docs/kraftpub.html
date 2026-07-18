@@ -20303,10 +20303,9 @@ function _dispatchShortcut(e) {
       if (_videoSelected()) return false;
       state.spaceDown = true; viewport.style.cursor = 'grab'; return true;
     case 'nav-help':         if (typeof showHelp === 'function') showHelp(); return true;
-    case 'nav-esc':          clearSelection(); hideCtx(); if (typeof hideHelp === 'function') hideHelp(); captureResultPanel.classList.remove('show'); _exitRelationTool(); // v6.0: draw mode — Esc packs all strokes into one item then exits draw mode
-      if (state.tool === 'draw') { convertAllStrokesToItem(); setTool('select'); return true; }
+    case 'nav-esc':          clearSelection(); hideCtx(); if (typeof hideHelp === 'function') hideHelp(); captureResultPanel.classList.remove('show'); _exitRelationTool();
       if (state.tool !== 'select') setTool('select'); return true;
-    case 'draw-finish':      if (state.tool === 'draw') { convertAllStrokesToItem(); setTool('select'); return true; } return false;
+    case 'draw-finish':      if (state.tool === 'draw') { setTool('select'); return true; } return false;
     // Translate
     case 'translate-en-zh':  translateSelectedText('en', 'zh'); return true;
     // Media
@@ -22221,12 +22220,18 @@ document.addEventListener('mouseup', e => {
   if (G.currentStroke) {
     const stroke = G.currentStroke;
     G.currentStroke = null;
-    // v6.0: Draw is always continuous — strokes stay on the draw layer.
-    // No per-stroke items are created. Press Enter or Esc to pack all
-    // strokes into a single item and exit draw mode.
+    // Every stroke becomes a draw item (selectable, groupable, deletable).
+    // In continuous mode, the user can keep drawing without clicking the
+    // draw button — Esc just exits draw mode (no merging, no packing).
+    if (stroke.points.length >= 2 && stroke.mode !== 'eraser') {
+      createDrawItem(stroke);
+    }
     try { pushUndo(); } catch (e) {}
     scheduleAutoSave();
-    redrawDrawLayer();
+    // Continuous draw: stay in draw mode so the user can keep drawing.
+    if (drawTool.continuous) {
+      setTool('draw');
+    }
   }
 
   // DRAW STROKE MOVE END
