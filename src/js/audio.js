@@ -160,3 +160,6 @@ export function handleAudioUpload(event) {
   event.target.value = ''; // Reset for re-upload
 }
 
+window.addAudioItem = addAudioItem;
+window.handleAudioUpload = handleAudioUpload;
+

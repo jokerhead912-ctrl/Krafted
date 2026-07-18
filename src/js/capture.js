@@ -589,3 +589,10 @@ export async function captureScreen() {
   setCaptureMode(false);
 }
 
+window.captureArea = captureArea;
+window.captureScreen = captureScreen;
+window.setCaptureMode = setCaptureMode;
+window.discardCaptureResult = discardCaptureResult;
+window.saveCaptureResult = saveCaptureResult;
+window.pasteCaptureToBoard = pasteCaptureToBoard;
+

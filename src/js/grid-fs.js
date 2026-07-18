@@ -46,3 +46,6 @@ document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 // Marker so user can confirm new code is loaded (check DevTools console)
 console.log('%c[Krafted v5.5] Fullscreen feature loaded — press F to toggle',
   'color:#22c55e;font-weight:bold;font-size:13px;');
+
+window.toggleGrid = toggleGrid;
+window.toggleAppFullscreen = toggleAppFullscreen;

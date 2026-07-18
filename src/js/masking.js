@@ -875,3 +875,23 @@ export function resetMasks(item) {
   removeBrushCanvas();
   updateMaskList();
 }
+
+window.addMaskLayer = addMaskLayer;
+window.deleteMaskLayer = deleteMaskLayer;
+window.toggleMask = toggleMask;
+window.selectMask = selectMask;
+window.setMaskFilter = setMaskFilter;
+window.setMaskColor = setMaskColor;
+window.setMaskTolerance = setMaskTolerance;
+window.setMaskFeather = setMaskFeather;
+window.setMaskBrushSize = setMaskBrushSize;
+window.togglePickColor = togglePickColor;
+window.toggleBrushMode = toggleBrushMode;
+window.clearBrushMask = clearBrushMask;
+window.toggleMaskShow = toggleMaskShow;
+window.setMaskTint = setMaskTint;
+window.setMaskTintStrength = setMaskTintStrength;
+window.toggleColorWheel = toggleColorWheel;
+window.colorWheelPick = colorWheelPick;
+window.colorWheelDrag = colorWheelDrag;
+window.resetMasks = resetMasks;

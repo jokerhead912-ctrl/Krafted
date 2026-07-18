@@ -301,3 +301,15 @@ export function applyTextColorToSelected(hexColor) {
     }
   }, 0);
 })();
+
+window.toggleTextStyle = toggleTextStyle;
+window.setTextProp = setTextProp;
+window.setTextAlign = setTextAlign;
+window.showTextQuickBar = showTextQuickBar;
+window.updateTextQuickBarActive = updateTextQuickBarActive;
+window.applyTextColorToSelected = applyTextColorToSelected;
+window.applyTextStyleToSelected = applyTextStyleToSelected;
+window.applyInlineColor = applyInlineColor;
+window.applyInlineSize = applyInlineSize;
+window.getEditingText = getEditingText;
+window.initTextToolbar = initTextToolbar;

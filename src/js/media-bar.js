@@ -172,3 +172,7 @@ export function toggleMediaItem(itemId) {
   }
   updateMediaBar();
 }
+
+window.playAllMedia = playAllMedia;
+window.pauseAllMedia = pauseAllMedia;
+window.updateMediaBar = updateMediaBar;

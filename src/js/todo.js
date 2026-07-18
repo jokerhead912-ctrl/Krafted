@@ -177,3 +177,4 @@ export function renderTodoList(todo) {
   });
 }
 
+window.addTodo = addTodo;

@@ -412,3 +412,6 @@ function _buildVersionPanel(verPanel) {
       if (listEl) listEl.innerHTML = '<span style="color:#666;">Could not load version list (offline?)</span>';
     });
 }
+
+window.showHelp = showHelp;
+window.hideHelp = hideHelp;

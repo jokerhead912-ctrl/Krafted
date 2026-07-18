@@ -135,3 +135,10 @@ export function setCanvasBg(color) {
   scheduleAutoSave();
 }
 
+window.togglePaper = togglePaper;
+window.setPaperSize = setPaperSize;
+window.setPaperColor = setPaperColor;
+window.toggleAutoFit = toggleAutoFit;
+window.updatePaper = updatePaper;
+window.setCanvasBg = setCanvasBg;
+

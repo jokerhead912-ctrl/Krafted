@@ -376,3 +376,5 @@ export function exportGifTrim() {
     toast('GIF export failed: ' + err.message);
   }
 }
+
+window.openGifEditor = openGifEditor;

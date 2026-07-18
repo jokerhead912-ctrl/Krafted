@@ -589,3 +589,7 @@ export async function exportAllImagesToFolder() {
   // Expose for manual trigger
   window.emergencySave = emergencySave;
 })();
+
+window.newBoard = newBoard;
+window.showWelcome = showWelcome;
+window.hideWelcome = hideWelcome;

@@ -278,3 +278,7 @@ export function splitTextChunks(text, maxLen) {
   return chunks;
 }
 
+window.translateSelectedText = translateSelectedText;
+window.openGoogleTranslate = openGoogleTranslate;
+window.openInGoogleTranslate = openInGoogleTranslate;
+

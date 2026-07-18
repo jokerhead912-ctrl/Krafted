@@ -883,3 +883,4 @@ document.addEventListener('mouseup', (e) => {
   }
 });
 
+window.addMindMap = addMindMap;

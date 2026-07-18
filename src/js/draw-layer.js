@@ -167,3 +167,8 @@ export function clearDraw() {
   redrawDrawLayer();
 }
 
+window.setDrawMode = setDrawMode;
+window.clearDraw = clearDraw;
+window.undoDraw = undoDraw;
+window.redrawDrawLayer = redrawDrawLayer;
+

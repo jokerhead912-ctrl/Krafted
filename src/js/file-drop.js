@@ -667,3 +667,7 @@ window.kraftedEnableCorsProxy = function() {
     toast('CORS proxy enabled — try paste again');
   } catch (e) { console.warn(e); }
 };
+
+window._handleFileDrop = _handleFileDrop;
+window.fetchImageFromURL = fetchImageFromURL;
+window.tryCorsProxy = tryCorsProxy;

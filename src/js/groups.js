@@ -128,3 +128,7 @@ export function moveGroupMembers(movedItem, dx, dy) {
   updateGroupBorder(group);
 }
 
+window.groupSelected = groupSelected;
+window.ungroupSelected = ungroupSelected;
+window.updateAllGroupBorders = updateAllGroupBorders;
+

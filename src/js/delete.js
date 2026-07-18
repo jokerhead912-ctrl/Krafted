@@ -185,3 +185,5 @@ export function deleteSelected() {
   updateAutoFitPaper();
 }
 
+window.deleteSelected = deleteSelected;
+

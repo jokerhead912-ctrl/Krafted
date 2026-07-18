@@ -268,3 +268,10 @@ export function initVideoLazyLoad() {
     }
   }, { passive: true });
 }
+
+window.selectOnly = selectOnly;
+window.clearSelection = clearSelection;
+window.toggleSelect = toggleSelect;
+window.refreshSelection = refreshSelection;
+window.getSelectedItems = getSelectedItems;
+window.getSelectedImages = getSelectedImages;

@@ -1431,3 +1431,15 @@ export function loadAutoSave() {
     if (data) { restoreBoard(JSON.parse(data)); toast('Auto-saved board restored'); }
   } catch(e) {}
 }
+
+window.saveBoard = saveBoard;
+window.loadBoardFile = loadBoardFile;
+window.showSaveLockPrompt = showSaveLockPrompt;
+window.closeSaveLockPrompt = closeSaveLockPrompt;
+window.showUnlockModal = showUnlockModal;
+window.closeUnlockModal = closeUnlockModal;
+window.tryUnlockFile = tryUnlockFile;
+window.serializeBoard = serializeBoard;
+window.scheduleAutoSave = scheduleAutoSave;
+window.loadAutoSave = loadAutoSave;
+window.restoreBoard = restoreBoard;

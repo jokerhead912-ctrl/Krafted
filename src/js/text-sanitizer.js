@@ -151,3 +151,7 @@ export function updateAltPanBadge() {
   const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
   badge.textContent = isMac ? '⌥ + drag = pan canvas' : 'Alt + drag = pan canvas';
 }
+
+window.toggleAltPan = toggleAltPan;
+window.sanitizeTextHtml = sanitizeTextHtml;
+window.updateAltPanBadge = updateAltPanBadge;

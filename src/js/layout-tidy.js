@@ -281,3 +281,6 @@ export function frameTidiedSelection(selItems) {
   state.pan.y = sh / 2 - bboxCy * state.zoom;
   try { updateCanvas(); } catch (e) {}
 }
+
+window.tidySelection = tidySelection;
+window.tidyAll = tidyAll;

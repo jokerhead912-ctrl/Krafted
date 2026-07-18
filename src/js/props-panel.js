@@ -305,3 +305,13 @@ export function updateCgiOverlays(item) {
     grain.remove();
   }
 }
+
+window.flipH = flipH;
+window.flipV = flipV;
+window.toggleLock = toggleLock;
+window.setOpacity = setOpacity;
+window.setRotation = setRotation;
+window.setPhotoFilter = setPhotoFilter;
+window.resetPhotoFilters = resetPhotoFilters;
+window.setCgiFilter = setCgiFilter;
+window.updatePropsPanel = updatePropsPanel;

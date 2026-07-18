@@ -723,3 +723,6 @@ export function autoTidy() {
   scheduleAutoSave();
 }
 
+window.alignItems = alignItems;
+window.layerOrder = layerOrder;
+

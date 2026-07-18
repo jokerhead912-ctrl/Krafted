@@ -78,3 +78,5 @@ export function setTool(tool) {
     toolBadge.classList.remove('show');
   }
 }
+
+window.setTool = setTool;

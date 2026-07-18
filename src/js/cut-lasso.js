@@ -362,3 +362,6 @@ export function applyLassoExtract() {
   }
 }
 
+window.enterCutMode = enterCutMode;
+window.enterLassoMode = enterLassoMode;
+

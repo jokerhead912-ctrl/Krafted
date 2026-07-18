@@ -332,3 +332,5 @@ export function closeExport() {
   document.getElementById('export-modal').classList.remove('active');
 }
 
+window.startExportDrag = startExportDrag;
+

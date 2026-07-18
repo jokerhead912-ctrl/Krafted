@@ -410,3 +410,8 @@ export function applyCrop() {
   img.src = sourceSrc;
 }
 
+window.enterReframe = enterReframe;
+window.exitReframe = exitReframe;
+window.enterCrop = enterCrop;
+window.exitCrop = exitCrop;
+

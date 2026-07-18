@@ -261,3 +261,8 @@ export function frameSelection() {
     toast('Framed ' + tag + ' · ' + Math.round(state.zoom * 100) + '%  —  F');
   } catch (e) {}
 }
+
+window.updateCanvas = updateCanvas;
+window.frameSelection = frameSelection;
+window.zoomBy = zoomBy;
+window.zoomTo = zoomTo;

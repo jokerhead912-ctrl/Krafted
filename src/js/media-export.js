@@ -46,3 +46,5 @@ export function exportMediaSelected() {
   toast('Downloading ' + sel.length + ' file(s)');
 }
 
+window.exportMediaSelected = exportMediaSelected;
+

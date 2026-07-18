@@ -136,3 +136,8 @@ export function showCtx(x, y) {
   ctxMenu.style.display = 'block';
 }
 export function hideCtx() { if (ctxMenu) ctxMenu.style.display = 'none'; }
+
+window.showCtx = showCtx;
+window.hideCtx = hideCtx;
+window.toast = toast;
+window.triggerPaste = triggerPaste;

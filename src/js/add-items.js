@@ -789,3 +789,12 @@ export function applyTextProps(tx) {
   if (tx.shadow) shadow = '2px 2px 4px rgba(0,0,0,0.7)';
   el.style.textShadow = tx.outline ? `-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000${tx.shadow ? ', 2px 2px 4px rgba(0,0,0,0.7)' : ''}` : (tx.shadow ? shadow : 'none');
 }
+
+window.addImage = addImage;
+window.addText = addText;
+window.addLinkCard = addLinkCard;
+window.openLinkModal = openLinkModal;
+window.closeLinkModal = closeLinkModal;
+window.updateItemStyle = updateItemStyle;
+window.autoGrowTextItem = autoGrowTextItem;
+window.applyTextProps = applyTextProps;

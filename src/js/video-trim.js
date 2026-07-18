@@ -341,3 +341,12 @@ export function resetVideoTrim() {
   updateVideoControls(item);
   scheduleAutoSave();
 }
+
+window.setupVideoTrim = setupVideoTrim;
+window.setVideoTimeMode = setVideoTimeMode;
+window.setVideoTrimStart = setVideoTrimStart;
+window.setVideoTrimEnd = setVideoTrimEnd;
+window.setVideoPlaybackRate = setVideoPlaybackRate;
+window.seekVideo = seekVideo;
+window.resetVideoTrim = resetVideoTrim;
+window.getCurrentFps = getCurrentFps;

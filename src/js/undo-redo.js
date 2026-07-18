@@ -408,3 +408,7 @@ export function redo() {
   restoreSnapshot(state.redoStack.pop());
   updateStatus();
 }
+
+window.undo = undo;
+window.redo = redo;
+window.pushUndo = pushUndo;

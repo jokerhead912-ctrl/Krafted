@@ -233,3 +233,7 @@ export function duplicateSelected() {
   pasteClipboard();
 }
 
+window.copySelected = copySelected;
+window.pasteClipboard = pasteClipboard;
+window.duplicateSelected = duplicateSelected;
+

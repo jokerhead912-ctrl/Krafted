@@ -33,3 +33,7 @@ export function setVideoVolume(val) {
   sel[0].video.volume = val / 100;
   document.getElementById('prop-video-vol-val').textContent = val + '%';
 }
+
+window.restartVideo = restartVideo;
+window.toggleVideoPlay = toggleVideoPlay;
+window.setVideoVolume = setVideoVolume;
