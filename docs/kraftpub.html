@@ -9505,7 +9505,7 @@ var __kraft = (() => {
         if (typeof cursorRing !== "undefined" && cursorRing) {
           cursorRing.style.display = "none";
         }
-      }, _refreshDrawBtnBadge2 = function() {
+      }, _refreshDrawBtnBadge = function() {
         const s = el._annoDrawState;
         drawBtn.classList.toggle("has-strokes", s.strokes.length > 0);
       }, _getVideoContentRect = function() {
@@ -9646,7 +9646,7 @@ var __kraft = (() => {
         if (frame === s.lastFrame) return;
         _syncStrokesForFrame();
         _renderAnnoCanvas();
-        _refreshDrawBtnBadge2();
+        el._refreshDrawBtnBadge();
         try {
           _updateFrameIndicator();
         } catch (e) {
@@ -9891,7 +9891,7 @@ var __kraft = (() => {
           s.strokes = s.strokesByFrame[targetFrame];
           s.lastFrame = targetFrame;
           _renderAnnoCanvas();
-          _refreshDrawBtnBadge2();
+          el._refreshDrawBtnBadge();
           if (el._refreshAllSeekMarkers) {
             try {
               el._refreshAllSeekMarkers();
@@ -9976,7 +9976,7 @@ var __kraft = (() => {
         }
         _activePointerId = null;
         _renderAnnoCanvas();
-        _refreshDrawBtnBadge2();
+        el._refreshDrawBtnBadge();
         if (el._refreshDrawSeekMarkers) {
           try {
             el._refreshAllSeekMarkers();
@@ -10004,7 +10004,7 @@ var __kraft = (() => {
       __name(_makeToolbarSep, "_makeToolbarSep");
       __name(_applyDrawMode2, "_applyDrawMode");
       __name(_exitDrawMode, "_exitDrawMode");
-      __name(_refreshDrawBtnBadge2, "_refreshDrawBtnBadge");
+      __name(_refreshDrawBtnBadge, "_refreshDrawBtnBadge");
       __name(_getVideoContentRect, "_getVideoContentRect");
       __name(_renderAnnoCanvas, "_renderAnnoCanvas");
       __name(_drawAnnoStroke, "_drawAnnoStroke");
@@ -10295,7 +10295,7 @@ var __kraft = (() => {
         const s = el._annoDrawState;
         s.strokes.pop();
         _renderAnnoCanvas();
-        _refreshDrawBtnBadge2();
+        el._refreshDrawBtnBadge();
         if (el._refreshDrawSeekMarkers) {
           try {
             el._refreshAllSeekMarkers();
@@ -10327,7 +10327,7 @@ var __kraft = (() => {
         if (s.strokesByFrame[frame]) s.strokesByFrame[frame].length = 0;
         if (s.strokes) s.strokes.length = 0;
         _renderAnnoCanvas();
-        _refreshDrawBtnBadge2();
+        el._refreshDrawBtnBadge();
         if (el._refreshAllSeekMarkers) {
           try {
             el._refreshAllSeekMarkers();
@@ -10449,7 +10449,7 @@ var __kraft = (() => {
       el._drawAnnoStroke = _drawAnnoStroke;
       el._applyDrawMode = _applyDrawMode2;
       el._exitDrawMode = _exitDrawMode;
-      el._refreshDrawBtnBadge = _refreshDrawBtnBadge2;
+      el._refreshDrawBtnBadge = _refreshDrawBtnBadge;
       el._currentFrame = _currentFrame;
       el._syncStrokesForFrame = _syncStrokesForFrame;
       el._onFrameChange = _onFrameChange;
@@ -10628,7 +10628,7 @@ var __kraft = (() => {
         s.mode = s.mode === "off" ? "pen" : "off";
         _applyDrawMode();
       });
-      _refreshDrawBtnBadge();
+      el._refreshDrawBtnBadge();
     }
     ctrlsRow.appendChild(leftGroup);
     ctrlsRow.appendChild(_makeSep());
@@ -11073,7 +11073,7 @@ var __kraft = (() => {
         }
         if (drawBtn) {
           try {
-            _refreshDrawBtnBadge();
+            el._refreshDrawBtnBadge();
           } catch (e) {
           }
         }

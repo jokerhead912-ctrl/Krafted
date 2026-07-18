@@ -573,7 +573,7 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
       const s = el._annoDrawState;
       s.strokes.pop();
       _renderAnnoCanvas();
-      _refreshDrawBtnBadge();
+      el._refreshDrawBtnBadge();
       // Round 10: refresh drawing markers (may need to remove the
       // marker if the user just removed the last stroke on this frame)
       if (el._refreshDrawSeekMarkers) {
@@ -630,7 +630,7 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
       if (s.strokesByFrame[frame]) s.strokesByFrame[frame].length = 0;
       if (s.strokes) s.strokes.length = 0;
       _renderAnnoCanvas();
-      _refreshDrawBtnBadge();
+      el._refreshDrawBtnBadge();
       if (el._refreshAllSeekMarkers) {
         try { el._refreshAllSeekMarkers(); } catch (e) {}
       }
@@ -1200,7 +1200,7 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
       if (frame === s.lastFrame) return;
       _syncStrokesForFrame();
       _renderAnnoCanvas();
-      _refreshDrawBtnBadge();
+      el._refreshDrawBtnBadge();
       // Update the frame indicator in the toolbar (if visible)
       try { _updateFrameIndicator(); } catch (e) {}
     }
@@ -1584,7 +1584,7 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
         s.strokes = s.strokesByFrame[targetFrame];
         s.lastFrame = targetFrame;
         _renderAnnoCanvas();
-        _refreshDrawBtnBadge();
+        el._refreshDrawBtnBadge();
         if (el._refreshAllSeekMarkers) {
           try { el._refreshAllSeekMarkers(); } catch (e) {}
         }
@@ -1702,7 +1702,7 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
       try { annoCanvas.releasePointerCapture(_activePointerId); } catch (e) {}
       _activePointerId = null;
       _renderAnnoCanvas();
-      _refreshDrawBtnBadge();
+      el._refreshDrawBtnBadge();
       // Round 10: refresh drawing markers on the seek bar so the new
       // stroke shows up as a cyan diamond at the spawn frame.
       if (el._refreshDrawSeekMarkers) {
@@ -1863,7 +1863,7 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
       _applyDrawMode();
     });
     // Initial badge state (must run after the button element exists).
-    _refreshDrawBtnBadge();
+    el._refreshDrawBtnBadge();
   }
   // Commit the left group + a separator
   ctrlsRow.appendChild(leftGroup);
@@ -2330,7 +2330,7 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // When exiting clean mode, re-show controls and re-sync
     if (!isClean) {
       try { updateSeekUI(); } catch (e) {}
-      if (drawBtn) { try { _refreshDrawBtnBadge(); } catch (e) {} }
+      if (drawBtn) { try { el._refreshDrawBtnBadge(); } catch (e) {} }
     }
   }
   // Also expose on el so keyboard handler can reach it
