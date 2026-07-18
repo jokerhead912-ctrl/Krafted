@@ -66,7 +66,7 @@ initTextToolbar();
 updateCanvas();
 initVideoLazyLoad();
 // ALWAYS show welcome page on load — user must click GET STARTED every time
-showWelcome();
+window.showWelcome();
 // Auto-save restore: if data exists, restore in background but keep welcome page visible
 window.addEventListener('load', async () => {
   // Restore autosave in background
@@ -122,7 +122,7 @@ export function newBoard() {
   refreshSelection();
   _frozenGifs.clear();
   updateMediaBar();
-  showWelcome();
+  window.showWelcome();
   toast('Board cleared!');
 }
 
@@ -457,7 +457,7 @@ export async function exportAllImagesToFolder() {
       }
       if (typeof restoreBoard === 'function' && typeof hideWelcome === 'function') {
         restoreBoard(data);
-        hideWelcome();
+        window.hideWelcome();
         // R91: yield after synchronous restore so video elements can start
         // their metadata loading without blocking the main thread.
         await new Promise(function(r) { setTimeout(r, 50); });
@@ -617,7 +617,7 @@ export async function exportAllImagesToFolder() {
           var data = JSON.parse(saved);
           if (data && data.items && data.items.length && typeof restoreBoard === 'function') {
             restoreBoard(data);
-            try { hideWelcome(); } catch(e) {}
+            try { window.hideWelcome(); } catch(e) {}
             if (typeof toast === 'function') {
               toast('🔄 Restored from emergency save (images may need re-adding)');
             }

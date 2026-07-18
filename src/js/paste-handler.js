@@ -42,7 +42,7 @@ document.addEventListener('paste', e => {
   // so our paste handler can take over
   if (ae && ae.contentEditable === 'true' && !ae.classList.contains('text-item')) return;
 
-  hideWelcome();
+  window.hideWelcome();
   const items = e.clipboardData.items;
   const files = e.clipboardData.files;
 

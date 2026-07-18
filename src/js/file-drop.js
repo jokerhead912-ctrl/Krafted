@@ -56,7 +56,7 @@ if (_welcomeEl) {
     e.preventDefault();
     e.stopPropagation(); // v5.5.3: prevent bubbling to document-level handlers
     console.log('[FileDrop] Welcome received drop, files:', e.dataTransfer.files.length);
-    hideWelcome();
+    window.hideWelcome();
     const files = e.dataTransfer.files;
     if (files && files.length) _handleFileDrop(e, [...files]);
   });
@@ -78,7 +78,7 @@ window.addEventListener('dragover', function(e){
         // Hide welcome immediately so user sees visual feedback
         const w = document.getElementById('welcome');
         if (w && w._welcomeHiddenByDrag !== true && w.style.display !== 'none') {
-          try { hideWelcome(); } catch (err) {}
+          try { window.hideWelcome(); } catch (err) {}
         }
         return;
       }
@@ -93,7 +93,7 @@ window.addEventListener('drop', function(e){
   e.stopPropagation();
   const files = e.dataTransfer && e.dataTransfer.files;
   if (files && files.length) {
-    try { hideWelcome(); } catch (err) {}
+    try { window.hideWelcome(); } catch (err) {}
     try { _handleFileDrop(e, [...files]); } catch (err) { console.warn('[FileDrop] window handler error:', err); }
     return;
   }
@@ -116,7 +116,7 @@ window.addEventListener('drop', function(e){
     }
   }
   if (!url) return;
-  try { hideWelcome(); } catch (err) {}
+  try { window.hideWelcome(); } catch (err) {}
   // Fetch real image bytes via CORS proxy → convert to data URL →
   // addImage directly. Data URL is same-origin, zero CORS forever.
   // This is functionally identical to "Copy Image → Paste" but done
@@ -506,7 +506,7 @@ export function _handleFileDrop(e, files) {
 
 viewport.addEventListener('drop', e => {
   e.preventDefault();
-  hideWelcome();
+  window.hideWelcome();
   // v5.5.1: detect folder drops via DataTransferItem.webkitGetAsEntry()
   var items = e.dataTransfer.items;
   if (items && items.length > 0 && items[0].webkitGetAsEntry) {
@@ -536,7 +536,7 @@ viewport.addEventListener('drop', e => {
 // a canvas to convert to data URL for persistence).
 export function fetchImageFromURL(url, x, y) {
   console.log('[fetchImageFromURL] start:', url);
-  try { hideWelcome(); } catch (err) {}
+  try { window.hideWelcome(); } catch (err) {}
   toast('Fetching image…');
   // 1) Try direct fetch (works if server has CORS headers or same-origin)
   fetch(url, { mode: 'cors' })

@@ -4655,7 +4655,7 @@ var __kraft = (() => {
   var captureBox = document.getElementById("capture-box");
   var captureOverlay = document.getElementById("capture-overlay");
   var captureHint = document.getElementById("capture-hint");
-  var coPanels2 = {
+  var coPanels = {
     top: document.getElementById("co-top"),
     bottom: document.getElementById("co-bottom"),
     left: document.getElementById("co-left"),
@@ -5355,7 +5355,7 @@ var __kraft = (() => {
   var mmConnectState = null;
   function addMindMap(x, y) {
     pushUndo();
-    hideWelcome();
+    window.hideWelcome();
     const el = document.createElement("div");
     el.className = "mindmap-item";
     canvasContent.appendChild(el);
@@ -6670,7 +6670,7 @@ var __kraft = (() => {
   var cutExtractBtn = document.getElementById("cut-extract-btn");
   var cutRedrawBtn = document.getElementById("cut-redraw-btn");
   var cutHint = document.getElementById("cut-hint");
-  function enterCutMode2(item2) {
+  function enterCutMode(item2) {
     cancelCut();
     cutState2 = { itemId: item2.id, points: [], isDragging: false, closed: false };
     cutOverlay.classList.add("active");
@@ -6678,10 +6678,10 @@ var __kraft = (() => {
     cutExtractBtn.style.display = "none";
     cutRedrawBtn.style.display = "none";
     cutHint.textContent = "Draw on image to cut";
-    updateCutTargetHighlight2();
+    updateCutTargetHighlight();
   }
-  __name(enterCutMode2, "enterCutMode");
-  function updateCutTargetHighlight2() {
+  __name(enterCutMode, "enterCutMode");
+  function updateCutTargetHighlight() {
     if (!cutState2) {
       cutTargetHighlight.classList.remove("active");
       return;
@@ -6698,12 +6698,12 @@ var __kraft = (() => {
     cutTargetHighlight.style.width = r.width + 4 + "px";
     cutTargetHighlight.style.height = r.height + 4 + "px";
   }
-  __name(updateCutTargetHighlight2, "updateCutTargetHighlight");
-  function getCutItem2() {
+  __name(updateCutTargetHighlight, "updateCutTargetHighlight");
+  function getCutItem() {
     if (!cutState2) return null;
     return state.items.find((i) => i.id === cutState2.itemId);
   }
-  __name(getCutItem2, "getCutItem");
+  __name(getCutItem, "getCutItem");
   function cancelCut() {
     cutState2 = null;
     cutOverlay.classList.remove("active");
@@ -6729,8 +6729,56 @@ var __kraft = (() => {
     cutHint.textContent = "Draw on image to cut";
   }
   __name(clearCutPath, "clearCutPath");
+  function startCutDraw(clientX, clientY) {
+    if (!cutState2) return;
+    cutState2.points = [{ x: clientX, y: clientY }];
+    cutState2.isDragging = true;
+    cutState2.closed = false;
+    cutPathEl.setAttribute("d", "M " + clientX + " " + clientY);
+    cutPathEl.classList.remove("closed");
+    cutFillPathEl.setAttribute("d", "");
+    cutPreviewMask.classList.remove("active");
+    cutExtractBtn.style.display = "none";
+    cutRedrawBtn.style.display = "none";
+  }
+  __name(startCutDraw, "startCutDraw");
+  function updateCutDraw(clientX, clientY) {
+    if (!cutState2 || !cutState2.isDragging) return;
+    const pts = cutState2.points;
+    const last = pts[pts.length - 1];
+    const dx = clientX - last.x, dy = clientY - last.y;
+    if (dx * dx + dy * dy < 4) return;
+    pts.push({ x: clientX, y: clientY });
+    let d = "M " + pts[0].x + " " + pts[0].y;
+    for (let i = 1; i < pts.length; i++) {
+      d += " L " + pts[i].x + " " + pts[i].y;
+    }
+    cutPathEl.setAttribute("d", d);
+  }
+  __name(updateCutDraw, "updateCutDraw");
+  function endCutDraw() {
+    if (!cutState2 || !cutState2.isDragging) return;
+    cutState2.isDragging = false;
+    if (cutState2.points.length < 3) {
+      clearCutPath();
+      return;
+    }
+    cutState2.closed = true;
+    let d = "M " + cutState2.points[0].x + " " + cutState2.points[0].y;
+    for (let i = 1; i < cutState2.points.length; i++) {
+      d += " L " + cutState2.points[i].x + " " + cutState2.points[i].y;
+    }
+    d += " Z";
+    cutPathEl.setAttribute("d", d);
+    cutPathEl.classList.add("closed");
+    cutFillPathEl.setAttribute("d", d);
+    cutExtractBtn.style.display = "";
+    cutRedrawBtn.style.display = "";
+    cutHint.textContent = "Extract or redraw";
+  }
+  __name(endCutDraw, "endCutDraw");
   function applyCutExtract() {
-    const item2 = getCutItem2();
+    const item2 = getCutItem();
     if (!item2 || !cutState2 || !cutState2.closed || cutState2.points.length < 3) return;
     const imgEl = item2.el.querySelector("img");
     if (!imgEl || !imgEl.complete) {
@@ -6780,7 +6828,7 @@ var __kraft = (() => {
   var lassoCloseBtn = document.getElementById("lasso-close-btn");
   var lassoUndoBtn = document.getElementById("lasso-undo-btn");
   var lassoPointEls = [];
-  function enterLassoMode2(item2) {
+  function enterLassoMode(item2) {
     cancelLasso();
     lassoState2 = { itemId: item2.id, points: [], closed: false };
     lassoOverlay.classList.add("active");
@@ -6791,7 +6839,7 @@ var __kraft = (() => {
     lassoHint.textContent = "Click points on image to define cut area";
     updateLassoTargetHighlight();
   }
-  __name(enterLassoMode2, "enterLassoMode");
+  __name(enterLassoMode, "enterLassoMode");
   function updateLassoTargetHighlight() {
     if (!lassoState2) {
       lassoTargetHighlight.classList.remove("active");
@@ -6810,11 +6858,11 @@ var __kraft = (() => {
     lassoTargetHighlight.style.height = r.height + 4 + "px";
   }
   __name(updateLassoTargetHighlight, "updateLassoTargetHighlight");
-  function getLassoItem2() {
+  function getLassoItem() {
     if (!lassoState2) return null;
     return state.items.find((i) => i.id === lassoState2.itemId);
   }
-  __name(getLassoItem2, "getLassoItem");
+  __name(getLassoItem, "getLassoItem");
   function cancelLasso() {
     lassoState2 = null;
     lassoOverlay.classList.remove("active");
@@ -6833,6 +6881,26 @@ var __kraft = (() => {
     lassoPointEls = [];
   }
   __name(clearLassoPoints, "clearLassoPoints");
+  function addLassoPoint(clientX, clientY) {
+    if (!lassoState2 || lassoState2.closed) return;
+    if (lassoState2.points.length >= 3) {
+      const first = lassoState2.points[0];
+      const dx = clientX - first.x, dy = clientY - first.y;
+      if (dx * dx + dy * dy < 196) {
+        closeLasso();
+        return;
+      }
+    }
+    lassoState2.points.push({ x: clientX, y: clientY });
+    renderLassoPath();
+    renderLassoPoints();
+    lassoUndoBtn.style.display = "";
+    if (lassoState2.points.length >= 3) {
+      lassoCloseBtn.style.display = "";
+    }
+    lassoHint.textContent = lassoState2.points.length + " points \u2014 click to add, click first point to close";
+  }
+  __name(addLassoPoint, "addLassoPoint");
   function undoLassoPoint() {
     if (!lassoState2 || lassoState2.closed || lassoState2.points.length === 0) return;
     lassoState2.points.pop();
@@ -6893,7 +6961,7 @@ var __kraft = (() => {
   }
   __name(renderLassoPoints, "renderLassoPoints");
   function applyLassoExtract() {
-    const item2 = getLassoItem2();
+    const item2 = getLassoItem();
     if (!item2 || !lassoState2 || !lassoState2.closed || lassoState2.points.length < 3) return;
     const imgEl = item2.el.querySelector("img");
     if (!imgEl || !imgEl.complete) {
@@ -6946,8 +7014,8 @@ var __kraft = (() => {
     }
   }
   __name(applyLassoExtract, "applyLassoExtract");
-  window.enterCutMode = enterCutMode2;
-  window.enterLassoMode = enterLassoMode2;
+  window.enterCutMode = enterCutMode;
+  window.enterLassoMode = enterLassoMode;
   window.cutState = cutState2;
   window.lassoState = lassoState2;
 
@@ -8050,6 +8118,370 @@ var __kraft = (() => {
     }
   }
   __name(videoAnnoCaptureSnapshot, "videoAnnoCaptureSnapshot");
+  function _renderStrokesToCtx(ctx, strokes2, cw, ch) {
+    if (!ctx || !strokes2 || strokes2.length === 0) return;
+    strokes2.forEach((stk) => {
+      if (!stk || !stk.points || stk.points.length === 0) return;
+      ctx.strokeStyle = stk.color || "#ff4444";
+      ctx.fillStyle = stk.color || "#ff4444";
+      const sw = Math.max(1, stk.size || 4);
+      ctx.lineWidth = sw;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      const pts = stk.points.map((p) => [p[0] * cw, p[1] * ch]);
+      if (stk.type === "pen") {
+        if (pts.length < 2) return;
+        ctx.beginPath();
+        pts.forEach((p, i) => i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]));
+        ctx.stroke();
+      } else if (stk.type === "arrow") {
+        if (pts.length < 2) return;
+        const [x0, y0] = pts[0];
+        const [x1, y1] = pts[pts.length - 1];
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        const angle = Math.atan2(y1 - y0, x1 - x0);
+        const headLen = Math.max(10, sw * 3.2);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 - headLen * Math.cos(angle - Math.PI / 6), y1 - headLen * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(x1 - headLen * Math.cos(angle + Math.PI / 6), y1 - headLen * Math.sin(angle + Math.PI / 6));
+        ctx.closePath();
+        ctx.fill();
+      } else if (stk.type === "box") {
+        if (pts.length < 2) return;
+        const [x0, y0] = pts[0];
+        const [x1, y1] = pts[pts.length - 1];
+        ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
+      } else if (stk.type === "circle") {
+        if (pts.length < 2) return;
+        const [x0, y0] = pts[0];
+        const [x1, y1] = pts[pts.length - 1];
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        const rx = Math.max(0.5, Math.abs(x1 - x0) / 2);
+        const ry = Math.max(0.5, Math.abs(y1 - y0) / 2);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (stk.type === "text") {
+        const [tx, ty] = pts[0];
+        const txt = (stk.text || "").trim();
+        if (!txt) return;
+        const fontSize = Math.max(14, (stk.size || 4) * 5);
+        ctx.font = "600 " + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
+        ctx.textBaseline = "top";
+        const metrics = ctx.measureText(txt);
+        const padX = 6, padY = 4;
+        const bgW = metrics.width + padX * 2;
+        const bgH = fontSize * 1.15 + padY * 2;
+        ctx.save();
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        const radius = 5;
+        ctx.beginPath();
+        ctx.moveTo(tx + radius, ty);
+        ctx.lineTo(tx + bgW - radius, ty);
+        ctx.quadraticCurveTo(tx + bgW, ty, tx + bgW, ty + radius);
+        ctx.lineTo(tx + bgW, ty + bgH - radius);
+        ctx.quadraticCurveTo(tx + bgW, ty + bgH, tx + bgW - radius, ty + bgH);
+        ctx.lineTo(tx + radius, ty + bgH);
+        ctx.quadraticCurveTo(tx, ty + bgH, tx, ty + bgH - radius);
+        ctx.lineTo(tx, ty + radius);
+        ctx.quadraticCurveTo(tx, ty, tx + radius, ty);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.fillStyle = stk.color || "#fff";
+        ctx.fillText(txt, tx + padX, ty + padY);
+      }
+    });
+  }
+  __name(_renderStrokesToCtx, "_renderStrokesToCtx");
+  async function videoAnnoExportVideo() {
+    const item2 = videoAnnoGetSelected();
+    if (!item2) {
+      toast("Select a video first");
+      return;
+    }
+    if (!item2.video) {
+      toast("Video not ready yet");
+      return;
+    }
+    if (typeof MediaRecorder === "undefined") {
+      toast("Video export not supported in this browser");
+      return;
+    }
+    const anno = videoAnnoEnsure(item2);
+    const drawState = item2.el && item2.el._annoDrawState;
+    const strokesByFrame = drawState && drawState.strokesByFrame || {};
+    const hasAnyStrokes = Object.keys(strokesByFrame).some((k) => (strokesByFrame[k] || []).length > 0);
+    if (!hasAnyStrokes) {
+      toast("No drawings to export \u2014 draw on at least one frame first");
+      return;
+    }
+    const v = item2.video;
+    const fps = typeof getCurrentFps === "function" ? getCurrentFps() : v._kraftedFps || 30;
+    const rawFileName = (item2.filename || item2.name || "video").toString();
+    const safeFileName = rawFileName.replace(/[\\/:*?"<>|]+/g, "_").trim() || "video";
+    const dotIdx = safeFileName.lastIndexOf(".");
+    const baseName = dotIdx > 0 ? safeFileName.slice(0, dotIdx) : safeFileName;
+    const dur = isFinite(v.duration) ? v.duration : 0;
+    if (!dur || dur <= 0) {
+      toast("Video duration unknown \u2014 wait for it to load");
+      return;
+    }
+    const MAX_DIM = 2560;
+    const aspect = (v.videoWidth || 1280) / (v.videoHeight || 720);
+    let outW = Math.min(MAX_DIM, v.videoWidth || 1280);
+    let outH = Math.round(outW / aspect);
+    if (outH > MAX_DIM) {
+      outH = MAX_DIM;
+      outW = Math.round(outH * aspect);
+    }
+    const canvas3 = document.createElement("canvas");
+    canvas3.width = outW;
+    canvas3.height = outH;
+    const ctx = canvas3.getContext("2d");
+    const mimeCandidates = [
+      "video/mp4;codecs=avc1.42E01E",
+      "video/mp4;codecs=avc1",
+      "video/mp4;codecs=h264",
+      "video/mp4"
+    ];
+    const mime = mimeCandidates.find((m) => {
+      try {
+        return MediaRecorder.isTypeSupported(m);
+      } catch (e) {
+        return false;
+      }
+    }) || "";
+    if (!mime) {
+      toast("Your browser does not support MP4 video export \u2014 try the latest Chrome");
+      return;
+    }
+    const fileExt = "mp4";
+    let recorder;
+    try {
+      const stream = canvas3.captureStream(30);
+      recorder = new MediaRecorder(stream, { mimeType: mime });
+    } catch (e) {
+      toast("Could not start video export: " + e.message);
+      return;
+    }
+    const chunks = [];
+    recorder.ondataavailable = (ev) => {
+      if (ev.data && ev.data.size) chunks.push(ev.data);
+    };
+    const finished = new Promise((resolve) => {
+      recorder.onstop = () => resolve();
+    });
+    const saveFilename = baseName + "-with-drawings." + fileExt;
+    let saveHandle = null;
+    if (typeof window.showSaveFilePicker === "function") {
+      try {
+        saveHandle = await window.showSaveFilePicker({
+          suggestedName: saveFilename,
+          types: [{
+            description: "MP4 video with annotations baked in",
+            accept: { "video/mp4": [".mp4"] }
+          }]
+        });
+      } catch (e) {
+        if (e && (e.name === "AbortError" || e.code === 20 || e.code === "ABORT_ERR")) {
+          return;
+        }
+        console.warn("showSaveFilePicker failed, will fall back to download:", e);
+        saveHandle = null;
+      }
+    }
+    const prevTime = v.currentTime;
+    const wasPaused = v.paused;
+    const prevMuted = v.muted;
+    let cancelled = false;
+    const exportBtn = document.querySelector(".video-anno-popover .export-comments-btn, .video-anno-popover .popover-btn-export");
+    let cancelBtn = null;
+    if (exportBtn) {
+      cancelBtn = document.createElement("button");
+      cancelBtn.className = exportBtn.className;
+      cancelBtn.textContent = "\u23F9 Stop export";
+      cancelBtn.style.background = "#ff5252";
+      cancelBtn.style.color = "#fff";
+      exportBtn.parentNode.replaceChild(cancelBtn, exportBtn);
+      cancelBtn.addEventListener("click", () => {
+        cancelled = true;
+      });
+    }
+    const restoreUi = /* @__PURE__ */ __name(() => {
+      if (cancelBtn && exportBtn && cancelBtn.parentNode) {
+        try {
+          cancelBtn.parentNode.replaceChild(exportBtn, cancelBtn);
+        } catch (e) {
+        }
+      }
+    }, "restoreUi");
+    const prog = document.createElement("div");
+    prog.className = "video-export-progress";
+    prog.innerHTML = '<div class="pct">Preparing export\u2026</div>';
+    document.body.appendChild(prog);
+    const updateProg = /* @__PURE__ */ __name((pct) => {
+      prog.innerHTML = '<div class="pct">Exporting video\u2026 ' + Math.round(pct) + '%</div><div class="bar"><div class="fill" style="width:' + pct + '%"></div></div>';
+    }, "updateProg");
+    try {
+      v.pause();
+    } catch (e) {
+    }
+    try {
+      v.muted = true;
+    } catch (e) {
+    }
+    const seekTo = /* @__PURE__ */ __name((t) => new Promise((resolve) => {
+      const onSeeked = /* @__PURE__ */ __name(() => {
+        v.removeEventListener("seeked", onSeeked);
+        resolve();
+      }, "onSeeked");
+      v.addEventListener("seeked", onSeeked);
+      try {
+        v.currentTime = t;
+      } catch (e) {
+        v.removeEventListener("seeked", onSeeked);
+        resolve();
+      }
+    }), "seekTo");
+    const renderFrame = /* @__PURE__ */ __name(() => {
+      try {
+        ctx.drawImage(v, 0, 0, outW, outH);
+      } catch (e) {
+      }
+      const cf = Math.max(0, Math.floor((v.currentTime || 0) * fps));
+      const frameStrokes = strokesByFrame[cf] || [];
+      if (typeof _renderStrokesToCtx === "function") {
+        _renderStrokesToCtx(ctx, frameStrokes, outW, outH);
+      } else if (frameStrokes.length) {
+        frameStrokes.forEach((st) => {
+          if (!st.pts || st.pts.length < 2) return;
+          ctx.strokeStyle = st.color || "#ff4444";
+          ctx.lineWidth = (st.size || 4) * (outW / 1280);
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.beginPath();
+          ctx.moveTo(st.pts[0][0] * outW, st.pts[0][1] * outH);
+          for (let i = 1; i < st.pts.length; i++) {
+            ctx.lineTo(st.pts[i][0] * outW, st.pts[i][1] * outH);
+          }
+          ctx.stroke();
+        });
+      }
+    }, "renderFrame");
+    (async () => {
+      try {
+        await seekTo(0);
+        recorder.start(250);
+        try {
+          await v.play();
+        } catch (e) {
+          throw new Error("Could not play video for export");
+        }
+        const startMs = performance.now();
+        const totalMs = dur * 1e3;
+        const loop = /* @__PURE__ */ __name(() => {
+          if (cancelled) {
+            try {
+              v.pause();
+            } catch (e) {
+            }
+            try {
+              recorder.stop();
+            } catch (e) {
+            }
+            return;
+          }
+          renderFrame();
+          const elapsed = performance.now() - startMs;
+          const pct = Math.min(100, elapsed / totalMs * 100);
+          updateProg(pct);
+          if (v.ended || v.currentTime >= dur - 0.05) {
+            renderFrame();
+            try {
+              recorder.stop();
+            } catch (e) {
+            }
+            return;
+          }
+          requestAnimationFrame(loop);
+        }, "loop");
+        requestAnimationFrame(loop);
+        await finished;
+        const blob = new Blob(chunks, { type: recorder.mimeType || "video/mp4" });
+        const fmtLabel = "MP4";
+        let result;
+        if (saveHandle) {
+          try {
+            const w = await saveHandle.createWritable();
+            try {
+              await w.write(blob);
+            } finally {
+              try {
+                await w.close();
+              } catch (e) {
+              }
+            }
+            result = "saved";
+            toast("Video saved as " + fmtLabel + " (" + Math.round(blob.size / 1024) + " KB)");
+          } catch (e) {
+            console.warn("Write to handle failed, falling back to download:", e);
+            try {
+              triggerDownload(blob, saveFilename);
+            } catch (e2) {
+            }
+            result = "fallback";
+            toast("Video downloaded as " + fmtLabel + " (" + Math.round(blob.size / 1024) + " KB)");
+          }
+        } else {
+          try {
+            triggerDownload(blob, saveFilename);
+            result = "fallback";
+          } catch (e) {
+            result = "cancelled";
+          }
+          if (result === "fallback") {
+            toast("Video downloaded as " + fmtLabel + " (" + Math.round(blob.size / 1024) + " KB)");
+          } else {
+            toast("Video export cancelled");
+          }
+        }
+      } catch (e) {
+        console.error("Video export failed:", e);
+        toast("Export failed: " + e.message);
+      } finally {
+        try {
+          v.pause();
+        } catch (e) {
+        }
+        try {
+          v.currentTime = prevTime;
+        } catch (e) {
+        }
+        try {
+          v.muted = prevMuted;
+        } catch (e) {
+        }
+        if (!wasPaused) {
+          try {
+            v.play().catch(() => {
+            });
+          } catch (e) {
+          }
+        }
+        try {
+          prog.remove();
+        } catch (e) {
+        }
+        restoreUi();
+      }
+    })();
+  }
+  __name(videoAnnoExportVideo, "videoAnnoExportVideo");
   function videoAnnoDeleteComment(id) {
     const item2 = videoAnnoGetSelected();
     if (!item2) return;
@@ -8094,6 +8526,249 @@ var __kraft = (() => {
     toast("Comment updated");
   }
   __name(videoAnnoUpdateComment, "videoAnnoUpdateComment");
+  function escapeHTML(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
+  __name(escapeHTML, "escapeHTML");
+  function autoFitTextItem(tx, opts) {
+    opts = opts || {};
+    const minW = opts.minW != null ? opts.minW : 80;
+    const maxW = opts.maxW != null ? opts.maxW : 400;
+    const padAdj = opts.padAdj != null ? opts.padAdj : 4;
+    const _tz = Math.max(0.02, Math.min(10, state.zoom || 1));
+    const el = tx.el;
+    if (!el || !el.isConnected) return;
+    const origW = el.style.width;
+    const origH = el.style.height;
+    el.style.width = maxW / _tz + "px";
+    el.style.height = "auto";
+    void el.offsetWidth;
+    const naturalWOS = el.scrollWidth * _tz;
+    const finalWOS = Math.max(minW, Math.min(maxW, Math.ceil(naturalWOS + padAdj)));
+    el.style.width = finalWOS / _tz + "px";
+    el.style.height = "auto";
+    void el.offsetWidth;
+    const naturalHOS = el.scrollHeight * _tz;
+    const finalHOS = Math.max(20, Math.ceil(naturalHOS + 4));
+    if (tx.w === finalWOS && tx.h === finalHOS) {
+      el.style.width = origW;
+      el.style.height = origH;
+      return;
+    }
+    tx.w = finalWOS;
+    tx.h = finalHOS;
+    updateItemStyle(tx);
+    const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
+    if (hCont) {
+      hCont.style.width = tx.w / _tz + "px";
+      hCont.style.height = tx.h / _tz + "px";
+    }
+    updateAutoFitPaper();
+  }
+  __name(autoFitTextItem, "autoFitTextItem");
+  async function videoAnnoSendToBoard() {
+    const item2 = videoAnnoGetSelected();
+    if (!item2) {
+      toast("Select a video first");
+      return;
+    }
+    if (!item2.video) {
+      toast("Video not ready yet");
+      return;
+    }
+    const anno = videoAnnoEnsure(item2);
+    const comments = (anno.comments || []).slice().sort((a, b) => (a.frame || 0) - (b.frame || 0));
+    if (comments.length === 0) {
+      toast("No comments to send \u2014 add at least one frame comment first");
+      return;
+    }
+    const v = item2.video;
+    const prevTime = v.currentTime;
+    const wasPaused = v.paused;
+    const SNAP_MAX_W = 0;
+    const captureOne = /* @__PURE__ */ __name((c) => new Promise((resolve) => {
+      if (c.snapshot && c.snapshot.startsWith("data:image/")) {
+        resolve(c.snapshot);
+        return;
+      }
+      if (!v) {
+        resolve("");
+        return;
+      }
+      const tryCapture = /* @__PURE__ */ __name((tries) => {
+        if (tries <= 0) {
+          resolve("");
+          return;
+        }
+        try {
+          if (v.readyState >= 2 && Math.abs((v.currentTime || 0) - (c.time || 0)) < 0.05) {
+            const dataUrl = videoAnnoCaptureSnapshot(v, SNAP_MAX_W, c.annoStrokes);
+            resolve(dataUrl || "");
+          } else if (tries > 7) {
+            setTimeout(() => tryCapture(tries - 1), 120);
+          } else {
+            setTimeout(() => tryCapture(tries - 1), 60);
+          }
+        } catch (e) {
+          resolve("");
+        }
+      }, "tryCapture");
+      try {
+        v.currentTime = c.time || 0;
+      } catch (e) {
+        resolve("");
+        return;
+      }
+      setTimeout(() => tryCapture(10), 80);
+    }), "captureOne");
+    const needsFreshCapture = comments.some((c) => !c.snapshot || !c.snapshot.startsWith("data:image/"));
+    if (needsFreshCapture) {
+      try {
+        v.pause();
+      } catch (e) {
+      }
+      toast("Capturing " + comments.length + " snapshot" + (comments.length === 1 ? "" : "s") + "\u2026");
+    }
+    const dataUrls = [];
+    for (let i = 0; i < comments.length; i++) {
+      dataUrls.push(await captureOne(comments[i]));
+    }
+    if (needsFreshCapture) {
+      try {
+        v.currentTime = prevTime;
+      } catch (e) {
+      }
+      if (!wasPaused) {
+        try {
+          v.play().catch(() => {
+          });
+        } catch (e) {
+        }
+      }
+    }
+    const COLS = 2;
+    const VW = v && v.videoWidth ? v.videoWidth : 1920;
+    const VH = v && v.videoHeight ? v.videoHeight : 1080;
+    const IMG_MAX_W = 480;
+    const IMG_W = Math.min(IMG_MAX_W, VW);
+    const IMG_H = Math.max(60, Math.round(IMG_W * VH / VW));
+    const TEXT_GAP = 12;
+    const TEXT_MIN_W = 100;
+    const TEXT_MAX_W = 200;
+    const CHIP_BODY_GAP = 7;
+    const ROW_GAP = 18;
+    const COL_GAP = 56;
+    const CHIP_FONT = 18;
+    const BODY_FONT = 22;
+    const PAIR_W = IMG_W + TEXT_GAP + TEXT_MAX_W;
+    const startX = item2.x + item2.w + COL_GAP;
+    const startY = item2.y;
+    const preBatchSnap = captureSnapshot();
+    const initialUndoLen = state.undoStack.length;
+    const newItemIds = [];
+    const colY = [startY, startY];
+    let actualRowsRendered = 0;
+    for (let i = 0; i < comments.length; i++) {
+      const c = comments[i];
+      const dataUrl = dataUrls[i];
+      if (!dataUrl) continue;
+      const col = i % COLS;
+      const rowY = colY[col];
+      const colX = startX + col * (PAIR_W + COL_GAP);
+      const isLastInBatch = i === comments.length - 1;
+      const imgItem = addImage(dataUrl, 400, 225, colX, rowY, false, isLastInBatch);
+      if (imgItem) {
+        imgItem.w = IMG_W;
+        imgItem.h = IMG_H;
+        try {
+          if (imgItem.img) {
+            imgItem.img.style.objectFit = "contain";
+            imgItem.img.style.backgroundColor = "#000";
+            imgItem.img.onerror = function() {
+              try {
+                const ph = document.createElement("div");
+                ph.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:10px;font-family:Inter,sans-serif;background:linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.08));pointer-events:none;";
+                ph.textContent = "f " + (c.frame || 0);
+                imgItem.el.appendChild(ph);
+                imgItem.img.style.display = "none";
+              } catch (e) {
+              }
+            };
+            if (imgItem.img.complete && imgItem.img.naturalWidth === 0 && imgItem.img.src) {
+              imgItem.img.onerror();
+            }
+          }
+          imgItem.el.style.backgroundColor = "#000";
+        } catch (e) {
+        }
+        updateItemStyle(imgItem);
+        newItemIds.push(imgItem.id);
+      }
+      const m = Math.floor((c.time || 0) / 60);
+      const s = Math.floor((c.time || 0) % 60);
+      const timeStr = m + ":" + (s < 10 ? "0" : "") + s;
+      const hasTranslation = !!(c.translation && c.translation !== c.text);
+      const body = (hasTranslation ? c.translation : c.text || "").trim();
+      const textX = colX + IMG_W + TEXT_GAP;
+      const chipText = "[ f " + c.frame + " \xB7 " + timeStr + " ]";
+      const chipHTML = '<div style="color:rgba(255,255,255,0.55);font-size:' + CHIP_FONT + 'px;line-height:1.35;letter-spacing:0.02em;white-space:nowrap;">' + chipText + "</div>";
+      const bodyHTML = body ? '<div style="color:#ffffff;font-size:' + BODY_FONT + "px;line-height:1.4;margin-top:" + CHIP_BODY_GAP + 'px;white-space:pre-wrap;word-break:break-word;">' + escapeHTML(body) + "</div>" : "";
+      const textItem = addText(textX, rowY, "", { noFocus: true, initW: 50 });
+      if (textItem) {
+        textItem.el.innerHTML = chipHTML + bodyHTML;
+        if (typeof autoFitTextItem === "function") {
+          autoFitTextItem(textItem, { minW: TEXT_MIN_W, maxW: TEXT_MAX_W });
+        } else if (typeof autoGrowTextItem === "function") {
+          textItem.w = TEXT_MAX_W;
+          autoGrowTextItem(textItem);
+        }
+        textItem._autoGrowLocked = true;
+        newItemIds.push(textItem.id);
+      }
+      const textH = textItem ? textItem.h || 0 : 0;
+      const pairH = Math.max(IMG_H, textH);
+      colY[col] = rowY + pairH + ROW_GAP;
+      if (col === COLS - 1) actualRowsRendered++;
+    }
+    try {
+      state.undoStack.length = initialUndoLen;
+      state.undoStack.push(preBatchSnap);
+      state.redoStack = [];
+      updateStatus();
+    } catch (e) {
+    }
+    if (newItemIds.length > 0) {
+      try {
+        clearSelection();
+      } catch (e) {
+      }
+      newItemIds.forEach((id) => {
+        state.selected.add(id);
+      });
+      refreshSelection();
+    }
+    try {
+      const finalY = Math.max(colY[0], colY[1]);
+      const totalH = finalY - startY;
+      const blockW = COLS * PAIR_W + (COLS - 1) * COL_GAP;
+      const centerX = startX + blockW / 2;
+      const centerY = startY + totalH / 2;
+      const viewportW = window.innerWidth;
+      const viewportH = window.innerHeight;
+      state.pan.x = viewportW / 2 - centerX * state.zoom;
+      state.pan.y = viewportH / 2 - centerY * state.zoom;
+      if (typeof updateCanvas === "function") updateCanvas();
+    } catch (e) {
+    }
+    toast("Sent " + comments.length + " comment" + (comments.length === 1 ? "" : "s") + " to board as a 2-column storyboard \u2014 click any text to edit (time chip + comment are combined in one box)");
+    try {
+      if (item2.el && item2.el._setListOpen) item2.el._setListOpen(false);
+    } catch (e) {
+    }
+  }
+  __name(videoAnnoSendToBoard, "videoAnnoSendToBoard");
   function videoAnnoJumpToComment(id) {
     const item2 = videoAnnoGetSelected();
     if (!item2 || !item2.video) return;
@@ -8600,7 +9275,7 @@ var __kraft = (() => {
     }
   }
   __name(videoAnnoOpenLightbox, "videoAnnoOpenLightbox");
-  async function videoAnnoTranslateComment2(id) {
+  async function videoAnnoTranslateComment(id) {
     const item2 = videoAnnoGetSelected();
     if (!item2) return;
     const anno = videoAnnoEnsure(item2);
@@ -8649,7 +9324,7 @@ var __kraft = (() => {
       toast("Translation failed");
     }
   }
-  __name(videoAnnoTranslateComment2, "videoAnnoTranslateComment");
+  __name(videoAnnoTranslateComment, "videoAnnoTranslateComment");
   function videoAnnoRefreshCommentList(item2, highlightId) {
     let list = item2 && item2.el && item2.el._annoCommentsList || document.getElementById("video-anno-comments-list");
     const empty = document.getElementById("video-anno-comments-empty");
@@ -8740,7 +9415,7 @@ var __kraft = (() => {
       };
       head.querySelector(".tr-btn").onclick = (e) => {
         e.stopPropagation();
-        videoAnnoTranslateComment2(c.id);
+        videoAnnoTranslateComment(c.id);
       };
       head.querySelector(".del").onclick = (e) => {
         e.stopPropagation();
@@ -8779,6 +9454,9 @@ var __kraft = (() => {
     updateVideoPlayhead(item2);
   }
   __name(updateVideoControls, "updateVideoControls");
+  window.videoAnnoExportVideo = videoAnnoExportVideo;
+  window.videoAnnoSendToBoard = videoAnnoSendToBoard;
+  window.videoAnnoTranslateComment = videoAnnoTranslateComment;
 
   // src/js/props-panel.js
   function trimGifSelected() {
@@ -9212,14 +9890,106 @@ var __kraft = (() => {
   window.updateMediaBar = updateMediaBar;
 
   // src/js/draw-items.js
-  function findStrokeById2(strokeId) {
+  function createDrawItem(stroke) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    stroke.points.forEach((p) => {
+      if (p[0] < minX) minX = p[0];
+      if (p[1] < minY) minY = p[1];
+      if (p[0] > maxX) maxX = p[0];
+      if (p[1] > maxY) maxY = p[1];
+    });
+    const pad = Math.max(stroke.size * 1.5, 12);
+    const x = minX - pad;
+    const y = minY - pad;
+    const w = Math.max(maxX - minX + pad * 2, 20);
+    const h = Math.max(maxY - minY + pad * 2, 20);
+    const el = document.createElement("div");
+    el.className = "item draw-item";
+    el.style.cssText = "background:transparent;border:none;pointer-events:auto;";
+    canvasContent.appendChild(el);
+    const item2 = {
+      id: G2.nextId++,
+      el,
+      type: "draw",
+      x,
+      y,
+      w,
+      h,
+      rot: 0,
+      opacity: 1,
+      flipH: false,
+      flipV: false,
+      locked: false,
+      z: G2.nextZ++,
+      strokeId: stroke.strokeId,
+      drawMode: stroke.mode,
+      drawColor: stroke.color,
+      drawSize: stroke.size,
+      drawOpacity: stroke.opacity,
+      drawArrowHead: stroke.arrowHead || 0
+    };
+    state.items.push(item2);
+    updateItemStyle(item2);
+    return item2;
+  }
+  __name(createDrawItem, "createDrawItem");
+  function findStrokeById(strokeId) {
     return G2.drawStrokes.find((s) => s.strokeId === strokeId) || null;
   }
-  __name(findStrokeById2, "findStrokeById");
+  __name(findStrokeById, "findStrokeById");
   function removeStrokeById(strokeId) {
     G2.drawStrokes = G2.drawStrokes.filter((s) => s.strokeId !== strokeId);
   }
   __name(removeStrokeById, "removeStrokeById");
+  var HIT_THRESHOLD = 8;
+  function hitTestStrokes(wx, wy) {
+    const sx = wx * state.zoom + state.pan.x;
+    const sy = wy * state.zoom + state.pan.y;
+    for (let i = G2.drawStrokes.length - 1; i >= 0; i--) {
+      const s = strokes[i];
+      if (s.mode === "eraser") continue;
+      if (s.mode === "pen" && s.points.length >= 2) {
+        for (let j = 1; j < s.points.length; j++) {
+          const p0 = s.points[j - 1], p1 = s.points[j];
+          const x0 = p0[0] * state.zoom + state.pan.x, y0 = p0[1] * state.zoom + state.pan.y;
+          const x1 = p1[0] * state.zoom + state.pan.x, y1 = p1[1] * state.zoom + state.pan.y;
+          if (distToSegment(sx, sy, x0, y0, x1, y1) < HIT_THRESHOLD + s.size / 2) return s;
+        }
+      } else if (s.mode === "arrow" && s.points.length >= 2) {
+        const p0 = s.points[0], p1 = s.points[1];
+        const x0 = p0[0] * state.zoom + state.pan.x, y0 = p0[1] * state.zoom + state.pan.y;
+        const x1 = p1[0] * state.zoom + state.pan.x, y1 = p1[1] * state.zoom + state.pan.y;
+        if (distToSegment(sx, sy, x0, y0, x1, y1) < HIT_THRESHOLD + s.size / 2) return s;
+        const angle = Math.atan2(y1 - y0, x1 - x0);
+        const headLen = s.arrowHead || 15;
+        const spread = Math.PI / 7;
+        const ax1 = x1 - headLen * Math.cos(angle - spread), ay1 = y1 - headLen * Math.sin(angle - spread);
+        const ax2 = x1 - headLen * Math.cos(angle + spread), ay2 = y1 - headLen * Math.sin(angle + spread);
+        if (distToSegment(sx, sy, x1, y1, ax1, ay1) < HIT_THRESHOLD + s.size / 2) return s;
+        if (distToSegment(sx, sy, x1, y1, ax2, ay2) < HIT_THRESHOLD + s.size / 2) return s;
+      } else if (s.mode === "box" && s.points.length >= 2) {
+        const p0 = s.points[0], p1 = s.points[1];
+        const x0 = p0[0] * state.zoom + state.pan.x, y0 = p0[1] * state.zoom + state.pan.y;
+        const x1 = p1[0] * state.zoom + state.pan.x, y1 = p1[1] * state.zoom + state.pan.y;
+        const bx = Math.min(x0, x1), by = Math.min(y0, y1), bw = Math.abs(x1 - x0), bh = Math.abs(y1 - y0);
+        if (distToSegment(sx, sy, bx, by, bx + bw, by) < HIT_THRESHOLD + s.size / 2) return s;
+        if (distToSegment(sx, sy, bx + bw, by, bx + bw, by + bh) < HIT_THRESHOLD + s.size / 2) return s;
+        if (distToSegment(sx, sy, bx + bw, by + bh, bx, by + bh) < HIT_THRESHOLD + s.size / 2) return s;
+        if (distToSegment(sx, sy, bx, by + bh, bx, by) < HIT_THRESHOLD + s.size / 2) return s;
+      }
+    }
+    return null;
+  }
+  __name(hitTestStrokes, "hitTestStrokes");
+  function distToSegment(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+    let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+  }
+  __name(distToSegment, "distToSegment");
 
   // src/js/delete.js
   function cleanupVideoItem(item2, revokeBlob) {
@@ -11897,8 +12667,8 @@ var __kraft = (() => {
         }
       } catch (e) {
       }
-      if (typeof videoAnnoSendToBoard === "function") {
-        videoAnnoSendToBoard();
+      if (typeof window.videoAnnoSendToBoard === "function") {
+        window.videoAnnoSendToBoard();
       } else {
         toast("Send-to-board not ready yet");
       }
@@ -11913,8 +12683,8 @@ var __kraft = (() => {
     exportVideoBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       ev.preventDefault();
-      if (typeof videoAnnoExportVideo === "function") {
-        videoAnnoExportVideo();
+      if (typeof window.videoAnnoExportVideo === "function") {
+        window.videoAnnoExportVideo();
       } else {
         toast("Video export not ready yet");
       }
@@ -12602,7 +13372,7 @@ var __kraft = (() => {
       tBtn.onclick = function(ev) {
         ev.stopPropagation();
         try {
-          if (typeof videoAnnoTranslateComment === "function") videoAnnoTranslateComment(c.id);
+          if (typeof window.videoAnnoTranslateComment === "function") window.videoAnnoTranslateComment(c.id);
         } catch (e) {
         }
       };
@@ -13705,7 +14475,7 @@ var __kraft = (() => {
   }
   __name(addImage, "addImage");
   function openLinkModal() {
-    hideWelcome();
+    window.hideWelcome();
     const modal = document.getElementById("link-modal");
     const input = document.getElementById("link-url-input");
     modal.classList.add("active");
@@ -20162,7 +20932,7 @@ var __kraft = (() => {
       if (i.type === "draw" && i.strokeId) {
         const orig = drawOffsets.get(i.id);
         if (orig) {
-          const stroke = findStrokeById2(i.strokeId);
+          const stroke = findStrokeById(i.strokeId);
           if (stroke) stroke.points = stroke.points.map((p) => [p[0] + i.x - orig.ox, p[1] + i.y - orig.oy]);
         }
       }
@@ -20226,7 +20996,7 @@ var __kraft = (() => {
       });
       if (!it) return;
       if (Math.abs(it.w - orig.w) < 0.5 && Math.abs(it.h - orig.h) < 0.5 && Math.abs(it.x - orig.x) < 0.5 && Math.abs(it.y - orig.y) < 0.5) return;
-      var stroke = findStrokeById2(it.strokeId);
+      var stroke = findStrokeById(it.strokeId);
       if (stroke && orig.w > 0 && orig.h > 0) {
         var sx = it.w / orig.w;
         var sy = it.h / orig.h;
@@ -20255,7 +21025,7 @@ var __kraft = (() => {
       if (i.type === "draw" && i.strokeId) {
         const dx = i.x - origX;
         const dy = i.y - origY;
-        const stroke = findStrokeById2(i.strokeId);
+        const stroke = findStrokeById(i.strokeId);
         if (stroke) stroke.points = stroke.points.map((p) => [p[0] + dx, p[1] + dy]);
       }
       updateItemStyle(i);
@@ -20612,7 +21382,7 @@ var __kraft = (() => {
       e.preventDefault();
       e.stopPropagation();
       console.log("[FileDrop] Welcome received drop, files:", e.dataTransfer.files.length);
-      hideWelcome();
+      window.hideWelcome();
       const files = e.dataTransfer.files;
       if (files && files.length) _handleFileDrop(e, [...files]);
     });
@@ -20626,7 +21396,7 @@ var __kraft = (() => {
           const w = document.getElementById("welcome");
           if (w && w._welcomeHiddenByDrag !== true && w.style.display !== "none") {
             try {
-              hideWelcome();
+              window.hideWelcome();
             } catch (err) {
             }
           }
@@ -20646,7 +21416,7 @@ var __kraft = (() => {
     const files = e.dataTransfer && e.dataTransfer.files;
     if (files && files.length) {
       try {
-        hideWelcome();
+        window.hideWelcome();
       } catch (err) {
       }
       try {
@@ -20675,7 +21445,7 @@ var __kraft = (() => {
     }
     if (!url) return;
     try {
-      hideWelcome();
+      window.hideWelcome();
     } catch (err) {
     }
     toast("Fetching image\u2026");
@@ -21017,7 +21787,7 @@ var __kraft = (() => {
   __name(_handleFileDrop, "_handleFileDrop");
   viewport.addEventListener("drop", (e) => {
     e.preventDefault();
-    hideWelcome();
+    window.hideWelcome();
     var items = e.dataTransfer.items;
     if (items && items.length > 0 && items[0].webkitGetAsEntry) {
       var entries = [];
@@ -21036,7 +21806,7 @@ var __kraft = (() => {
   function fetchImageFromURL(url, x, y) {
     console.log("[fetchImageFromURL] start:", url);
     try {
-      hideWelcome();
+      window.hideWelcome();
     } catch (err) {
     }
     toast("Fetching image\u2026");
@@ -21259,10 +22029,10 @@ var __kraft = (() => {
       captureBox.style.top = e.clientY + "px";
       captureBox.style.width = "0px";
       captureBox.style.height = "0px";
-      coPanels2.top.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);";
-      coPanels2.bottom.style.display = "none";
-      coPanels2.left.style.display = "none";
-      coPanels2.right.style.display = "none";
+      coPanels.top.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);";
+      coPanels.bottom.style.display = "none";
+      coPanels.left.style.display = "none";
+      coPanels.right.style.display = "none";
       document.body.style.cursor = "crosshair";
       return;
     }
@@ -21483,10 +22253,10 @@ var __kraft = (() => {
     captureBox.style.top = e.clientY + "px";
     captureBox.style.width = "0px";
     captureBox.style.height = "0px";
-    coPanels2.top.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);";
-    coPanels2.bottom.style.display = "none";
-    coPanels2.left.style.display = "none";
-    coPanels2.right.style.display = "none";
+    coPanels.top.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);";
+    coPanels.bottom.style.display = "none";
+    coPanels.left.style.display = "none";
+    coPanels.right.style.display = "none";
     document.body.style.cursor = "crosshair";
   });
   viewport.addEventListener("dblclick", (e) => {
@@ -23070,7 +23840,7 @@ var __kraft = (() => {
       }
     }
     if (ae && ae.contentEditable === "true" && !ae.classList.contains("text-item")) return;
-    hideWelcome();
+    window.hideWelcome();
     const items = e.clipboardData.items;
     const files = e.clipboardData.files;
     try {
@@ -25189,7 +25959,7 @@ var __kraft = (() => {
   initTextToolbar();
   updateCanvas2();
   initVideoLazyLoad();
-  showWelcome();
+  window.showWelcome();
   window.addEventListener("load", async () => {
     setTimeout(() => {
       const saved = window.KraftedStorage && window.KraftedStorage.getItemSync("krafted_autosave") || localStorage.getItem("krafted_autosave");
@@ -25204,7 +25974,7 @@ var __kraft = (() => {
   });
   window.addEventListener("resize", () => {
     updateCanvas2();
-    if (cutState2) updateCutTargetHighlight2();
+    if (cutState2) updateCutTargetHighlight();
   });
   document.addEventListener("visibilitychange", function() {
     if (document.hidden) {
@@ -25252,7 +26022,7 @@ var __kraft = (() => {
     refreshSelection();
     _frozenGifs.clear();
     updateMediaBar();
-    showWelcome();
+    window.showWelcome();
     toast("Board cleared!");
   }
   __name(newBoard, "newBoard");
@@ -25580,7 +26350,7 @@ var __kraft = (() => {
         }
         if (typeof restoreBoard === "function" && typeof hideWelcome === "function") {
           restoreBoard(data);
-          hideWelcome();
+          window.hideWelcome();
           await new Promise(function(r) {
             setTimeout(r, 50);
           });
@@ -25717,7 +26487,7 @@ var __kraft = (() => {
             if (data && data.items && data.items.length && typeof restoreBoard === "function") {
               restoreBoard(data);
               try {
-                hideWelcome();
+                window.hideWelcome();
               } catch (e) {
               }
               if (typeof toast === "function") {

@@ -15,7 +15,7 @@ let mmConnectState = null; // { mm, fromId, svg, tempPath } for connector drag
 
 export function addMindMap(x, y) {
   pushUndo();
-  hideWelcome();
+  window.hideWelcome();
   const el = document.createElement('div');
   el.className = 'mindmap-item';
   canvasContent.appendChild(el);

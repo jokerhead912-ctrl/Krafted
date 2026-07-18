@@ -9,6 +9,8 @@ import { _handleRelationClick, renderRelations } from './relations.js';
 import { clearSelection, getSelectedItems, refreshSelection, selectOnly, toggleSelect } from './selection.js';
 import { setTool } from './tools.js';
 import { IS_TOUCH_DEVICE, state, viewport, selBox, exportBox, captureBox, captureOverlay, captureHint, coPanels, G, drawTool, isPanTrigger } from './core-state.js';;
+import { createDrawItem, findStrokeById, hitTestStrokes } from './draw-items.js';
+import { addLassoPoint, endCutDraw, enterCutMode, enterLassoMode, getCutItem, getLassoItem, startCutDraw, updateCutDraw, updateCutTargetHighlight } from './cut-lasso.js';
 import { pushUndo } from './undo-redo.js';
 import { addText, updateItemStyle } from './add-items.js';
 import { updatePropsPanel } from './props-panel.js';

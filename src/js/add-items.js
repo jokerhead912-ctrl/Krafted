@@ -125,7 +125,7 @@ export function addVideoItem(src, natW, natH, x, y) {
 //  LINK CARDS — paste a URL, get a preview cover, click to open
 // ============================================================
 export function openLinkModal() {
-  hideWelcome();
+  window.hideWelcome();
   const modal = document.getElementById('link-modal');
   const input = document.getElementById('link-url-input');
   modal.classList.add('active');

@@ -1,5 +1,5 @@
 
-import { state, G, captureBox, captureOverlay, captureHint, captureResultPanel, captureResultImg, captureResultInfo, canvas, canvasContent, viewport } from './core-state.js';
+import { state, G, captureBox, captureOverlay, captureHint, captureResultPanel, captureResultImg, captureResultInfo, canvas, canvasContent, coPanels, viewport } from './core-state.js';
 import { toast } from './ui-utils.js';
 import { scheduleAutoSave } from './save-load.js';
 import { addImage } from './add-items.js';

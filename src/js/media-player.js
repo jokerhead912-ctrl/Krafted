@@ -2863,8 +2863,8 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
         });
       }
     } catch (e) {}
-    if (typeof videoAnnoSendToBoard === 'function') {
-      videoAnnoSendToBoard();
+    if (typeof window.videoAnnoSendToBoard === 'function') {
+      window.videoAnnoSendToBoard();
     } else {
       toast('Send-to-board not ready yet');
     }
@@ -2880,8 +2880,8 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
   exportVideoBtn.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
   exportVideoBtn.addEventListener('click', function(ev){
     ev.stopPropagation(); ev.preventDefault();
-    if (typeof videoAnnoExportVideo === 'function') {
-      videoAnnoExportVideo();
+    if (typeof window.videoAnnoExportVideo === 'function') {
+      window.videoAnnoExportVideo();
     } else {
       toast('Video export not ready yet');
     }
@@ -3635,7 +3635,7 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
     tBtn.className = 'tr';
     tBtn.textContent = '🌐';
     tBtn.title = 'Translate';
-    tBtn.onclick = function(ev){ ev.stopPropagation(); try { if (typeof videoAnnoTranslateComment === 'function') videoAnnoTranslateComment(c.id); } catch(e){} };
+    tBtn.onclick = function(ev){ ev.stopPropagation(); try { if (typeof window.videoAnnoTranslateComment === 'function') window.videoAnnoTranslateComment(c.id); } catch(e){} };
     actions.appendChild(tBtn);
     // Delete
     const delBtn = document.createElement('button');

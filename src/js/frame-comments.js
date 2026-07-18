@@ -2564,3 +2564,10 @@ export function updateVideoControls(item) {
   updateVideoTimeline(item);
   updateVideoPlayhead(item);
 }
+
+// ============================================================
+// Window exposure (for inline onclick handlers in other modules)
+// ============================================================
+window.videoAnnoExportVideo = videoAnnoExportVideo;
+window.videoAnnoSendToBoard = videoAnnoSendToBoard;
+window.videoAnnoTranslateComment = videoAnnoTranslateComment;
