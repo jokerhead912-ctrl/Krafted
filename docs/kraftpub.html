@@ -19480,7 +19480,32 @@ window.addEventListener('drop', function(e){
           (e.clientY - state.pan.y) / state.zoom);
         toast('Pasted image (hotlinked)');
       };
-      img.onerror = () => toast('Image could not be loaded');
+      img.onerror = () => {
+        // Try fallback proxy (corsproxy.io) as last resort
+        console.log('[FileDrop] hotlink failed, trying corsproxy.io');
+        fetch('https://corsproxy.io/?' + encodeURIComponent(url))
+          .then(function(r){ return r.blob(); })
+          .then(function(blob){
+            var reader = new FileReader();
+            reader.onload = function(ev){
+              var i2 = new Image();
+              i2.onload = function(){
+                var dw = Math.round(Math.min(i2.naturalWidth / 2, 360));
+                var dh = Math.round(i2.naturalHeight * (dw / i2.naturalWidth));
+                addImage(ev.target.result, dw, dh,
+                  (e.clientX - state.pan.x) / state.zoom,
+                  (e.clientY - state.pan.y) / state.zoom);
+                toast('Pasted image (via fallback proxy)');
+              };
+              i2.src = ev.target.result;
+            };
+            reader.readAsDataURL(blob);
+          })
+          .catch(function(e2){
+            console.log('[FileDrop] all paths failed:', e2.message);
+            toast('Image could not be loaded (source may be expired)');
+          });
+      };
       img.src = url;
     });
 }, true);
