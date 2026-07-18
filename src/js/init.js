@@ -538,12 +538,10 @@ export async function exportAllImagesToFolder() {
 // This prevents accidental data loss from Cmd+W / close tab.
 (function _initCloseGuard(){
   window.addEventListener('beforeunload', function(e){
-    // Only prompt if there's actual content on the board
-    if (!state || !state.items || state.items.length === 0) return;
-    // Standard cross-browser beforeunload pattern:
-    // returnValue + preventDefault both needed for Chrome/Edge/Safari.
+    // Only prompt if there are unsaved changes
+    if (!state || !state._dirty) return;
     e.preventDefault();
-    e.returnValue = 'You have unsaved work. Leave anyway?';
+    e.returnValue = 'You have unsaved changes. Leave anyway?';
     return e.returnValue;
   });
 })();

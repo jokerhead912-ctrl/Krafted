@@ -161,6 +161,7 @@ export const state = {
   cropping: null, // { item, x, y, w, h, aspect, origSrc, origNatW, origNatH, origW, origH, origCropX, origCropY }
   // Alt+Left-Click pans the canvas — primarily for MacBook trackpads (no middle button).
   // Auto-enabled on Mac; off by default on Windows/Linux to avoid clashing with system Alt+Click.
+  _dirty: false, // unsaved changes flag — set true on any modification, cleared by quickSave/saveBoard
   altPanEnabled: (function() {
     try {
       const saved = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_alt_pan')) || localStorage.getItem('krafted_alt_pan');

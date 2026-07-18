@@ -6,6 +6,7 @@
 
 import { restoreBoard, saveBoard, serializeBoard } from './save-load.js';
 import { toast } from './ui-utils.js';
+import { state } from './core-state.js';
 
 var _qs = {
   // IndexedDB key for persisting the directory handle
@@ -115,6 +116,7 @@ export async function quickSave() {
     var writable = await fileHandle.createWritable();
     await writable.write(blob);
     await writable.close();
+    state._dirty = false;
     toast('Quick saved');
     console.log('[QuickSave] Saved to', dirHandle.name + '/' + _qs.FILE_NAME);
   } catch(e) {
@@ -141,6 +143,7 @@ export async function quickSaveAs() {
     var writable = await fileHandle.createWritable();
     await writable.write(blob);
     await writable.close();
+    state._dirty = false;
     toast('Saved to ' + dirHandle.name + '/' + _qs.FILE_NAME);
     console.log('[QuickSave] Save As to', dirHandle.name + '/' + _qs.FILE_NAME);
   } catch(e) {

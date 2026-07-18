@@ -503,6 +503,7 @@ export async function saveBoard() {
       window.KraftedStorage.onSaveComplete();
     }
     console.log('[SAVE] done!');
+    state._dirty = false;
   } catch (err) {
     console.error('[SAVE] FAILED:', err.name, err.message, err.stack);
     updateProg('Error: ' + (err.message || 'unknown'));
@@ -1417,6 +1418,7 @@ export function restoreBoard(data) {
 // ============================================================
 export function scheduleAutoSave() {
   clearTimeout(state.autoSaveTimer);
+  state._dirty = true;
   state.autoSaveTimer = setTimeout(() => {
     try {
       var val = serializeBoard();
