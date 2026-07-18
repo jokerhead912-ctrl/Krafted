@@ -1,11 +1,11 @@
-// Krafted v5.5 Service Worker
+// Krafted v6.0.1 Service Worker
 // Standalone file (replaces the previous inline blob-URL approach which
 // failed on GitHub Pages with "The URL protocol of the script ('blob:...')
 // is not supported"). Browsers require SW scripts to be real same-origin
 // file URLs, not blob: URLs, on secure origins.
 
-const CACHE_NAME = 'krafted-v5.5-' + Date.now();
-const APP_VERSION = '5.5';
+const CACHE_NAME = 'krafted-v6.0.1-' + Date.now();
+const APP_VERSION = '6.0.1';
 
 // Files to pre-cache on install
 const PRE_CACHE = [
