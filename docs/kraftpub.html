@@ -4065,7 +4065,7 @@ function showWelcome() {
         <tr><td style="padding:4px 0;color:#888;">Two-finger drag</td><td style="padding:4px 0;">Pan (trackpad)</td></tr>
       </table>
     </div>
-    <p style="margin-top:20px;font-size:10px;color:#555;text-align:center;">Krafted v5.5 — by Joker Head Studios</p>
+    <p style="margin-top:20px;font-size:10px;color:#555;text-align:center;">Krafted v<span id="help-footer-version">6.0</span> — by Joker Head Studios</p>
   </div>
 </div>
 
@@ -4852,12 +4852,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 // ============================================================
 //  STARTUP CHECKS
 // ============================================================
-console.log('[INIT] Krafted v5.5 loading...');
+console.log('[INIT] Krafted v' + (typeof KRAFTED_VERSION !== 'undefined' ? KRAFTED_VERSION : '?') + ' loading...');
 console.log('[INIT] JSZip available:', typeof JSZip);
 console.log('[INIT] showSaveFilePicker available:', typeof window.showSaveFilePicker);
 // === COPYRIGHT — Krafted by Joker Head Studios ===
 console.log(
-  '%c Krafted v5.5 %c by Joker Head Studios ',
+  '%c Krafted v' + (typeof KRAFTED_VERSION !== 'undefined' ? KRAFTED_VERSION : '?') + ' %c by Joker Head Studios ',
   'background:#7c8cf0;color:#000;font-weight:bold;padding:4px 8px;font-size:14px;',
   'background:#1a1a1a;color:#e8e8e8;padding:4px 8px;font-size:12px;'
 );
@@ -5443,7 +5443,7 @@ var I18N = (function() {
     'Context menu': '右鍵選單',
     'Zoom (natural)': '縮放 (自然)',
     'Pan (trackpad)': '平移 (觸控板)',
-    'Krafted v5.5 — by Joker Head Studios': 'Krafted v5.5 — Joker Head Studios',
+    'Krafted v6.0 — by Joker Head Studios': 'Krafted v6.0 — Joker Head Studios',
 
     // ── Link modal ──
     'Add Reference Link': '加入參考連結',
@@ -5893,7 +5893,7 @@ var I18N = (function() {
     'KRAFTED — Help': 'KRAFTED — 幫助',
     '📖 Guide': '📖 指南',
     '⌨️ Shortcuts': '⌨️ 快捷鍵',
-    'Krafted v5.5 — by Joker Head Studios': 'Krafted v5.5 — Joker Head Studios',
+    'Krafted v6.0 — by Joker Head Studios': 'Krafted v6.0 — Joker Head Studios',
     'Help / Shortcuts': '幫助 / 快捷鍵',
     'Board Pen': '畫板畫筆',
     'Export Area': '導出區域',
