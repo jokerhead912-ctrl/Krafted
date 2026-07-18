@@ -1,0 +1,39 @@
+name: Build & Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'build.js'
+      - 'package.json'
+      - '.github/workflows/deploy.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install
+
+      - run: node build.js
+
+      - name: Commit built output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/kraftpub.html
+          if git diff --staged --quiet; then
+            echo "No changes to kraftpub.html"
+          else
+            git commit -m "🤖 Auto-build from src/"
+            git push
+          fi
