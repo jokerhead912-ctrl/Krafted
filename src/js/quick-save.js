@@ -172,7 +172,7 @@ export async function quickSaveAs() {
         var data = JSON.parse(json);
         if (data && data.items && typeof restoreBoard === 'function') {
           restoreBoard(data);
-          try { hideWelcome(); } catch(e) {}
+          try { window.hideWelcome(); } catch(e) {}
           console.log('[QuickSave] Auto-restored from ' + dirHandle.name + '/' + _qs.FILE_NAME);
         }
       }).catch(function(e){

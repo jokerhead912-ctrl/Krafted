@@ -136,7 +136,7 @@ export function deleteSelected() {
   if (sel.length === 0) return;
   pushUndo();
   // Clean up mask editing
-  maskPickColorActive = false; maskBrushActive = false; activeMaskId = null;
+  window.maskPickColorActive = false; window.maskBrushActive = false; window.activeMaskId = null;
   removeBrushCanvas();
   document.getElementById('viewport').classList.remove('mask-pick-mode');
   sel.forEach(i => {

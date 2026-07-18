@@ -15,7 +15,7 @@ export function toast(msg) {
 // Only falls back to the internal state.clipboard if the system clipboard is
 // empty OR the user just did an in-app copy within the last 3 seconds.
 export async function triggerPaste() {
-  hideWelcome();
+  window.hideWelcome();
   // Internal clipboard is used for in-app "duplicate" workflows (Ctrl+D).
   // For explicit Paste actions (toolbar / right-click), the user expects
   // whatever is in the system clipboard. So we only honor state.clipboard
@@ -24,7 +24,7 @@ export async function triggerPaste() {
   // overriding external copies that have since landed on the system clipboard.
   const recentCopy = state.clipboardTime && (Date.now() - state.clipboardTime) < 3000;
   if (state.clipboard && state.clipboard.length > 0 && recentCopy) {
-    pasteClipboard();
+    window.pasteClipboard();
     return;
   }
   // Try modern Clipboard API (works on HTTPS / localhost / secure contexts)
@@ -41,7 +41,7 @@ export async function triggerPaste() {
             reader.onload = ev => {
               const img = new Image();
               img.onload = () => {
-                addImage(ev.target.result, img.naturalWidth, img.naturalHeight, pasteX, pasteY);
+                window.addImage(ev.target.result, img.naturalWidth, img.naturalHeight, pasteX, pasteY);
           toast('Pasted from clipboard ' + img.naturalWidth + 'x' + img.naturalHeight);
               };
     img.onerror = () => toast('Failed to paste image');
@@ -58,7 +58,7 @@ export async function triggerPaste() {
   }
   // Last resort: internal clipboard (only if system clipboard was empty)
   if (state.clipboard) {
-    pasteClipboard();
+    window.pasteClipboard();
   } else {
     toast('Use Ctrl+V to paste from clipboard');
   }
@@ -69,9 +69,9 @@ export async function triggerPaste() {
 // ============================================================
 export function showCtx(x, y) {
   if (!ctxMenu) return;
-  const sel = getSelectedItems();
+  const sel = window.getSelectedItems();
   const hasItems = sel.length > 0;
-  const hasImages = getSelectedImages().length > 0;
+  const hasImages = window.getSelectedImages().length > 0;
   let html = '';
   if (hasItems) {
     html += `<div class="ctx-item" onclick="duplicateSelected();hideCtx()">Duplicate <kbd>Ctrl+Shift+D</kbd></div>`;
@@ -96,10 +96,10 @@ export function showCtx(x, y) {
     html += `<div class="ctx-item" onclick="distributeItems('v');hideCtx()">Distribute V</div>`;
     html += `<div class="ctx-item" onclick="tidySelection();hideCtx()">🧹 Tidy Selected</div>`;
     html += `<div class="ctx-sep"></div>`;
-    if (hasImages && getSelectedImages()[0] && getSelectedImages()[0].src && getSelectedImages()[0].src.includes('image/gif')) html += `<div class="ctx-item" onclick="trimGifSelected();hideCtx()">Trim GIF</div>`;
+    if (hasImages && window.getSelectedImages()[0] && window.getSelectedImages()[0].src && window.getSelectedImages()[0].src.includes('image/gif')) html += `<div class="ctx-item" onclick="trimGifSelected();hideCtx()">Trim GIF</div>`;
     html += `<div class="ctx-item" onclick="exportMediaSelected();hideCtx()">Download Source File</div>`;
-    if (hasImages) html += `<div class="ctx-item" onclick="enterCrop(getSelectedImages()[0]);hideCtx()">Crop Image <kbd>C</kbd></div>`;
-    if (hasImages) html += `<div class="ctx-item" onclick="enterReframe(getSelectedImages()[0]);hideCtx()">Reframe Image <kbd>Enter</kbd></div>`;
+    if (hasImages) html += `<div class="ctx-item" onclick="enterCrop(window.getSelectedImages()[0]);hideCtx()">Crop Image <kbd>C</kbd></div>`;
+    if (hasImages) html += `<div class="ctx-item" onclick="enterReframe(window.getSelectedImages()[0]);hideCtx()">Reframe Image <kbd>Enter</kbd></div>`;
     html += `<div class="ctx-item" onclick="toggleLock();hideCtx()">Lock/Unlock</div>`;
     html += `<div class="ctx-item" onclick="flipH();hideCtx()">Flip H</div>`;
     html += `<div class="ctx-item" onclick="flipV();hideCtx()">Flip V</div>`;
@@ -119,8 +119,8 @@ export function showCtx(x, y) {
     html += `<div class="ctx-item" onclick="document.getElementById('file-audio-input').click();hideCtx()">Import Audio</div>`;
     html += `<div class="ctx-item" onclick="saveBoard();hideCtx()">Save Board</div>`;
     // Save all images (or selected) to a chosen local folder
-    const _imgCount = (typeof getSelectedImages === 'function' ? getSelectedImages() : []).length || state.items.filter(i => i && i.img && i.src && !i.isVideo).length;
-    const _ctxTitle = hasFileSystemAccess() ? 'Save images to a local folder (Chrome / Edge on Win + Mac)' : 'Folder picker unavailable — will download each image instead';
+    const _imgCount = (typeof window.getSelectedImages === 'function' ? window.getSelectedImages() : []).length || state.items.filter(i => i && i.img && i.src && !i.isVideo).length;
+    const _ctxTitle = window.hasFileSystemAccess() ? 'Save images to a local folder (Chrome / Edge on Win + Mac)' : 'Folder picker unavailable — will download each image instead';
     html += `<div class="ctx-item" onclick="exportAllImagesToFolder();hideCtx()" title="${_ctxTitle}">Save Images to Folder…${_imgCount > 0 ? ' <kbd style="opacity:.4">' + _imgCount + '</kbd>' : ''}</div>`;
     html += `<div class="ctx-item" onclick="document.getElementById('file-load').click();hideCtx()">Load Board</div>`;
     html += `<div class="ctx-item" onclick="tidyAll();hideCtx()">🧹 Tidy All</div>`;

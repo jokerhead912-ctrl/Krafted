@@ -147,7 +147,7 @@ export function addAudioItem(src, fileName, x, y) {
 export function handleAudioUpload(event) {
   const files = [...event.target.files];
   if (files.length === 0) return;
-  hideWelcome();
+  window.hideWelcome();
   const pasteX = (G.lastScreenX - state.pan.x) / state.zoom;
   const pasteY = (G.lastScreenY - state.pan.y) / state.zoom;
   files.forEach((file, idx) => {

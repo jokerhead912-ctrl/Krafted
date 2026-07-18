@@ -364,4 +364,6 @@ export function applyLassoExtract() {
 
 window.enterCutMode = enterCutMode;
 window.enterLassoMode = enterLassoMode;
+window.cutState = cutState;
+window.lassoState = lassoState;
 

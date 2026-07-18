@@ -126,7 +126,7 @@ export function updatePropsPanel() {
   if (maskWrap) {
     maskWrap.style.display = (item.img && item.src) ? 'block' : 'none';
     // Pre-load image pixel cache for mask color picking
-    if (item.img && item.src && !maskImageCache[item.src]) {
+    if (item.img && item.src && !window.maskImageCache[item.src]) {
       getCachedImagePixels(item.src, () => {});
     }
   }

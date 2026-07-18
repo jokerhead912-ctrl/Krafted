@@ -65,7 +65,7 @@ viewport.addEventListener('mousedown', e => {
   if (e.target.closest('.annotation-toolbar')) return;
 
   // MASK COLOR PICKER
-  if (maskPickColorActive) {
+  if (window.maskPickColorActive) {
     const itemEl = e.target.closest('.item');
     if (itemEl) {
       const item = state.items.find(i => i.el === itemEl);
@@ -88,7 +88,7 @@ viewport.addEventListener('mousedown', e => {
       return;
     }
     // If already in cut mode for an item, handle drawing on that item
-    if (cutState) {
+    if (window.cutState) {
       const item = getCutItem();
       if (item) {
         const itemEl = e.target.closest('.item');
@@ -129,7 +129,7 @@ viewport.addEventListener('mousedown', e => {
       return;
     }
     // If already in lasso mode for an item
-    if (lassoState) {
+    if (window.lassoState) {
       const item = getLassoItem();
       if (item) {
         const itemEl = e.target.closest('.item');
@@ -598,13 +598,13 @@ document.addEventListener('mousemove', e => {
   }
 
   // FREE CUT DRAW UPDATE
-  if (cutState && cutState.isDragging) {
+  if (window.cutState && window.cutState.isDragging) {
     updateCutDraw(e.clientX, e.clientY);
     return;
   }
 
   // Update cut target highlight on pan/zoom
-  if (cutState && !cutState.isDragging) {
+  if (window.cutState && !window.cutState.isDragging) {
     updateCutTargetHighlight();
   }
 
@@ -1188,7 +1188,7 @@ document.addEventListener('mouseup', e => {
   }
 
   // FREE CUT DRAW END
-  if (cutState && cutState.isDragging) {
+  if (window.cutState && window.cutState.isDragging) {
     endCutDraw();
   }
 

@@ -4408,7 +4408,7 @@ var __kraft = (() => {
     canvasToBlobAsync: () => canvasToBlobAsync,
     dataUrlToBlob: () => dataUrlToBlob,
     exportAllImagesToFolder: () => exportAllImagesToFolder,
-    hasFileSystemAccess: () => hasFileSystemAccess2,
+    hasFileSystemAccess: () => hasFileSystemAccess,
     hasShowSaveFilePicker: () => hasShowSaveFilePicker,
     kraftedSaveFile: () => kraftedSaveFile,
     newBoard: () => newBoard,
@@ -4710,10 +4710,10 @@ var __kraft = (() => {
   }
   __name(toast, "toast");
   async function triggerPaste() {
-    hideWelcome();
+    window.hideWelcome();
     const recentCopy = state.clipboardTime && Date.now() - state.clipboardTime < 3e3;
     if (state.clipboard && state.clipboard.length > 0 && recentCopy) {
-      pasteClipboard();
+      window.pasteClipboard();
       return;
     }
     try {
@@ -4729,7 +4729,7 @@ var __kraft = (() => {
               reader.onload = (ev) => {
                 const img = new Image();
                 img.onload = () => {
-                  addImage(ev.target.result, img.naturalWidth, img.naturalHeight, pasteX, pasteY);
+                  window.addImage(ev.target.result, img.naturalWidth, img.naturalHeight, pasteX, pasteY);
                   toast("Pasted from clipboard " + img.naturalWidth + "x" + img.naturalHeight);
                 };
                 img.onerror = () => toast("Failed to paste image");
@@ -4744,7 +4744,7 @@ var __kraft = (() => {
     } catch (err) {
     }
     if (state.clipboard) {
-      pasteClipboard();
+      window.pasteClipboard();
     } else {
       toast("Use Ctrl+V to paste from clipboard");
     }
@@ -4752,9 +4752,9 @@ var __kraft = (() => {
   __name(triggerPaste, "triggerPaste");
   function showCtx(x, y) {
     if (!ctxMenu) return;
-    const sel = getSelectedItems();
+    const sel = window.getSelectedItems();
     const hasItems = sel.length > 0;
-    const hasImages = getSelectedImages().length > 0;
+    const hasImages = window.getSelectedImages().length > 0;
     let html = "";
     if (hasItems) {
       html += `<div class="ctx-item" onclick="duplicateSelected();hideCtx()">Duplicate <kbd>Ctrl+Shift+D</kbd></div>`;
@@ -4779,10 +4779,10 @@ var __kraft = (() => {
       html += `<div class="ctx-item" onclick="distributeItems('v');hideCtx()">Distribute V</div>`;
       html += `<div class="ctx-item" onclick="tidySelection();hideCtx()">\u{1F9F9} Tidy Selected</div>`;
       html += `<div class="ctx-sep"></div>`;
-      if (hasImages && getSelectedImages()[0] && getSelectedImages()[0].src && getSelectedImages()[0].src.includes("image/gif")) html += `<div class="ctx-item" onclick="trimGifSelected();hideCtx()">Trim GIF</div>`;
+      if (hasImages && window.getSelectedImages()[0] && window.getSelectedImages()[0].src && window.getSelectedImages()[0].src.includes("image/gif")) html += `<div class="ctx-item" onclick="trimGifSelected();hideCtx()">Trim GIF</div>`;
       html += `<div class="ctx-item" onclick="exportMediaSelected();hideCtx()">Download Source File</div>`;
-      if (hasImages) html += `<div class="ctx-item" onclick="enterCrop(getSelectedImages()[0]);hideCtx()">Crop Image <kbd>C</kbd></div>`;
-      if (hasImages) html += `<div class="ctx-item" onclick="enterReframe(getSelectedImages()[0]);hideCtx()">Reframe Image <kbd>Enter</kbd></div>`;
+      if (hasImages) html += `<div class="ctx-item" onclick="enterCrop(window.getSelectedImages()[0]);hideCtx()">Crop Image <kbd>C</kbd></div>`;
+      if (hasImages) html += `<div class="ctx-item" onclick="enterReframe(window.getSelectedImages()[0]);hideCtx()">Reframe Image <kbd>Enter</kbd></div>`;
       html += `<div class="ctx-item" onclick="toggleLock();hideCtx()">Lock/Unlock</div>`;
       html += `<div class="ctx-item" onclick="flipH();hideCtx()">Flip H</div>`;
       html += `<div class="ctx-item" onclick="flipV();hideCtx()">Flip V</div>`;
@@ -4800,8 +4800,8 @@ var __kraft = (() => {
       html += `<div class="ctx-item" onclick="triggerPaste();hideCtx()">Paste <kbd>Ctrl+V</kbd></div>`;
       html += `<div class="ctx-item" onclick="document.getElementById('file-audio-input').click();hideCtx()">Import Audio</div>`;
       html += `<div class="ctx-item" onclick="saveBoard();hideCtx()">Save Board</div>`;
-      const _imgCount = (typeof getSelectedImages === "function" ? getSelectedImages() : []).length || state.items.filter((i) => i && i.img && i.src && !i.isVideo).length;
-      const _ctxTitle = hasFileSystemAccess() ? "Save images to a local folder (Chrome / Edge on Win + Mac)" : "Folder picker unavailable \u2014 will download each image instead";
+      const _imgCount = (typeof window.getSelectedImages === "function" ? window.getSelectedImages() : []).length || state.items.filter((i) => i && i.img && i.src && !i.isVideo).length;
+      const _ctxTitle = window.hasFileSystemAccess() ? "Save images to a local folder (Chrome / Edge on Win + Mac)" : "Folder picker unavailable \u2014 will download each image instead";
       html += `<div class="ctx-item" onclick="exportAllImagesToFolder();hideCtx()" title="${_ctxTitle}">Save Images to Folder\u2026${_imgCount > 0 ? ' <kbd style="opacity:.4">' + _imgCount + "</kbd>" : ""}</div>`;
       html += `<div class="ctx-item" onclick="document.getElementById('file-load').click();hideCtx()">Load Board</div>`;
       html += `<div class="ctx-item" onclick="tidyAll();hideCtx()">\u{1F9F9} Tidy All</div>`;
@@ -4852,7 +4852,7 @@ var __kraft = (() => {
   }
   __name(setTextAlign, "setTextAlign");
   function applyTextStyleToSelected() {
-    const sel = getSelectedItems2().filter((i) => i.el && i.el.classList.contains("text-item"));
+    const sel = getSelectedItems().filter((i) => i.el && i.el.classList.contains("text-item"));
     sel.forEach((tx) => {
       Object.assign(tx, {
         font: textTool.font,
@@ -4979,7 +4979,7 @@ var __kraft = (() => {
   function updateTextColorPalette() {
     const palette = document.getElementById("text-color-palette");
     if (!palette) return;
-    const sel = getSelectedItems2().filter((i) => i.el && i.el.classList.contains("text-item"));
+    const sel = getSelectedItems().filter((i) => i.el && i.el.classList.contains("text-item"));
     let targetCount = sel.length;
     if (targetCount === 0) {
       const ed = getEditingText();
@@ -5005,7 +5005,7 @@ var __kraft = (() => {
   __name(updateTextColorPalette, "updateTextColorPalette");
   function applyTextColorToSelected(hexColor) {
     if (!/^#[0-9a-f]{6}$/i.test(hexColor)) return;
-    const sel = getSelectedItems2().filter((i) => i.el && i.el.classList.contains("text-item"));
+    const sel = getSelectedItems().filter((i) => i.el && i.el.classList.contains("text-item"));
     let targets = sel;
     if (targets.length === 0) {
       const ed = getEditingText();
@@ -5075,7 +5075,7 @@ var __kraft = (() => {
       if (tx) sel = [tx];
     }
     if (!sel || sel.length === 0) {
-      sel = getSelectedItems2().filter((i) => i.el && i.el.classList.contains("text-item"));
+      sel = getSelectedItems().filter((i) => i.el && i.el.classList.contains("text-item"));
     }
     if (!sel || sel.length === 0) {
       const editingTx = getEditingText();
@@ -5290,7 +5290,7 @@ var __kraft = (() => {
       text = focusedEl.textContent.trim();
     }
     if (!text) {
-      const sel = getSelectedItems2().filter((i) => i.el && i.el.classList.contains("text-item"));
+      const sel = getSelectedItems().filter((i) => i.el && i.el.classList.contains("text-item"));
       if (sel.length) text = sel.map((t) => t.el.textContent).join("\n").trim();
     }
     if (!text) {
@@ -6690,6 +6690,8 @@ var __kraft = (() => {
   __name(clearLassoPoints, "clearLassoPoints");
   window.enterCutMode = enterCutMode;
   window.enterLassoMode = enterLassoMode;
+  window.cutState = cutState;
+  window.lassoState = lassoState;
 
   // src/js/tools.js
   function setTool(tool) {
@@ -6954,7 +6956,7 @@ var __kraft = (() => {
   // src/js/groups.js
   var GROUP_COLORS = ["#ff4444", "#44ff44", "#4488ff", "#ffaa00", "#ff44ff", "#44ffff", "#ff8844", "#88ff44", "#aa44ff", "#ffff44"];
   function groupSelected() {
-    const sel = getSelectedItems2();
+    const sel = getSelectedItems();
     if (sel.length < 2) {
       toast("Select 2+ items to group");
       return;
@@ -6983,7 +6985,7 @@ var __kraft = (() => {
   }
   __name(groupSelected, "groupSelected");
   function ungroupSelected() {
-    const sel = getSelectedItems2();
+    const sel = getSelectedItems();
     if (sel.length === 0) {
       toast("Select items to ungroup");
       return;
@@ -7329,7 +7331,7 @@ var __kraft = (() => {
   __name(setVideoTimeMode, "setVideoTimeMode");
   function getSelectedVideoItem() {
     try {
-      var sel = typeof getSelectedImages2 === "function" ? getSelectedImages2() : [];
+      var sel = typeof getSelectedImages === "function" ? getSelectedImages() : [];
       if (sel && sel.length && sel[0] && sel[0].video) return sel[0];
     } catch (e) {
     }
@@ -7476,7 +7478,7 @@ var __kraft = (() => {
   }
   __name(updateVideoPlayhead, "updateVideoPlayhead");
   function setVideoTrimStart(val) {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     if (sel.length === 0 || !sel[0].video) return;
     const item2 = sel[0];
     const v = item2.video;
@@ -7489,7 +7491,7 @@ var __kraft = (() => {
   }
   __name(setVideoTrimStart, "setVideoTrimStart");
   function setVideoTrimEnd(val) {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     if (sel.length === 0 || !sel[0].video) return;
     const item2 = sel[0];
     const v = item2.video;
@@ -7502,7 +7504,7 @@ var __kraft = (() => {
   }
   __name(setVideoTrimEnd, "setVideoTrimEnd");
   function setVideoPlaybackRate(rate) {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     if (sel.length === 0 || !sel[0].video) return;
     const item2 = sel[0];
     item2.playbackRate = parseFloat(rate);
@@ -7511,7 +7513,7 @@ var __kraft = (() => {
   }
   __name(setVideoPlaybackRate, "setVideoPlaybackRate");
   function seekVideo(pct) {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     if (sel.length === 0 || !sel[0].video) return;
     const item2 = sel[0];
     const v = item2.video;
@@ -7523,7 +7525,7 @@ var __kraft = (() => {
   }
   __name(seekVideo, "seekVideo");
   function resetVideoTrim() {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     if (sel.length === 0 || !sel[0].video) return;
     const item2 = sel[0];
     const v = item2.video;
@@ -7550,7 +7552,7 @@ var __kraft = (() => {
 
   // src/js/frame-comments.js
   function videoAnnoGetSelected() {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     return sel.length === 1 && sel[0].isVideo ? sel[0] : null;
   }
   __name(videoAnnoGetSelected, "videoAnnoGetSelected");
@@ -8411,7 +8413,7 @@ var __kraft = (() => {
 
   // src/js/props-panel.js
   function trimGifSelected() {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     if (sel.length !== 1) {
       toast("Select 1 GIF image");
       return;
@@ -8420,7 +8422,7 @@ var __kraft = (() => {
   }
   __name(trimGifSelected, "trimGifSelected");
   function updatePropsPanel() {
-    const sel = getSelectedItems2();
+    const sel = getSelectedItems();
     const empty = document.getElementById("props-empty");
     const content = document.getElementById("props-content");
     const gifSection = document.getElementById("gif-section");
@@ -8512,7 +8514,7 @@ var __kraft = (() => {
     const maskWrap = document.getElementById("mask-wrap");
     if (maskWrap) {
       maskWrap.style.display = item2.img && item2.src ? "block" : "none";
-      if (item2.img && item2.src && !maskImageCache[item2.src]) {
+      if (item2.img && item2.src && !window.maskImageCache[item2.src]) {
         getCachedImagePixels(item2.src, () => {
         });
       }
@@ -8521,7 +8523,7 @@ var __kraft = (() => {
   }
   __name(updatePropsPanel, "updatePropsPanel");
   function setOpacity(v) {
-    const sel = getSelectedItems2();
+    const sel = getSelectedItems();
     sel.forEach((i) => {
       i.opacity = v / 100;
       updateItemStyle(i);
@@ -8531,7 +8533,7 @@ var __kraft = (() => {
   }
   __name(setOpacity, "setOpacity");
   function setRotation(v) {
-    const sel = getSelectedItems2();
+    const sel = getSelectedItems();
     sel.forEach((i) => {
       i.rot = +v;
       updateItemStyle(i);
@@ -8542,7 +8544,7 @@ var __kraft = (() => {
   __name(setRotation, "setRotation");
   function flipH() {
     pushUndo();
-    getSelectedItems2().forEach((i) => {
+    getSelectedItems().forEach((i) => {
       i.flipH = !i.flipH;
       updateItemStyle(i);
     });
@@ -8551,7 +8553,7 @@ var __kraft = (() => {
   __name(flipH, "flipH");
   function flipV() {
     pushUndo();
-    getSelectedItems2().forEach((i) => {
+    getSelectedItems().forEach((i) => {
       i.flipV = !i.flipV;
       updateItemStyle(i);
     });
@@ -8560,7 +8562,7 @@ var __kraft = (() => {
   __name(flipV, "flipV");
   function toggleLock() {
     pushUndo();
-    getSelectedItems2().forEach((i) => {
+    getSelectedItems().forEach((i) => {
       i.locked = !i.locked;
       updateItemStyle(i);
     });
@@ -8570,7 +8572,7 @@ var __kraft = (() => {
   }
   __name(toggleLock, "toggleLock");
   function setPhotoFilter(filter, value) {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     if (sel.length === 0) return;
     if (!sel[0]._filterDragging) {
       pushUndo();
@@ -8591,7 +8593,7 @@ var __kraft = (() => {
   __name(setPhotoFilter, "setPhotoFilter");
   function resetPhotoFilters() {
     pushUndo();
-    getSelectedImages2().forEach((i) => {
+    getSelectedImages().forEach((i) => {
       i.brightness = 100;
       i.contrast = 100;
       i.saturate = 100;
@@ -8658,7 +8660,7 @@ var __kraft = (() => {
   __name(_applyPropSectionState, "_applyPropSectionState");
   _applyPropSectionState();
   function setCgiFilter(filter, value) {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     if (sel.length === 0) return;
     if (!sel[0]._cgiDragging) {
       pushUndo();
@@ -8930,12 +8932,12 @@ var __kraft = (() => {
   }
   __name(cleanupAllItems, "cleanupAllItems");
   function deleteSelected() {
-    const sel = getSelectedItems2();
+    const sel = getSelectedItems();
     if (sel.length === 0) return;
     pushUndo();
-    maskPickColorActive = false;
-    maskBrushActive = false;
-    activeMaskId = null;
+    window.maskPickColorActive = false;
+    window.maskBrushActive = false;
+    window.activeMaskId = null;
     removeBrushCanvas();
     document.getElementById("viewport").classList.remove("mask-pick-mode");
     sel.forEach((i) => {
@@ -13208,7 +13210,7 @@ var __kraft = (() => {
   window.buildMediaControls = buildMediaControls;
 
   // src/js/add-items.js
-  function addImage2(src, natW, natH, x, y, isVideoFlag, isLast) {
+  function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
     const isBatch = isLast !== void 0;
     if (!isBatch) pushUndo();
     const maxW = 720;
@@ -13328,7 +13330,7 @@ var __kraft = (() => {
     }
     return item2;
   }
-  __name(addImage2, "addImage");
+  __name(addImage, "addImage");
   function openLinkModal() {
     hideWelcome();
     const modal = document.getElementById("link-modal");
@@ -13955,7 +13957,7 @@ var __kraft = (() => {
     el.style.textShadow = tx.outline ? `-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000${tx.shadow ? ", 2px 2px 4px rgba(0,0,0,0.7)" : ""}` : tx.shadow ? shadow : "none";
   }
   __name(applyTextProps, "applyTextProps");
-  window.addImage = addImage2;
+  window.addImage = addImage;
   window.addText = addText;
   window.addLinkCard = addLinkCard;
   window.openLinkModal = openLinkModal;
@@ -14319,7 +14321,7 @@ var __kraft = (() => {
         dispH = dispH * (maxW / dispW);
         dispW = maxW;
       }
-      addImage2(dataUrl, img.naturalWidth, img.naturalHeight, cx - dispW / 2, cy - dispH / 2);
+      addImage(dataUrl, img.naturalWidth, img.naturalHeight, cx - dispW / 2, cy - dispH / 2);
       captureResultPanel.classList.remove("show");
       G2.captureResultCanvas = null;
       captureResultImg.style.display = "";
@@ -14376,7 +14378,7 @@ var __kraft = (() => {
       const { x, y } = getPasteXY();
       const img = new Image();
       img.onload = () => {
-        addImage2(dataUrl, img.naturalWidth, img.naturalHeight, x, y);
+        addImage(dataUrl, img.naturalWidth, img.naturalHeight, x, y);
         toast("Screen captured: " + img.naturalWidth + "x" + img.naturalHeight);
       };
       img.src = dataUrl;
@@ -14611,7 +14613,7 @@ var __kraft = (() => {
   }
   __name(_isBlobUrlLive, "_isBlobUrlLive");
   function copySelected() {
-    const sel = getSelectedItems2();
+    const sel = getSelectedItems();
     if (sel.length === 0) return;
     state.clipboard = sel.map((i) => {
       const copy = { ...i, el: null, img: null };
@@ -14645,7 +14647,7 @@ var __kraft = (() => {
     }
   }
   __name(copySelected, "copySelected");
-  function pasteClipboard2() {
+  function pasteClipboard() {
     if (!state.clipboard) return;
     pushUndo();
     state.selected.clear();
@@ -14709,7 +14711,7 @@ var __kraft = (() => {
           return;
         }
         const isVideoPaste = !!data.isVideo;
-        const item2 = addImage2(data.src, data.natW, data.natH, px, py, isVideoPaste);
+        const item2 = addImage(data.src, data.natW, data.natH, px, py, isVideoPaste);
         Object.assign(item2, {
           w: data.w,
           h: data.h,
@@ -14794,14 +14796,14 @@ var __kraft = (() => {
     } catch (e) {
     }
   }
-  __name(pasteClipboard2, "pasteClipboard");
+  __name(pasteClipboard, "pasteClipboard");
   function duplicateSelected() {
     copySelected();
-    pasteClipboard2();
+    pasteClipboard();
   }
   __name(duplicateSelected, "duplicateSelected");
   window.copySelected = copySelected;
-  window.pasteClipboard = pasteClipboard2;
+  window.pasteClipboard = pasteClipboard;
   window.duplicateSelected = duplicateSelected;
 
   // src/js/text-sanitizer.js
@@ -15351,23 +15353,23 @@ var __kraft = (() => {
   window.pushUndo = pushUndo;
 
   // src/js/masking.js
-  var maskPickColorActive2 = false;
-  var maskBrushActive2 = false;
-  var activeMaskId2 = null;
-  window.maskPickColorActive = maskPickColorActive2;
-  window.maskBrushActive = maskBrushActive2;
-  window.activeMaskId = activeMaskId2;
+  var maskPickColorActive = false;
+  var maskBrushActive = false;
+  var activeMaskId = null;
+  window.maskPickColorActive = maskPickColorActive;
+  window.maskBrushActive = maskBrushActive;
+  window.activeMaskId = activeMaskId;
   var maskBrushCanvas = null;
   var maskBrushCtx = null;
   var maskBrushDrawing = false;
-  var maskImageCache2 = {};
+  var maskImageCache = {};
   var maskCanvasCache = {};
   var maskBlobUrls = {};
   var brushMaskCache = {};
   var maskShowOverlay = false;
   var maskWheelOpenId = null;
   function getSelectedImageItem() {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     return sel.length > 0 ? sel[0] : null;
   }
   __name(getSelectedImageItem, "getSelectedImageItem");
@@ -15403,7 +15405,7 @@ var __kraft = (() => {
       tintStrength: 50
     };
     item2.masks.push(mask);
-    activeMaskId2 = id;
+    activeMaskId = id;
     updateMaskList();
     renderMasks(item2);
     scheduleAutoSave();
@@ -15416,9 +15418,9 @@ var __kraft = (() => {
     pushUndo();
     item2.masks = item2.masks.filter((m) => m.id !== maskId);
     invalidateBrushMaskCache(maskId);
-    if (activeMaskId2 === maskId) {
-      activeMaskId2 = null;
-      maskBrushActive2 = false;
+    if (activeMaskId === maskId) {
+      activeMaskId = null;
+      maskBrushActive = false;
       removeBrushCanvas();
     }
     updateMaskList();
@@ -15437,8 +15439,8 @@ var __kraft = (() => {
   }
   __name(toggleMask, "toggleMask");
   function selectMask(maskId) {
-    activeMaskId2 = activeMaskId2 === maskId ? null : maskId;
-    if (activeMaskId2 !== maskId) maskWheelOpenId = null;
+    activeMaskId = activeMaskId === maskId ? null : maskId;
+    if (activeMaskId !== maskId) maskWheelOpenId = null;
     updateMaskList();
   }
   __name(selectMask, "selectMask");
@@ -15524,13 +15526,13 @@ var __kraft = (() => {
   }
   __name(setMaskBrushSize, "setMaskBrushSize");
   function togglePickColor(maskId) {
-    if (maskPickColorActive2 && activeMaskId2 === maskId) {
-      maskPickColorActive2 = false;
+    if (maskPickColorActive && activeMaskId === maskId) {
+      maskPickColorActive = false;
       document.getElementById("viewport").classList.remove("mask-pick-mode");
     } else {
-      maskPickColorActive2 = true;
-      activeMaskId2 = maskId;
-      maskBrushActive2 = false;
+      maskPickColorActive = true;
+      activeMaskId = maskId;
+      maskBrushActive = false;
       removeBrushCanvas();
       document.getElementById("viewport").classList.add("mask-pick-mode");
       toast("Click on the image to pick a color");
@@ -15543,8 +15545,8 @@ var __kraft = (() => {
     if (!item2 || !item2.masks) return;
     const mask = item2.masks.find((m) => m.id === maskId);
     if (!mask) return;
-    if (maskBrushActive2 && activeMaskId2 === maskId) {
-      maskBrushActive2 = false;
+    if (maskBrushActive && activeMaskId === maskId) {
+      maskBrushActive = false;
       removeBrushCanvas();
       if (maskBrushCanvas) {
         mask.brushData = maskBrushCanvas.toDataURL();
@@ -15553,9 +15555,9 @@ var __kraft = (() => {
         scheduleAutoSave();
       }
     } else {
-      maskBrushActive2 = true;
-      activeMaskId2 = maskId;
-      maskPickColorActive2 = false;
+      maskBrushActive = true;
+      activeMaskId = maskId;
+      maskPickColorActive = false;
       document.getElementById("viewport").classList.remove("mask-pick-mode");
       showBrushCanvas(item2, mask);
       toast("Paint on the image to create mask");
@@ -15650,8 +15652,8 @@ var __kraft = (() => {
   }
   __name(removeBrushCanvas, "removeBrushCanvas");
   function getCachedImagePixels(src, callback) {
-    if (maskImageCache2[src]) {
-      const { img: img2, canvas: canvas3, ctx } = maskImageCache2[src];
+    if (maskImageCache[src]) {
+      const { img: img2, canvas: canvas3, ctx } = maskImageCache[src];
       if (!img2) return;
       callback(img2, canvas3, ctx);
       return;
@@ -15659,7 +15661,7 @@ var __kraft = (() => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onerror = () => {
-      maskImageCache2[src] = { img: null };
+      maskImageCache[src] = { img: null };
     };
     img.onload = () => {
       const canvas3 = document.createElement("canvas");
@@ -15667,7 +15669,7 @@ var __kraft = (() => {
       canvas3.height = img.naturalHeight;
       const ctx = canvas3.getContext("2d");
       ctx.drawImage(img, 0, 0);
-      maskImageCache2[src] = { img, canvas: canvas3, ctx };
+      maskImageCache[src] = { img, canvas: canvas3, ctx };
       callback(img, canvas3, ctx);
     };
     img.src = src;
@@ -15675,7 +15677,7 @@ var __kraft = (() => {
   __name(getCachedImagePixels, "getCachedImagePixels");
   function _buildMaskCanvas(item2, mask) {
     if (!item2.src) return null;
-    const cached = maskImageCache2[item2.src];
+    const cached = maskImageCache[item2.src];
     if (!cached) {
       getCachedImagePixels(item2.src, () => {
         invalidateMaskCache(item2.src);
@@ -16065,7 +16067,7 @@ var __kraft = (() => {
     if (emptyEl) emptyEl.style.display = "none";
     listEl.innerHTML = "";
     item2.masks.forEach((mask, idx) => {
-      const isActive = activeMaskId2 === mask.id;
+      const isActive = activeMaskId === mask.id;
       const div = document.createElement("div");
       div.className = "mask-item" + (isActive ? " active-mask" : "");
       let html = `<div class="mask-item-head" onclick="selectMask('` + mask.id + `')">`;
@@ -16083,14 +16085,14 @@ var __kraft = (() => {
           html += '<div class="mask-color-row">';
           html += '<input type="color" value="' + (mask.color || "#ffffff") + `" onchange="setMaskColor('` + mask.id + `',this.value)">`;
           html += "<label>Color</label>";
-          html += '<button class="mask-pick-btn ' + (maskPickColorActive2 ? "active" : "") + `" onclick="event.stopPropagation();togglePickColor('` + mask.id + `')">` + (maskPickColorActive2 ? "Picking..." : "Pick") + "</button>";
+          html += '<button class="mask-pick-btn ' + (maskPickColorActive ? "active" : "") + `" onclick="event.stopPropagation();togglePickColor('` + mask.id + `')">` + (maskPickColorActive ? "Picking..." : "Pick") + "</button>";
           html += "</div>";
           html += '<div class="prop-row"><label>Tol</label><input type="range" min="5" max="200" value="' + (mask.tolerance || 40) + `" oninput="setMaskTolerance('` + mask.id + `',this.value)"><span id="mk-` + mask.id + '-tol-val" style="font-size:9px;width:28px;">' + (mask.tolerance || 40) + "</span></div>";
           html += '<div class="prop-row"><label>Feather</label><input type="range" min="0" max="30" value="' + (mask.feather !== void 0 ? mask.feather : 3) + `" oninput="setMaskFeather('` + mask.id + `',this.value)"><span id="mk-` + mask.id + '-feather-val" style="font-size:9px;width:28px;">' + (mask.feather !== void 0 ? mask.feather : 3) + "</span></div>";
         } else {
           html += '<div class="prop-row"><label>Brush</label><input type="range" min="5" max="150" value="' + (mask.brushSize || 40) + `" oninput="setMaskBrushSize('` + mask.id + `',this.value)"><span id="mk-` + mask.id + '-bs-val" style="font-size:9px;width:28px;">' + (mask.brushSize || 40) + "</span></div>";
           html += '<div class="btn-group" style="margin-bottom:6px;">';
-          html += '<button class="mask-pick-btn ' + (maskBrushActive2 ? "active" : "") + `" onclick="event.stopPropagation();toggleBrushMode('` + mask.id + `')" style="flex:1;">` + (maskBrushActive2 ? "Done" : "Paint") + "</button>";
+          html += '<button class="mask-pick-btn ' + (maskBrushActive ? "active" : "") + `" onclick="event.stopPropagation();toggleBrushMode('` + mask.id + `')" style="flex:1;">` + (maskBrushActive ? "Done" : "Paint") + "</button>";
           html += `<button onclick="event.stopPropagation();clearBrushMask('` + mask.id + `')" style="flex:1;font-size:10px;">Clear</button>`;
           html += "</div>";
           html += '<div class="prop-row"><label>Feather</label><input type="range" min="0" max="30" value="' + (mask.feather !== void 0 ? mask.feather : 3) + `" oninput="setMaskFeather('` + mask.id + `',this.value)"><span id="mk-` + mask.id + '-feather-val" style="font-size:9px;width:28px;">' + (mask.feather !== void 0 ? mask.feather : 3) + "</span></div>";
@@ -16132,9 +16134,9 @@ var __kraft = (() => {
     }
     invalidateMaskCache(item2.src);
     brushMaskCache = {};
-    activeMaskId2 = null;
-    maskPickColorActive2 = false;
-    maskBrushActive2 = false;
+    activeMaskId = null;
+    maskPickColorActive = false;
+    maskBrushActive = false;
     maskShowOverlay = false;
     maskWheelOpenId = null;
     removeBrushCanvas();
@@ -16160,18 +16162,18 @@ var __kraft = (() => {
   window.colorWheelPick = colorWheelPick;
   window.colorWheelDrag = colorWheelDrag;
   window.resetMasks = resetMasks;
-  window.maskImageCache = maskImageCache2;
+  window.maskImageCache = maskImageCache;
   window.getCachedImagePixels = getCachedImagePixels;
 
   // src/js/selection.js
-  function getSelectedItems2() {
+  function getSelectedItems() {
     return [...state.items, ...state.texts, ...state.todos || [], ...state.mindmaps || []].filter((i) => state.selected.has(i.id));
   }
-  __name(getSelectedItems2, "getSelectedItems");
-  function getSelectedImages2() {
+  __name(getSelectedItems, "getSelectedItems");
+  function getSelectedImages() {
     return state.items.filter((i) => state.selected.has(i.id));
   }
-  __name(getSelectedImages2, "getSelectedImages");
+  __name(getSelectedImages, "getSelectedImages");
   function selectOnly(id) {
     state.selected.clear();
     state.selected.add(id);
@@ -16198,7 +16200,7 @@ var __kraft = (() => {
     document.querySelectorAll(".multi-sel-handles").forEach((el) => el.remove());
     document.querySelectorAll(".text-handles").forEach((el) => el.remove());
     if (state.reframing) return;
-    const sel = getSelectedItems2();
+    const sel = getSelectedItems();
     if (sel.length !== 1 || !sel[0].masks || !sel[0].masks.find((m) => m.id === window.activeMaskId)) {
       if (window.maskBrushActive) {
         window.maskBrushActive = false;
@@ -16378,8 +16380,8 @@ var __kraft = (() => {
   window.clearSelection = clearSelection;
   window.toggleSelect = toggleSelect;
   window.refreshSelection = refreshSelection;
-  window.getSelectedItems = getSelectedItems2;
-  window.getSelectedImages = getSelectedImages2;
+  window.getSelectedItems = getSelectedItems;
+  window.getSelectedImages = getSelectedImages;
 
   // src/js/paper.js
   function updatePaper() {
@@ -16693,7 +16695,7 @@ var __kraft = (() => {
   function handleAudioUpload(event) {
     const files = [...event.target.files];
     if (files.length === 0) return;
-    hideWelcome();
+    window.hideWelcome();
     const pasteX = (G2.lastScreenX - state.pan.x) / state.zoom;
     const pasteY = (G2.lastScreenY - state.pan.y) / state.zoom;
     files.forEach((file, idx) => {
@@ -18064,7 +18066,7 @@ var __kraft = (() => {
     updateMediaBar();
     state.items.forEach((item2) => {
       if (item2.masks && item2.masks.length > 0 && item2.img && item2.src) {
-        if (!maskImageCache2[item2.src]) {
+        if (!maskImageCache[item2.src]) {
           getCachedImagePixels(item2.src, () => {
             invalidateMaskCache(item2.src);
             renderMasks(item2);
@@ -18290,7 +18292,7 @@ var __kraft = (() => {
           if (data && data.items && typeof restoreBoard === "function") {
             restoreBoard(data);
             try {
-              hideWelcome();
+              window.hideWelcome();
             } catch (e) {
             }
             console.log("[QuickSave] Auto-restored from " + dirHandle.name + "/" + _qs.FILE_NAME);
@@ -19113,7 +19115,7 @@ var __kraft = (() => {
 
   // src/js/video-playback.js
   function toggleVideoPlay() {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     if (sel.length === 0 || !sel[0].video) return;
     const item2 = sel[0];
     const v = item2.video;
@@ -19131,7 +19133,7 @@ var __kraft = (() => {
   }
   __name(toggleVideoPlay, "toggleVideoPlay");
   function restartVideo() {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     if (sel.length === 0 || !sel[0].video) return;
     const item2 = sel[0];
     const v = item2.video;
@@ -19143,7 +19145,7 @@ var __kraft = (() => {
   }
   __name(restartVideo, "restartVideo");
   function setVideoVolume(val) {
-    const sel = getSelectedImages2();
+    const sel = getSelectedImages();
     if (sel.length === 0 || !sel[0].video) return;
     sel[0].video.muted = val == 0;
     sel[0].video.volume = val / 100;
@@ -19160,21 +19162,21 @@ var __kraft = (() => {
     const all = [...state.items, ...state.texts, ...state.todos || [], ...state.mindmaps || []];
     all.sort((a, b) => a.z - b.z);
     if (action === "front") {
-      getSelectedItems2().forEach((i) => i.z = G.nextZ++);
+      getSelectedItems().forEach((i) => i.z = G.nextZ++);
     } else if (action === "back") {
       const minZ = all.length ? all[0].z - 1 : 0;
-      getSelectedItems2().forEach((i, idx) => i.z = minZ - getSelectedItems2().length + idx);
+      getSelectedItems().forEach((i, idx) => i.z = minZ - getSelectedItems().length + idx);
     } else if (action === "up") {
-      getSelectedItems2().forEach((i) => i.z = G.nextZ++);
+      getSelectedItems().forEach((i) => i.z = G.nextZ++);
     } else if (action === "down") {
-      getSelectedItems2().forEach((i) => i.z = (i.z || 1) - 100);
+      getSelectedItems().forEach((i) => i.z = (i.z || 1) - 100);
     }
     all.forEach((i) => updateItemStyle(i));
     scheduleAutoSave();
   }
   __name(layerOrder, "layerOrder");
   function alignItems(type) {
-    const sel = getSelectedItems2();
+    const sel = getSelectedItems();
     if (sel.length < 2) return;
     pushUndo();
     if (type === "left") {
@@ -19532,7 +19534,7 @@ var __kraft = (() => {
 
   // src/js/media-export.js
   function exportMediaSelected() {
-    const sel = getSelectedItems2();
+    const sel = getSelectedItems();
     if (sel.length === 0) {
       toast("Select an item first");
       return;
@@ -19676,7 +19678,7 @@ var __kraft = (() => {
         img.onload = () => {
           const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
           const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
-          addImage2(
+          addImage(
             ev.target.result,
             dw,
             dh,
@@ -19693,10 +19695,10 @@ var __kraft = (() => {
       console.log("[FileDrop] proxy fetch failed:", err.message);
       const img = new Image();
       img.onload = () => {
-        if (typeof maskImageCache2 !== "undefined") maskImageCache2[url] = { img: null };
+        if (typeof maskImageCache !== "undefined") maskImageCache[url] = { img: null };
         const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
         const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
-        addImage2(
+        addImage(
           url,
           dw,
           dh,
@@ -19716,7 +19718,7 @@ var __kraft = (() => {
             i2.onload = function() {
               var dw = Math.round(Math.min(i2.naturalWidth / 2, 360));
               var dh = Math.round(i2.naturalHeight * (dw / i2.naturalWidth));
-              addImage2(
+              addImage(
                 ev.target.result,
                 dw,
                 dh,
@@ -19907,7 +19909,7 @@ var __kraft = (() => {
         const dataUrl = ev.target.result;
         const img = new Image();
         img.onload = function() {
-          addImage2(dataUrl, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
+          addImage(dataUrl, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
           imgIdx++;
           setTimeout(processNextImage, 30);
         };
@@ -19916,7 +19918,7 @@ var __kraft = (() => {
           const blobUrl = URL.createObjectURL(file);
           const img2 = new Image();
           img2.onload = function() {
-            addImage2(blobUrl, img2.naturalWidth, img2.naturalHeight, dropX, dropY, false, isLast);
+            addImage(blobUrl, img2.naturalWidth, img2.naturalHeight, dropX, dropY, false, isLast);
             imgIdx++;
             setTimeout(processNextImage, 30);
           };
@@ -19961,7 +19963,7 @@ var __kraft = (() => {
         done = true;
         videoEl.removeAttribute("src");
         videoEl.load();
-        const newItem = addImage2(blobUrl, w, h, dropX, dropY, true, isLast);
+        const newItem = addImage(blobUrl, w, h, dropX, dropY, true, isLast);
         if (newItem && file && file.name) {
           newItem.filename = file.name;
           try {
@@ -20037,7 +20039,7 @@ var __kraft = (() => {
       reader.onload = (ev) => {
         const img = new Image();
         img.onload = () => {
-          addImage2(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
+          addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
           toast("Pasted image from URL");
         };
         img.onerror = () => {
@@ -20052,15 +20054,15 @@ var __kraft = (() => {
       const img = new Image();
       img.onload = () => {
         console.log("[fetchImageFromURL] hotlink img loaded:", img.naturalWidth, "x", img.naturalHeight);
-        if (typeof maskImageCache2 !== "undefined") {
-          maskImageCache2[url] = { img: null };
+        if (typeof maskImageCache !== "undefined") {
+          maskImageCache[url] = { img: null };
         }
         fetch(url, { mode: "no-cors" }).then((res) => res.blob()).then((blob) => {
           const objUrl = URL.createObjectURL(blob);
-          addImage2(objUrl, img.naturalWidth, img.naturalHeight, x, y);
+          addImage(objUrl, img.naturalWidth, img.naturalHeight, x, y);
           toast("Pasted image (hotlinked)");
         }).catch(() => {
-          addImage2(url, img.naturalWidth, img.naturalHeight, x, y);
+          addImage(url, img.naturalWidth, img.naturalHeight, x, y);
           toast("Pasted image (hotlinked)");
         });
       };
@@ -20089,7 +20091,7 @@ var __kraft = (() => {
       reader.onload = (ev) => {
         const img = new Image();
         img.onload = () => {
-          addImage2(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
+          addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
           toast("Pasted image (via proxy)");
         };
         img.onerror = () => {
@@ -20106,7 +20108,7 @@ var __kraft = (() => {
         reader.onload = (ev) => {
           const img = new Image();
           img.onload = () => {
-            addImage2(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
+            addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
             toast("Pasted image (via fallback proxy)");
           };
           img.onerror = () => {
@@ -20208,12 +20210,12 @@ var __kraft = (() => {
     toast("Board cleared!");
   }
   __name(newBoard, "newBoard");
-  function hasFileSystemAccess2() {
+  function hasFileSystemAccess() {
     return typeof window.showDirectoryPicker === "function";
   }
-  __name(hasFileSystemAccess2, "hasFileSystemAccess");
+  __name(hasFileSystemAccess, "hasFileSystemAccess");
   async function pickSaveFolder() {
-    if (!hasFileSystemAccess2()) return null;
+    if (!hasFileSystemAccess()) return null;
     try {
       return await window.showDirectoryPicker({ mode: "readwrite" });
     } catch (e) {
@@ -20348,7 +20350,7 @@ var __kraft = (() => {
   __name(kraftedSaveFile, "kraftedSaveFile");
   async function saveCaptureToFolder(canvas3, suggestedName, onComplete) {
     if (!canvas3) return;
-    if (!hasFileSystemAccess2()) {
+    if (!hasFileSystemAccess()) {
       try {
         const blob = await canvasToBlobAsync(canvas3, "image/png");
         const name = sanitizeFilename(suggestedName, "krafted") + ".png";
@@ -20403,7 +20405,7 @@ var __kraft = (() => {
   __name(saveCapturePanelToFolder, "saveCapturePanelToFolder");
   async function exportAllImagesToFolder() {
     let images = [];
-    const sel = typeof getSelectedImages2 === "function" ? getSelectedImages2() : [];
+    const sel = typeof getSelectedImages === "function" ? getSelectedImages() : [];
     if (sel && sel.length > 0) {
       images = sel.filter((i) => i && i.img && i.src);
     } else {
@@ -20413,7 +20415,7 @@ var __kraft = (() => {
       toast("No images to export");
       return;
     }
-    if (!hasFileSystemAccess2()) {
+    if (!hasFileSystemAccess()) {
       toast("Folder picker not supported \u2014 downloading " + images.length + " image" + (images.length === 1 ? "" : "s") + " one by one");
       let saved2 = 0;
       for (let i = 0; i < images.length; i++) {
