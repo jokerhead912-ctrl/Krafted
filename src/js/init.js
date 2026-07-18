@@ -1,4 +1,5 @@
-import { state, G, paperState, captureResultPanel, captureResultImg, _frozenGifs } from './core-state.js';;
+import { state, G, paperState, captureResultPanel, captureResultImg, _frozenGifs, KRAFTED_VERSION } from './core-state.js';;
+import './quick-save.js';
 import { initTextToolbar } from './text-style.js';
 import { updateCanvas } from './canvas-view.js';
 import { restoreBoard, formatBytes } from './save-load.js';
@@ -432,4 +433,158 @@ export async function exportAllImagesToFolder() {
       toast('Failed to open: ' + e.message);
     }
   })();
+})();
+
+// ── Welcome page version sync ──
+(function _syncWelcomeVersion(){
+  var wv = document.getElementById('welcome-version');
+  if (wv) wv.textContent = 'V ' + KRAFTED_VERSION.split('.').join(' . ');
+})();
+
+// ── Version check: fetch latest version from GitHub Pages ──
+// Compares current KRAFTED_VERSION with the remote version.json.
+// If newer, shows a non-intrusive update toast.
+(function _checkForUpdate(){
+  try {
+    var REMOTE_VERSION_URL = 'https://jokerhead912-ctrl.github.io/Krafted/version.json';
+    // Cache-bust to avoid CDN stale cache
+    var url = REMOTE_VERSION_URL + '?t=' + Date.now();
+    fetch(url, { cache: 'no-store' })
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(data) {
+        var remote = data.version;
+        if (!remote) return;
+        var current = KRAFTED_VERSION;
+        if (remote !== current) {
+          var partsCur = current.split('.').map(Number);
+          var partsRem = remote.split('.').map(Number);
+          var isNewer = false;
+          for (var i = 0; i < Math.max(partsCur.length, partsRem.length); i++) {
+            var a = partsRem[i] || 0, b = partsCur[i] || 0;
+            if (a > b) { isNewer = true; break; }
+            if (a < b) break;
+          }
+          if (isNewer) {
+            console.log('%c[Krafted] Update available: v' + remote + ' (current: v' + current + ')',
+              'color:#f59e0b;font-weight:bold;');
+            var toastEl = document.getElementById('toast');
+            if (toastEl) {
+              toastEl.textContent = 'Update v' + remote + ' available! Hard refresh to update.';
+              toastEl.classList.add('show');
+              clearTimeout(toastEl._t);
+              toastEl._t = setTimeout(function(){ toastEl.classList.remove('show'); }, 6000);
+            }
+          }
+        }
+      })
+      .catch(function(e) {
+        // Silently fail — version check is non-critical
+        console.log('[Krafted] Version check skipped (offline or blocked):', e.message);
+      });
+  } catch(e) {}
+})();
+
+// ── Close-confirm: ask user before closing the tab ──
+// If the board has any items (images, text, videos, etc.), show a
+// native browser confirm dialog. User can Save → close, or just close.
+// This prevents accidental data loss from Cmd+W / close tab.
+(function _initCloseGuard(){
+  window.addEventListener('beforeunload', function(e){
+    // Only prompt if there's actual content on the board
+    if (!state || !state.items || state.items.length === 0) return;
+    // Standard cross-browser beforeunload pattern:
+    // returnValue + preventDefault both needed for Chrome/Edge/Safari.
+    e.preventDefault();
+    e.returnValue = 'You have unsaved work. Leave anyway?';
+    return e.returnValue;
+  });
+})();
+
+// ── Error boundary + emergency save ──────────────────────────
+// Catches unhandled errors and rejected promises. On crash:
+// 1. Shows a non-intrusive toast so the user knows something went wrong
+// 2. Auto-saves the current board state to 'krafted_emergency_save' in
+//    localStorage (stripped of ephemeral blob URLs — layout only)
+// 3. On next load, detects emergency save and offers to restore
+(function _initErrorBoundary(){
+  var EMERGENCY_KEY = 'krafted_emergency_save';
+  var _saving = false;
+
+  function emergencySave(reason) {
+    if (_saving) return;
+    _saving = true;
+    try {
+      if (typeof state === 'undefined' || !state.items || !state.items.length) return;
+      if (typeof serializeBoard !== 'function') return;
+      var data = serializeBoard();
+      // Strip ephemeral blob/data URLs to keep the payload small
+      if (data && data.items) {
+        data.items = data.items.map(function(it){
+          if (it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:'))) {
+            it.src = '';
+            it._emergencyStripped = true;
+          }
+          return it;
+        });
+      }
+      var json = JSON.stringify(data);
+      try { localStorage.setItem(EMERGENCY_KEY, json); } catch(e) {}
+      console.error('[Krafted] Emergency save written (' + (reason || 'crash') + ') — ' +
+        Math.round(json.length / 1024) + ' KB');
+    } catch(e) {
+      console.warn('[Krafted] Emergency save failed:', e);
+    }
+  }
+
+  // Catch synchronous errors
+  window.addEventListener('error', function(e){
+    var msg = e.message || 'Unknown error';
+    var file = e.filename || '';
+    // Only catch our own errors (skip third-party scripts)
+    if (file && file.indexOf('kraftpub') === -1 && file.indexOf('krafted') === -1) return;
+    console.error('[Krafted] Unhandled error:', msg, file + ':' + e.lineno);
+    emergencySave(msg);
+    if (typeof toast === 'function') {
+      toast('⚠️ Something went wrong. Your layout was auto-saved.');
+    }
+    // Don't preventDefault — let the browser still log the error
+  });
+
+  // Catch unhandled promise rejections
+  window.addEventListener('unhandledrejection', function(e){
+    var msg = (e.reason && e.reason.message) || String(e.reason) || 'Promise rejected';
+    console.error('[Krafted] Unhandled rejection:', msg);
+    emergencySave(msg);
+  });
+
+  // ── Restore emergency save on next load ──
+  try {
+    var saved = localStorage.getItem(EMERGENCY_KEY);
+    if (saved) {
+      console.log('[Krafted] Emergency save detected from previous session');
+      localStorage.removeItem(EMERGENCY_KEY); // clear so we don't restore twice
+      // Restore after a short delay (let the main app init first)
+      setTimeout(function(){
+        try {
+          var data = JSON.parse(saved);
+          if (data && data.items && data.items.length && typeof restoreBoard === 'function') {
+            restoreBoard(data);
+            try { hideWelcome(); } catch(e) {}
+            if (typeof toast === 'function') {
+              toast('🔄 Restored from emergency save (images may need re-adding)');
+            }
+            console.log('[Krafted] Emergency save restored: ' + data.items.length + ' items');
+          }
+        } catch(e) {
+          console.warn('[Krafted] Emergency restore failed:', e);
+        }
+      }, 800);
+    }
+  } catch(e) {}
+
+  // Expose for manual trigger
+  window.emergencySave = emergencySave;
 })();

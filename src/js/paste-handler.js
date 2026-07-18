@@ -1,5 +1,6 @@
 
 import { state } from './core-state.js';
+import { fetchImageFromURL } from './file-drop.js';
 
 // PASTE FROM CLIPBOARD (handles Explorer files, screenshots, text, URLs, internal items)
 document.addEventListener('paste', e => {
@@ -244,6 +245,32 @@ document.addEventListener('paste', e => {
               trimmed = trimmed.replace(/\{\\[^{}]*\}/g, '').replace(/\\[a-z]+/gi, '').replace(/[{}]/g, '').trim();
             }
             if (!trimmed) return;
+
+            // ── Cross-origin image URL paste ──
+            // When user copies an image from another website, the clipboard
+            // usually contains text/html (with <img src>) or text/plain (URL).
+            // The image/* MIME type is often missing cross-origin. Detect
+            // image URLs here and fetch + embed them directly.
+            let imgUrl = null;
+            if (itemType === 'text/html') {
+              // Try to extract <img src> from HTML clipboard
+              const imgMatch = raw.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
+              if (imgMatch) imgUrl = imgMatch[1];
+            }
+            if (!imgUrl && /^https?:\/\/[^\s]+$/i.test(trimmed)) {
+              // Plain-text URL — check if it looks like an image
+              const lc = trimmed.toLowerCase();
+              if (/\.(png|jpg|jpeg|gif|webp|svg|bmp|avif|ico)(\?.*)?$/i.test(lc)) {
+                imgUrl = trimmed;
+              }
+            }
+            console.log('[Paste] imgUrl detected:', imgUrl, 'itemType:', itemType);
+            if (imgUrl) {
+              const { x, y } = getPasteXY();
+              fetchImageFromURL(imgUrl, x, y);
+              return;
+            }
+
             // URL detection
             if (/^https?:\/\/[^\s]+$/i.test(trimmed) || /^www\.[^\s]+\.[a-z]{2,}/i.test(trimmed) ||
                 /^[a-z0-9-]+\.[a-z]{2,}[^\s]*$/i.test(trimmed)) {

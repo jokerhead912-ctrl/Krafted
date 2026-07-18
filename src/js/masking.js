@@ -328,11 +328,17 @@ export function pickColorFromImage(e, item) {
 export function getCachedImagePixels(src, callback) {
   if (maskImageCache[src]) {
     const { img, canvas, ctx } = maskImageCache[src];
+    if (!img) return; // previously failed (no CORS) — silently skip
     callback(img, canvas, ctx);
     return;
   }
   const img = new Image();
   img.crossOrigin = 'anonymous';
+  // Suppress CORS error log for hotlinked images — server doesn't send
+  // Access-Control-Allow-Origin, so the load fails. Mark as failed in
+  // cache so we don't retry (and re-log the browser CORS warning) every
+  // time the canvas re-renders.
+  img.onerror = () => { maskImageCache[src] = { img: null }; };
   img.onload = () => {
     const canvas = document.createElement('canvas');
     canvas.width = img.naturalWidth;

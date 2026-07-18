@@ -1,5 +1,6 @@
 
 import { IS_TOUCH_DEVICE, state, viewport } from './core-state.js';
+import { maskImageCache } from './masking.js';
 
 // MIDDLE MOUSE / ALT+LEFT PAN (Mac trackpad fallback)
 viewport.addEventListener('mousedown', e => {
@@ -83,14 +84,104 @@ window.addEventListener('dragover', function(e){
   e.preventDefault();
 }, true);
 window.addEventListener('drop', function(e){
-  console.log('[FileDrop] window capture-phase drop, files:', e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0);
+  try { console.log('[FileDrop] window capture-phase drop, files:', e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0, 'types:', e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types).join(',') : ''); } catch (err) {}
   e.preventDefault();
   e.stopPropagation();
   const files = e.dataTransfer && e.dataTransfer.files;
   if (files && files.length) {
     try { hideWelcome(); } catch (err) {}
-    _handleFileDrop(e, [...files]);
+    try { _handleFileDrop(e, [...files]); } catch (err) { console.warn('[FileDrop] window handler error:', err); }
+    return;
   }
+  // ── Cross-origin drag: no files, but dataTransfer may have URL ──
+  const dt = e.dataTransfer;
+  if (!dt) return;
+  let url = null;
+  if (dt.getData) {
+    const uriList = dt.getData('text/uri-list');
+    if (uriList) {
+      const lines = uriList.split(/\r?\n/).map(s => s.trim()).filter(s => s && !s.startsWith('#'));
+      if (lines.length) url = lines[0];
+    }
+    if (!url) {
+      const html = dt.getData('text/html');
+      if (html) {
+        const m = html.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
+        if (m) url = m[1];
+      }
+    }
+  }
+  if (!url) return;
+  try { hideWelcome(); } catch (err) {}
+  // Fetch real image bytes via CORS proxy → convert to data URL →
+  // addImage directly. Data URL is same-origin, zero CORS forever.
+  // This is functionally identical to "Copy Image → Paste" but done
+  // in one drag gesture.
+  toast('Fetching image…');
+  fetch('https://images.weserv.nl/?url=' + encodeURIComponent(url))
+    .then(res => {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.blob();
+    })
+    .then(blob => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          // Max 360px wide for comfortable drag-drop viewing
+          const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
+          const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
+          addImage(ev.target.result, dw, dh,
+            (e.clientX - state.pan.x) / state.zoom,
+            (e.clientY - state.pan.y) / state.zoom);
+          toast('Pasted image');
+        };
+        img.onerror = () => toast('Failed to decode image');
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(blob);
+    })
+    .catch(err => {
+      console.log('[FileDrop] proxy fetch failed:', err.message);
+      // Last resort: hotlink with no CORS check
+      const img = new Image();
+      img.onload = () => {
+        if (typeof maskImageCache !== 'undefined') maskImageCache[url] = { img: null };
+        const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
+        const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
+        addImage(url, dw, dh,
+          (e.clientX - state.pan.x) / state.zoom,
+          (e.clientY - state.pan.y) / state.zoom);
+        toast('Pasted image (hotlinked)');
+      };
+      img.onerror = () => {
+        // Try fallback proxy (corsproxy.io) as last resort
+        console.log('[FileDrop] hotlink failed, trying corsproxy.io');
+        fetch('https://corsproxy.io/?' + encodeURIComponent(url))
+          .then(function(r){ return r.blob(); })
+          .then(function(blob){
+            var reader = new FileReader();
+            reader.onload = function(ev){
+              var i2 = new Image();
+              i2.onload = function(){
+                var dw = Math.round(Math.min(i2.naturalWidth / 2, 360));
+                var dh = Math.round(i2.naturalHeight * (dw / i2.naturalWidth));
+                addImage(ev.target.result, dw, dh,
+                  (e.clientX - state.pan.x) / state.zoom,
+                  (e.clientY - state.pan.y) / state.zoom);
+                toast('Pasted image (via fallback proxy)');
+              };
+              i2.src = ev.target.result;
+            };
+            reader.readAsDataURL(blob);
+          })
+          .catch(function(e2){
+            console.log('[FileDrop] all paths failed:', e2.message);
+            toast('Image could not be loaded (source may be expired)');
+          });
+      };
+      img.src = url;
+    });
 }, true);
 
 viewport.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
@@ -429,3 +520,146 @@ viewport.addEventListener('drop', e => {
   const files = [...e.dataTransfer.files];
   if (files.length) _handleFileDrop(e, files);
 });
+
+// ============================================================
+//  CROSS-ORIGIN IMAGE FETCH — used by drag-drop + paste
+// ============================================================
+
+// Fetch an image from a URL and embed it on the canvas.
+// Used for cross-origin paste (copy image from another website → paste into Krafted).
+// Tries direct fetch first; if CORS-blocked, falls back to an image element load
+// (which works for most public images but won't give us the raw bytes — we use
+// a canvas to convert to data URL for persistence).
+export function fetchImageFromURL(url, x, y) {
+  console.log('[fetchImageFromURL] start:', url);
+  try { hideWelcome(); } catch (err) {}
+  toast('Fetching image…');
+  // 1) Try direct fetch (works if server has CORS headers or same-origin)
+  fetch(url, { mode: 'cors' })
+    .then(res => {
+      console.log('[fetchImageFromURL] fetch response status:', res.status);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.blob();
+    })
+    .then(blob => {
+      console.log('[fetchImageFromURL] got blob size:', blob.size);
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
+          toast('Pasted image from URL');
+        };
+        img.onerror = () => { console.log('[fetchImageFromURL] data URL img decode failed'); toast('Failed to decode image'); };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(blob);
+    })
+    .catch(err => {
+      console.log('[fetchImageFromURL] direct fetch failed:', err.message);
+      // 2) Fallback: load via img tag (no CORS). Then convert to data
+      // URL via fetch(no-cors) so the embedded image is same-origin
+      // and never triggers CORS again on re-render.
+      const img = new Image();
+      img.onload = () => {
+        console.log('[fetchImageFromURL] hotlink img loaded:', img.naturalWidth, 'x', img.naturalHeight);
+        // Pre-mark mask cache as failed BEFORE addImage
+        if (typeof maskImageCache !== 'undefined') {
+          maskImageCache[url] = { img: null };
+        }
+        // Try fetch(no-cors) to get the bytes — opaque response still
+        // gives us a Blob, which we convert to objectURL. This avoids
+        // any future CORS check since objectURL is same-origin.
+        fetch(url, { mode: 'no-cors' })
+          .then(res => res.blob())
+          .then(blob => {
+            const objUrl = URL.createObjectURL(blob);
+            addImage(objUrl, img.naturalWidth, img.naturalHeight, x, y);
+            toast('Pasted image (hotlinked)');
+          })
+          .catch(() => {
+            // Even blob conversion failed — fall back to direct URL.
+            // The browser's <img> cache will at least make re-renders
+            // not re-trigger CORS for this src.
+            addImage(url, img.naturalWidth, img.naturalHeight, x, y);
+            toast('Pasted image (hotlinked)');
+          });
+      };
+      img.onerror = () => {
+        console.log('[fetchImageFromURL] hotlink also failed, trying CORS proxy');
+        if (typeof state !== 'undefined' && state.allowCorsProxy) {
+          tryCorsProxy(url, x, y);
+        } else {
+          toast('Image blocked. Enable proxy: kraftedEnableCorsProxy()');
+          console.log('[fetchImageFromURL] CORS proxy not enabled — giving up');
+        }
+      };
+      img.src = url;
+    });
+}
+
+// Last-resort: fetch through a public CORS proxy. Only invoked if the user
+// has explicitly enabled state.allowCorsProxy in settings (privacy: the proxy
+// sees the URL you're fetching). Uses images.weserv.nl as the primary proxy
+// (designed for image hotlinking, no rate limit on free tier) with
+// corsproxy.io as fallback.
+// To enable, run in console: kraftedEnableCorsProxy()
+export function tryCorsProxy(url, x, y) {
+  const proxy = 'https://images.weserv.nl/?url=' + encodeURIComponent(url);
+  console.log('[tryCorsProxy]', proxy);
+  toast('Fetching via CORS proxy…');
+  fetch(proxy)
+    .then(res => {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.blob();
+    })
+    .then(blob => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
+          toast('Pasted image (via proxy)');
+        };
+        img.onerror = () => { toast('Proxy returned invalid image'); };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(blob);
+    })
+    .catch(err => {
+      console.log('[tryCorsProxy] weserv failed:', err.message);
+      // Fallback proxy
+      const fallback = 'https://corsproxy.io/?' + encodeURIComponent(url);
+      fetch(fallback)
+        .then(res => res.blob())
+        .then(blob => {
+          const reader = new FileReader();
+          reader.onload = ev => {
+            const img = new Image();
+            img.onload = () => {
+              addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
+              toast('Pasted image (via fallback proxy)');
+            };
+            img.onerror = () => { toast('Proxy returned invalid image'); };
+            img.src = ev.target.result;
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(e2 => {
+          console.log('[tryCorsProxy] fallback also failed:', e2.message);
+          toast('All CORS proxies failed. Image cannot be loaded.');
+        });
+    });
+}
+
+// Console command: enable CORS proxy for cross-origin image paste.
+// Persists in localStorage. To disable: kraftedDisableCorsProxy()
+window.kraftedEnableCorsProxy = function() {
+  try {
+    if (typeof state === 'undefined') state = {};
+    state.allowCorsProxy = true;
+    localStorage.setItem('krafted-allow-cors-proxy', '1');
+    console.log('[Krafted] CORS proxy ENABLED. Cross-origin image paste will use images.weserv.nl as fallback.');
+    toast('CORS proxy enabled — try paste again');
+  } catch (e) { console.warn(e); }
+};

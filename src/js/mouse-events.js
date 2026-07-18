@@ -904,7 +904,11 @@ document.addEventListener('mousemove', e => {
       if (d.item.el && d.item.el.classList.contains('todo-item')) d.item._resized = true;
       // Mark text-items as user-resized so autoGrowTextItem respects the width
       // and only grows height on input (prevents width jumping on type).
-      if (d.item.el && d.item.el.classList.contains('text-item')) d.item.userResized = true;
+      if (d.item.el && d.item.el.classList.contains('text-item')) {
+        d.item.userResized = true;
+        // Font size is independent of box resize — user changes it manually in text props.
+        // Box resize only affects dimensions; text wraps naturally.
+      }
     }
     // Cache scale factors and pivot for group members
     const scaleX = w / d.origW;
