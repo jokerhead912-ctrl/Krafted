@@ -4850,14 +4850,22 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 // ==== core-state.js ====
 
 // ============================================================
+//  KRAFTED_VERSION — single source of truth, declared EARLY so all
+//  [INIT] logs and version checks below can reference it.
+//  Bump this AND docs/version.json when releasing a new version.
+// ============================================================
+var KRAFTED_VERSION = '6.0';
+// (console.log marker moved to after init, see below)
+
+// ============================================================
 //  STARTUP CHECKS
 // ============================================================
-console.log('[INIT] Krafted v' + (typeof KRAFTED_VERSION !== 'undefined' ? KRAFTED_VERSION : '?') + ' loading...');
+console.log('[INIT] Krafted v' + KRAFTED_VERSION + ' loading...');
 console.log('[INIT] JSZip available:', typeof JSZip);
 console.log('[INIT] showSaveFilePicker available:', typeof window.showSaveFilePicker);
 // === COPYRIGHT — Krafted by Joker Head Studios ===
 console.log(
-  '%c Krafted v' + (typeof KRAFTED_VERSION !== 'undefined' ? KRAFTED_VERSION : '?') + ' %c by Joker Head Studios ',
+  '%c Krafted v' + KRAFTED_VERSION + ' %c by Joker Head Studios ',
   'background:#7c8cf0;color:#000;font-weight:bold;padding:4px 8px;font-size:14px;',
   'background:#1a1a1a;color:#e8e8e8;padding:4px 8px;font-size:12px;'
 );
@@ -18003,10 +18011,8 @@ function _syncAppFsIcon() {
 document.addEventListener('fullscreenchange', _syncAppFsIcon);
 document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
-// Marker so user can confirm new code is loaded (check DevTools console)
-var KRAFTED_VERSION = '6.0';
-console.log('%c[Krafted v' + KRAFTED_VERSION + '] Text item handle z-index raised to 99999 — previously the right-side handles (NE/SE/E/W) could be hidden behind sibling items. Refresh the popover/comment list to re-render.',
-  'color:#22c55e;font-weight:bold;font-size:13px;');
+// (KRAFTED_VERSION marker — now declared at the top of the file, see line 4857)
+// Additional version-specific changelog markers can go below.
 
 // Auto-sync welcome page version number from KRAFTED_VERSION.
 // Change KRAFTED_VERSION above and the welcome page updates automatically.
