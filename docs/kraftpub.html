@@ -20304,8 +20304,10 @@ function _dispatchShortcut(e) {
       state.spaceDown = true; viewport.style.cursor = 'grab'; return true;
     case 'nav-help':         if (typeof showHelp === 'function') showHelp(); return true;
     case 'nav-esc':          clearSelection(); hideCtx(); if (typeof hideHelp === 'function') hideHelp(); captureResultPanel.classList.remove('show'); _exitRelationTool();
+      // v6.0: draw mode — Esc packs all strokes into one item then exits
+      if (state.tool === 'draw') { convertAllStrokesToItem(); setTool('select'); return true; }
       if (state.tool !== 'select') setTool('select'); return true;
-    case 'draw-finish':      if (state.tool === 'draw') { setTool('select'); return true; } return false;
+    case 'draw-finish':      if (state.tool === 'draw') { convertAllStrokesToItem(); setTool('select'); return true; } return false;
     // Translate
     case 'translate-en-zh':  translateSelectedText('en', 'zh'); return true;
     // Media
@@ -22220,18 +22222,11 @@ document.addEventListener('mouseup', e => {
   if (G.currentStroke) {
     const stroke = G.currentStroke;
     G.currentStroke = null;
-    // Every stroke becomes a draw item (selectable, groupable, deletable).
-    // In continuous mode, the user can keep drawing without clicking the
-    // draw button — Esc just exits draw mode (no merging, no packing).
-    if (stroke.points.length >= 2 && stroke.mode !== 'eraser') {
-      createDrawItem(stroke);
-    }
+    // Strokes stay on the draw layer — no items created.
+    // Press Enter or Esc to pack all strokes into one movable item.
     try { pushUndo(); } catch (e) {}
     scheduleAutoSave();
-    // Continuous draw: stay in draw mode so the user can keep drawing.
-    if (drawTool.continuous) {
-      setTool('draw');
-    }
+    redrawDrawLayer();
   }
 
   // DRAW STROKE MOVE END
@@ -24678,13 +24673,14 @@ function clearDraw() {
   redrawDrawLayer();
 }
 
-// v6.0: Pack all draw-layer strokes into a single movable item.
-// Called on Enter/Esc when in draw mode. The user draws freely with
-// many strokes, then hits Enter to convert them all into one item.
+// v6.0: Pack all draw-layer strokes into a single movable item with an
+// internal canvas that renders all strokes. The item can be dragged,
+// scaled, and deleted as one unit — perfect for storyboard sketches.
 function convertAllStrokesToItem() {
   const strokes = G.drawStrokes.filter(s => s.mode !== 'eraser' && s.points && s.points.length >= 2);
   if (strokes.length === 0) return;
-  // Find the union bounding box of all strokes
+
+  // Find the union bounding box of all strokes (in world coords)
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   strokes.forEach(stroke => {
     stroke.points.forEach(p => {
@@ -24694,15 +24690,59 @@ function convertAllStrokesToItem() {
       if (p[1] > maxY) maxY = p[1];
     });
   });
-  const pad = 12;
+  const pad = 8;
   const x = minX - pad;
   const y = minY - pad;
   const w = Math.max(maxX - minX + pad * 2, 20);
   const h = Math.max(maxY - minY + pad * 2, 20);
 
+  // Save stroke data before removing from G.drawStrokes
+  const strokeData = strokes.map(s => ({
+    color: s.color, size: s.size, opacity: s.opacity,
+    mode: s.mode, arrowHead: s.arrowHead || 0,
+    points: s.points.map(p => [p[0], p[1], p[2] || 0])
+  }));
+
+  // Remove packed strokes from draw layer
+  const packedIds = new Set(strokes.map(s => s.strokeId));
+  G.drawStrokes = G.drawStrokes.filter(s => !packedIds.has(s.strokeId));
+
+  // Create item with internal canvas
   const el = document.createElement('div');
   el.className = 'item draw-item';
-  el.style.cssText = 'background:transparent;border:none;pointer-events:auto;';
+  el.style.cssText = 'background:transparent;border:none;pointer-events:auto;overflow:visible;';
+  el._strokeData = strokeData;
+  el._drawW = w;
+  el._drawH = h;
+  el._drawPad = pad;
+  el._minX = minX;
+  el._minY = minY;
+
+  // Render strokes onto an internal canvas
+  const dpr = window.devicePixelRatio || 1;
+  const canvas = document.createElement('canvas');
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  strokeData.forEach(s => {
+    ctx.globalAlpha = s.opacity;
+    ctx.strokeStyle = s.color;
+    ctx.fillStyle = s.color;
+    ctx.lineWidth = s.size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    s.points.forEach((p, i) => {
+      const sx = p[0] - minX + pad;
+      const sy = p[1] - minY + pad;
+      if (i === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    });
+    ctx.stroke();
+  });
+  el.appendChild(canvas);
   canvasContent.appendChild(el);
 
   const item = {
@@ -24721,7 +24761,7 @@ function convertAllStrokesToItem() {
   pushUndo();
   scheduleAutoSave();
   redrawDrawLayer();
-  toast('Packed ' + strokes.length + ' strokes into 1 item');
+  toast('Packed ' + strokes.length + ' strokes');
 }
 
 window.convertAllStrokesToItem = convertAllStrokesToItem;
