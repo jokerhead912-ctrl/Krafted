@@ -895,3 +895,5 @@ window.toggleColorWheel = toggleColorWheel;
 window.colorWheelPick = colorWheelPick;
 window.colorWheelDrag = colorWheelDrag;
 window.resetMasks = resetMasks;
+window.maskImageCache = maskImageCache;
+window.getCachedImagePixels = getCachedImagePixels;
