@@ -20303,9 +20303,10 @@ function _dispatchShortcut(e) {
       if (_videoSelected()) return false;
       state.spaceDown = true; viewport.style.cursor = 'grab'; return true;
     case 'nav-help':         if (typeof showHelp === 'function') showHelp(); return true;
-    case 'nav-esc':          clearSelection(); hideCtx(); if (typeof hideHelp === 'function') hideHelp(); captureResultPanel.classList.remove('show'); _exitRelationTool();
+    case 'nav-esc':
       // v6.0: draw mode — Esc packs all strokes into one item then exits
       if (state.tool === 'draw') { convertAllStrokesToItem(); setTool('select'); return true; }
+      clearSelection(); hideCtx(); if (typeof hideHelp === 'function') hideHelp(); captureResultPanel.classList.remove('show'); _exitRelationTool();
       if (state.tool !== 'select') setTool('select'); return true;
     case 'draw-finish':      if (state.tool === 'draw') { convertAllStrokesToItem(); setTool('select'); return true; } return false;
     // Translate
