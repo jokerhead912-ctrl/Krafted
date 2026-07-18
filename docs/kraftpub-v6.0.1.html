@@ -3965,6 +3965,13 @@ function showWelcome() {
 
 <script>
 // ============================================================
+// KRAFTED_VERSION — must be defined BEFORE the main script runs,
+// so console.log calls referencing it at startup don't print "undefined".
+// Update this when bumping the version.
+// ============================================================
+var KRAFTED_VERSION = '6.0.1';
+
+// ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
 // These wrap existing operations with try/catch / sanitization.
 // If anything breaks, revert the single call site, not the wrapper.
@@ -18088,7 +18095,9 @@ document.addEventListener('fullscreenchange', _syncAppFsIcon);
 document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
-var KRAFTED_VERSION = '6.0.1';
+// KRAFTED_VERSION is now defined in the early <script> block (line ~3966)
+// so startup console.log calls can access it. Kept here as a marker only.
+// var KRAFTED_VERSION = '6.0.1';  ← DO NOT redeclare; defined above.
 console.log('%c[Krafted v' + KRAFTED_VERSION + '] Text item handle z-index raised to 99999 — previously the right-side handles (NE/SE/E/W) could be hidden behind sibling items. Refresh the popover/comment list to re-render.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
