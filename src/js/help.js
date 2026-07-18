@@ -4,7 +4,7 @@
 //  v5.4 R79 — tabs: Guide | Shortcuts
 // ============================================================
 
-import { Platform, KRAFTED_VERSION } from './core-state.js';
+import { Platform } from './core-state.js';
 
 export function showHelp() {
   var overlay = document.getElementById('help-overlay');
@@ -92,7 +92,7 @@ function _buildHelpContent(overlay) {
   // Footer
   var footer = document.createElement('p');
   footer.style.cssText = 'margin-top:20px;font-size:10px;color:#555;text-align:center;';
-  footer.textContent = 'Krafted v' + KRAFTED_VERSION + ' — by Joker Head Studios';
+  footer.textContent = 'Krafted v' + __KRAFTED_VERSION__ + ' — by Joker Head Studios';
   box.appendChild(footer);
 
   overlay.appendChild(box);
@@ -371,7 +371,7 @@ function _formatKeyCombo(keys) {
 // ── Version panel ─────────────────────────────────────────────
 function _buildVersionPanel(verPanel) {
   var html = '<h3 style="color:#00e5ff;margin:0 0 12px;">🔢 Version &amp; Rollback</h3>';
-  html += '<p style="color:#888;margin:0 0 16px;">Current version: <b style="color:#fff;">v' + KRAFTED_VERSION + '</b></p>';
+  html += '<p style="color:#888;margin:0 0 16px;">Current version: <b style="color:#fff;">v' + __KRAFTED_VERSION__ + '</b></p>';
 
   html += '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;margin-bottom:14px;">';
   html += '<p style="margin:0 0 10px;color:#aaa;font-weight:bold;">Available versions (click to switch):</p>';
@@ -398,7 +398,7 @@ function _buildVersionPanel(verPanel) {
       if (keys.length === 0) { listEl.innerHTML = '<span style="color:#666;">No previous versions available</span>'; return; }
       var html2 = '';
       keys.forEach(function(v){
-        var isCurrent = (v === KRAFTED_VERSION);
+        var isCurrent = (v === __KRAFTED_VERSION__);
         var file = versions[v];
         var url = 'https://jokerhead912-ctrl.github.io/Krafted/' + file;
         html2 += '<a href="' + url + '" style="display:block;padding:8px 12px;background:' + (isCurrent ? 'rgba(0,229,255,0.1)' : 'rgba(255,255,255,0.04)') + ';border-radius:6px;color:' + (isCurrent ? '#00e5ff' : '#aaa') + ';text-decoration:none;font-size:12px;transition:background 0.15s;"';

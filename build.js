@@ -1,5 +1,5 @@
 /**
- * Krafted v5.4 — Build Script
+ * Krafted v6.0 — Build Script
  *
  * Takes the modular source in src/ and bundles everything into a single
  * self-contained kraftpub.html, ready for GitHub Pages deployment.
@@ -11,7 +11,7 @@
  * 4. Write the final HTML to the output path
  *
  * Usage: node build.js [output_path]
- *   Default output: ../krafted-build/docs/kraftpub.html
+ *   Default output: docs/kraftpub.html
  */
 
 const esbuild = require('esbuild');
@@ -21,10 +21,11 @@ const path = require('path');
 const SRC_DIR = path.join(__dirname, 'src');
 const JS_DIR = path.join(SRC_DIR, 'js');
 const LIB_DIR = path.join(SRC_DIR, 'lib');
-const OUTPUT = process.argv[2] || path.join(__dirname, '..', 'krafted-build', 'docs', 'kraftpub.html');
+const OUTPUT = process.argv[2] || path.join(__dirname, 'docs', 'kraftpub.html');
+const VERSION = '6.0.1';
 
 async function build() {
-  console.log('🔨 Krafted v5.4 — Building...\n');
+  console.log('🔨 Krafted v6.0 — Building...\n');
 
   // ── Step 1: Bundle JS modules with esbuild ──
   console.log('  📦 Bundling JS modules...');
@@ -37,6 +38,9 @@ async function build() {
     platform: 'browser',
     target: 'es2020',
     write: false,
+    define: {
+      '__KRAFTED_VERSION__': JSON.stringify(VERSION)
+    },
     outfile: 'app.bundle.js',
     minify: false,
     keepNames: true,
@@ -63,7 +67,7 @@ async function build() {
     window.state = state;
     window.IS_TOUCH_DEVICE = IS_TOUCH_DEVICE;
     window._frozenGifs = _frozenGifs;
-    window.KRAFTED_VERSION = "6.0.1";
+    window.KRAFTED_VERSION = __KRAFTED_VERSION__;
     var _expFuncs = [
       hideWelcome,showWelcome,addImage,addText,addLinkCard,addMindMap,addTodo,
       addAudioItem,selectOnly,clearSelection,toggleSelect,deleteSelected,
@@ -236,6 +240,13 @@ async function build() {
 })();
 `;
   allJS += globalExposure;
+
+  // ── Post-process: replace any remaining __KRAFTED_VERSION__ placeholders ──
+  // The exposure blocks are injected as raw strings AFTER esbuild, so they
+  // aren't processed by esbuild's define. Replace them manually.
+  // In JS context: use JSON.stringify (quoted). In HTML context: use raw version.
+  allJS = allJS.replace(/__KRAFTED_VERSION__/g, JSON.stringify(VERSION));
+  html = html.replace(/__KRAFTED_VERSION__/g, VERSION);
 
   // ── Step 5: Write output ──
   const outDir = path.dirname(OUTPUT);

@@ -1,20 +1,21 @@
 
 // ============================================================
-//  KRAFTED_VERSION — single source of truth, declared EARLY so all
-//  [INIT] logs and version checks below can reference it.
-//  Bump this AND docs/version.json when releasing a new version.
+//  KRAFTED_VERSION — single source of truth.
+//  __KRAFTED_VERSION__ is injected by esbuild define at build time;
+//  it becomes a string literal like "6.0.1" in the bundled output.
+//  Bump version in build.js (VERSION const) AND docs/version.json.
+//  No var declaration needed — esbuild replaces all references inline.
 // ============================================================
-export const KRAFTED_VERSION = '6.0.1';
 
 // ============================================================
 //  STARTUP CHECKS
 // ============================================================
-console.log('[INIT] Krafted v' + KRAFTED_VERSION + ' loading...');
+console.log('[INIT] Krafted v' + __KRAFTED_VERSION__ + ' loading...');
 console.log('[INIT] JSZip available:', typeof JSZip);
 console.log('[INIT] showSaveFilePicker available:', typeof window.showSaveFilePicker);
 // === COPYRIGHT — Krafted by Joker Head Studios ===
 console.log(
-  '%c Krafted v' + KRAFTED_VERSION + ' %c by Joker Head Studios ',
+  '%c Krafted v' + __KRAFTED_VERSION__ + ' %c by Joker Head Studios ',
   'background:#7c8cf0;color:#000;font-weight:bold;padding:4px 8px;font-size:14px;',
   'background:#1a1a1a;color:#e8e8e8;padding:4px 8px;font-size:12px;'
 );

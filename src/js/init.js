@@ -1,4 +1,4 @@
-import { state, G, paperState, captureResultPanel, captureResultImg, _frozenGifs, KRAFTED_VERSION } from './core-state.js';;
+import { state, G, paperState, captureResultPanel, captureResultImg, _frozenGifs } from './core-state.js';;
 import './quick-save.js';
 import { initTextToolbar } from './text-style.js';
 import { updateCanvas } from './canvas-view.js';
@@ -438,11 +438,11 @@ export async function exportAllImagesToFolder() {
 // ── Welcome page version sync ──
 (function _syncWelcomeVersion(){
   var wv = document.getElementById('welcome-version');
-  if (wv) wv.textContent = 'V ' + KRAFTED_VERSION.split('.').join(' . ');
+  if (wv) wv.textContent = 'V ' + __KRAFTED_VERSION__.split('.').join(' . ');
 })();
 
 // ── Version check: fetch latest version from GitHub Pages ──
-// Compares current KRAFTED_VERSION with the remote version.json.
+// Compares current __KRAFTED_VERSION__ with the remote version.json.
 // If newer, shows a non-intrusive update toast.
 (function _checkForUpdate(){
   try {
@@ -457,7 +457,7 @@ export async function exportAllImagesToFolder() {
       .then(function(data) {
         var remote = data.version;
         if (!remote) return;
-        var current = KRAFTED_VERSION;
+        var current = __KRAFTED_VERSION__;
         if (remote !== current) {
           var partsCur = current.split('.').map(Number);
           var partsRem = remote.split('.').map(Number);
