@@ -6403,7 +6403,7 @@ var __kraft = (() => {
     mmAutoFit(mm);
   }
   __name(renderMindMap2, "renderMindMap");
-  function mmUpdateConnectors2(mm, canvasDiv) {
+  function mmUpdateConnectors(mm, canvasDiv) {
     if (!canvasDiv) canvasDiv = mm.el.querySelector(".mindmap-canvas");
     if (!canvasDiv) return;
     const svg = canvasDiv.querySelector(".mm-svg-layer");
@@ -6441,7 +6441,7 @@ var __kraft = (() => {
       path.setAttribute("d", pathD);
     });
   }
-  __name(mmUpdateConnectors2, "mmUpdateConnectors");
+  __name(mmUpdateConnectors, "mmUpdateConnectors");
   function mmAutoFit(mm, allowShrink) {
     if (!mm.nodes || mm.nodes.length === 0) return;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -6475,7 +6475,7 @@ var __kraft = (() => {
         nodeEl.style.top = n.y + "px";
       }
     });
-    requestAnimationFrame(() => mmUpdateConnectors2(mm));
+    requestAnimationFrame(() => mmUpdateConnectors(mm));
   }
   __name(mmAutoFit, "mmAutoFit");
   function mmSelectNode(mm, nodeId) {
@@ -6620,7 +6620,7 @@ var __kraft = (() => {
       node.y = Math.max(0, node.y);
       nodeEl.style.left = node.x + "px";
       nodeEl.style.top = node.y + "px";
-      mmUpdateConnectors2(mm, canvasDiv);
+      mmUpdateConnectors(mm, canvasDiv);
       return;
     }
     if (mmConnectState) {
@@ -6759,6 +6759,554 @@ var __kraft = (() => {
   }
   __name(setTool2, "setTool");
 
+  // src/js/draw-layer.js
+  function getDrawCtx() {
+    const ctx = drawLayer.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return ctx;
+  }
+  __name(getDrawCtx, "getDrawCtx");
+  function redrawDrawLayer2() {
+    const ctx = getDrawCtx();
+    ctx.clearRect(0, 0, drawLayer.width, drawLayer.height);
+    G2.drawStrokes.forEach((stroke) => {
+      if (stroke.points.length < 2) return;
+      ctx.globalAlpha = stroke.opacity;
+      ctx.strokeStyle = stroke.color;
+      ctx.fillStyle = stroke.color;
+      ctx.lineWidth = stroke.size;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      if (stroke.mode === "eraser") {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.beginPath();
+        stroke.points.forEach((p, i) => {
+          const sx = p[0] * state.zoom + state.pan.x;
+          const sy = p[1] * state.zoom + state.pan.y;
+          if (i === 0) ctx.moveTo(sx, sy);
+          else ctx.lineTo(sx, sy);
+        });
+        ctx.stroke();
+      } else if (stroke.mode === "arrow") {
+        ctx.globalCompositeOperation = "source-over";
+        const p0 = stroke.points[0], p1 = stroke.points[1];
+        const sx0 = p0[0] * state.zoom + state.pan.x;
+        const sy0 = p0[1] * state.zoom + state.pan.y;
+        const sx1 = p1[0] * state.zoom + state.pan.x;
+        const sy1 = p1[1] * state.zoom + state.pan.y;
+        ctx.beginPath();
+        ctx.moveTo(sx0, sy0);
+        ctx.lineTo(sx1, sy1);
+        ctx.stroke();
+        const angle = Math.atan2(sy1 - sy0, sx1 - sx0);
+        const headLen = stroke.arrowHead || drawTool.arrowHead || 15;
+        const spread = Math.PI / 7;
+        ctx.beginPath();
+        ctx.moveTo(sx1, sy1);
+        ctx.lineTo(sx1 - headLen * Math.cos(angle - spread), sy1 - headLen * Math.sin(angle - spread));
+        ctx.lineTo(sx1 - headLen * Math.cos(angle + spread), sy1 - headLen * Math.sin(angle + spread));
+        ctx.closePath();
+        ctx.fill();
+      } else if (stroke.mode === "box") {
+        ctx.globalCompositeOperation = "source-over";
+        const p0 = stroke.points[0], p1 = stroke.points[1];
+        const sx0 = p0[0] * state.zoom + state.pan.x;
+        const sy0 = p0[1] * state.zoom + state.pan.y;
+        const sx1 = p1[0] * state.zoom + state.pan.x;
+        const sy1 = p1[1] * state.zoom + state.pan.y;
+        const bx = Math.min(sx0, sx1), by = Math.min(sy0, sy1);
+        const bw = Math.abs(sx1 - sx0), bh = Math.abs(sy1 - sy0);
+        ctx.strokeRect(bx, by, bw, bh);
+      } else {
+        ctx.globalCompositeOperation = "source-over";
+        const hasPressure = stroke.points[0] && stroke.points[0].length >= 3;
+        if (hasPressure) {
+          for (let i = 1; i < stroke.points.length; i++) {
+            const p0 = stroke.points[i - 1];
+            const p1 = stroke.points[i];
+            const sx0 = p0[0] * state.zoom + state.pan.x;
+            const sy0 = p0[1] * state.zoom + state.pan.y;
+            const sx1 = p1[0] * state.zoom + state.pan.x;
+            const sy1 = p1[1] * state.zoom + state.pan.y;
+            const pr = ((p0[2] || 0.5) + (p1[2] || 0.5)) / 2;
+            const w = stroke.size * (0.3 + 0.7 * Math.min(1, Math.max(0, pr)));
+            ctx.lineWidth = w;
+            ctx.beginPath();
+            ctx.moveTo(sx0, sy0);
+            ctx.lineTo(sx1, sy1);
+            ctx.stroke();
+          }
+        } else {
+          ctx.lineWidth = stroke.size;
+          ctx.beginPath();
+          stroke.points.forEach((p, i) => {
+            const sx = p[0] * state.zoom + state.pan.x;
+            const sy = p[1] * state.zoom + state.pan.y;
+            if (i === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+          });
+          ctx.stroke();
+        }
+      }
+    });
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    if (G2.hoveredStroke && !G2.currentStroke && !G2.drawMoveState) {
+      const hs = G2.hoveredStroke;
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = (hs.size || 3) + 4;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.setLineDash([6, 4]);
+      if (hs.mode === "arrow" && hs.points.length >= 2) {
+        const p0 = hs.points[0], p1 = hs.points[1];
+        const sx0 = p0[0] * state.zoom + state.pan.x, sy0 = p0[1] * state.zoom + state.pan.y;
+        const sx1 = p1[0] * state.zoom + state.pan.x, sy1 = p1[1] * state.zoom + state.pan.y;
+        ctx.beginPath();
+        ctx.moveTo(sx0, sy0);
+        ctx.lineTo(sx1, sy1);
+        ctx.stroke();
+      } else if (hs.mode === "box" && hs.points.length >= 2) {
+        const p0 = hs.points[0], p1 = hs.points[1];
+        const sx0 = p0[0] * state.zoom + state.pan.x, sy0 = p0[1] * state.zoom + state.pan.y;
+        const sx1 = p1[0] * state.zoom + state.pan.x, sy1 = p1[1] * state.zoom + state.pan.y;
+        ctx.strokeRect(Math.min(sx0, sx1), Math.min(sy0, sy1), Math.abs(sx1 - sx0), Math.abs(sy1 - sy0));
+      } else if (hs.mode === "pen") {
+        ctx.beginPath();
+        hs.points.forEach((p, i) => {
+          const sx = p[0] * state.zoom + state.pan.x, sy = p[1] * state.zoom + state.pan.y;
+          if (i === 0) ctx.moveTo(sx, sy);
+          else ctx.lineTo(sx, sy);
+        });
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+  }
+  __name(redrawDrawLayer2, "redrawDrawLayer");
+
+  // src/js/groups.js
+  function updateAllGroupBorders2() {
+    state.groups.forEach((g) => updateGroupBorder(g));
+  }
+  __name(updateAllGroupBorders2, "updateAllGroupBorders");
+  function updateGroupBorder(group) {
+    const allItems = [...state.items, ...state.texts, ...state.todos || [], ...state.mindmaps || []];
+    const members = allItems.filter((i) => group.memberIds.has(i.id));
+    if (members.length === 0) {
+      group.borderEl.style.display = "none";
+      return;
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const m of members) {
+      const el = m.el;
+      const r = el.getBoundingClientRect();
+      const canvasRect = canvasContent.getBoundingClientRect();
+      const sx = (r.left - canvasRect.left) / state.zoom;
+      const sy = (r.top - canvasRect.top) / state.zoom;
+      const sw = r.width / state.zoom;
+      const sh = r.height / state.zoom;
+      if (sx < minX) minX = sx;
+      if (sy < minY) minY = sy;
+      if (sx + sw > maxX) maxX = sx + sw;
+      if (sy + sh > maxY) maxY = sy + sh;
+    }
+    const pad = 8;
+    group.borderEl.style.display = "block";
+    group.borderEl.style.left = minX - pad + "px";
+    group.borderEl.style.top = minY - pad + "px";
+    group.borderEl.style.width = maxX - minX + pad * 2 + "px";
+    group.borderEl.style.height = maxY - minY + pad * 2 + "px";
+    group.borderEl.style.borderColor = group.color;
+  }
+  __name(updateGroupBorder, "updateGroupBorder");
+
+  // src/js/relations.js
+  var RELATION_STYLES = [
+    { id: "orthogonal", name: "\u76F4\u89D2\u6298\u7EBF", icon: "\u2517" },
+    { id: "straight", name: "\u76F4\u7EBF", icon: "\u2501" },
+    { id: "curved", name: "\u66F2\u7EBF", icon: "\u2570" },
+    { id: "dashed", name: "\u865A\u7EBF", icon: "\u2505" }
+  ];
+  function _ensureRelations() {
+    if (!state.relations) state.relations = [];
+  }
+  __name(_ensureRelations, "_ensureRelations");
+  function _getItemWorldRect(item2) {
+    return {
+      x: item2.x,
+      y: item2.y,
+      w: item2.w || (item2.el ? item2.el.offsetWidth : 200),
+      h: item2.h || (item2.el ? item2.el.offsetHeight : 150)
+    };
+  }
+  __name(_getItemWorldRect, "_getItemWorldRect");
+  function _getAnchorPoint(item2, anchor) {
+    var r = _getItemWorldRect(item2);
+    if (!anchor || anchor === "auto") {
+      return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+    }
+    switch (anchor) {
+      case "top":
+        return { x: r.x + r.w / 2, y: r.y };
+      case "bottom":
+        return { x: r.x + r.w / 2, y: r.y + r.h };
+      case "left":
+        return { x: r.x, y: r.y + r.h / 2 };
+      case "right":
+        return { x: r.x + r.w, y: r.y + r.h / 2 };
+      case "center":
+        return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+      default:
+        return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+    }
+  }
+  __name(_getAnchorPoint, "_getAnchorPoint");
+  function _autoAnchor(fromItem, toItem) {
+    var fr = _getItemWorldRect(fromItem);
+    var tr = _getItemWorldRect(toItem);
+    var fc = { x: fr.x + fr.w / 2, y: fr.y + fr.h / 2 };
+    var tc = { x: tr.x + tr.w / 2, y: tr.y + tr.h / 2 };
+    var dx = tc.x - fc.x;
+    var dy = tc.y - fc.y;
+    var fromA, toA;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      fromA = dx > 0 ? "right" : "left";
+      toA = dx > 0 ? "left" : "right";
+    } else {
+      fromA = dy > 0 ? "bottom" : "top";
+      toA = dy > 0 ? "top" : "bottom";
+    }
+    return { from: fromA, to: toA };
+  }
+  __name(_autoAnchor, "_autoAnchor");
+  function _getRelationEndpoints(rel) {
+    var fromItem = null, toItem = null;
+    for (var i = 0; i < state.items.length; i++) {
+      if (state.items[i].id === rel.fromId) fromItem = state.items[i];
+      if (state.items[i].id === rel.toId) toItem = state.items[i];
+    }
+    if (!fromItem || !toItem) return null;
+    var fromA = rel.fromAnchor, toA = rel.toAnchor;
+    if (!fromA || fromA === "auto" || !toA || toA === "auto") {
+      var auto = _autoAnchor(fromItem, toItem);
+      if (!fromA || fromA === "auto") fromA = auto.from;
+      if (!toA || toA === "auto") toA = auto.to;
+    }
+    return {
+      from: _getAnchorPoint(fromItem, fromA),
+      to: _getAnchorPoint(toItem, toA),
+      fromItem,
+      toItem,
+      fromAnchor: fromA,
+      toAnchor: toA
+    };
+  }
+  __name(_getRelationEndpoints, "_getRelationEndpoints");
+  function _buildOrthogonalPath(p1, p2) {
+    var dx = p2.x - p1.x;
+    var dy = p2.y - p1.y;
+    var mx = p1.x + dx / 2;
+    var my = p1.y + dy / 2;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      return [
+        "M",
+        p1.x,
+        p1.y,
+        "L",
+        mx,
+        p1.y,
+        "L",
+        mx,
+        p2.y,
+        "L",
+        p2.x,
+        p2.y
+      ].join(" ");
+    } else {
+      return [
+        "M",
+        p1.x,
+        p1.y,
+        "L",
+        p1.x,
+        my,
+        "L",
+        p2.x,
+        my,
+        "L",
+        p2.x,
+        p2.y
+      ].join(" ");
+    }
+  }
+  __name(_buildOrthogonalPath, "_buildOrthogonalPath");
+  function _buildCurvedPath(p1, p2) {
+    var dx = p2.x - p1.x;
+    var dy = p2.y - p1.y;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var cpOffset = Math.min(dist * 0.4, 200);
+    var cp1x, cp1y;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      cp1x = p1.x + dx / 2;
+      cp1y = p1.y;
+    } else {
+      cp1x = p1.x;
+      cp1y = p1.y + dy / 2;
+    }
+    return "M " + p1.x + " " + p1.y + " Q " + cp1x + " " + cp1y + " " + p2.x + " " + p2.y;
+  }
+  __name(_buildCurvedPath, "_buildCurvedPath");
+  function _buildArrowhead(p1, p2, size) {
+    size = size || 8;
+    var dx = p2.x - p1.x;
+    var dy = p2.y - p1.y;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1) return "";
+    var ux = dx / len, uy = dy / len;
+    var tipX = p2.x, tipY = p2.y;
+    var baseX = tipX - ux * size;
+    var baseY = tipY - uy * size;
+    var nx = -uy * (size * 0.45);
+    var ny = ux * (size * 0.45);
+    return baseX + nx + "," + (baseY + ny) + " " + tipX + "," + tipY + " " + (baseX - nx) + "," + (baseY - ny);
+  }
+  __name(_buildArrowhead, "_buildArrowhead");
+  function renderRelations2() {
+    var svg = document.getElementById("relation-svg");
+    if (!svg) return;
+    _ensureRelations();
+    var OFF = 5e4;
+    svg.innerHTML = "";
+    if (!state.relations.length) return;
+    if (!state.items || !state.items.length) return;
+    var defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    var marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+    marker.setAttribute("id", "rel-arrow-marker");
+    marker.setAttribute("markerWidth", "8");
+    marker.setAttribute("markerHeight", "6");
+    marker.setAttribute("refX", "8");
+    marker.setAttribute("refY", "3");
+    marker.setAttribute("orient", "auto");
+    var arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    arrowPath.setAttribute("d", "M0,0 L8,3 L0,6 L2,3 Z");
+    arrowPath.setAttribute("fill", "#00e5ff");
+    marker.appendChild(arrowPath);
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+    for (var i = 0; i < state.relations.length; i++) {
+      var rel = state.relations[i];
+      var ep = _getRelationEndpoints(rel);
+      if (!ep) continue;
+      var p1 = { x: ep.from.x + OFF, y: ep.from.y + OFF };
+      var p2 = { x: ep.to.x + OFF, y: ep.to.y + OFF };
+      var isSelected = state.selectedRelation === rel.id;
+      var style = rel.style || "orthogonal";
+      var color = rel.color || "#00e5ff";
+      var lw = rel.lineWidth || 3;
+      var g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.setAttribute("data-rel-id", rel.id);
+      g.setAttribute("class", "rel-group");
+      var d;
+      switch (style) {
+        case "curved":
+          d = _buildCurvedPath(p1, p2);
+          break;
+        case "straight":
+        case "dashed":
+          d = "M " + p1.x + " " + p1.y + " L " + p2.x + " " + p2.y;
+          break;
+        default:
+          d = _buildOrthogonalPath(p1, p2);
+          break;
+      }
+      var hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      hit.setAttribute("d", d);
+      hit.setAttribute("class", "rel-hit");
+      hit.setAttribute("data-rel-id", rel.id);
+      hit.addEventListener("click", function(e) {
+        e.stopPropagation();
+        _selectRelation(this.getAttribute("data-rel-id"));
+      });
+      hit.addEventListener("dblclick", function(e) {
+        e.stopPropagation();
+        _editRelationLabel(this.getAttribute("data-rel-id"));
+      });
+      hit.addEventListener("contextmenu", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        _showRelationCtxMenu(e, this.getAttribute("data-rel-id"));
+      });
+      g.appendChild(hit);
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", d);
+      path.setAttribute("class", "rel-line" + (style === "dashed" ? " dashed" : "") + (isSelected ? " selected" : ""));
+      path.setAttribute("stroke", color);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke-width", isSelected ? String(lw + 1) : String(lw));
+      if (style === "dashed") path.setAttribute("stroke-dasharray", "6 4");
+      path.setAttribute("data-rel-id", rel.id);
+      path.addEventListener("click", function(e) {
+        e.stopPropagation();
+        _selectRelation(this.getAttribute("data-rel-id"));
+      });
+      path.addEventListener("dblclick", function(e) {
+        e.stopPropagation();
+        _editRelationLabel(this.getAttribute("data-rel-id"));
+      });
+      path.addEventListener("contextmenu", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        _showRelationCtxMenu(e, this.getAttribute("data-rel-id"));
+      });
+      g.appendChild(path);
+      var arrowPoly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      arrowPoly.setAttribute("points", _buildArrowhead(p1, p2, 10));
+      arrowPoly.setAttribute("class", "rel-arrow");
+      arrowPoly.setAttribute("fill", color);
+      g.appendChild(arrowPoly);
+      if (rel.label) {
+        var labelSize = rel.labelSize || 20;
+        var mx = (p1.x + p2.x) / 2;
+        var my = (p1.y + p2.y) / 2;
+        var labelText = rel.label.length > 40 ? rel.label.substring(0, 40) + "\u2026" : rel.label;
+        var charW = labelSize * 0.58;
+        var textW = Math.min(labelText.length * charW, 300);
+        var textH = labelSize + 6;
+        var bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        bg.setAttribute("x", mx - textW / 2 - 6);
+        bg.setAttribute("y", my - textH / 2 - 1);
+        bg.setAttribute("width", textW + 12);
+        bg.setAttribute("height", textH + 2);
+        bg.setAttribute("class", "rel-label-bg");
+        g.appendChild(bg);
+        var txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        txt.setAttribute("x", mx);
+        txt.setAttribute("y", my + labelSize * 0.35);
+        txt.setAttribute("text-anchor", "middle");
+        txt.setAttribute("class", "rel-label-text");
+        txt.setAttribute("font-size", labelSize + "px");
+        txt.textContent = labelText;
+        g.appendChild(txt);
+      }
+      svg.appendChild(g);
+    }
+  }
+  __name(renderRelations2, "renderRelations");
+  function _selectRelation(id) {
+    _ensureRelations();
+    state.selectedRelation = state.selectedRelation === id ? null : id;
+    if (state.selectedRelation) {
+      state.selected.clear();
+      refreshSelection();
+    }
+    renderRelations2();
+  }
+  __name(_selectRelation, "_selectRelation");
+  function _showRelationCtxMenu(e, id) {
+    _selectRelation(id);
+    var menu = document.getElementById("ctx-menu");
+    if (!menu) return;
+    var rel = (state.relations || []).find(function(r) {
+      return r.id === id;
+    });
+    if (!rel) return;
+    var curStyle = rel.style || "orthogonal";
+    var curColor = rel.color || "#00e5ff";
+    var curWidth = rel.lineWidth || 6;
+    var colors3 = ["#00e5ff", "#ffdd44", "#ff6b6b", "#51cf66", "#cc5de8", "#ff922b", "#74c0fc", "#ffffff"];
+    var html = '<div class="ctx-section">Style</div>';
+    for (var i = 0; i < RELATION_STYLES.length; i++) {
+      var s = RELATION_STYLES[i];
+      html += '<div class="ctx-item' + (s.id === curStyle ? " ctx-checked" : "") + `" onclick="(function(){ _setRelationStyle('` + id + "','" + s.id + `'); hideCtx(); })()">` + s.icon + " " + s.name + "</div>";
+    }
+    html += '<div class="ctx-sep"></div>';
+    html += '<div class="ctx-section">Width</div>';
+    html += `<div class="ctx-item" onclick="(function(){ _setRelationWidth('` + id + `',4); hideCtx(); })()">` + (curWidth === 4 ? "\u2713 " : "") + "Thin (4px)</div>";
+    html += `<div class="ctx-item" onclick="(function(){ _setRelationWidth('` + id + `',6); hideCtx(); })()">` + (curWidth === 6 ? "\u2713 " : "") + "Normal (6px)</div>";
+    html += `<div class="ctx-item" onclick="(function(){ _setRelationWidth('` + id + `',10); hideCtx(); })()">` + (curWidth === 10 ? "\u2713 " : "") + "Thick (10px)</div>";
+    html += '<div class="ctx-sep"></div>';
+    html += '<div class="ctx-section">Color</div><div style="display:flex;flex-wrap:wrap;gap:3px;padding:4px 8px;">';
+    for (var c = 0; c < colors3.length; c++) {
+      html += `<div onclick="(function(){ _setRelationColor('` + id + "','" + colors3[c] + `'); hideCtx(); })()" style="width:18px;height:18px;border-radius:3px;background:` + colors3[c] + ";cursor:pointer;border:1px solid " + (curColor === colors3[c] ? "#fff" : "#444") + ';" title="' + colors3[c] + '"></div>';
+    }
+    html += "</div>";
+    html += '<div class="ctx-sep"></div>';
+    html += '<div class="ctx-section">Label</div>';
+    html += `<div class="ctx-item" onclick="(function(){ _editRelationLabel('` + id + `'); hideCtx(); })()">\u270F\uFE0F Edit Label Text</div>`;
+    html += '<div class="ctx-item ctx-submenu-trigger" onclick="event.stopPropagation();(function(btn){ var sm=btn.nextElementSibling; if(sm){ sm.style.display=sm.style.display===&quot;block&quot;?&quot;none&quot;:&quot;block&quot;; } })(this)">\u{1F524} Label Size (' + (rel.labelSize || 16) + "px) \u25B8</div>";
+    html += '<div class="ctx-submenu" style="display:none;padding-left:12px;">';
+    var _lsSizes = [12, 14, 16, 20, 24, 32, 48, 64];
+    for (var ls = 0; ls < _lsSizes.length; ls++) {
+      var _lsz = _lsSizes[ls];
+      var _lmark = rel.labelSize === _lsz ? "\u2713 " : "";
+      html += `<div class="ctx-item" onclick="(function(){ _setRelationLabelSize('` + id + "'," + _lsz + '); hideCtx(); })()">' + _lmark + _lsz + "px</div>";
+    }
+    html += "</div>";
+    html += '<div class="ctx-sep"></div>';
+    html += `<div class="ctx-item ctx-danger" onclick="(function(){ _deleteRelation('` + id + `'); hideCtx(); })()">\u{1F5D1} Delete Relation</div>`;
+    menu.innerHTML = html;
+    menu.style.display = "block";
+    menu.style.left = e.clientX + "px";
+    menu.style.top = e.clientY + "px";
+    menu.style.zIndex = "99999999";
+  }
+  __name(_showRelationCtxMenu, "_showRelationCtxMenu");
+  function _editRelationLabel(id) {
+    _ensureRelations();
+    var rel = state.relations.find(function(r) {
+      return r.id === id;
+    });
+    if (!rel) return;
+    var existing = document.getElementById("rel-label-editor");
+    if (existing) existing.remove();
+    var ep = _getRelationEndpoints(rel);
+    if (!ep) return;
+    var OFF = 5e4;
+    var mx = (ep.from.x + ep.to.x) / 2 + OFF;
+    var my = (ep.from.y + ep.to.y) / 2 + OFF;
+    var screenX = mx * state.zoom + state.pan.x + OFF - OFF * state.zoom;
+    var screenY = my * state.zoom + state.pan.y + OFF - OFF * state.zoom;
+    var editor = document.createElement("div");
+    editor.id = "rel-label-editor";
+    editor.style.cssText = "position:fixed;z-index:99999999;background:#1a1a2e;border:1px solid #00e5ff;border-radius:6px;padding:6px 8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);";
+    editor.style.left = Math.max(10, Math.min(screenX - 100, window.innerWidth - 220)) + "px";
+    editor.style.top = Math.max(10, Math.min(screenY - 20, window.innerHeight - 60)) + "px";
+    editor.innerHTML = '<input id="rel-label-input" value="' + (rel.label || "").replace(/"/g, "&quot;") + `" style="background:#0d0d1a;border:1px solid #333;color:#fff;padding:4px 8px;border-radius:4px;font-size:12px;width:200px;font-family:Inter,sans-serif;" placeholder="Label text\u2026" autofocus><div style="display:flex;gap:4px;margin-top:4px;"><button onclick="(function(){ var v=document.getElementById('rel-label-input').value.trim(); _commitRelationLabel('` + id + `',v); })()" style="background:#00e5ff;color:#000;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">OK</button><button onclick="(function(){ document.getElementById('rel-label-editor').remove(); })()" style="background:#333;color:#fff;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Cancel</button></div>`;
+    document.body.appendChild(editor);
+    var inp = document.getElementById("rel-label-input");
+    if (inp) {
+      inp.focus();
+      inp.select();
+      inp.addEventListener("keydown", function(ev) {
+        if (ev.key === "Enter") {
+          _commitRelationLabel(id, inp.value.trim());
+        }
+        if (ev.key === "Escape") {
+          editor.remove();
+        }
+      });
+    }
+  }
+  __name(_editRelationLabel, "_editRelationLabel");
+  function _commitRelationLabel(id, value) {
+    _ensureRelations();
+    var rel = state.relations.find(function(r) {
+      return r.id === id;
+    });
+    if (rel) {
+      rel.label = value;
+    }
+    var editor = document.getElementById("rel-label-editor");
+    if (editor) editor.remove();
+    renderRelations2();
+    scheduleAutoSave();
+  }
+  __name(_commitRelationLabel, "_commitRelationLabel");
+
   // src/js/canvas-view.js
   function updateCanvas2() {
     const OFF = 5e4;
@@ -6768,10 +7316,10 @@ var __kraft = (() => {
     drawLayer.height = window.innerHeight * dpr;
     drawLayer.style.width = window.innerWidth + "px";
     drawLayer.style.height = window.innerHeight + "px";
-    redrawDrawLayer();
-    updateAllGroupBorders();
+    redrawDrawLayer2();
+    updateAllGroupBorders2();
     (state.mindmaps || []).forEach((mm) => mmUpdateConnectors(mm));
-    renderRelations();
+    renderRelations2();
     updateStatus2();
     cullOffscreenItems();
     repositionAllAnnoToolbars();
@@ -12560,7 +13108,7 @@ var __kraft = (() => {
     }
     if (lightweight) return;
     if (el.classList.contains("mindmap-item") && item2.nodes && item2.nodes.length > 0) {
-      requestAnimationFrame(() => mmUpdateConnectors2(item2));
+      requestAnimationFrame(() => mmUpdateConnectors(item2));
     }
     const mediaEl = item2.img || item2.video;
     if (mediaEl) {
@@ -12796,135 +13344,6 @@ var __kraft = (() => {
   }
   __name(addAudioItem2, "addAudioItem");
 
-  // src/js/draw-layer.js
-  function getDrawCtx() {
-    const ctx = drawLayer.getContext("2d");
-    const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    return ctx;
-  }
-  __name(getDrawCtx, "getDrawCtx");
-  function redrawDrawLayer2() {
-    const ctx = getDrawCtx();
-    ctx.clearRect(0, 0, drawLayer.width, drawLayer.height);
-    G2.drawStrokes.forEach((stroke) => {
-      if (stroke.points.length < 2) return;
-      ctx.globalAlpha = stroke.opacity;
-      ctx.strokeStyle = stroke.color;
-      ctx.fillStyle = stroke.color;
-      ctx.lineWidth = stroke.size;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      if (stroke.mode === "eraser") {
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.beginPath();
-        stroke.points.forEach((p, i) => {
-          const sx = p[0] * state.zoom + state.pan.x;
-          const sy = p[1] * state.zoom + state.pan.y;
-          if (i === 0) ctx.moveTo(sx, sy);
-          else ctx.lineTo(sx, sy);
-        });
-        ctx.stroke();
-      } else if (stroke.mode === "arrow") {
-        ctx.globalCompositeOperation = "source-over";
-        const p0 = stroke.points[0], p1 = stroke.points[1];
-        const sx0 = p0[0] * state.zoom + state.pan.x;
-        const sy0 = p0[1] * state.zoom + state.pan.y;
-        const sx1 = p1[0] * state.zoom + state.pan.x;
-        const sy1 = p1[1] * state.zoom + state.pan.y;
-        ctx.beginPath();
-        ctx.moveTo(sx0, sy0);
-        ctx.lineTo(sx1, sy1);
-        ctx.stroke();
-        const angle = Math.atan2(sy1 - sy0, sx1 - sx0);
-        const headLen = stroke.arrowHead || drawTool.arrowHead || 15;
-        const spread = Math.PI / 7;
-        ctx.beginPath();
-        ctx.moveTo(sx1, sy1);
-        ctx.lineTo(sx1 - headLen * Math.cos(angle - spread), sy1 - headLen * Math.sin(angle - spread));
-        ctx.lineTo(sx1 - headLen * Math.cos(angle + spread), sy1 - headLen * Math.sin(angle + spread));
-        ctx.closePath();
-        ctx.fill();
-      } else if (stroke.mode === "box") {
-        ctx.globalCompositeOperation = "source-over";
-        const p0 = stroke.points[0], p1 = stroke.points[1];
-        const sx0 = p0[0] * state.zoom + state.pan.x;
-        const sy0 = p0[1] * state.zoom + state.pan.y;
-        const sx1 = p1[0] * state.zoom + state.pan.x;
-        const sy1 = p1[1] * state.zoom + state.pan.y;
-        const bx = Math.min(sx0, sx1), by = Math.min(sy0, sy1);
-        const bw = Math.abs(sx1 - sx0), bh = Math.abs(sy1 - sy0);
-        ctx.strokeRect(bx, by, bw, bh);
-      } else {
-        ctx.globalCompositeOperation = "source-over";
-        const hasPressure = stroke.points[0] && stroke.points[0].length >= 3;
-        if (hasPressure) {
-          for (let i = 1; i < stroke.points.length; i++) {
-            const p0 = stroke.points[i - 1];
-            const p1 = stroke.points[i];
-            const sx0 = p0[0] * state.zoom + state.pan.x;
-            const sy0 = p0[1] * state.zoom + state.pan.y;
-            const sx1 = p1[0] * state.zoom + state.pan.x;
-            const sy1 = p1[1] * state.zoom + state.pan.y;
-            const pr = ((p0[2] || 0.5) + (p1[2] || 0.5)) / 2;
-            const w = stroke.size * (0.3 + 0.7 * Math.min(1, Math.max(0, pr)));
-            ctx.lineWidth = w;
-            ctx.beginPath();
-            ctx.moveTo(sx0, sy0);
-            ctx.lineTo(sx1, sy1);
-            ctx.stroke();
-          }
-        } else {
-          ctx.lineWidth = stroke.size;
-          ctx.beginPath();
-          stroke.points.forEach((p, i) => {
-            const sx = p[0] * state.zoom + state.pan.x;
-            const sy = p[1] * state.zoom + state.pan.y;
-            if (i === 0) ctx.moveTo(sx, sy);
-            else ctx.lineTo(sx, sy);
-          });
-          ctx.stroke();
-        }
-      }
-    });
-    ctx.globalCompositeOperation = "source-over";
-    ctx.globalAlpha = 1;
-    if (G2.hoveredStroke && !G2.currentStroke && !G2.drawMoveState) {
-      const hs = G2.hoveredStroke;
-      ctx.globalAlpha = 0.5;
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = (hs.size || 3) + 4;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.setLineDash([6, 4]);
-      if (hs.mode === "arrow" && hs.points.length >= 2) {
-        const p0 = hs.points[0], p1 = hs.points[1];
-        const sx0 = p0[0] * state.zoom + state.pan.x, sy0 = p0[1] * state.zoom + state.pan.y;
-        const sx1 = p1[0] * state.zoom + state.pan.x, sy1 = p1[1] * state.zoom + state.pan.y;
-        ctx.beginPath();
-        ctx.moveTo(sx0, sy0);
-        ctx.lineTo(sx1, sy1);
-        ctx.stroke();
-      } else if (hs.mode === "box" && hs.points.length >= 2) {
-        const p0 = hs.points[0], p1 = hs.points[1];
-        const sx0 = p0[0] * state.zoom + state.pan.x, sy0 = p0[1] * state.zoom + state.pan.y;
-        const sx1 = p1[0] * state.zoom + state.pan.x, sy1 = p1[1] * state.zoom + state.pan.y;
-        ctx.strokeRect(Math.min(sx0, sx1), Math.min(sy0, sy1), Math.abs(sx1 - sx0), Math.abs(sy1 - sy0));
-      } else if (hs.mode === "pen") {
-        ctx.beginPath();
-        hs.points.forEach((p, i) => {
-          const sx = p[0] * state.zoom + state.pan.x, sy = p[1] * state.zoom + state.pan.y;
-          if (i === 0) ctx.moveTo(sx, sy);
-          else ctx.lineTo(sx, sy);
-        });
-        ctx.stroke();
-      }
-      ctx.setLineDash([]);
-      ctx.globalAlpha = 1;
-    }
-  }
-  __name(redrawDrawLayer2, "redrawDrawLayer");
-
   // src/js/delete.js
   function cleanupVideoItem(item2, revokeBlob) {
     if (!item2.video) return;
@@ -12987,425 +13406,6 @@ var __kraft = (() => {
     }
   }
   __name(cleanupAllItems2, "cleanupAllItems");
-
-  // src/js/groups.js
-  function updateAllGroupBorders2() {
-    state.groups.forEach((g) => updateGroupBorder(g));
-  }
-  __name(updateAllGroupBorders2, "updateAllGroupBorders");
-  function updateGroupBorder(group) {
-    const allItems = [...state.items, ...state.texts, ...state.todos || [], ...state.mindmaps || []];
-    const members = allItems.filter((i) => group.memberIds.has(i.id));
-    if (members.length === 0) {
-      group.borderEl.style.display = "none";
-      return;
-    }
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const m of members) {
-      const el = m.el;
-      const r = el.getBoundingClientRect();
-      const canvasRect = canvasContent.getBoundingClientRect();
-      const sx = (r.left - canvasRect.left) / state.zoom;
-      const sy = (r.top - canvasRect.top) / state.zoom;
-      const sw = r.width / state.zoom;
-      const sh = r.height / state.zoom;
-      if (sx < minX) minX = sx;
-      if (sy < minY) minY = sy;
-      if (sx + sw > maxX) maxX = sx + sw;
-      if (sy + sh > maxY) maxY = sy + sh;
-    }
-    const pad = 8;
-    group.borderEl.style.display = "block";
-    group.borderEl.style.left = minX - pad + "px";
-    group.borderEl.style.top = minY - pad + "px";
-    group.borderEl.style.width = maxX - minX + pad * 2 + "px";
-    group.borderEl.style.height = maxY - minY + pad * 2 + "px";
-    group.borderEl.style.borderColor = group.color;
-  }
-  __name(updateGroupBorder, "updateGroupBorder");
-
-  // src/js/relations.js
-  var RELATION_STYLES = [
-    { id: "orthogonal", name: "\u76F4\u89D2\u6298\u7EBF", icon: "\u2517" },
-    { id: "straight", name: "\u76F4\u7EBF", icon: "\u2501" },
-    { id: "curved", name: "\u66F2\u7EBF", icon: "\u2570" },
-    { id: "dashed", name: "\u865A\u7EBF", icon: "\u2505" }
-  ];
-  function _ensureRelations() {
-    if (!state.relations) state.relations = [];
-  }
-  __name(_ensureRelations, "_ensureRelations");
-  function _getItemWorldRect(item2) {
-    return {
-      x: item2.x,
-      y: item2.y,
-      w: item2.w || (item2.el ? item2.el.offsetWidth : 200),
-      h: item2.h || (item2.el ? item2.el.offsetHeight : 150)
-    };
-  }
-  __name(_getItemWorldRect, "_getItemWorldRect");
-  function _getAnchorPoint(item2, anchor) {
-    var r = _getItemWorldRect(item2);
-    if (!anchor || anchor === "auto") {
-      return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
-    }
-    switch (anchor) {
-      case "top":
-        return { x: r.x + r.w / 2, y: r.y };
-      case "bottom":
-        return { x: r.x + r.w / 2, y: r.y + r.h };
-      case "left":
-        return { x: r.x, y: r.y + r.h / 2 };
-      case "right":
-        return { x: r.x + r.w, y: r.y + r.h / 2 };
-      case "center":
-        return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
-      default:
-        return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
-    }
-  }
-  __name(_getAnchorPoint, "_getAnchorPoint");
-  function _autoAnchor(fromItem, toItem) {
-    var fr = _getItemWorldRect(fromItem);
-    var tr = _getItemWorldRect(toItem);
-    var fc = { x: fr.x + fr.w / 2, y: fr.y + fr.h / 2 };
-    var tc = { x: tr.x + tr.w / 2, y: tr.y + tr.h / 2 };
-    var dx = tc.x - fc.x;
-    var dy = tc.y - fc.y;
-    var fromA, toA;
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      fromA = dx > 0 ? "right" : "left";
-      toA = dx > 0 ? "left" : "right";
-    } else {
-      fromA = dy > 0 ? "bottom" : "top";
-      toA = dy > 0 ? "top" : "bottom";
-    }
-    return { from: fromA, to: toA };
-  }
-  __name(_autoAnchor, "_autoAnchor");
-  function _getRelationEndpoints(rel) {
-    var fromItem = null, toItem = null;
-    for (var i = 0; i < state.items.length; i++) {
-      if (state.items[i].id === rel.fromId) fromItem = state.items[i];
-      if (state.items[i].id === rel.toId) toItem = state.items[i];
-    }
-    if (!fromItem || !toItem) return null;
-    var fromA = rel.fromAnchor, toA = rel.toAnchor;
-    if (!fromA || fromA === "auto" || !toA || toA === "auto") {
-      var auto = _autoAnchor(fromItem, toItem);
-      if (!fromA || fromA === "auto") fromA = auto.from;
-      if (!toA || toA === "auto") toA = auto.to;
-    }
-    return {
-      from: _getAnchorPoint(fromItem, fromA),
-      to: _getAnchorPoint(toItem, toA),
-      fromItem,
-      toItem,
-      fromAnchor: fromA,
-      toAnchor: toA
-    };
-  }
-  __name(_getRelationEndpoints, "_getRelationEndpoints");
-  function _buildOrthogonalPath(p1, p2) {
-    var dx = p2.x - p1.x;
-    var dy = p2.y - p1.y;
-    var mx = p1.x + dx / 2;
-    var my = p1.y + dy / 2;
-    if (Math.abs(dx) > Math.abs(dy)) {
-      return [
-        "M",
-        p1.x,
-        p1.y,
-        "L",
-        mx,
-        p1.y,
-        "L",
-        mx,
-        p2.y,
-        "L",
-        p2.x,
-        p2.y
-      ].join(" ");
-    } else {
-      return [
-        "M",
-        p1.x,
-        p1.y,
-        "L",
-        p1.x,
-        my,
-        "L",
-        p2.x,
-        my,
-        "L",
-        p2.x,
-        p2.y
-      ].join(" ");
-    }
-  }
-  __name(_buildOrthogonalPath, "_buildOrthogonalPath");
-  function _buildCurvedPath(p1, p2) {
-    var dx = p2.x - p1.x;
-    var dy = p2.y - p1.y;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-    var cpOffset = Math.min(dist * 0.4, 200);
-    var cp1x, cp1y;
-    if (Math.abs(dx) > Math.abs(dy)) {
-      cp1x = p1.x + dx / 2;
-      cp1y = p1.y;
-    } else {
-      cp1x = p1.x;
-      cp1y = p1.y + dy / 2;
-    }
-    return "M " + p1.x + " " + p1.y + " Q " + cp1x + " " + cp1y + " " + p2.x + " " + p2.y;
-  }
-  __name(_buildCurvedPath, "_buildCurvedPath");
-  function _buildArrowhead(p1, p2, size) {
-    size = size || 8;
-    var dx = p2.x - p1.x;
-    var dy = p2.y - p1.y;
-    var len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 1) return "";
-    var ux = dx / len, uy = dy / len;
-    var tipX = p2.x, tipY = p2.y;
-    var baseX = tipX - ux * size;
-    var baseY = tipY - uy * size;
-    var nx = -uy * (size * 0.45);
-    var ny = ux * (size * 0.45);
-    return baseX + nx + "," + (baseY + ny) + " " + tipX + "," + tipY + " " + (baseX - nx) + "," + (baseY - ny);
-  }
-  __name(_buildArrowhead, "_buildArrowhead");
-  function renderRelations2() {
-    var svg = document.getElementById("relation-svg");
-    if (!svg) return;
-    _ensureRelations();
-    var OFF = 5e4;
-    svg.innerHTML = "";
-    if (!state.relations.length) return;
-    if (!state.items || !state.items.length) return;
-    var defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-    var marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
-    marker.setAttribute("id", "rel-arrow-marker");
-    marker.setAttribute("markerWidth", "8");
-    marker.setAttribute("markerHeight", "6");
-    marker.setAttribute("refX", "8");
-    marker.setAttribute("refY", "3");
-    marker.setAttribute("orient", "auto");
-    var arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    arrowPath.setAttribute("d", "M0,0 L8,3 L0,6 L2,3 Z");
-    arrowPath.setAttribute("fill", "#00e5ff");
-    marker.appendChild(arrowPath);
-    defs.appendChild(marker);
-    svg.appendChild(defs);
-    for (var i = 0; i < state.relations.length; i++) {
-      var rel = state.relations[i];
-      var ep = _getRelationEndpoints(rel);
-      if (!ep) continue;
-      var p1 = { x: ep.from.x + OFF, y: ep.from.y + OFF };
-      var p2 = { x: ep.to.x + OFF, y: ep.to.y + OFF };
-      var isSelected = state.selectedRelation === rel.id;
-      var style = rel.style || "orthogonal";
-      var color = rel.color || "#00e5ff";
-      var lw = rel.lineWidth || 3;
-      var g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      g.setAttribute("data-rel-id", rel.id);
-      g.setAttribute("class", "rel-group");
-      var d;
-      switch (style) {
-        case "curved":
-          d = _buildCurvedPath(p1, p2);
-          break;
-        case "straight":
-        case "dashed":
-          d = "M " + p1.x + " " + p1.y + " L " + p2.x + " " + p2.y;
-          break;
-        default:
-          d = _buildOrthogonalPath(p1, p2);
-          break;
-      }
-      var hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      hit.setAttribute("d", d);
-      hit.setAttribute("class", "rel-hit");
-      hit.setAttribute("data-rel-id", rel.id);
-      hit.addEventListener("click", function(e) {
-        e.stopPropagation();
-        _selectRelation(this.getAttribute("data-rel-id"));
-      });
-      hit.addEventListener("dblclick", function(e) {
-        e.stopPropagation();
-        _editRelationLabel(this.getAttribute("data-rel-id"));
-      });
-      hit.addEventListener("contextmenu", function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        _showRelationCtxMenu(e, this.getAttribute("data-rel-id"));
-      });
-      g.appendChild(hit);
-      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      path.setAttribute("d", d);
-      path.setAttribute("class", "rel-line" + (style === "dashed" ? " dashed" : "") + (isSelected ? " selected" : ""));
-      path.setAttribute("stroke", color);
-      path.setAttribute("fill", "none");
-      path.setAttribute("stroke-width", isSelected ? String(lw + 1) : String(lw));
-      if (style === "dashed") path.setAttribute("stroke-dasharray", "6 4");
-      path.setAttribute("data-rel-id", rel.id);
-      path.addEventListener("click", function(e) {
-        e.stopPropagation();
-        _selectRelation(this.getAttribute("data-rel-id"));
-      });
-      path.addEventListener("dblclick", function(e) {
-        e.stopPropagation();
-        _editRelationLabel(this.getAttribute("data-rel-id"));
-      });
-      path.addEventListener("contextmenu", function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        _showRelationCtxMenu(e, this.getAttribute("data-rel-id"));
-      });
-      g.appendChild(path);
-      var arrowPoly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-      arrowPoly.setAttribute("points", _buildArrowhead(p1, p2, 10));
-      arrowPoly.setAttribute("class", "rel-arrow");
-      arrowPoly.setAttribute("fill", color);
-      g.appendChild(arrowPoly);
-      if (rel.label) {
-        var labelSize = rel.labelSize || 20;
-        var mx = (p1.x + p2.x) / 2;
-        var my = (p1.y + p2.y) / 2;
-        var labelText = rel.label.length > 40 ? rel.label.substring(0, 40) + "\u2026" : rel.label;
-        var charW = labelSize * 0.58;
-        var textW = Math.min(labelText.length * charW, 300);
-        var textH = labelSize + 6;
-        var bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        bg.setAttribute("x", mx - textW / 2 - 6);
-        bg.setAttribute("y", my - textH / 2 - 1);
-        bg.setAttribute("width", textW + 12);
-        bg.setAttribute("height", textH + 2);
-        bg.setAttribute("class", "rel-label-bg");
-        g.appendChild(bg);
-        var txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        txt.setAttribute("x", mx);
-        txt.setAttribute("y", my + labelSize * 0.35);
-        txt.setAttribute("text-anchor", "middle");
-        txt.setAttribute("class", "rel-label-text");
-        txt.setAttribute("font-size", labelSize + "px");
-        txt.textContent = labelText;
-        g.appendChild(txt);
-      }
-      svg.appendChild(g);
-    }
-  }
-  __name(renderRelations2, "renderRelations");
-  function _selectRelation(id) {
-    _ensureRelations();
-    state.selectedRelation = state.selectedRelation === id ? null : id;
-    if (state.selectedRelation) {
-      state.selected.clear();
-      refreshSelection();
-    }
-    renderRelations2();
-  }
-  __name(_selectRelation, "_selectRelation");
-  function _showRelationCtxMenu(e, id) {
-    _selectRelation(id);
-    var menu = document.getElementById("ctx-menu");
-    if (!menu) return;
-    var rel = (state.relations || []).find(function(r) {
-      return r.id === id;
-    });
-    if (!rel) return;
-    var curStyle = rel.style || "orthogonal";
-    var curColor = rel.color || "#00e5ff";
-    var curWidth = rel.lineWidth || 6;
-    var colors3 = ["#00e5ff", "#ffdd44", "#ff6b6b", "#51cf66", "#cc5de8", "#ff922b", "#74c0fc", "#ffffff"];
-    var html = '<div class="ctx-section">Style</div>';
-    for (var i = 0; i < RELATION_STYLES.length; i++) {
-      var s = RELATION_STYLES[i];
-      html += '<div class="ctx-item' + (s.id === curStyle ? " ctx-checked" : "") + `" onclick="(function(){ _setRelationStyle('` + id + "','" + s.id + `'); hideCtx(); })()">` + s.icon + " " + s.name + "</div>";
-    }
-    html += '<div class="ctx-sep"></div>';
-    html += '<div class="ctx-section">Width</div>';
-    html += `<div class="ctx-item" onclick="(function(){ _setRelationWidth('` + id + `',4); hideCtx(); })()">` + (curWidth === 4 ? "\u2713 " : "") + "Thin (4px)</div>";
-    html += `<div class="ctx-item" onclick="(function(){ _setRelationWidth('` + id + `',6); hideCtx(); })()">` + (curWidth === 6 ? "\u2713 " : "") + "Normal (6px)</div>";
-    html += `<div class="ctx-item" onclick="(function(){ _setRelationWidth('` + id + `',10); hideCtx(); })()">` + (curWidth === 10 ? "\u2713 " : "") + "Thick (10px)</div>";
-    html += '<div class="ctx-sep"></div>';
-    html += '<div class="ctx-section">Color</div><div style="display:flex;flex-wrap:wrap;gap:3px;padding:4px 8px;">';
-    for (var c = 0; c < colors3.length; c++) {
-      html += `<div onclick="(function(){ _setRelationColor('` + id + "','" + colors3[c] + `'); hideCtx(); })()" style="width:18px;height:18px;border-radius:3px;background:` + colors3[c] + ";cursor:pointer;border:1px solid " + (curColor === colors3[c] ? "#fff" : "#444") + ';" title="' + colors3[c] + '"></div>';
-    }
-    html += "</div>";
-    html += '<div class="ctx-sep"></div>';
-    html += '<div class="ctx-section">Label</div>';
-    html += `<div class="ctx-item" onclick="(function(){ _editRelationLabel('` + id + `'); hideCtx(); })()">\u270F\uFE0F Edit Label Text</div>`;
-    html += '<div class="ctx-item ctx-submenu-trigger" onclick="event.stopPropagation();(function(btn){ var sm=btn.nextElementSibling; if(sm){ sm.style.display=sm.style.display===&quot;block&quot;?&quot;none&quot;:&quot;block&quot;; } })(this)">\u{1F524} Label Size (' + (rel.labelSize || 16) + "px) \u25B8</div>";
-    html += '<div class="ctx-submenu" style="display:none;padding-left:12px;">';
-    var _lsSizes = [12, 14, 16, 20, 24, 32, 48, 64];
-    for (var ls = 0; ls < _lsSizes.length; ls++) {
-      var _lsz = _lsSizes[ls];
-      var _lmark = rel.labelSize === _lsz ? "\u2713 " : "";
-      html += `<div class="ctx-item" onclick="(function(){ _setRelationLabelSize('` + id + "'," + _lsz + '); hideCtx(); })()">' + _lmark + _lsz + "px</div>";
-    }
-    html += "</div>";
-    html += '<div class="ctx-sep"></div>';
-    html += `<div class="ctx-item ctx-danger" onclick="(function(){ _deleteRelation('` + id + `'); hideCtx(); })()">\u{1F5D1} Delete Relation</div>`;
-    menu.innerHTML = html;
-    menu.style.display = "block";
-    menu.style.left = e.clientX + "px";
-    menu.style.top = e.clientY + "px";
-    menu.style.zIndex = "99999999";
-  }
-  __name(_showRelationCtxMenu, "_showRelationCtxMenu");
-  function _editRelationLabel(id) {
-    _ensureRelations();
-    var rel = state.relations.find(function(r) {
-      return r.id === id;
-    });
-    if (!rel) return;
-    var existing = document.getElementById("rel-label-editor");
-    if (existing) existing.remove();
-    var ep = _getRelationEndpoints(rel);
-    if (!ep) return;
-    var OFF = 5e4;
-    var mx = (ep.from.x + ep.to.x) / 2 + OFF;
-    var my = (ep.from.y + ep.to.y) / 2 + OFF;
-    var screenX = mx * state.zoom + state.pan.x + OFF - OFF * state.zoom;
-    var screenY = my * state.zoom + state.pan.y + OFF - OFF * state.zoom;
-    var editor = document.createElement("div");
-    editor.id = "rel-label-editor";
-    editor.style.cssText = "position:fixed;z-index:99999999;background:#1a1a2e;border:1px solid #00e5ff;border-radius:6px;padding:6px 8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);";
-    editor.style.left = Math.max(10, Math.min(screenX - 100, window.innerWidth - 220)) + "px";
-    editor.style.top = Math.max(10, Math.min(screenY - 20, window.innerHeight - 60)) + "px";
-    editor.innerHTML = '<input id="rel-label-input" value="' + (rel.label || "").replace(/"/g, "&quot;") + `" style="background:#0d0d1a;border:1px solid #333;color:#fff;padding:4px 8px;border-radius:4px;font-size:12px;width:200px;font-family:Inter,sans-serif;" placeholder="Label text\u2026" autofocus><div style="display:flex;gap:4px;margin-top:4px;"><button onclick="(function(){ var v=document.getElementById('rel-label-input').value.trim(); _commitRelationLabel('` + id + `',v); })()" style="background:#00e5ff;color:#000;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">OK</button><button onclick="(function(){ document.getElementById('rel-label-editor').remove(); })()" style="background:#333;color:#fff;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Cancel</button></div>`;
-    document.body.appendChild(editor);
-    var inp = document.getElementById("rel-label-input");
-    if (inp) {
-      inp.focus();
-      inp.select();
-      inp.addEventListener("keydown", function(ev) {
-        if (ev.key === "Enter") {
-          _commitRelationLabel(id, inp.value.trim());
-        }
-        if (ev.key === "Escape") {
-          editor.remove();
-        }
-      });
-    }
-  }
-  __name(_editRelationLabel, "_editRelationLabel");
-  function _commitRelationLabel(id, value) {
-    _ensureRelations();
-    var rel = state.relations.find(function(r) {
-      return r.id === id;
-    });
-    if (rel) {
-      rel.label = value;
-    }
-    var editor = document.getElementById("rel-label-editor");
-    if (editor) editor.remove();
-    renderRelations2();
-    scheduleAutoSave();
-  }
-  __name(_commitRelationLabel, "_commitRelationLabel");
 
   // src/js/todo.js
   function renderTodo2(todo) {

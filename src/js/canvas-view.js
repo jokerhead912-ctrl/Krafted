@@ -1,5 +1,9 @@
 
 import { state, drawLayer, canvas, _frozenGifs } from './core-state.js';
+import { redrawDrawLayer } from './draw-layer.js';
+import { updateAllGroupBorders } from './groups.js';
+import { renderRelations } from './relations.js';
+import { mmUpdateConnectors } from './mindmap.js';
 
 // ============================================================
 //  CANVAS / VIEW
