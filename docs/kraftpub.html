@@ -3706,6 +3706,10 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
   </label>
   <label>Arrow Head Size</label>
   <input type="range" id="draw-arrowhead" min="5" max="40" value="15" oninput="drawTool.arrowHead=+this.value">
+  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--text);">
+    <input type="checkbox" id="draw-continuous" onchange="drawTool.continuous=this.checked" style="cursor:pointer;width:auto;height:auto;margin:0;">
+    Continuous Draw (keep pen active)
+  </label>
   <hr style="border:none;border-top:1px solid var(--border-light);margin:6px 0 4px;">
   <div class="btn-group">
     <button onclick="undoDraw()" title="Undo Last Stroke">Undo</button>
@@ -5131,7 +5135,7 @@ const textTool = {
   color: '#ffffff', highlightColor: '#ffff00', align: 'left',
   activeColorTarget: 'color',
 };
-const drawTool = { color: '#ff4444', size: 3, opacity: 1, mode: 'pen', arrowHead: 15, pressure: true };
+const drawTool = { color: '#ff4444', size: 3, opacity: 1, mode: 'pen', arrowHead: 15, pressure: true, continuous: false };
 // Paper / artboard settings
 const paperState = {
   enabled: false,
@@ -11539,6 +11543,17 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   resizeHandle.className = 'resize-handle';
   resizeHandle.title = 'Drag to resize';
   listPopover.appendChild(resizeHandle);
+  // Bottom close button — big and obvious, for mobile users
+  const bottomCloseBtn = document.createElement('button');
+  bottomCloseBtn.className = 'head-btn danger';
+  bottomCloseBtn.textContent = '✕ Close Comments';
+  bottomCloseBtn.style.cssText = 'width:100%;margin-top:6px;padding:8px;font-size:13px;font-weight:600;border-radius:6px;';
+  bottomCloseBtn.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
+  bottomCloseBtn.addEventListener('click', function(ev){
+    ev.stopPropagation(); ev.preventDefault();
+    listPopover.classList.remove('open');
+  });
+  listPopover.appendChild(bottomCloseBtn);
   // Append the list popover to <body> so it escapes the item's transform
   // stacking context (see the long comment near _positionPopover for why).
   document.body.appendChild(listPopover);
@@ -22218,11 +22233,14 @@ document.addEventListener('mouseup', e => {
     // per-stroke undo granularity.
     try { pushUndo(); } catch (e) {}
     scheduleAutoSave();
-    // R79: if "lock to player" is on, stay in draw mode so the user
-    // can immediately start the next stroke. Otherwise the default
-    // behaviour is to drop back to select on stroke end (handled by
-    // the existing tool-state machine; the lock toggle is the only
-    // opt-in to "continuous draw" here).
+    // v6.0: Continuous draw — if the checkbox is checked, stay in
+    // draw mode so the user can immediately start the next stroke
+    // without having to click the draw button again. The cursor
+    // stays as crosshair and the draw toolbar stays visible.
+    if (drawTool.continuous) {
+      // Keep draw mode active — don't switch back to select
+      setTool('draw');
+    }
   }
 
   // DRAW STROKE MOVE END
