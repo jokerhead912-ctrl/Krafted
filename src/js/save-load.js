@@ -22,17 +22,6 @@ import { redrawDrawLayer } from './draw-layer.js';
 import { updateMediaBar } from './media-bar.js';
 import { showTextQuickBar, updateTextQuickBarActive } from './text-style.js';
 import { sanitizeTextHtml } from './text-sanitizer.js';
-import { videoAnnoRefreshCommentList } from './frame-comments.js';
-import { setupVideoTrim } from './video-trim.js';
-import { buildMediaControls } from './media-player.js';
-import { pushUndo } from './undo-redo.js';
-import { updateMediaBar } from './media-bar.js';
-import { applyTextProps, autoGrowTextItem, rebuildLinkCard, updateItemStyle } from './add-items.js';
-import { showTextQuickBar, updateTextQuickBarActive } from './text-style.js';
-import { updateCanvas } from './canvas-view.js';
-import { redrawDrawLayer } from './draw-layer.js';
-import { toast } from './ui-utils.js';
-import { sanitizeTextHtml } from './text-sanitizer.js';
 // ============================================================
 //  SAVE / LOAD
 // ============================================================

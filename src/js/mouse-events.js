@@ -20,7 +20,6 @@ import { exitReframe, positionCropUI } from './reframe-crop.js';
 import { updateCanvas } from './canvas-view.js';
 import { redrawDrawLayer } from './draw-layer.js';
 import { hideCtx } from './ui-utils.js';
-import { updateCanvas } from './canvas-view.js';
 
 // ============================================================
 //  MOUSE EVENTS (desktop — unchanged)

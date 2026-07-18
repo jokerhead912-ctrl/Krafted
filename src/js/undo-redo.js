@@ -20,26 +20,10 @@ export function captureSnapshot() {
       drawSize: i.drawSize, drawOpacity: i.drawOpacity, drawArrowHead: i.drawArrowHead,
       src: i.src, natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false,
       audioName: i.audioName || i.filename || '',
-      filename: i.filename || i.audioName || '',
-      // Round 58: persist the user's manual FPS override so undo/redo
-      // and save/reload keep the chip state. Cycle index is UI-only
-      // (not saved) — it always re-initializes from the saved FPS.
-      fps: (i.video && i.video._kraftedFps) ? i.video._kraftedFps : null,
-      fpsManual: !!(i.video && i.video._kraftedFpsManual),
-      // R72: persist the playhead position and play state so undo
-      // doesn't jump the video to 0 and pause it. The user reported
-      // "the mov player will close" after Ctrl+Z — that's because
-      // the new <video> element was created with no currentTime
-      // (defaults to 0) and no autoplay, so a video the user was
-      // watching at, say, 1:23 would suddenly be at 0:00 and paused.
-      // We round-trip currentTime + !paused; restore applies them
-      // after loadedmetadata.
-      currentTime: (i.video && isFinite(i.video.currentTime)) ? i.video.currentTime : 0,
-      wasPlaying: !!(i.video && !i.video.paused && !i.video.ended),
       // Original file name (if known) — used by video frame-comment
       // export to name the output file and to display in the exported
       // header. Empty when not available.
-      filename: i.filename || '',
+      filename: i.filename || i.audioName || '',
       cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH,
       brightness: i.brightness, contrast: i.contrast, saturate: i.saturate,
       hueRotate: i.hueRotate, blur: i.blur, sepia: i.sepia, grayscale: i.grayscale,

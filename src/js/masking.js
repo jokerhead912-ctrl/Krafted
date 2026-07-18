@@ -3,9 +3,6 @@ import { state, G } from './core-state.js';
 import { pushUndo } from './undo-redo.js';
 import { scheduleAutoSave } from './save-load.js';
 import { toast } from './ui-utils.js';;
-import { scheduleAutoSave } from './save-load.js';
-import { toast } from './ui-utils.js';
-import { pushUndo } from './undo-redo.js';
 
 // ============================================================
 //  MASK LAYERS — per-area adjustments via CSS mask-image

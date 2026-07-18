@@ -1,12 +1,10 @@
-import { images, kraftedSaveFile, triggerDownload } from './init.js';
+import { kraftedSaveFile, triggerDownload } from './init.js';
 import { updateAutoFitPaper } from './paper.js';
 import { clearSelection, getSelectedImages, getSelectedItems, refreshSelection, selectOnly } from './selection.js';
 import { translateText } from './translation.js';
-import { state, canvasContent, canvas, toastEl } from './core-state.js';
+import { state, canvasContent, canvas, toastEl, viewport } from './core-state.js';
 
 import { captureSnapshot, pushUndo, undo } from './undo-redo.js';
-import { updateCanvas, updateStatus } from './canvas-view.js';
-import { state, viewport } from './core-state.js';
 import { getCurrentFps, updateVideoPlayhead, updateVideoTimeline } from './video-trim.js';
 import { addImage, addText, autoGrowTextItem, updateItemStyle } from './add-items.js';
 import { scheduleAutoSave } from './save-load.js';

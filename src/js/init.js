@@ -5,17 +5,10 @@ import { restoreBoard, formatBytes } from './save-load.js';
 import { updateMediaBar } from './media-bar.js';
 import { canvas } from './core-state.js';
 import { updateAltPanBadge } from './text-sanitizer.js';
-import { updateCanvas } from './canvas-view.js';
-import { initTextToolbar } from './text-style.js';
 import { redrawDrawLayer } from './draw-layer.js';
 import { initVideoLazyLoad } from './selection.js';
-import { updateCutTargetHighlight } from './cut-lasso.js';
-import { formatBytes, restoreBoard } from './save-load.js';
-import { toast } from './ui-utils.js';
-import { redrawDrawLayer } from './draw-layer.js';
-import { updateMediaBar } from './media-bar.js';
 import { cutState, updateCutTargetHighlight } from './cut-lasso.js';
-import { updateAltPanBadge } from './text-sanitizer.js';
+import { toast } from './ui-utils.js';
 
 //  HELP PANEL — now in help.js (R79)
 // ============================================================

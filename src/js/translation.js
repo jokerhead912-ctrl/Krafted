@@ -2,7 +2,6 @@ import { getSelectedItems } from './selection.js';
 import { state } from './core-state.js';
 import { toast } from './ui-utils.js';
 import { scheduleAutoSave } from './save-load.js';
-import { toast } from './ui-utils.js';
 import { getEditingText } from './text-style.js';
 import { autoGrowTextItem } from './add-items.js';
 import { pushUndo } from './undo-redo.js';

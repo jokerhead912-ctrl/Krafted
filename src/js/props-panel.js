@@ -6,13 +6,8 @@ import { pushUndo } from './undo-redo.js';
 import { updateItemStyle } from './add-items.js';
 import { updateVideoControls } from './frame-comments.js';
 import { refreshVideoPanelTimes } from './video-trim.js';
-import { refreshVideoPanelTimes } from './video-trim.js';
 import { isAnimatedGif, openGifEditor } from './gif-editor.js';
-import { scheduleAutoSave } from './save-load.js';
 import { toast } from './ui-utils.js';
-import { updateVideoControls } from './frame-comments.js';
-import { updateItemStyle } from './add-items.js';
-import { pushUndo } from './undo-redo.js';
 
 // ============================================================
 //  PROPERTIES PANEL

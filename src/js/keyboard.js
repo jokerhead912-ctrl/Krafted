@@ -22,7 +22,6 @@ import { saveBoard, scheduleAutoSave } from './save-load.js';
 import { formatTime, formatVideoTimeForLabel } from './video-trim.js';
 import { toggleAppFullscreen, toggleGrid } from './grid-fs.js';
 import { hideCtx, toast } from './ui-utils.js';
-import { frameSelection } from './canvas-view.js';
 
 // ── Shortcut Registry dispatcher ─────────────────────────────
 

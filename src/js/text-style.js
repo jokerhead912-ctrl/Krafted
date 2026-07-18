@@ -4,9 +4,6 @@ import { scheduleAutoSave } from './save-load.js';
 import { toast } from './ui-utils.js';
 import { applyTextProps } from './add-items.js';
 import { pushUndo } from './undo-redo.js';
-import { scheduleAutoSave } from './save-load.js';
-import { pushUndo } from './undo-redo.js';
-import { applyTextProps } from './add-items.js';
 
 // ============================================================
 //  TEXT TOOL

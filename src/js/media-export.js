@@ -1,7 +1,6 @@
 import { getSelectedItems } from './selection.js';
 import { state } from './core-state.js';
 import { toast } from './ui-utils.js';
-import { toast } from './ui-utils.js';
 
 // ============================================================
 //  EXPORT MEDIA — download original source files
