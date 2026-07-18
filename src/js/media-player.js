@@ -4864,7 +4864,4 @@ export function buildMediaControls(el, mediaEl, isVideo, isGif) {
   }
 }
 
-window.restartVideo = restartVideo;
-window.toggleVideoPlay = toggleVideoPlay;
-window.setVideoVolume = setVideoVolume;
 window.buildMediaControls = buildMediaControls;

@@ -13205,9 +13205,6 @@ var __kraft = (() => {
     }
   }
   __name(buildMediaControls, "buildMediaControls");
-  window.restartVideo = restartVideo;
-  window.toggleVideoPlay = toggleVideoPlay;
-  window.setVideoVolume = setVideoVolume;
   window.buildMediaControls = buildMediaControls;
 
   // src/js/add-items.js
@@ -18319,6 +18316,1825 @@ var __kraft = (() => {
   window.quickSave = quickSave;
   window.quickSaveAs = quickSaveAs;
 
+  // src/js/grid-fs.js
+  function toggleGrid() {
+    canvas2.classList.toggle("grid");
+    toast(canvas2.classList.contains("grid") ? "\u25A6 Grid on" : "\u25AB Grid off");
+  }
+  __name(toggleGrid, "toggleGrid");
+  function toggleAppFullscreen() {
+    var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl) {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    } else {
+      var el = document.documentElement;
+      if (el.requestFullscreen) {
+        el.requestFullscreen();
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      }
+    }
+  }
+  __name(toggleAppFullscreen, "toggleAppFullscreen");
+  function _syncAppFsIcon() {
+    var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    var btn = document.getElementById("btn-fullscreen");
+    if (!btn) return;
+    var svg = btn.querySelector("svg");
+    if (fsEl) {
+      svg.innerHTML = '<path d="M5 3v3M5 3H2M5 3L2 6M11 13v-3M11 13h3M11 13l3-3"/>';
+      btn.title = "Exit fullscreen (Esc)";
+    } else {
+      svg.innerHTML = '<path d="M3 3v4M3 3h4M3 3l4 4M13 13v-4M13 13H9M13 13l-4-4"/>';
+      btn.title = "Fullscreen (F)";
+    }
+  }
+  __name(_syncAppFsIcon, "_syncAppFsIcon");
+  document.addEventListener("fullscreenchange", _syncAppFsIcon);
+  document.addEventListener("webkitfullscreenchange", _syncAppFsIcon);
+  console.log(
+    "%c[Krafted v5.5] Fullscreen feature loaded \u2014 press F to toggle",
+    "color:#22c55e;font-weight:bold;font-size:13px;"
+  );
+  window.toggleGrid = toggleGrid;
+  window.toggleAppFullscreen = toggleAppFullscreen;
+
+  // src/js/help.js
+  function showHelp() {
+    var overlay = document.getElementById("help-overlay");
+    if (!overlay) return;
+    if (!overlay._built) _buildHelpContent(overlay);
+    overlay.style.display = "flex";
+    _switchTab("guide");
+  }
+  __name(showHelp, "showHelp");
+  function hideHelp() {
+    var overlay = document.getElementById("help-overlay");
+    if (overlay) overlay.style.display = "none";
+  }
+  __name(hideHelp, "hideHelp");
+  function _buildHelpContent(overlay) {
+    overlay._built = true;
+    while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
+    var box = document.createElement("div");
+    box.style.cssText = "background:#14142a;border:1px solid rgba(0,229,255,0.3);border-radius:16px;padding:24px 28px;max-width:720px;max-height:85vh;overflow-y:auto;color:#e0e0e0;font-family:Inter,sans-serif;box-shadow:0 24px 80px rgba(0,0,0,0.6);width:90vw;";
+    var header = document.createElement("div");
+    header.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;";
+    var title = document.createElement("h2");
+    title.style.cssText = "margin:0;font-size:22px;font-weight:700;color:#00e5ff;letter-spacing:0.5px;";
+    title.textContent = "KRAFTED \u2014 Help";
+    var closeBtn = document.createElement("button");
+    closeBtn.innerHTML = "&times;";
+    closeBtn.style.cssText = "background:none;border:none;color:#888;font-size:24px;cursor:pointer;padding:0 4px;";
+    closeBtn.onclick = hideHelp;
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    box.appendChild(header);
+    var tabs = document.createElement("div");
+    tabs.style.cssText = "display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);";
+    ["guide", "shortcuts", "version"].forEach(function(tabId) {
+      var t = document.createElement("button");
+      t.className = "help-tab";
+      t.setAttribute("data-tab", tabId);
+      t.textContent = tabId === "guide" ? "\u{1F4D6} Guide" : tabId === "shortcuts" ? "\u2328\uFE0F Shortcuts" : "\u{1F522} Version";
+      t.style.cssText = "background:none;border:none;color:#888;padding:8px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;";
+      t.onclick = function() {
+        _switchTab(tabId);
+      };
+      tabs.appendChild(t);
+    });
+    box.appendChild(tabs);
+    var panels = document.createElement("div");
+    panels.id = "help-panels";
+    var guidePanel = document.createElement("div");
+    guidePanel.id = "help-panel-guide";
+    guidePanel.className = "help-panel";
+    guidePanel.innerHTML = _guideHTML();
+    panels.appendChild(guidePanel);
+    var scPanel = document.createElement("div");
+    scPanel.id = "help-panel-shortcuts";
+    scPanel.className = "help-panel";
+    scPanel.style.display = "none";
+    scPanel.innerHTML = '<div style="text-align:center;color:#888;padding:20px;">Loading shortcuts\u2026</div>';
+    panels.appendChild(scPanel);
+    var verPanel = document.createElement("div");
+    verPanel.id = "help-panel-version";
+    verPanel.className = "help-panel";
+    verPanel.style.display = "none";
+    _buildVersionPanel(verPanel);
+    panels.appendChild(verPanel);
+    box.appendChild(panels);
+    var footer = document.createElement("p");
+    footer.style.cssText = "margin-top:20px;font-size:10px;color:#555;text-align:center;";
+    footer.textContent = "Krafted v6.0.1 \u2014 by Joker Head Studios";
+    box.appendChild(footer);
+    overlay.appendChild(box);
+    overlay.onclick = function(ev) {
+      if (ev.target === overlay) hideHelp();
+    };
+  }
+  __name(_buildHelpContent, "_buildHelpContent");
+  function _guideHTML() {
+    return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;"><div><h3 style="color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Tools</h3><table style="width:100%;font-size:12px;border-collapse:collapse;"><tr><td style="padding:4px 0;color:#888;">V</td><td style="padding:4px 0;">Select & Move</td></tr><tr><td style="padding:4px 0;color:#888;">T</td><td style="padding:4px 0;">Text Tool</td></tr><tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+D</td><td style="padding:4px 0;">Draw (pen/arrow/box)</td></tr><tr><td style="padding:4px 0;color:#888;">E</td><td style="padding:4px 0;">Export Area</td></tr><tr><td style="padding:4px 0;color:#888;">C</td><td style="padding:4px 0;">Capture Area</td></tr><tr><td style="padding:4px 0;color:#888;">Shift+C</td><td style="padding:4px 0;">Screen Capture</td></tr><tr><td style="padding:4px 0;color:#888;">X</td><td style="padding:4px 0;">Free Shape Cut</td></tr><tr><td style="padding:4px 0;color:#888;">L</td><td style="padding:4px 0;">Lasso Cut</td></tr><tr><td style="padding:4px 0;color:#888;">M</td><td style="padding:4px 0;">Mind Map</td></tr><tr><td style="padding:4px 0;color:#888;">R</td><td style="padding:4px 0;">Relation Line</td></tr><tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+L</td><td style="padding:4px 0;">Add Link</td></tr><tr><td style="padding:4px 0;color:#888;">H</td><td style="padding:4px 0;">Help / Shortcuts</td></tr></table></div><div><h3 style="color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Actions</h3><table style="width:100%;font-size:12px;border-collapse:collapse;"><tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Z</td><td style="padding:4px 0;">Undo</td></tr><tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Y</td><td style="padding:4px 0;">Redo</td></tr><tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+S</td><td style="padding:4px 0;">Save Board</td></tr><tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+O</td><td style="padding:4px 0;">Open Board</td></tr><tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+G</td><td style="padding:4px 0;">Group</td></tr><tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Shift+G</td><td style="padding:4px 0;">Ungroup</td></tr><tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Shift+D</td><td style="padding:4px 0;">Duplicate</td></tr><tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Shift+U</td><td style="padding:4px 0;">Tidy Selected</td></tr><tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Shift+T</td><td style="padding:4px 0;">Translate EN\u2192\u4E2D\u6587</td></tr><tr><td style="padding:4px 0;color:#888;">G</td><td style="padding:4px 0;">Toggle Grid</td></tr><tr><td style="padding:4px 0;color:#888;">Shift+F</td><td style="padding:4px 0;">Fullscreen</td></tr><tr><td style="padding:4px 0;color:#888;">F</td><td style="padding:4px 0;">Frame Selection</td></tr><tr><td style="padding:4px 0;color:#888;">Del</td><td style="padding:4px 0;">Delete Selected</td></tr><tr><td style="padding:4px 0;color:#888;">Space (hold)</td><td style="padding:4px 0;">Pan Canvas</td></tr></table></div></div><div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);"><h3 style="color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Mouse / Touch</h3><table style="width:100%;font-size:12px;border-collapse:collapse;"><tr><td style="padding:4px 0;color:#888;">Scroll Wheel</td><td style="padding:4px 0;">Zoom in/out</td></tr><tr><td style="padding:4px 0;color:#888;">' + Platform.zoomMod + '+Wheel</td><td style="padding:4px 0;">Zoom (modifier key)</td></tr><tr><td style="padding:4px 0;color:#888;">Middle-drag</td><td style="padding:4px 0;">Pan canvas</td></tr><tr><td style="padding:4px 0;color:#888;">Right-click item</td><td style="padding:4px 0;">Context menu</td></tr>' + (Platform.trackpad ? '<tr><td style="padding:4px 0;color:#888;">Pinch (trackpad)</td><td style="padding:4px 0;">Zoom (natural)</td></tr><tr><td style="padding:4px 0;color:#888;">Two-finger drag</td><td style="padding:4px 0;">Pan (trackpad)</td></tr>' : "") + "</table></div>";
+  }
+  __name(_guideHTML, "_guideHTML");
+  function _switchTab(tabId) {
+    var tabs = document.querySelectorAll("#help-overlay .help-tab");
+    tabs.forEach(function(t) {
+      t.style.color = t.getAttribute("data-tab") === tabId ? "#00e5ff" : "#888";
+      t.style.borderBottomColor = t.getAttribute("data-tab") === tabId ? "#00e5ff" : "transparent";
+    });
+    var panels = document.querySelectorAll("#help-panels .help-panel");
+    panels.forEach(function(p) {
+      p.style.display = "none";
+    });
+    var panel = document.getElementById("help-panel-" + tabId);
+    if (panel) panel.style.display = "";
+    if (tabId === "shortcuts" && !panel._built) {
+      _buildShortcutEditor(panel);
+      panel._built = true;
+    }
+  }
+  __name(_switchTab, "_switchTab");
+  function _buildShortcutEditor(panel) {
+    var reg = typeof window !== "undefined" && window.ShortcutRegistry ? window.ShortcutRegistry : {};
+    var defaults = typeof window !== "undefined" && window.DEFAULT_SHORTCUTS ? window.DEFAULT_SHORTCUTS : [];
+    var defaultMap = {};
+    defaults.forEach(function(d) {
+      defaultMap[d.id] = d;
+    });
+    var cats = {};
+    var catOrder = ["Tools", "Edit", "File", "Group", "Arrange", "Navigation", "Translate", "Media"];
+    catOrder.forEach(function(c) {
+      cats[c] = [];
+    });
+    Object.keys(reg).forEach(function(id) {
+      var e = reg[id];
+      var cat = e.category || "Other";
+      if (!cats[cat]) {
+        cats[cat] = [];
+        catOrder.push(cat);
+      }
+      cats[cat].push(e);
+    });
+    var html = "";
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    html += '<span style="font-size:11px;color:#888;">Click a shortcut to rebind \u2014 press the new key combo, then Enter to save or Esc to cancel.</span>';
+    html += '<button onclick="if(window._kraftedResetAllShortcuts){window._kraftedResetAllShortcuts()}" style="background:rgba(255,80,80,0.15);border:1px solid rgba(255,80,80,0.3);color:#ff5050;font-size:11px;padding:4px 10px;border-radius:4px;cursor:pointer;">Reset All</button>';
+    html += "</div>";
+    catOrder.forEach(function(cat) {
+      var entries = cats[cat];
+      if (!entries || !entries.length) return;
+      html += '<h4 style="color:#00e5ff;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 6px;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:4px;">' + cat + "</h4>";
+      html += '<table style="width:100%;font-size:12px;border-collapse:collapse;">';
+      entries.forEach(function(e) {
+        var def = defaultMap[e.id];
+        var defaultKeys = null;
+        if (def) {
+          defaultKeys = Platform.mac && def.macKeys ? def.macKeys : def.keys;
+        }
+        var isCustom = !!e.userDefined;
+        var keyStr = _formatKeyCombo(e.keys);
+        var defStr = defaultKeys ? _formatKeyCombo(defaultKeys) : "";
+        html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.03);">';
+        html += '<td style="padding:6px 8px 6px 0;color:#e0e0e0;white-space:nowrap;">' + e.label + "</td>";
+        html += '<td style="padding:6px 4px;color:' + (isCustom ? "#7c8cf0" : "#888") + ';font-family:monospace;font-size:11px;white-space:nowrap;cursor:pointer;" class="sc-key" data-id="' + e.id + '" title="Click to rebind">' + keyStr + "</td>";
+        if (isCustom) {
+          html += '<td style="padding:6px 4px;"><button class="sc-reset" data-id="' + e.id + '" title="Reset to default (' + defStr + ')" style="background:none;border:none;color:#ff5050;font-size:14px;cursor:pointer;padding:0 4px;">\u21A9</button></td>';
+        } else {
+          html += '<td style="padding:6px 4px;"></td>';
+        }
+        html += "</tr>";
+      });
+      html += "</table>";
+    });
+    panel.innerHTML = html;
+    panel.querySelectorAll(".sc-key").forEach(function(el) {
+      el.addEventListener("click", function() {
+        var id = el.getAttribute("data-id");
+        _startKeyCapture(el, id);
+      });
+    });
+    panel.querySelectorAll(".sc-reset").forEach(function(el) {
+      el.addEventListener("click", function(ev) {
+        ev.stopPropagation();
+        var id = el.getAttribute("data-id");
+        if (typeof window._kraftedResetShortcut === "function") {
+          window._kraftedResetShortcut(id);
+          _rebuildShortcutPanel(panel);
+        }
+      });
+    });
+    window._kraftedResetAllShortcuts = function() {
+      if (typeof window._kraftedResetAllSC === "function") {
+        window._kraftedResetAllSC();
+        _rebuildShortcutPanel(panel);
+      }
+    };
+    window._kraftedResetShortcut = function(id) {
+      if (typeof window.resetShortcutSC === "function") {
+        window.resetShortcutSC(id);
+      }
+    };
+  }
+  __name(_buildShortcutEditor, "_buildShortcutEditor");
+  var _captureState = null;
+  function _startKeyCapture(el, id) {
+    if (_captureState) {
+      _captureState.el.style.outline = "";
+      _captureState.el.style.background = "";
+    }
+    _captureState = { el, id };
+    el.style.outline = "2px solid #7c8cf0";
+    el.style.background = "rgba(124,140,240,0.15)";
+    el.textContent = "Press keys\u2026";
+    function _onCapture(e) {
+      if (e.key === "Escape") {
+        _cancelCapture();
+        return;
+      }
+      if (e.key === "Enter") {
+        _commitCapture();
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      var k = {
+        key: e.key,
+        ctrl: e.ctrlKey,
+        shift: e.shiftKey,
+        alt: e.altKey,
+        meta: e.metaKey
+      };
+      _captureState.keys = [k];
+      el.textContent = _formatKeyCombo([k]);
+    }
+    __name(_onCapture, "_onCapture");
+    function _commitCapture() {
+      document.removeEventListener("keydown", _onCapture, true);
+      if (_captureState && _captureState.keys && _captureState.keys.length > 0) {
+        var id2 = _captureState.id;
+        var keys = _captureState.keys;
+        try {
+          var overrides = {};
+          try {
+            var raw = window.KraftedStorage && window.KraftedStorage.getItemSync("krafted_shortcuts") || localStorage.getItem("krafted_shortcuts");
+            if (raw) overrides = JSON.parse(raw);
+          } catch (e) {
+          }
+          overrides[id2] = keys;
+          var val = JSON.stringify(overrides);
+          localStorage.setItem("krafted_shortcuts", val);
+          if (window.KraftedStorage) window.KraftedStorage.setItem("krafted_shortcuts", val).catch(function() {
+          });
+        } catch (e) {
+        }
+        if (typeof window._kraftedRebuildShortcuts === "function") {
+          window._kraftedRebuildShortcuts();
+        }
+      }
+      _clearCapture();
+    }
+    __name(_commitCapture, "_commitCapture");
+    function _cancelCapture() {
+      document.removeEventListener("keydown", _onCapture, true);
+      _clearCapture();
+    }
+    __name(_cancelCapture, "_cancelCapture");
+    document.addEventListener("keydown", _onCapture, true);
+    window._captureCommit = _commitCapture;
+    window._captureCancel = _cancelCapture;
+  }
+  __name(_startKeyCapture, "_startKeyCapture");
+  function _clearCapture() {
+    if (_captureState) {
+      _captureState.el.style.outline = "";
+      _captureState.el.style.background = "";
+      _captureState = null;
+      var panel = document.getElementById("help-panel-shortcuts");
+      if (panel) _rebuildShortcutPanel(panel);
+    }
+  }
+  __name(_clearCapture, "_clearCapture");
+  function _rebuildShortcutPanel(panel) {
+    panel._built = false;
+    _buildShortcutEditor(panel);
+    panel._built = true;
+  }
+  __name(_rebuildShortcutPanel, "_rebuildShortcutPanel");
+  function _formatKeyCombo(keys) {
+    if (!keys || !keys.length) return "\u2014";
+    return keys.map(function(k) {
+      var parts = [];
+      if (k.ctrl) parts.push(Platform.mac ? "\u2303" : "Ctrl");
+      if (k.meta) parts.push(Platform.mac ? "\u2318" : "Win");
+      if (k.alt) parts.push(Platform.mac ? "\u2325" : "Alt");
+      if (k.shift) parts.push(Platform.mac ? "\u21E7" : "Shift");
+      var kn = k.key;
+      if (kn === " ") kn = "Space";
+      if (kn === "ArrowUp") kn = "\u2191";
+      if (kn === "ArrowDown") kn = "\u2193";
+      if (kn === "ArrowLeft") kn = "\u2190";
+      if (kn === "ArrowRight") kn = "\u2192";
+      if (kn === "Escape") kn = "Esc";
+      if (kn === "Delete") kn = "Del";
+      if (kn === "Backspace") kn = "\u232B";
+      parts.push(kn);
+      return parts.join(Platform.mac ? "" : "+");
+    }).join("  ");
+  }
+  __name(_formatKeyCombo, "_formatKeyCombo");
+  function _buildVersionPanel(verPanel) {
+    var html = '<h3 style="color:#00e5ff;margin:0 0 12px;">\u{1F522} Version &amp; Rollback</h3>';
+    html += '<p style="color:#888;margin:0 0 16px;">Current version: <b style="color:#fff;">v6.0.1</b></p>';
+    html += '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;margin-bottom:14px;">';
+    html += '<p style="margin:0 0 10px;color:#aaa;font-weight:bold;">Available versions (click to switch):</p>';
+    html += '<div id="krafted-version-list" style="display:flex;flex-direction:column;gap:6px;">';
+    html += '<span style="color:#666;">Loading version list\u2026</span>';
+    html += "</div>";
+    html += "</div>";
+    html += '<p style="color:#666;font-size:11px;margin-top:8px;">Rollback loads an older version directly from GitHub Pages.<br>Your .kpak save files are forward-compatible with older versions.</p>';
+    html += '<p style="color:#555;font-size:10px;margin-top:8px;">To rollback manually: change the URL to<br><code style="color:#888;">kraftpub-vX.Y.html</code></p>';
+    verPanel.innerHTML = html;
+    fetch("https://jokerhead912-ctrl.github.io/Krafted/version.json?t=" + Date.now(), { cache: "no-store" }).then(function(r) {
+      return r.json();
+    }).then(function(data) {
+      var listEl = document.getElementById("krafted-version-list");
+      if (!listEl) return;
+      var versions = data.versions || {};
+      var keys = Object.keys(versions).sort().reverse();
+      if (keys.length === 0) {
+        listEl.innerHTML = '<span style="color:#666;">No previous versions available</span>';
+        return;
+      }
+      var html2 = "";
+      keys.forEach(function(v) {
+        var isCurrent = v === "6.0.1";
+        var file = versions[v];
+        var url = "https://jokerhead912-ctrl.github.io/Krafted/" + file;
+        html2 += '<a href="' + url + '" style="display:block;padding:8px 12px;background:' + (isCurrent ? "rgba(0,229,255,0.1)" : "rgba(255,255,255,0.04)") + ";border-radius:6px;color:" + (isCurrent ? "#00e5ff" : "#aaa") + ';text-decoration:none;font-size:12px;transition:background 0.15s;"';
+        if (isCurrent) html2 += ' onclick="return false;"';
+        html2 += ">v" + v + (isCurrent ? ' <span style="color:#666;font-size:10px;">(current)</span>' : "") + "</a>";
+      });
+      listEl.innerHTML = html2;
+    }).catch(function(e) {
+      var listEl = document.getElementById("krafted-version-list");
+      if (listEl) listEl.innerHTML = '<span style="color:#666;">Could not load version list (offline?)</span>';
+    });
+  }
+  __name(_buildVersionPanel, "_buildVersionPanel");
+  window.showHelp = showHelp;
+  window.hideHelp = hideHelp;
+
+  // src/js/export.js
+  function startExportDrag() {
+    G2.exportDrag = { startX: 0, startY: 0 };
+    exportBox.style.display = "block";
+    exportBox.style.left = "0px";
+    exportBox.style.top = "0px";
+    exportBox.style.width = "0px";
+    exportBox.style.height = "0px";
+  }
+  __name(startExportDrag, "startExportDrag");
+  var EXPORT_BG_KEY = "krafted_export_bg";
+  var EXPORT_BG_TRANS_KEY = "krafted_export_bg_transparent";
+  var exportBgColor = "#2a2a3e";
+  var exportBgTransparent = false;
+  try {
+    const saved = window.KraftedStorage && window.KraftedStorage.getItemSync(EXPORT_BG_KEY) || localStorage.getItem(EXPORT_BG_KEY);
+    if (saved && /^#[0-9a-fA-F]{6}$/.test(saved)) exportBgColor = saved;
+    const savedT = window.KraftedStorage && window.KraftedStorage.getItemSync(EXPORT_BG_TRANS_KEY) || localStorage.getItem(EXPORT_BG_TRANS_KEY);
+    if (savedT === "1") exportBgTransparent = true;
+  } catch (e) {
+  }
+  function syncExportBgUI() {
+    const c = document.getElementById("export-bg-color");
+    const t = document.getElementById("export-bg-transparent");
+    if (c) c.value = exportBgColor;
+    if (t) t.checked = exportBgTransparent;
+  }
+  __name(syncExportBgUI, "syncExportBgUI");
+  syncExportBgUI();
+  window.startExportDrag = startExportDrag;
+
+  // src/js/reframe-crop.js
+  function enterReframe(item2) {
+    if (!item2 || !item2.src || item2.isVideo) return;
+    if (state.reframing) exitReframe(false);
+    pushUndo();
+    state.reframing = {
+      item: item2,
+      origCropX: item2.cropX || 0,
+      origCropY: item2.cropY || 0,
+      dragStartX: 0,
+      dragStartY: 0,
+      dragCropX: 0,
+      dragCropY: 0
+    };
+    const el = item2.el;
+    el.classList.add("reframing");
+    const imgEl = item2.img;
+    if (imgEl) {
+      imgEl.style.width = item2.natW + "px";
+      imgEl.style.height = "auto";
+      imgEl.style.transform = "translate(" + -(item2.cropX || 0) + "px, " + -(item2.cropY || 0) + "px)";
+    }
+    document.querySelectorAll(".item-handle, .item-rot").forEach((el2) => el2.remove());
+    document.querySelectorAll(".multi-sel-handles").forEach((el2) => el2.remove());
+    toast("Drag to reframe \u2014 Enter to apply, Esc to cancel");
+  }
+  __name(enterReframe, "enterReframe");
+  function exitReframe(apply) {
+    if (!state.reframing) return;
+    const { item: item2, origCropX, origCropY } = state.reframing;
+    state.reframing = null;
+    const el = item2.el;
+    el.classList.remove("reframing");
+    const imgEl = item2.img;
+    if (!apply) {
+      item2.cropX = origCropX;
+      item2.cropY = origCropY;
+    }
+    if (imgEl) {
+      imgEl.style.width = "100%";
+      imgEl.style.height = "100%";
+      imgEl.style.transform = "";
+      imgEl.style.objectFit = "cover";
+      imgEl.style.objectPosition = -(item2.cropX || 0) + "px " + -(item2.cropY || 0) + "px";
+    }
+    updateItemStyle(item2);
+    refreshSelection();
+    scheduleAutoSave();
+    toast(apply ? "Reframe applied" : "Reframe cancelled");
+  }
+  __name(exitReframe, "exitReframe");
+  function enterCrop(item2) {
+    if (!item2 || !item2.src || item2.isVideo || item2.isAudio) {
+      toast("Select a static image to crop");
+      return;
+    }
+    if (state.cropping) exitCrop(false);
+    if (state.reframing) exitReframe(true);
+    const el = item2.el;
+    const imgW = item2.w, imgH = item2.h;
+    const defW = imgW * 0.8;
+    const defH = imgH * 0.8;
+    const defX = (imgW - defW) / 2;
+    const defY = (imgH - defH) / 2;
+    state.cropping = {
+      item: item2,
+      x: defX,
+      y: defY,
+      w: defW,
+      h: defH,
+      aspect: null,
+      origSrc: item2.src,
+      origNatW: item2.natW,
+      origNatH: item2.natH,
+      origW: item2.w,
+      origH: item2.h,
+      origCropX: item2.cropX || 0,
+      origCropY: item2.cropY || 0,
+      els: {}
+    };
+    el.classList.add("cropping");
+    const overlay = document.createElement("div");
+    overlay.className = "crop-overlay";
+    const mTop = document.createElement("div");
+    const mBot = document.createElement("div");
+    const mL = document.createElement("div");
+    const mR = document.createElement("div");
+    mTop.className = "crop-mask mask-top";
+    mBot.className = "crop-mask mask-bottom";
+    mL.className = "crop-mask mask-left";
+    mR.className = "crop-mask mask-right";
+    const win = document.createElement("div");
+    win.className = "crop-window";
+    const winInner = document.createElement("div");
+    winInner.className = "crop-window-inner";
+    win.appendChild(winInner);
+    const rh1 = document.createElement("div");
+    rh1.className = "crop-rule-h";
+    const rh2 = document.createElement("div");
+    rh2.className = "crop-rule-h";
+    const rv1 = document.createElement("div");
+    rv1.className = "crop-rule-v";
+    const rv2 = document.createElement("div");
+    rv2.className = "crop-rule-v";
+    const handles = {};
+    ["nw", "n", "ne", "e", "se", "s", "sw", "w"].forEach((name) => {
+      const h = document.createElement("div");
+      h.className = "crop-handle " + (name.length === 2 ? "corner" : "edge") + " " + name;
+      h.dataset.handle = name;
+      handles[name] = h;
+      win.appendChild(h);
+    });
+    const toolbar = document.createElement("div");
+    toolbar.className = "crop-toolbar";
+    toolbar.innerHTML = '<select data-role="aspect" title="Aspect ratio"><option value="free">Free</option><option value="1:1">1:1</option><option value="4:3">4:3</option><option value="3:2">3:2</option><option value="16:9">16:9</option><option value="2:3">2:3</option><option value="9:16">9:16</option></select><div class="sep"></div><button data-role="reset" title="Reset crop box">Reset</button><button data-role="full" title="Select full image">Full</button><div class="sep"></div><button data-role="cancel" title="Cancel (Esc)">Cancel</button><button data-role="apply" class="primary" title="Apply (Enter)">Apply</button>';
+    overlay.appendChild(mTop);
+    overlay.appendChild(mBot);
+    overlay.appendChild(mL);
+    overlay.appendChild(mR);
+    overlay.appendChild(win);
+    win.appendChild(rh1);
+    win.appendChild(rh2);
+    win.appendChild(rv1);
+    win.appendChild(rv2);
+    el.appendChild(overlay);
+    el.appendChild(toolbar);
+    state.cropping.els = { overlay, win, mTop, mBot, mL, mR, toolbar, handles, rh1, rh2, rv1, rv2 };
+    positionCropUI();
+    win.addEventListener("mousedown", (e) => {
+      if (e.target.classList.contains("crop-handle")) return;
+      e.stopPropagation();
+      e.preventDefault();
+      state.dragging = {
+        type: "crop-move",
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: state.cropping.x,
+        origY: state.cropping.y,
+        imgW,
+        imgH
+      };
+      document.body.classList.add("is-dragging");
+    });
+    Object.values(handles).forEach((h) => {
+      h.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        state.dragging = {
+          type: "crop-resize",
+          handle: h.dataset.handle,
+          startX: e.clientX,
+          startY: e.clientY,
+          origX: state.cropping.x,
+          origY: state.cropping.y,
+          origW: state.cropping.w,
+          origH: state.cropping.h,
+          imgW,
+          imgH
+        };
+        document.body.classList.add("is-dragging");
+      });
+    });
+    toolbar.querySelector('[data-role="aspect"]').addEventListener("change", (e) => {
+      const v = e.target.value;
+      setCropAspect(v === "free" ? null : v);
+    });
+    toolbar.querySelector('[data-role="reset"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.cropping.x = (imgW - defW) / 2;
+      state.cropping.y = (imgH - defH) / 2;
+      state.cropping.w = defW;
+      state.cropping.h = defH;
+      positionCropUI();
+    });
+    toolbar.querySelector('[data-role="full"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.cropping.x = 0;
+      state.cropping.y = 0;
+      state.cropping.w = imgW;
+      state.cropping.h = imgH;
+      positionCropUI();
+    });
+    toolbar.querySelector('[data-role="apply"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      applyCrop();
+    });
+    toolbar.querySelector('[data-role="cancel"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      exitCrop(false);
+    });
+    overlay.addEventListener("click", (e) => e.stopPropagation());
+    overlay.addEventListener("mousedown", (e) => e.stopPropagation());
+    overlay.addEventListener("dblclick", (e) => e.stopPropagation());
+    toolbar.addEventListener("mousedown", (e) => e.stopPropagation());
+    document.querySelectorAll(".item-handle, .item-rot").forEach((el2) => el2.remove());
+    document.querySelectorAll(".multi-sel-handles").forEach((el2) => el2.remove());
+    toast("Crop: drag to move, drag handles to resize. Enter to apply, Esc to cancel");
+    item2.z = ++G.nextZ;
+    el.style.zIndex = item2.z;
+  }
+  __name(enterCrop, "enterCrop");
+  function setCropAspect(v) {
+    if (!state.cropping) return;
+    state.cropping.aspect = v;
+    if (v) {
+      const c = state.cropping;
+      const cx = c.x + c.w / 2;
+      const cy = c.y + c.h / 2;
+      let newH = c.w / v;
+      let newW = c.w;
+      const maxW = c.imgW || c.item.w;
+      const maxH = c.imgH || c.item.h;
+      if (newH > maxH) {
+        newH = maxH;
+        newW = newH * v;
+      }
+      if (newW > maxW) {
+        newW = maxW;
+        newH = newW / v;
+      }
+      c.w = newW;
+      c.h = newH;
+      c.x = Math.max(0, Math.min(maxW - newW, cx - newW / 2));
+      c.y = Math.max(0, Math.min(maxH - newH, cy - newH / 2));
+      positionCropUI();
+    }
+  }
+  __name(setCropAspect, "setCropAspect");
+  function positionCropUI() {
+    const c = state.cropping;
+    if (!c || !c.els.win) return;
+    const { x, y, w, h, els, item: item2 } = c;
+    els.win.style.left = x + "px";
+    els.win.style.top = y + "px";
+    els.win.style.width = w + "px";
+    els.win.style.height = h + "px";
+    els.mTop.style.left = "0";
+    els.mTop.style.top = "0";
+    els.mTop.style.width = item2.w + "px";
+    els.mTop.style.height = y + "px";
+    els.mBot.style.left = "0";
+    els.mBot.style.top = y + h + "px";
+    els.mBot.style.width = item2.w + "px";
+    els.mBot.style.height = item2.h - y - h + "px";
+    els.mL.style.left = "0";
+    els.mL.style.top = y + "px";
+    els.mL.style.width = x + "px";
+    els.mL.style.height = h + "px";
+    els.mR.style.left = x + w + "px";
+    els.mR.style.top = y + "px";
+    els.mR.style.width = item2.w - x - w + "px";
+    els.mR.style.height = h + "px";
+    els.rh1.style.top = h / 3 + "px";
+    els.rh2.style.top = h * 2 / 3 + "px";
+    els.rv1.style.left = w / 3 + "px";
+    els.rv2.style.left = w * 2 / 3 + "px";
+    const tb = els.toolbar;
+    tb.classList.remove("below", "above");
+    if (y + h + 50 < item2.h) {
+      tb.classList.add("below");
+      tb.style.top = y + h + 6 + "px";
+    } else {
+      tb.classList.add("above");
+      tb.style.top = Math.max(0, y - 44) + "px";
+    }
+    tb.style.left = Math.max(0, Math.min(item2.w - 200, x + w / 2 - 100)) + "px";
+  }
+  __name(positionCropUI, "positionCropUI");
+  function exitCrop(restoreOriginal) {
+    if (!state.cropping) return;
+    const c = state.cropping;
+    const { item: item2, els, origSrc, origNatW, origNatH, origW, origH, origCropX, origCropY } = c;
+    state.cropping = null;
+    if (els.overlay && els.overlay.parentNode) els.overlay.parentNode.removeChild(els.overlay);
+    if (els.toolbar && els.toolbar.parentNode) els.toolbar.parentNode.removeChild(els.toolbar);
+    item2.el.classList.remove("cropping");
+    if (restoreOriginal) {
+      item2.src = origSrc;
+      item2.natW = origNatW;
+      item2.natH = origNatH;
+      item2.w = origW;
+      item2.h = origH;
+      item2.cropX = origCropX;
+      item2.cropY = origCropY;
+      if (item2.img) {
+        item2.img.src = origSrc;
+        item2.img.style.width = "100%";
+        item2.img.style.height = "100%";
+        item2.img.style.transform = "";
+        item2.img.style.objectFit = "";
+        item2.img.style.objectPosition = "";
+      }
+      updateItemStyle(item2);
+      refreshSelection();
+      scheduleAutoSave();
+      toast("Crop cancelled");
+    } else {
+      refreshSelection();
+      scheduleAutoSave();
+    }
+  }
+  __name(exitCrop, "exitCrop");
+  function applyCrop() {
+    if (!state.cropping) return;
+    const c = state.cropping;
+    const item2 = c.item;
+    const ratioX = item2.natW / item2.w;
+    const ratioY = item2.natH / item2.h;
+    const sx = Math.max(0, Math.round(c.x * ratioX));
+    const sy = Math.max(0, Math.round(c.y * ratioY));
+    let sw = Math.max(1, Math.round(c.w * ratioX));
+    let sh = Math.max(1, Math.round(c.h * ratioY));
+    sw = Math.min(sw, item2.natW - sx);
+    sh = Math.min(sh, item2.natH - sy);
+    if (sw < 2 || sh < 2) {
+      toast("Crop area too small");
+      return;
+    }
+    toast("Cropping\u2026");
+    const sourceSrc = item2.src;
+    const img = new Image();
+    img.onload = function() {
+      try {
+        const canvas3 = document.createElement("canvas");
+        canvas3.width = sw;
+        canvas3.height = sh;
+        const ctx2d = canvas3.getContext("2d");
+        ctx2d.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+        let mime = "image/png";
+        const m = (sourceSrc.match(/^data:([^;,]+)/) || [])[1];
+        if (m && /^image\/(png|jpeg|webp)$/i.test(m)) mime = m;
+        const quality = mime === "image/jpeg" ? 0.92 : void 0;
+        const newSrc = canvas3.toDataURL(mime, quality);
+        const newAspect = sw / sh;
+        const oldDispW = item2.w;
+        const newDispW = oldDispW;
+        const newDispH = Math.max(20, Math.round(newDispW / newAspect));
+        const old = {
+          src: item2.src,
+          natW: item2.natW,
+          natH: item2.natH,
+          w: item2.w,
+          h: item2.h,
+          cropX: item2.cropX || 0,
+          cropY: item2.cropY || 0
+        };
+        item2.src = newSrc;
+        item2.natW = sw;
+        item2.natH = sh;
+        item2.w = newDispW;
+        item2.h = newDispH;
+        item2.cropX = 0;
+        item2.cropY = 0;
+        if (item2.img) {
+          item2.img.src = newSrc;
+          item2.img.style.width = "100%";
+          item2.img.style.height = "100%";
+          item2.img.style.transform = "";
+          item2.img.style.objectFit = "";
+          item2.img.style.objectPosition = "";
+        }
+        if (state.cropping) {
+          const crop = state.cropping;
+          state.cropping = null;
+          if (crop.els.overlay && crop.els.overlay.parentNode) crop.els.overlay.parentNode.removeChild(crop.els.overlay);
+          if (crop.els.toolbar && crop.els.toolbar.parentNode) crop.els.toolbar.parentNode.removeChild(crop.els.toolbar);
+          crop.item.el.classList.remove("cropping");
+        }
+        updateItemStyle(item2);
+        refreshSelection();
+        scheduleAutoSave();
+        toast("Image cropped to " + sw + "\xD7" + sh);
+      } catch (err) {
+        console.error("Crop failed", err);
+        toast("Crop failed");
+      }
+    };
+    img.onerror = function() {
+      toast("Could not load image for cropping");
+    };
+    img.src = sourceSrc;
+  }
+  __name(applyCrop, "applyCrop");
+  window.enterReframe = enterReframe;
+  window.exitReframe = exitReframe;
+  window.enterCrop = enterCrop;
+  window.exitCrop = exitCrop;
+
+  // src/js/video-playback.js
+  function toggleVideoPlay() {
+    const sel = getSelectedImages2();
+    if (sel.length === 0 || !sel[0].video) return;
+    const item2 = sel[0];
+    const v = item2.video;
+    if (v.paused) {
+      const ts = item2.trimStart || 0;
+      if (v.currentTime < ts || v.currentTime >= (item2.trimEnd || v.duration) - 0.1) v.currentTime = ts;
+      v.muted = false;
+      v.play().catch(() => {
+      });
+    } else {
+      v.pause();
+    }
+    document.getElementById("btn-video-play").textContent = v.paused ? "\u25B6\uFE0F Play" : "\u23F8 Pause";
+    updateMediaBar();
+  }
+  __name(toggleVideoPlay, "toggleVideoPlay");
+  function restartVideo() {
+    const sel = getSelectedImages2();
+    if (sel.length === 0 || !sel[0].video) return;
+    const item2 = sel[0];
+    const v = item2.video;
+    v.currentTime = item2.trimStart || 0;
+    v.play().catch(() => {
+    });
+    document.getElementById("btn-video-play").textContent = "\u23F8 Pause";
+    updateMediaBar();
+  }
+  __name(restartVideo, "restartVideo");
+  function setVideoVolume(val) {
+    const sel = getSelectedImages2();
+    if (sel.length === 0 || !sel[0].video) return;
+    sel[0].video.muted = val == 0;
+    sel[0].video.volume = val / 100;
+    document.getElementById("prop-video-vol-val").textContent = val + "%";
+  }
+  __name(setVideoVolume, "setVideoVolume");
+  window.restartVideo = restartVideo;
+  window.toggleVideoPlay = toggleVideoPlay;
+  window.setVideoVolume = setVideoVolume;
+
+  // src/js/alignment.js
+  function layerOrder(action) {
+    pushUndo();
+    const all = [...state.items, ...state.texts, ...state.todos || [], ...state.mindmaps || []];
+    all.sort((a, b) => a.z - b.z);
+    if (action === "front") {
+      getSelectedItems2().forEach((i) => i.z = G.nextZ++);
+    } else if (action === "back") {
+      const minZ = all.length ? all[0].z - 1 : 0;
+      getSelectedItems2().forEach((i, idx) => i.z = minZ - getSelectedItems2().length + idx);
+    } else if (action === "up") {
+      getSelectedItems2().forEach((i) => i.z = G.nextZ++);
+    } else if (action === "down") {
+      getSelectedItems2().forEach((i) => i.z = (i.z || 1) - 100);
+    }
+    all.forEach((i) => updateItemStyle(i));
+    scheduleAutoSave();
+  }
+  __name(layerOrder, "layerOrder");
+  function alignItems(type) {
+    const sel = getSelectedItems2();
+    if (sel.length < 2) return;
+    pushUndo();
+    if (type === "left") {
+      const target = Math.min(...sel.map((i) => i.x));
+      sel.forEach((i) => {
+        i.x = target;
+        updateItemStyle(i);
+      });
+      nudgeOverlaps(sel, "v");
+    } else if (type === "right") {
+      const target = Math.max(...sel.map((i) => i.x + i.w));
+      sel.forEach((i) => {
+        i.x = target - i.w;
+        updateItemStyle(i);
+      });
+      nudgeOverlaps(sel, "v");
+    } else if (type === "top") {
+      const target = Math.min(...sel.map((i) => i.y));
+      sel.forEach((i) => {
+        i.y = target;
+        updateItemStyle(i);
+      });
+      nudgeOverlaps(sel, "h");
+    } else if (type === "bottom") {
+      const target = Math.max(...sel.map((i) => i.y + i.h));
+      sel.forEach((i) => {
+        i.y = target - i.h;
+        updateItemStyle(i);
+      });
+      nudgeOverlaps(sel, "h");
+    } else if (type === "hcenter") {
+      const target = sel.reduce((s, i) => s + (i.x + i.w / 2), 0) / sel.length;
+      sel.forEach((i) => {
+        i.x = target - i.w / 2;
+        updateItemStyle(i);
+      });
+      nudgeOverlaps(sel, "v");
+    } else if (type === "vcenter") {
+      const target = sel.reduce((s, i) => s + (i.y + i.h / 2), 0) / sel.length;
+      sel.forEach((i) => {
+        i.y = target - i.h / 2;
+        updateItemStyle(i);
+      });
+      nudgeOverlaps(sel, "h");
+    }
+    refreshSelection();
+    scheduleAutoSave();
+    toast("Align " + type);
+  }
+  __name(alignItems, "alignItems");
+  function nudgeOverlaps(items, dir) {
+    const gap = 6;
+    const changed = /* @__PURE__ */ new Set();
+    for (let a = 0; a < items.length; a++) {
+      for (let b = a + 1; b < items.length; b++) {
+        const A = items[a], B = items[b];
+        if (A.x < B.x + B.w && A.x + A.w > B.x && A.y < B.y + B.h && A.y + A.h > B.y) {
+          if (dir === "v") {
+            const push = A.y + A.h + gap - B.y;
+            if (push > 0) {
+              B.y += push;
+              updateItemStyle(B);
+              changed.add(B.id);
+            }
+          } else {
+            const push = A.x + A.w + gap - B.x;
+            if (push > 0) {
+              B.x += push;
+              updateItemStyle(B);
+              changed.add(B.id);
+            }
+          }
+        }
+      }
+    }
+  }
+  __name(nudgeOverlaps, "nudgeOverlaps");
+  window.alignItems = alignItems;
+  window.layerOrder = layerOrder;
+
+  // src/js/layout-tidy.js
+  function tidySelection() {
+    var sel = state.selected;
+    if (!sel || sel.size === 0) {
+      try {
+        toast("Select items to tidy first");
+      } catch (e) {
+      }
+      return;
+    }
+    var selItems = [];
+    var selArr = Array.from(sel);
+    var COL_W = 280;
+    var GAP = 16;
+    for (var si = 0; si < selArr.length; si++) {
+      var id = selArr[si];
+      var it = (state.items || []).find(function(i) {
+        return i.id === id;
+      });
+      if (it) {
+        selItems.push({
+          id,
+          x: it.x,
+          y: it.y,
+          w: it.w,
+          h: it.h,
+          el: it.el,
+          isText: false,
+          isTodo: false,
+          isMindmap: false,
+          item: it
+        });
+        continue;
+      }
+      var tx = (state.texts || []).find(function(t) {
+        return t.id === id;
+      });
+      if (tx && tx.el) {
+        var r = tx.el.getBoundingClientRect();
+        var wx = (r.left - state.pan.x) / state.zoom;
+        var wy = (r.top - state.pan.y) / state.zoom;
+        var ww = r.width / state.zoom;
+        var wh = r.height / state.zoom;
+        selItems.push({
+          id,
+          x: wx,
+          y: wy,
+          w: ww,
+          h: wh,
+          el: tx.el,
+          isText: true,
+          isTodo: false,
+          isMindmap: false,
+          item: tx
+        });
+        continue;
+      }
+      var td = (state.todos || []).find(function(t) {
+        return t.id === id;
+      });
+      if (td && td.el) {
+        var r2 = td.el.getBoundingClientRect();
+        var wx2 = (r2.left - state.pan.x) / state.zoom;
+        var wy2 = (r2.top - state.pan.y) / state.zoom;
+        var ww2 = r2.width / state.zoom;
+        var wh2 = r2.height / state.zoom;
+        selItems.push({
+          id,
+          x: wx2,
+          y: wy2,
+          w: ww2,
+          h: wh2,
+          el: td.el,
+          isText: false,
+          isTodo: true,
+          isMindmap: false,
+          item: td
+        });
+        continue;
+      }
+      var mm = (state.mindmaps || []).find(function(m) {
+        return m.id === id;
+      });
+      if (mm && Array.isArray(mm.nodes) && mm.nodes.length > 0) {
+        var mMinX = Infinity, mMinY = Infinity, mMaxX = -Infinity, mMaxY = -Infinity;
+        mm.nodes.forEach(function(n) {
+          if (typeof n.x === "number" && typeof n.y === "number") {
+            if (n.x < mMinX) mMinX = n.x;
+            if (n.y < mMinY) mMinY = n.y;
+            var nw = n.w || 120;
+            var nh = n.h || 40;
+            if (n.x + nw > mMaxX) mMaxX = n.x + nw;
+            if (n.y + nh > mMaxY) mMaxY = n.y + nh;
+          }
+        });
+        if (isFinite(mMinX) && isFinite(mMaxX)) {
+          selItems.push({
+            id,
+            x: mMinX,
+            y: mMinY,
+            w: mMaxX - mMinX,
+            h: mMaxY - mMinY,
+            el: mm.el,
+            isText: false,
+            isTodo: false,
+            isMindmap: true,
+            item: mm,
+            origMinX: mMinX,
+            origMinY: mMinY
+          });
+        }
+      }
+    }
+    if (selItems.length === 0) {
+      try {
+        toast("Select items to tidy first");
+      } catch (e) {
+      }
+      return;
+    }
+    try {
+      pushUndo();
+    } catch (e) {
+    }
+    var cMinX = Infinity, cMinY = Infinity, cMaxX = -Infinity, cMaxY = -Infinity;
+    for (var ci = 0; ci < selItems.length; ci++) {
+      var siBox = selItems[ci];
+      if (siBox.x < cMinX) cMinX = siBox.x;
+      if (siBox.y < cMinY) cMinY = siBox.y;
+      if (siBox.x + siBox.w > cMaxX) cMaxX = siBox.x + siBox.w;
+      if (siBox.y + siBox.h > cMaxY) cMaxY = siBox.y + siBox.h;
+    }
+    var centerX = (cMinX + cMaxX) / 2;
+    var centerY = (cMinY + cMaxY) / 2;
+    var cols = selItems.length <= 1 ? 1 : Math.max(2, Math.ceil(Math.sqrt(selItems.length)));
+    selItems.sort(function(a, b) {
+      return b.h - a.h;
+    });
+    var colHeights = new Array(cols);
+    for (var cj = 0; cj < cols; cj++) {
+      colHeights[cj] = 0;
+    }
+    var _z = Math.max(0.02, Math.min(10, state.zoom || 1));
+    for (var pk = 0; pk < selItems.length; pk++) {
+      var ssi = selItems[pk];
+      var shortestCol = 0;
+      for (var ck = 1; ck < cols; ck++) {
+        if (colHeights[ck] < colHeights[shortestCol]) shortestCol = ck;
+      }
+      var scale = COL_W / ssi.w;
+      var newW = COL_W;
+      var newH = ssi.h * scale;
+      ssi._newW = newW;
+      ssi._newH = newH;
+      ssi._relX = shortestCol * (COL_W + GAP);
+      ssi._relY = colHeights[shortestCol];
+      ssi._relCol = shortestCol;
+      colHeights[shortestCol] += newH + GAP;
+    }
+    var totalW = cols * (COL_W + GAP) - GAP;
+    var maxColH = 0;
+    for (var cm = 0; cm < colHeights.length; cm++) {
+      if (colHeights[cm] > maxColH) maxColH = colHeights[cm];
+    }
+    var totalH = maxColH - GAP;
+    if (totalH < 1) totalH = 1;
+    var originX = centerX - totalW / 2;
+    var originY = centerY - totalH / 2;
+    for (var pa = 0; pa < selItems.length; pa++) {
+      var si = selItems[pa];
+      var finalX = originX + si._relX;
+      var finalY = originY + si._relY;
+      if (si.isMindmap) {
+        var dx = finalX - si.origMinX;
+        var dy = finalY - si.origMinY;
+        si.item.nodes.forEach(function(n) {
+          if (typeof n.x === "number") n.x += dx;
+          if (typeof n.y === "number") n.y += dy;
+        });
+        try {
+          mmUpdateConnectors(si.item);
+        } catch (e) {
+        }
+      } else if (si.isText) {
+        si.item.x = finalX;
+        si.item.y = finalY;
+        si.item.w = si._newW * _z;
+        si.item.h = si._newH * _z;
+      } else if (si.isTodo) {
+        si.item.x = finalX;
+        si.item.y = finalY;
+        si.item.w = si._newW;
+        si.item.h = si._newH;
+      } else {
+        si.item.x = finalX;
+        si.item.y = finalY;
+        si.item.w = si._newW;
+        si.item.h = si._newH;
+      }
+      try {
+        updateItemStyle(si.item);
+      } catch (e) {
+      }
+      si._newX = finalX;
+      si._newY = finalY;
+    }
+    try {
+      updateCanvas2();
+    } catch (e) {
+    }
+    frameTidiedSelection(selItems);
+    try {
+      scheduleAutoSave();
+    } catch (e) {
+    }
+    try {
+      toast("Tidied " + selItems.length + " items");
+    } catch (e) {
+    }
+  }
+  __name(tidySelection, "tidySelection");
+  function tidyAll() {
+    state.selected.clear();
+    [...state.items, ...state.texts, ...state.todos || [], ...state.mindmaps || []].forEach(function(i) {
+      state.selected.add(i.id);
+    });
+    tidySelection();
+  }
+  __name(tidyAll, "tidyAll");
+  function frameTidiedSelection(selItems) {
+    if (!selItems || selItems.length === 0) return;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (var i = 0; i < selItems.length; i++) {
+      var si = selItems[i];
+      var nx = si._newX !== void 0 ? si._newX : si.x;
+      var ny = si._newY !== void 0 ? si._newY : si.y;
+      var nw = si._newW !== void 0 ? si._newW : si.w;
+      var nh = si._newH !== void 0 ? si._newH : si.h;
+      if (nx < minX) minX = nx;
+      if (ny < minY) minY = ny;
+      if (nx + nw > maxX) maxX = nx + nw;
+      if (ny + nh > maxY) maxY = ny + nh;
+    }
+    if (!isFinite(minX) || !isFinite(maxX)) return;
+    if (maxX - minX < 1) {
+      minX -= 40;
+      maxX += 40;
+    }
+    if (maxY - minY < 1) {
+      minY -= 30;
+      maxY += 30;
+    }
+    var bboxCx = (minX + maxX) / 2;
+    var bboxCy = (minY + maxY) / 2;
+    var bboxW = maxX - minX;
+    var bboxH = maxY - minY;
+    var PADDING = 1.24;
+    var sw = window.innerWidth;
+    var sh = window.innerHeight;
+    var targetW = bboxW * PADDING;
+    var targetH = bboxH * PADDING;
+    var z = Math.min(sw / Math.max(1, targetW), sh / Math.max(1, targetH));
+    z = Math.max(0.02, Math.min(10, z));
+    state.zoom = z;
+    state.pan.x = sw / 2 - bboxCx * state.zoom;
+    state.pan.y = sh / 2 - bboxCy * state.zoom;
+    try {
+      updateCanvas2();
+    } catch (e) {
+    }
+  }
+  __name(frameTidiedSelection, "frameTidiedSelection");
+  window.tidySelection = tidySelection;
+  window.tidyAll = tidyAll;
+
+  // src/js/media-export.js
+  function exportMediaSelected() {
+    const sel = getSelectedItems2();
+    if (sel.length === 0) {
+      toast("Select an item first");
+      return;
+    }
+    sel.forEach((item2) => {
+      if (!item2.src) return;
+      let ext = "bin";
+      let name = "export_" + Date.now();
+      if (item2.isAudio) {
+        name = item2.audioName || "audio";
+        if (item2.src.startsWith("data:")) {
+          const m = item2.src.match(/^data:audio\/(\w+)/);
+          if (m) ext = m[1];
+        } else {
+          ext = item2.src.split(".").pop().split("?")[0] || "mp3";
+        }
+      } else if (item2.isVideo) {
+        name = "video_" + Date.now();
+        if (item2.src.startsWith("data:")) {
+          const m = item2.src.match(/^data:video\/(\w+)/);
+          if (m) ext = m[1];
+        } else {
+          ext = item2.src.split(".").pop().split("?")[0] || "mp4";
+        }
+      } else if (item2.src) {
+        name = "image_" + Date.now();
+        if (item2.src.startsWith("data:")) {
+          const m = item2.src.match(/^data:image\/(\w+)/);
+          if (m) ext = m[1];
+        } else {
+          ext = item2.src.split(".").pop().split("?")[0] || "png";
+        }
+      }
+      const link = document.createElement("a");
+      link.download = name.replace(/\.[^.]+$/, "") + "." + ext;
+      link.href = item2.src;
+      link.click();
+    });
+    toast("Downloading " + sel.length + " file(s)");
+  }
+  __name(exportMediaSelected, "exportMediaSelected");
+  window.exportMediaSelected = exportMediaSelected;
+
+  // src/js/file-drop.js
+  viewport.addEventListener("mousedown", (e) => {
+    if (IS_TOUCH_DEVICE) return;
+    if (e.button === 1 || state.altPanEnabled && e.button === 0 && e.altKey) {
+      if (e.cancelable) e.preventDefault();
+      state.dragging = { type: "pan", startX: e.clientX - state.pan.x, startY: e.clientY - state.pan.y };
+      viewport.classList.add("grabbing");
+    }
+  });
+  viewport.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    showCtx(e.clientX, e.clientY);
+  });
+  var _welcomeEl = document.getElementById("welcome");
+  if (_welcomeEl) {
+    _welcomeEl.addEventListener("dragover", function(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    });
+    _welcomeEl.addEventListener("drop", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log("[FileDrop] Welcome received drop, files:", e.dataTransfer.files.length);
+      hideWelcome();
+      const files = e.dataTransfer.files;
+      if (files && files.length) _handleFileDrop(e, [...files]);
+    });
+  }
+  window.addEventListener("dragover", function(e) {
+    if (e.dataTransfer && e.dataTransfer.items) {
+      for (let i = 0; i < e.dataTransfer.items.length; i++) {
+        if (e.dataTransfer.items[i].kind === "file") {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+          const w = document.getElementById("welcome");
+          if (w && w._welcomeHiddenByDrag !== true && w.style.display !== "none") {
+            try {
+              hideWelcome();
+            } catch (err) {
+            }
+          }
+          return;
+        }
+      }
+    }
+    e.preventDefault();
+  }, true);
+  window.addEventListener("drop", function(e) {
+    try {
+      console.log("[FileDrop] window capture-phase drop, files:", e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0, "types:", e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types).join(",") : "");
+    } catch (err) {
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files.length) {
+      try {
+        hideWelcome();
+      } catch (err) {
+      }
+      try {
+        _handleFileDrop(e, [...files]);
+      } catch (err) {
+        console.warn("[FileDrop] window handler error:", err);
+      }
+      return;
+    }
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    let url = null;
+    if (dt.getData) {
+      const uriList = dt.getData("text/uri-list");
+      if (uriList) {
+        const lines = uriList.split(/\r?\n/).map((s) => s.trim()).filter((s) => s && !s.startsWith("#"));
+        if (lines.length) url = lines[0];
+      }
+      if (!url) {
+        const html = dt.getData("text/html");
+        if (html) {
+          const m = html.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
+          if (m) url = m[1];
+        }
+      }
+    }
+    if (!url) return;
+    try {
+      hideWelcome();
+    } catch (err) {
+    }
+    toast("Fetching image\u2026");
+    fetch("https://images.weserv.nl/?url=" + encodeURIComponent(url)).then((res) => {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.blob();
+    }).then((blob) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
+          const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
+          addImage2(
+            ev.target.result,
+            dw,
+            dh,
+            (e.clientX - state.pan.x) / state.zoom,
+            (e.clientY - state.pan.y) / state.zoom
+          );
+          toast("Pasted image");
+        };
+        img.onerror = () => toast("Failed to decode image");
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(blob);
+    }).catch((err) => {
+      console.log("[FileDrop] proxy fetch failed:", err.message);
+      const img = new Image();
+      img.onload = () => {
+        if (typeof maskImageCache2 !== "undefined") maskImageCache2[url] = { img: null };
+        const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
+        const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
+        addImage2(
+          url,
+          dw,
+          dh,
+          (e.clientX - state.pan.x) / state.zoom,
+          (e.clientY - state.pan.y) / state.zoom
+        );
+        toast("Pasted image (hotlinked)");
+      };
+      img.onerror = () => {
+        console.log("[FileDrop] hotlink failed, trying corsproxy.io");
+        fetch("https://corsproxy.io/?" + encodeURIComponent(url)).then(function(r) {
+          return r.blob();
+        }).then(function(blob) {
+          var reader = new FileReader();
+          reader.onload = function(ev) {
+            var i2 = new Image();
+            i2.onload = function() {
+              var dw = Math.round(Math.min(i2.naturalWidth / 2, 360));
+              var dh = Math.round(i2.naturalHeight * (dw / i2.naturalWidth));
+              addImage2(
+                ev.target.result,
+                dw,
+                dh,
+                (e.clientX - state.pan.x) / state.zoom,
+                (e.clientY - state.pan.y) / state.zoom
+              );
+              toast("Pasted image (via fallback proxy)");
+            };
+            i2.src = ev.target.result;
+          };
+          reader.readAsDataURL(blob);
+        }).catch(function(e2) {
+          console.log("[FileDrop] all paths failed:", e2.message);
+          toast("Image could not be loaded (source may be expired)");
+        });
+      };
+      img.src = url;
+    });
+  }, true);
+  viewport.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  var _fileDragDepth = 0;
+  function _isFileDrag(e) {
+    if (!e || !e.dataTransfer) return false;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      for (let i = 0; i < e.dataTransfer.items.length; i++) {
+        if (e.dataTransfer.items[i].kind === "file") return true;
+      }
+    }
+    const types = e.dataTransfer.types;
+    if (types && types.length) {
+      for (let i = 0; i < types.length; i++) {
+        if (types[i] === "Files") return true;
+      }
+    }
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) return true;
+    return false;
+  }
+  __name(_isFileDrag, "_isFileDrag");
+  document.addEventListener("dragenter", function(e) {
+    if (!_isFileDrag(e)) return;
+    _fileDragDepth++;
+    if (_fileDragDepth === 1) {
+      document.body.classList.add("dragging-file");
+      try {
+        const w = document.getElementById("welcome");
+        if (w && w.style.display !== "none" && !w.classList.contains("fading")) {
+          w._welcomeHiddenByDrag = true;
+          w.classList.add("fading");
+          setTimeout(function() {
+            w.style.display = "none";
+          }, 320);
+        }
+      } catch (err) {
+      }
+    }
+  });
+  document.addEventListener("dragleave", function(e) {
+    if (!_isFileDrag(e)) return;
+    _fileDragDepth = Math.max(0, _fileDragDepth - 1);
+    if (_fileDragDepth === 0) {
+      document.body.classList.remove("dragging-file");
+    }
+  });
+  document.addEventListener("drop", function() {
+    _fileDragDepth = 0;
+    document.body.classList.remove("dragging-file");
+    try {
+      const w = document.getElementById("welcome");
+      if (w) w._welcomeHiddenByDrag = false;
+    } catch (err) {
+    }
+  });
+  document.addEventListener("dragend", function() {
+    _fileDragDepth = 0;
+    document.body.classList.remove("dragging-file");
+  });
+  window.addEventListener("dragleave", function(e) {
+    if (e.relatedTarget === null) {
+      _fileDragDepth = 0;
+      document.body.classList.remove("dragging-file");
+      try {
+        const w = document.getElementById("welcome");
+        if (w && w._welcomeHiddenByDrag) {
+          w._welcomeHiddenByDrag = false;
+          w.style.display = "flex";
+          void w.offsetWidth;
+          w.classList.remove("fading");
+        }
+      } catch (err) {
+      }
+    }
+  });
+  function _handleEntryDrop(e, entries) {
+    var allFiles = [];
+    var pending = entries.length;
+    function readEntry(entry, path) {
+      if (entry.isFile) {
+        pending++;
+        entry.file(function(file) {
+          file._kraftedPath = path;
+          allFiles.push(file);
+          pending--;
+          if (pending === 0) _finishFolderImport(e, allFiles);
+        }, function(err) {
+          console.warn("[FileDrop] Failed to read file:", entry.name, err);
+          pending--;
+          if (pending === 0) _finishFolderImport(e, allFiles);
+        });
+      } else if (entry.isDirectory) {
+        let readBatch = function() {
+          reader.readEntries(function(batch) {
+            if (batch.length === 0) {
+              pending--;
+              if (pending === 0) _finishFolderImport(e, allFiles);
+              return;
+            }
+            pending += batch.length;
+            batch.forEach(function(subEntry) {
+              readEntry(subEntry, subPath);
+            });
+            pending--;
+            readBatch();
+          }, function(err) {
+            console.warn("[FileDrop] Failed to read directory:", entry.name, err);
+            pending--;
+            if (pending === 0) _finishFolderImport(e, allFiles);
+          });
+        };
+        __name(readBatch, "readBatch");
+        var reader = entry.createReader();
+        var subPath = path ? path + "/" + entry.name : entry.name;
+        readBatch();
+      } else {
+        pending--;
+        if (pending === 0) _finishFolderImport(e, allFiles);
+      }
+    }
+    __name(readEntry, "readEntry");
+    entries.forEach(function(entry) {
+      readEntry(entry, "");
+    });
+  }
+  __name(_handleEntryDrop, "_handleEntryDrop");
+  function _finishFolderImport(e, allFiles) {
+    if (allFiles.length === 0) return;
+    var images = [], videos = [], audios = [];
+    allFiles.forEach(function(f) {
+      if (f.type.startsWith("image/")) images.push(f);
+      else if (f.type.startsWith("video/")) videos.push(f);
+      else if (f.type.startsWith("audio/") || /\.(mp3|wav|aiff|aif|flac|ogg|m4a)$/i.test(f.name)) audios.push(f);
+    });
+    var sorted = images.concat(videos).concat(audios);
+    console.log("[FileDrop] Folder import: " + sorted.length + " files (" + images.length + " images, " + videos.length + " videos, " + audios.length + " audio)");
+    if (typeof window.toast === "function") {
+      window.toast("\u{1F4C1} Importing " + sorted.length + " files from folder...");
+    }
+    _handleFileDrop(e, sorted);
+  }
+  __name(_finishFolderImport, "_finishFolderImport");
+  function _handleFileDrop(e, files) {
+    console.log("[FileDrop] _handleFileDrop called with", files.length, "files");
+    const imageFiles = [];
+    const videoFiles = [];
+    const audioFiles = [];
+    files.forEach((file, idx) => {
+      const isVideo = file.type.startsWith("video/");
+      const isAudio = file.type.startsWith("audio/") || /\.(mp3|wav|aiff|aif|flac|ogg|m4a)$/i.test(file.name);
+      if (!file.type.startsWith("image/") && !isVideo && !isAudio) return;
+      if (isVideo) videoFiles.push({ file, idx });
+      else if (isAudio) audioFiles.push({ file, idx });
+      else imageFiles.push({ file, idx });
+    });
+    const dropX0 = (e.clientX - state.pan.x) / state.zoom;
+    const dropY0 = (e.clientY - state.pan.y) / state.zoom;
+    if (imageFiles.length > 0) pushUndo();
+    let imgIdx = 0;
+    function processNextImage() {
+      if (imgIdx >= imageFiles.length) return;
+      const { file, idx } = imageFiles[imgIdx];
+      const dropX = dropX0 + idx * 20;
+      const dropY = dropY0 + idx * 20;
+      const isLast = imgIdx === imageFiles.length - 1;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        const dataUrl = ev.target.result;
+        const img = new Image();
+        img.onload = function() {
+          addImage2(dataUrl, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
+          imgIdx++;
+          setTimeout(processNextImage, 30);
+        };
+        img.onerror = function() {
+          console.warn("[FileDrop] Image decode failed, trying blob fallback:", file.name);
+          const blobUrl = URL.createObjectURL(file);
+          const img2 = new Image();
+          img2.onload = function() {
+            addImage2(blobUrl, img2.naturalWidth, img2.naturalHeight, dropX, dropY, false, isLast);
+            imgIdx++;
+            setTimeout(processNextImage, 30);
+          };
+          img2.onerror = function() {
+            console.error("[FileDrop] Both data URL and blob URL failed for:", file.name);
+            toast("Failed to load image: " + file.name);
+            imgIdx++;
+            setTimeout(processNextImage, 30);
+          };
+          img2.src = blobUrl;
+        };
+        img.src = dataUrl;
+      };
+      reader.onerror = function() {
+        console.error("[FileDrop] FileReader failed for:", file.name);
+        imgIdx++;
+        setTimeout(processNextImage, 30);
+      };
+      reader.readAsDataURL(file);
+    }
+    __name(processNextImage, "processNextImage");
+    if (imageFiles.length > 0) {
+      processNextImage();
+      if (imageFiles.length > 1) toast("Importing " + imageFiles.length + " images\u2026");
+    }
+    if (videoFiles.length > 0) pushUndo();
+    let videoQueueIdx = 0;
+    function processNextVideo() {
+      if (videoQueueIdx >= videoFiles.length) return;
+      const { file, idx } = videoFiles[videoQueueIdx];
+      const dropX = dropX0 + idx * 20;
+      const dropY = dropY0 + idx * 20;
+      const isLast = videoQueueIdx === videoFiles.length - 1;
+      const blobUrl = URL.createObjectURL(file);
+      const videoEl = document.createElement("video");
+      videoEl.preload = "metadata";
+      videoEl.muted = true;
+      videoEl.src = blobUrl;
+      let done = false;
+      const finish = /* @__PURE__ */ __name((w, h) => {
+        if (done) return;
+        done = true;
+        videoEl.removeAttribute("src");
+        videoEl.load();
+        const newItem = addImage2(blobUrl, w, h, dropX, dropY, true, isLast);
+        if (newItem && file && file.name) {
+          newItem.filename = file.name;
+          try {
+            if (newItem.el && newItem.el._setFilenameBadge) newItem.el._setFilenameBadge(file.name);
+          } catch (e2) {
+          }
+        }
+        videoQueueIdx++;
+        setTimeout(processNextVideo, 100);
+      }, "finish");
+      videoEl.onloadedmetadata = () => {
+        finish(videoEl.videoWidth || 640, videoEl.videoHeight || 360);
+      };
+      videoEl.onerror = () => {
+        if (done) return;
+        done = true;
+        toast("Failed to load video: " + file.name);
+        URL.revokeObjectURL(blobUrl);
+        videoQueueIdx++;
+        setTimeout(processNextVideo, 100);
+      };
+      setTimeout(() => {
+        if (!done) {
+          finish(640, 360);
+        }
+      }, 15e3);
+    }
+    __name(processNextVideo, "processNextVideo");
+    processNextVideo();
+    audioFiles.forEach(({ file, idx }) => {
+      const dropX = dropX0 + idx * 20;
+      const dropY = dropY0 + idx * 20;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        addAudioItem(ev.target.result, file.name, dropX, dropY);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  __name(_handleFileDrop, "_handleFileDrop");
+  viewport.addEventListener("drop", (e) => {
+    e.preventDefault();
+    hideWelcome();
+    var items = e.dataTransfer.items;
+    if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+      var entries = [];
+      for (var i = 0; i < items.length; i++) {
+        var entry = items[i].webkitGetAsEntry();
+        if (entry) entries.push(entry);
+      }
+      if (entries.length > 0) {
+        _handleEntryDrop(e, entries);
+        return;
+      }
+    }
+    const files = [...e.dataTransfer.files];
+    if (files.length) _handleFileDrop(e, files);
+  });
+  function fetchImageFromURL(url, x, y) {
+    console.log("[fetchImageFromURL] start:", url);
+    try {
+      hideWelcome();
+    } catch (err) {
+    }
+    toast("Fetching image\u2026");
+    fetch(url, { mode: "cors" }).then((res) => {
+      console.log("[fetchImageFromURL] fetch response status:", res.status);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.blob();
+    }).then((blob) => {
+      console.log("[fetchImageFromURL] got blob size:", blob.size);
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          addImage2(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
+          toast("Pasted image from URL");
+        };
+        img.onerror = () => {
+          console.log("[fetchImageFromURL] data URL img decode failed");
+          toast("Failed to decode image");
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(blob);
+    }).catch((err) => {
+      console.log("[fetchImageFromURL] direct fetch failed:", err.message);
+      const img = new Image();
+      img.onload = () => {
+        console.log("[fetchImageFromURL] hotlink img loaded:", img.naturalWidth, "x", img.naturalHeight);
+        if (typeof maskImageCache2 !== "undefined") {
+          maskImageCache2[url] = { img: null };
+        }
+        fetch(url, { mode: "no-cors" }).then((res) => res.blob()).then((blob) => {
+          const objUrl = URL.createObjectURL(blob);
+          addImage2(objUrl, img.naturalWidth, img.naturalHeight, x, y);
+          toast("Pasted image (hotlinked)");
+        }).catch(() => {
+          addImage2(url, img.naturalWidth, img.naturalHeight, x, y);
+          toast("Pasted image (hotlinked)");
+        });
+      };
+      img.onerror = () => {
+        console.log("[fetchImageFromURL] hotlink also failed, trying CORS proxy");
+        if (typeof state !== "undefined" && state.allowCorsProxy) {
+          tryCorsProxy(url, x, y);
+        } else {
+          toast("Image blocked. Enable proxy: kraftedEnableCorsProxy()");
+          console.log("[fetchImageFromURL] CORS proxy not enabled \u2014 giving up");
+        }
+      };
+      img.src = url;
+    });
+  }
+  __name(fetchImageFromURL, "fetchImageFromURL");
+  function tryCorsProxy(url, x, y) {
+    const proxy = "https://images.weserv.nl/?url=" + encodeURIComponent(url);
+    console.log("[tryCorsProxy]", proxy);
+    toast("Fetching via CORS proxy\u2026");
+    fetch(proxy).then((res) => {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.blob();
+    }).then((blob) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          addImage2(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
+          toast("Pasted image (via proxy)");
+        };
+        img.onerror = () => {
+          toast("Proxy returned invalid image");
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(blob);
+    }).catch((err) => {
+      console.log("[tryCorsProxy] weserv failed:", err.message);
+      const fallback = "https://corsproxy.io/?" + encodeURIComponent(url);
+      fetch(fallback).then((res) => res.blob()).then((blob) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            addImage2(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
+            toast("Pasted image (via fallback proxy)");
+          };
+          img.onerror = () => {
+            toast("Proxy returned invalid image");
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(blob);
+      }).catch((e2) => {
+        console.log("[tryCorsProxy] fallback also failed:", e2.message);
+        toast("All CORS proxies failed. Image cannot be loaded.");
+      });
+    });
+  }
+  __name(tryCorsProxy, "tryCorsProxy");
+  window.kraftedEnableCorsProxy = function() {
+    try {
+      if (!window.state) window.state = {};
+      window.state.allowCorsProxy = true;
+      localStorage.setItem("krafted-allow-cors-proxy", "1");
+      console.log("[Krafted] CORS proxy ENABLED. Cross-origin image paste will use images.weserv.nl as fallback.");
+      toast("CORS proxy enabled \u2014 try paste again");
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+  window._handleFileDrop = _handleFileDrop;
+  window.fetchImageFromURL = fetchImageFromURL;
+  window.tryCorsProxy = tryCorsProxy;
+
   // src/js/init.js
   initTextToolbar();
   updateCanvas2();
@@ -18869,8 +20685,8 @@ var __kraft = (() => {
     window.emergencySave = emergencySave;
   }), "_initErrorBoundary"))();
   window.newBoard = newBoard;
-  window.showWelcome = showWelcome;
-  window.hideWelcome = hideWelcome;
+  if (typeof showWelcome !== "undefined") window.showWelcome = showWelcome;
+  if (typeof hideWelcome !== "undefined") window.hideWelcome = hideWelcome;
   // ── Global exposure: bridge IIFE closure back to window ──
   if (typeof window !== "undefined") {
     window.state = state;

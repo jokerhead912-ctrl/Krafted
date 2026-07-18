@@ -660,8 +660,8 @@ export function tryCorsProxy(url, x, y) {
 // Persists in localStorage. To disable: kraftedDisableCorsProxy()
 window.kraftedEnableCorsProxy = function() {
   try {
-    if (typeof state === 'undefined') state = {};
-    state.allowCorsProxy = true;
+    if (!window.state) window.state = {};
+    window.state.allowCorsProxy = true;
     localStorage.setItem('krafted-allow-cors-proxy', '1');
     console.log('[Krafted] CORS proxy ENABLED. Cross-origin image paste will use images.weserv.nl as fallback.');
     toast('CORS proxy enabled — try paste again');

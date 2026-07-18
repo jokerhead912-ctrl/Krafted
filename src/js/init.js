@@ -12,6 +12,37 @@ import { cutState, updateCutTargetHighlight } from './cut-lasso.js';
 import { cleanupAllItems } from './delete.js';
 import { toast } from './ui-utils.js';
 
+// Side-effect imports: these modules define window.xxx = xxx at the bottom.
+// Importing them prevents esbuild from tree-shaking them away.
+// The functions are accessed via inline HTML onclick handlers.
+import './add-items.js';
+import './mindmap.js';
+import './todo.js';
+import './audio.js';
+import './props-panel.js';
+import './tools.js';
+import './grid-fs.js';
+import './help.js';
+import './paper.js';
+import './gif-editor.js';
+import './capture.js';
+import './export.js';
+import './reframe-crop.js';
+import './clipboard.js';
+import './undo-redo.js';
+import './video-playback.js';
+import './groups.js';
+import './alignment.js';
+import './draw-layer.js';
+import './translation.js';
+import './layout-tidy.js';
+import './media-export.js';
+import './masking.js';
+import './video-trim.js';
+import './file-drop.js';
+import './media-player.js';
+import './selection.js';
+
 //  HELP PANEL — now in help.js (R79)
 // ============================================================
 // showHelp / hideHelp are defined in help.js with the full
@@ -591,5 +622,6 @@ export async function exportAllImagesToFolder() {
 })();
 
 window.newBoard = newBoard;
-window.showWelcome = showWelcome;
-window.hideWelcome = hideWelcome;
+// showWelcome/hideWelcome are global functions defined in index.html
+if (typeof showWelcome !== 'undefined') window.showWelcome = showWelcome;
+if (typeof hideWelcome !== 'undefined') window.hideWelcome = hideWelcome;
