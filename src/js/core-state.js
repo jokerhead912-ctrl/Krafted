@@ -4,7 +4,7 @@
 //  [INIT] logs and version checks below can reference it.
 //  Bump this AND docs/version.json when releasing a new version.
 // ============================================================
-export const KRAFTED_VERSION = '6.0';
+export const KRAFTED_VERSION = '6.0.1';
 
 // ============================================================
 //  STARTUP CHECKS
