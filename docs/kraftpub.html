@@ -30249,9 +30249,21 @@ function loadAutoSave() {
 // tabbed UI (Guide + Shortcuts editor). The stubs below are
 // kept as no-ops so nothing breaks if help.js fails to load.
 
-initTextToolbar();
-updateCanvas();
-initVideoLazyLoad();
+// ── Close-confirm: ask user before closing the tab ──
+// If the board has any items (images, text, videos, etc.), show a
+// native browser confirm dialog. User can Save → close, or just close.
+// This prevents accidental data loss from Cmd+W / close tab.
+(function _initCloseGuard(){
+  window.addEventListener('beforeunload', function(e){
+    // Only prompt if there's actual content on the board
+    if (!state || !state.items || state.items.length === 0) return;
+    // Standard cross-browser beforeunload pattern:
+    // returnValue + preventDefault both needed for Chrome/Edge/Safari.
+    e.preventDefault();
+    e.returnValue = 'You have unsaved work. Leave anyway?';
+    return e.returnValue;
+  });
+})();
 // ALWAYS show welcome page on load — user must click GET STARTED every time
 showWelcome();
 // Auto-save restore: if data exists, restore in background but keep welcome page visible
