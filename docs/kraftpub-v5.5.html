@@ -2301,7 +2301,7 @@ body.dragging-file .media-anno-toolbar {
 #link-modal .link-loading .spinner { width:14px; height:14px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
 /* Text handle container — sibling of text-item, NOT a child (so contentEditable stays clean) */
-.text-handles { position:absolute; pointer-events:none; z-index: 99999; }
+.text-handles { position:absolute; pointer-events:none; }
 .text-handles .item-handle { pointer-events:auto; }
 /* GROUP BORDER */
 .group-border { position:absolute; pointer-events:none; border:2px dashed; border-radius:4px; z-index:0; transition:all 0.1s; }
@@ -9622,16 +9622,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     annoCanvas.addEventListener('pointerdown', function(ev) {
       const s = el._annoDrawState;
       if (s.mode === 'off') return;
-      // v6.0: Alt + pen/stylus → pan/zoom canvas instead of drawing.
-      // Wacom/XPPen users need a way to navigate the board while in
-      // draw mode without switching to the select tool. Alt is the
-      // industry standard modifier (Photoshop, Blender, Premiere).
-      // We release pointer capture and let the event bubble up to
-      // the viewport's pan handler.
-      if (ev.altKey) {
-        try { annoCanvas.releasePointerCapture(ev.pointerId); } catch (e) {}
-        return; // let the event bubble to viewport mousedown for pan
-      }
       ev.preventDefault();
       ev.stopPropagation();
       // Round 12: text mode is single-click (no drag). Spawn an
@@ -9704,9 +9694,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       const editor = document.createElement('textarea');
       editor.className = 'media-anno-text-editor';
       editor.placeholder = 'Type…';
-      // v6.0: no rows attribute — it fights with the auto-grow height
-      // logic and causes the editor to jump tall on first keystroke.
-      // We control initial size via style.width/minHeight instead.
+      editor.rows = 1;
       editor.value = '';
       // Position it at the click point in viewport coords. The editor
       // is `position: fixed` and is NOT inside the canvas zoom/pan
@@ -9730,31 +9718,19 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // (max(14, size*5)) so what-you-see matches what-you-get.
       const fontSize = Math.max(14, (s.size || 4) * 5);
       editor.style.font = '600 ' + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
-      // v6.0: remove the -2/-1 padding compensation — it caused the
-      // editor to appear offset from the click point. The textarea
-      // border+padding naturally creates a small gap which is fine.
-      editor.style.left = px + 'px';
-      editor.style.top = py + 'px';
-      // v6.0: start with a comfortable initial size. No rows attribute
-      // (that conflicts with scrollHeight auto-grow and causes height
-      //  jumps). Width starts at 80px, height auto-grows from 1 line.
-      editor.style.width = '80px';
-      editor.style.minHeight = '30px';
-      editor.style.maxHeight = '300px';
+      editor.style.left = (px - 2) + 'px';
+      editor.style.top = (py - 1) + 'px';
+      editor.style.width = '20px'; // start small, auto-grow on input
       // Color: copy from current draw state
       editor.style.color = s.color || '#fff';
       // Stash the normalised point for later commit
       editor._annoPt = pt;
       // Auto-grow width & height as the user types.
       // Uses a hidden mirror <span> with identical styling to measure
-      // the natural text width, then clamps between minW(180) and maxW(420).
+      // the natural text width, then clamps between minW(60) and maxW(420).
       var _mirror = document.createElement('span');
       _mirror.style.cssText = 'position:absolute;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;pointer-events:none;left:-9999px;top:-9999px;';
-      // Same parent choice as the editor (body for normal, fullscreen
-      // element for fullscreen). The mirror is `position:absolute` so
-      // it always renders in whatever subtree its parent is in.
-      var _mirrorFs = document.fullscreenElement || document.webkitFullscreenElement;
-      var _mirrorParent = _mirrorFs || document.body;
+      var _mirrorParent = el.querySelector('.media-wrap') || document.body;
       _mirrorParent.appendChild(_mirror);
       editor._mirror = _mirror; // stash for cleanup
       // Run once immediately to fit the placeholder width
@@ -9769,17 +9745,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         _mirror.style.letterSpacing = window.getComputedStyle(editor).letterSpacing;
         _mirror.textContent = txt;
         var naturalW = _mirror.getBoundingClientRect().width + pw + 2;
-        // v6.0: min 80px, max 200px (was 60-140) — slightly wider now
-        // that height is fixed at ~100px for square aspect ratio.
-        var targetW = Math.max(80, Math.min(200, Math.ceil(naturalW)));
+        var targetW = Math.max(20, Math.min(140, Math.ceil(naturalW)));
         editor.style.width = targetW + 'px';
       })();
       editor.addEventListener('input', function(){
-        // Height: auto-grow, clamped between minHeight (30) and maxHeight (300).
-        // Must set to 'auto' first so scrollHeight reflects actual content height.
+        // Height: auto-grow
         editor.style.height = 'auto';
-        var newH = Math.max(30, Math.min(300, editor.scrollHeight + 4));
-        editor.style.height = newH + 'px';
+        editor.style.height = (editor.scrollHeight + 4) + 'px';
         // Width: measure via mirror span
         var txt = editor.value || editor.placeholder || '';
         var fs = editor.style.font || window.getComputedStyle(editor).font || '14px sans-serif';
@@ -9789,7 +9761,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         _mirror.style.letterSpacing = window.getComputedStyle(editor).letterSpacing;
         _mirror.textContent = txt;
         var naturalW = _mirror.getBoundingClientRect().width + pw + 2; // +2 for border
-        var targetW = Math.max(80, Math.min(200, Math.ceil(naturalW)));
+        var targetW = Math.max(20, Math.min(140, Math.ceil(naturalW)));
         editor.style.width = targetW + 'px';
       });
       // Enter to commit, Shift+Enter for newline, Esc to cancel.
@@ -9818,24 +9790,14 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           if (el._textEditorEl === editor) _commitTextEditor();
         }, 80);
       });
-      // v6.0: pick the right parent for the editor.
-      // - Normal mode: append to document.body. The .item ancestor has
-      //   `transform: translate3d(...)` for pan/zoom, which would break
-      //   `position: fixed` (the editor would be relative to .item).
-      // - Fullscreen mode: append to the fullscreen element (wrap),
-      //   because the Fullscreen API only renders the fullscreen
-      //   element's subtree — body children are hidden in fullscreen.
-      //   But in fullscreen, .item's transform doesn't break the
-      //   editor because the wrap is the fullscreen element and
-      //   `position: fixed` is relative to the fullscreen viewport.
-      var _fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-      var _editorParent;
-      if (_fsEl) {
-        _editorParent = _fsEl; // fullscreen subtree
-      } else {
-        _editorParent = document.body;
-      }
-      _editorParent.appendChild(editor);
+      // Round 75.2: append editor to the fullscreen target (wrap)
+      // instead of document.body so the text editor is visible when
+      // the player is in fullscreen. The Fullscreen API only renders
+      // the fullscreen element's subtree. The editor uses position:fixed
+      // so it anchors to the viewport/fullscreen viewport identically
+      // regardless of which parent it lives under.
+      var _editorWrap = el.querySelector('.media-wrap') || document.body;
+      _editorWrap.appendChild(editor);
       el._textEditorEl = editor;
       // Make the text editor draggable so the user can reposition it
       // after it spawns at the video centre (T-key shortcut).
@@ -9954,12 +9916,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           refreshTrBtnLabel();
         }
       });
-      // v6.0: append translate button to body (normal) or fullscreen
-      // element (fullscreen) — same as the editor. Use body, not
-      // .media-wrap, so the button's `position:fixed` isn't broken by
-      // the .item's transform.
-      var _trFs = document.fullscreenElement || document.webkitFullscreenElement;
-      var _trParent = _trFs || document.body;
+      // Round 75.2: append translate button to wrap (the fullscreen
+      // target), not document.body — same reason as the editor: the
+      // Fullscreen API only renders the fullscreen element's subtree.
+      var _trParent = el.querySelector('.media-wrap') || document.body;
       _trParent.appendChild(trBtn);
       // Stash on the editor so _commit / _cancel can tear it down cleanly
       editor._trBtn = trBtn;
@@ -11199,47 +11159,40 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // Skips comments that already have a translation, but the user can clear
   // them individually first if they want a fresh translation. Sequential
   // calls (not parallel) to avoid hammering the translation API.
-  // v6.0: renamed from translateAllBtn → snapTranslateAllBtn. The
-  // handler is hoisted to a named function snapTranslateAll so it
-  // can be found/replaced in the codebase via a unique identifier.
-  const snapTranslateAllBtn = document.createElement('button');
-  snapTranslateAllBtn.className = 'head-btn bulk-translate';
-  snapTranslateAllBtn.innerHTML = '🌐→中 All';
-  snapTranslateAllBtn.title = 'snapTranslateAll — translate every snap comment to the other language (sequential, ~1s per comment)';
-  snapTranslateAllBtn.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
-  async function snapTranslateAll(ev) {
+  const translateAllBtn = document.createElement('button');
+  translateAllBtn.className = 'head-btn bulk-translate';
+  translateAllBtn.innerHTML = '🌐→中 All';
+  translateAllBtn.title = 'Translate every comment to the other language at once (sequential, ~1s per comment)';
+  translateAllBtn.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
+  translateAllBtn.addEventListener('click', async function(ev){
     ev.stopPropagation(); ev.preventDefault();
-    console.log('[snapTranslateAll] called');
-    // v6.0: force-commit any open inline-edit before bulk translate.
-    try {
-      var _anyEditable = listBody.querySelector('.media-anno-comment-text[contenteditable="true"]');
-      if (_anyEditable) { _anyEditable.blur(); console.log('[snapTranslateAll] force-blurred inline editor'); }
-    } catch (e) {}
     const itm = _getItem();
-    if (!itm) { console.warn('[snapTranslateAll] no item — abort'); return; }
-    console.log('[snapTranslateAll] item.id=' + itm.id);
+    if (!itm) return;
     const ann = videoAnnoEnsure(itm);
     const list = Array.isArray(ann.comments) ? ann.comments : [];
-    console.log('[snapTranslateAll] total comments: ' + list.length);
     if (list.length === 0) { try { toast('No comments to translate'); } catch (e) {} return; }
-    // Filter to comments that need translation
+    // Filter to comments that need translation (have text, no current translation
+    // OR a translation that matches the source language — i.e. stale)
     const toTranslate = list.filter(c => {
       if (!c || !c.text) return false;
+      // Skip if translation matches text (no-op)
       if (c.translation && c.translation === c.text) return false;
       return true;
     });
-    console.log('[snapTranslateAll] toTranslate count: ' + toTranslate.length);
     if (toTranslate.length === 0) { try { toast('All comments already have a translation'); } catch (e) {} return; }
-    try { toast('Translating ' + toTranslate.length + ' comments…'); } catch (e) {}
-    snapTranslateAllBtn.disabled = true;
-    const origLabel = snapTranslateAllBtn.innerHTML;
+    // Confirm with the user (so they don't accidentally trigger this on 50 comments)
+    if (toTranslate.length > 1) {
+      const ok = window.confirm('Translate ' + toTranslate.length + ' comments?\n(This will make ~' + toTranslate.length + ' API calls, one per comment, sequential)');
+      if (!ok) return;
+    }
+    translateAllBtn.disabled = true;
+    const origLabel = translateAllBtn.innerHTML;
     let done = 0, failed = 0;
     for (const c of toTranslate) {
       const hasCjk = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(c.text);
       const fromLang = hasCjk ? 'zh' : 'en';
       const toLang = hasCjk ? 'en' : 'zh';
-      snapTranslateAllBtn.innerHTML = '🌐→中 ' + (done + 1) + '/' + toTranslate.length;
-      console.log('[snapTranslateAll] #' + (done+failed+1) + ' text="' + c.text.slice(0,30) + '" ' + fromLang + '→' + toLang);
+      translateAllBtn.innerHTML = '🌐→中 ' + (done + 1) + '/' + toTranslate.length;
       try {
         const translated = await translateText(c.text, fromLang, toLang);
         if (translated && translated !== c.text) {
@@ -11247,25 +11200,19 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           c.translationDir = fromLang + '-' + toLang;
           if (!c.originalText) c.originalText = c.text;
           done++;
-          console.log('[snapTranslateAll]   OK → "' + translated.slice(0,30) + '"');
-        } else {
-          failed++;
-          console.log('[snapTranslateAll]   NO CHANGE — same as source');
-        }
+        } else { failed++; }
       } catch (e) {
-        console.warn('[snapTranslateAll]   FAILED:', e.message);
+        console.warn('Bulk translate failed for comment', c.id, e);
         failed++;
       }
     }
-    console.log('[snapTranslateAll] done=' + done + ', failed=' + failed);
     try { scheduleAutoSave(); } catch (e) {}
     try { _refreshListBody(); } catch (e) {}
-    try { if (itm && itm.el && itm.el._refreshSeekMarkers) itm.el._refreshSeekMarkers(); } catch (e) {}
-    snapTranslateAllBtn.innerHTML = origLabel;
-    snapTranslateAllBtn.disabled = false;
+    try { if (item && item.el && item.el._refreshSeekMarkers) item.el._refreshSeekMarkers(); } catch (e) {}
+    translateAllBtn.innerHTML = origLabel;
+    translateAllBtn.disabled = false;
     try { toast('Translated ' + done + ' / ' + toTranslate.length + (failed ? ' (' + failed + ' failed)' : '')); } catch (e) {}
-  }
-  snapTranslateAllBtn.addEventListener('click', snapTranslateAll);
+  });
   // Round 5: "Clear all" button — wipes all comments for this video.
   // Asks for confirmation first.
   const clearAllBtn = document.createElement('button');
@@ -11382,7 +11329,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // minimize so the user can reach it without hunting. Hidden by default.
   listHead.appendChild(followBtn);
   // Round 5: bulk translate + clear all buttons sit right next to the show-toolbar button
-  listHead.appendChild(snapTranslateAllBtn);
+  listHead.appendChild(translateAllBtn);
   listHead.appendChild(clearAllBtn);
   listHead.appendChild(sendToBoardBtn);
   listHead.appendChild(exportBtn);
@@ -12190,26 +12137,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     const tBtn = document.createElement('button');
     tBtn.className = 'tr';
     tBtn.textContent = '🌐';
-    tBtn.title = 'snapSingleTranslate';
-    tBtn.onclick = function(ev){
-      ev.stopPropagation();
-      // v6.0: if the comment body is in inline-edit mode, force-blur
-      // it FIRST to commit any pending text changes. Otherwise the
-      // blur handler races with the async translate, can clear the
-      // translation, and the re-render after translate shows the
-      // original text with no translation. By committing inline edits
-      // before translate, we guarantee c.text is stable.
-      try {
-        var _b = ev.target.closest('.media-anno-comment');
-        if (_b) {
-          var _body = _b.querySelector('.media-anno-comment-text');
-          if (_body && _body.getAttribute('contenteditable') === 'true') {
-            _body.blur();
-          }
-        }
-      } catch (e) {}
-      try { if (typeof snapSingleTranslate === 'function') snapSingleTranslate(c.id, el._item); } catch(e) {}
-    };
+    tBtn.title = 'Translate';
+    tBtn.onclick = function(ev){ ev.stopPropagation(); try { if (typeof videoAnnoTranslateComment === 'function') videoAnnoTranslateComment(c.id); } catch(e){} };
     actions.appendChild(tBtn);
     // Delete
     const delBtn = document.createElement('button');
@@ -16289,26 +16218,17 @@ function videoAnnoOpenLightbox(c) {
   try { document.body.style.overflow = 'hidden'; } catch (e) {}
 }
 
-async function snapSingleTranslate(id, _explicitItem) {
-  // v6.0: renamed from videoAnnoTranslateComment. This handles the
-  // "Translate" button on a single snap comment card in the popover.
-  // Accepts an explicit item so the popover (which has its own _item
-  // on the el) can translate even when no video is currently selected
-  // in the canvas. Falls back to videoAnnoGetSelected().
-  console.log('[snapSingleTranslate] called, id=' + id + ', hasExplicit=' + !!_explicitItem);
-  const item = _explicitItem || videoAnnoGetSelected();
-  if (!item) { console.warn('[snapSingleTranslate] no item found — abort'); return; }
-  console.log('[snapSingleTranslate] item.id=' + item.id);
+async function videoAnnoTranslateComment(id) {
+  const item = videoAnnoGetSelected();
+  if (!item) return;
   const anno = videoAnnoEnsure(item);
   const c = anno.comments.find(x => x.id === id);
-  if (!c || !c.text) { console.warn('[snapSingleTranslate] comment not found or empty text — abort'); try { toast('No comment to translate'); } catch(e) {} return; }
-  console.log('[snapSingleTranslate] text="' + c.text.slice(0, 40) + '", hasTranslation=' + !!c.translation);
+  if (!c || !c.text) return;
   // Detect direction: if text contains CJK, translate zh→en; otherwise en→zh
   const hasCjk = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(c.text);
   const fromLang = hasCjk ? 'zh' : 'en';
   const toLang = hasCjk ? 'en' : 'zh';
   const langLabel = toLang === 'zh' ? '中文' : 'English';
-  console.log('[snapSingleTranslate] direction: ' + fromLang + '→' + toLang);
   // Visual loading state
   const el = document.querySelector('[data-anno-comment-id="' + id + '"] .media-anno-comment-translation');
   if (el) { el.classList.add('loading'); el.textContent = 'Translating…'; }
@@ -16318,14 +16238,10 @@ async function snapSingleTranslate(id, _explicitItem) {
     let translated = null;
     if (typeof translationCache !== 'undefined' && translationCache.has(cacheKey)) {
       translated = translationCache.get(cacheKey);
-      console.log('[snapSingleTranslate] cache hit: "' + (translated||'').slice(0,40) + '"');
     } else {
-      console.log('[snapSingleTranslate] calling translateText("' + c.text.slice(0,40) + '", ' + fromLang + ', ' + toLang + ')');
       translated = await translateText(c.text, fromLang, toLang);
-      console.log('[snapSingleTranslate] translateText returned: "' + (translated||'').slice(0,40) + '"');
     }
     if (translated && translated !== c.text) {
-      console.log('[snapSingleTranslate] SUCCESS — setting translation');
       c.translation = translated;
       c.translationDir = fromLang + '-' + toLang;
       scheduleAutoSave();
@@ -16338,12 +16254,11 @@ async function snapSingleTranslate(id, _explicitItem) {
       }
       toast('Translated to ' + langLabel);
     } else {
-      console.log('[snapSingleTranslate] NO CHANGE — translated="' + (translated||'').slice(0,40) + '", c.text="' + (c.text||'').slice(0,40) + '"');
       if (el) { el.classList.remove('loading'); el.textContent = 'No translation available'; }
       toast('Translation returned no change');
     }
   } catch (err) {
-    console.warn('[snapSingleTranslate] ERROR:', err);
+    console.warn('Comment translation failed:', err);
     if (el) { el.classList.remove('loading'); el.textContent = 'Translation failed — try again'; }
     toast('Translation failed');
   }
@@ -16441,7 +16356,7 @@ function videoAnnoRefreshCommentList(item, highlightId) {
     head.querySelector('.frame-no').onclick = (e) => { e.stopPropagation(); videoAnnoJumpToComment(c.id); };
     head.querySelector('.time-no').onclick = (e) => { e.stopPropagation(); videoAnnoJumpToComment(c.id); };
     head.querySelector('.goto').onclick = (e) => { e.stopPropagation(); try { videoAnnoJumpToComment(c.id); } catch(e){} };
-    head.querySelector('.tr-btn').onclick = (e) => { e.stopPropagation(); snapSingleTranslate(c.id); };
+    head.querySelector('.tr-btn').onclick = (e) => { e.stopPropagation(); videoAnnoTranslateComment(c.id); };
     head.querySelector('.del').onclick = (e) => { e.stopPropagation(); videoAnnoDeleteComment(c.id); };
     main.appendChild(head);
 
@@ -18005,7 +17920,7 @@ document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 
 // Marker so user can confirm new code is loaded (check DevTools console)
 var KRAFTED_VERSION = '6.0';
-console.log('%c[Krafted v' + KRAFTED_VERSION + '] Text item handle z-index raised to 99999 — previously the right-side handles (NE/SE/E/W) could be hidden behind sibling items. Refresh the popover/comment list to re-render.',
+console.log('%c[Krafted v' + KRAFTED_VERSION + '] Frame Text + Fullscreen polish — text editor works in fullscreen, keyboard/click isolation prevents video interference.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
 // Auto-sync welcome page version number from KRAFTED_VERSION.
@@ -18013,52 +17928,6 @@ console.log('%c[Krafted v' + KRAFTED_VERSION + '] Text item handle z-index raise
 (function _syncWelcomeVersion(){
   var wv = document.getElementById('welcome-version');
   if (wv) wv.textContent = 'V ' + KRAFTED_VERSION.split('.').join(' . ');
-})();
-
-// ── Version check: fetch latest version from GitHub Pages ──
-// Compares current KRAFTED_VERSION with the remote version.json.
-// If newer, shows a non-intrusive update toast.
-(function _checkForUpdate(){
-  try {
-    var REMOTE_VERSION_URL = 'https://jokerhead912-ctrl.github.io/Krafted/version.json';
-    // Cache-bust to avoid CDN stale cache
-    var url = REMOTE_VERSION_URL + '?t=' + Date.now();
-    fetch(url, { cache: 'no-store' })
-      .then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(function(data) {
-        var remote = data.version;
-        if (!remote) return;
-        var current = KRAFTED_VERSION;
-        if (remote !== current) {
-          var partsCur = current.split('.').map(Number);
-          var partsRem = remote.split('.').map(Number);
-          var isNewer = false;
-          for (var i = 0; i < Math.max(partsCur.length, partsRem.length); i++) {
-            var a = partsRem[i] || 0, b = partsCur[i] || 0;
-            if (a > b) { isNewer = true; break; }
-            if (a < b) break;
-          }
-          if (isNewer) {
-            console.log('%c[Krafted] Update available: v' + remote + ' (current: v' + current + ')',
-              'color:#f59e0b;font-weight:bold;');
-            var toastEl = document.getElementById('toast');
-            if (toastEl) {
-              toastEl.textContent = 'Update v' + remote + ' available! Hard refresh to update.';
-              toastEl.classList.add('show');
-              clearTimeout(toastEl._t);
-              toastEl._t = setTimeout(function(){ toastEl.classList.remove('show'); }, 6000);
-            }
-          }
-        }
-      })
-      .catch(function(e) {
-        // Silently fail — version check is non-critical
-        console.log('[Krafted] Version check skipped (offline or blocked):', e.message);
-      });
-  } catch(e) {}
 })();
 
 
@@ -18252,11 +18121,11 @@ function _buildHelpContent(overlay) {
   // Tabs
   var tabs = document.createElement('div');
   tabs.style.cssText = 'display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);';
-  ['guide','shortcuts','version'].forEach(function(tabId){
+  ['guide','shortcuts'].forEach(function(tabId){
     var t = document.createElement('button');
     t.className = 'help-tab';
     t.setAttribute('data-tab', tabId);
-    t.textContent = tabId === 'guide' ? '📖 Guide' : tabId === 'shortcuts' ? '⌨️ Shortcuts' : '🔢 Version';
+    t.textContent = tabId === 'guide' ? '📖 Guide' : '⌨️ Shortcuts';
     t.style.cssText = 'background:none;border:none;color:#888;padding:8px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;';
     t.onclick = function(){ _switchTab(tabId); };
     tabs.appendChild(t);
@@ -18282,64 +18151,12 @@ function _buildHelpContent(overlay) {
   scPanel.innerHTML = '<div style="text-align:center;color:#888;padding:20px;">Loading shortcuts…</div>';
   panels.appendChild(scPanel);
 
-  // ── VERSION TAB ─────────────────────────────────────────────
-  var verPanel = document.createElement('div');
-  verPanel.id = 'help-panel-version';
-  verPanel.className = 'help-panel';
-  verPanel.style.display = 'none';
-  verPanel.style.cssText = 'color:#ccc;font-size:13px;line-height:1.7;';
-  // Build version panel HTML dynamically
-  (function _buildVersionPanel(){
-    var html = '<h3 style="color:#00e5ff;margin:0 0 12px;">🔢 Version &amp; Rollback</h3>';
-    html += '<p style="color:#888;margin:0 0 16px;">Current version: <b style="color:#fff;">v' + KRAFTED_VERSION + '</b></p>';
-
-    html += '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;margin-bottom:14px;">';
-    html += '<p style="margin:0 0 10px;color:#aaa;font-weight:bold;">Available versions (click to switch):</p>';
-
-    // Fetch version.json and list available versions
-    html += '<div id="krafted-version-list" style="display:flex;flex-direction:column;gap:6px;">';
-    html += '<span style="color:#666;">Loading version list…</span>';
-    html += '</div>';
-    html += '</div>';
-
-    html += '<p style="color:#666;font-size:11px;margin-top:8px;">Rollback loads an older version directly from GitHub Pages.<br>Your .kpak save files are forward-compatible with older versions.</p>';
-    html += '<p style="color:#555;font-size:10px;margin-top:8px;">To rollback manually: change the URL to<br><code style="color:#888;">kraftpub-vX.Y.html</code></p>';
-
-    verPanel.innerHTML = html;
-
-    // Fetch available versions
-    fetch('https://jokerhead912-ctrl.github.io/Krafted/version.json?t=' + Date.now(), { cache: 'no-store' })
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        var listEl = document.getElementById('krafted-version-list');
-        if (!listEl) return;
-        var versions = data.versions || {};
-        var keys = Object.keys(versions).sort().reverse();
-        if (keys.length === 0) { listEl.innerHTML = '<span style="color:#666;">No previous versions available</span>'; return; }
-        var html2 = '';
-        keys.forEach(function(v){
-          var isCurrent = (v === KRAFTED_VERSION);
-          var file = versions[v];
-          var url = 'https://jokerhead912-ctrl.github.io/Krafted/' + file;
-          html2 += '<a href="' + url + '" style="display:block;padding:8px 12px;background:' + (isCurrent ? 'rgba(0,229,255,0.1)' : 'rgba(255,255,255,0.04)') + ';border-radius:6px;color:' + (isCurrent ? '#00e5ff' : '#aaa') + ';text-decoration:none;font-size:12px;transition:background 0.15s;"';
-          if (isCurrent) html2 += ' onclick="return false;"';
-          html2 += '>v' + v + (isCurrent ? ' <span style="color:#666;font-size:10px;">(current)</span>' : '') + '</a>';
-        });
-        listEl.innerHTML = html2;
-      })
-      .catch(function(e){
-        var listEl = document.getElementById('krafted-version-list');
-        if (listEl) listEl.innerHTML = '<span style="color:#666;">Could not load version list (offline?)</span>';
-      });
-  })();
-  panels.appendChild(verPanel);
-
   box.appendChild(panels);
 
   // Footer
   var footer = document.createElement('p');
   footer.style.cssText = 'margin-top:20px;font-size:10px;color:#555;text-align:center;';
-  footer.textContent = 'Krafted v' + KRAFTED_VERSION + ' — by Joker Head Studios';
+  footer.textContent = 'Krafted v5.5 — by Joker Head Studios';
   box.appendChild(footer);
 
   overlay.appendChild(box);
@@ -19331,11 +19148,8 @@ viewport.addEventListener('mousedown', e => {
   // Desktop (IS_TOUCH_DEVICE === false) behavior is completely untouched.
   if (IS_TOUCH_DEVICE) return;
 
-  // v6.0: Alt + Left button pans:
-  //   - In draw mode: ALWAYS pan (Wacom/XPPen navigation).
-  //   - In select mode: only if altPanEnabled is ON (Mac trackpad).
-  // Catches middle-button (e.button===1) as well.
-  if (e.button === 1 || (e.button === 0 && e.altKey && (state.tool === 'draw' || state.altPanEnabled))) {
+  // Catches middle-button (e.button===1) and Alt+Left (button===0 + altKey, Mac trackpad fallback)
+  if (e.button === 1 || (state.altPanEnabled && e.button === 0 && e.altKey)) {
     if (e.cancelable) e.preventDefault();
     state.dragging = { type: 'pan', startX: e.clientX - state.pan.x, startY: e.clientY - state.pan.y };
     viewport.classList.add('grabbing');
@@ -19410,79 +19224,14 @@ window.addEventListener('dragover', function(e){
   e.preventDefault();
 }, true);
 window.addEventListener('drop', function(e){
-  try { console.log('[FileDrop] window capture-phase drop, files:', e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0, 'types:', e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types).join(',') : ''); } catch (err) {}
+  try { console.log('[FileDrop] window capture-phase drop, files:', e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0); } catch (err) {}
   e.preventDefault();
   e.stopPropagation();
   const files = e.dataTransfer && e.dataTransfer.files;
   if (files && files.length) {
     try { hideWelcome(); } catch (err) {}
     try { _handleFileDrop(e, [...files]); } catch (err) { console.warn('[FileDrop] window handler error:', err); }
-    return;
   }
-  // ── Cross-origin drag: no files, but dataTransfer may have URL ──
-  const dt = e.dataTransfer;
-  if (!dt) return;
-  let url = null;
-  if (dt.getData) {
-    const uriList = dt.getData('text/uri-list');
-    if (uriList) {
-      const lines = uriList.split(/\r?\n/).map(s => s.trim()).filter(s => s && !s.startsWith('#'));
-      if (lines.length) url = lines[0];
-    }
-    if (!url) {
-      const html = dt.getData('text/html');
-      if (html) {
-        const m = html.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
-        if (m) url = m[1];
-      }
-    }
-  }
-  if (!url) return;
-  try { hideWelcome(); } catch (err) {}
-  // Fetch real image bytes via CORS proxy → convert to data URL →
-  // addImage directly. Data URL is same-origin, zero CORS forever.
-  // This is functionally identical to "Copy Image → Paste" but done
-  // in one drag gesture.
-  toast('Fetching image…');
-  fetch('https://images.weserv.nl/?url=' + encodeURIComponent(url))
-    .then(res => {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res.blob();
-    })
-    .then(blob => {
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const img = new Image();
-        img.onload = () => {
-          // Max 360px wide for comfortable drag-drop viewing
-          const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
-          const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
-          addImage(ev.target.result, dw, dh,
-            (e.clientX - state.pan.x) / state.zoom,
-            (e.clientY - state.pan.y) / state.zoom);
-          toast('Pasted image');
-        };
-        img.onerror = () => toast('Failed to decode image');
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(blob);
-    })
-    .catch(err => {
-      console.log('[FileDrop] proxy fetch failed:', err.message);
-      // Last resort: hotlink with no CORS check
-      const img = new Image();
-      img.onload = () => {
-        if (typeof maskImageCache !== 'undefined') maskImageCache[url] = { img: null };
-        const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
-        const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
-        addImage(url, dw, dh,
-          (e.clientX - state.pan.x) / state.zoom,
-          (e.clientY - state.pan.y) / state.zoom);
-        toast('Pasted image (hotlinked)');
-      };
-      img.onerror = () => toast('Image could not be loaded');
-      img.src = url;
-    });
 }, true);
 
 viewport.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
@@ -20060,32 +19809,6 @@ document.addEventListener('paste', e => {
         try {
             let trimmed = raw.trim();
             if (!trimmed) return;
-
-            // ── Cross-origin image URL paste ──
-            // When user copies an image from another website, the clipboard
-            // usually contains text/html (with <img src>) or text/plain (URL).
-            // The image/* MIME type is often missing cross-origin. Detect
-            // image URLs here and fetch + embed them directly.
-            let imgUrl = null;
-            if (itemType === 'text/html') {
-              // Try to extract <img src> from HTML clipboard
-              const imgMatch = raw.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
-              if (imgMatch) imgUrl = imgMatch[1];
-            }
-            if (!imgUrl && /^https?:\/\/[^\s]+$/i.test(trimmed)) {
-              // Plain-text URL — check if it looks like an image
-              const lc = trimmed.toLowerCase();
-              if (/\.(png|jpg|jpeg|gif|webp|svg|bmp|avif|ico)(\?.*)?$/i.test(lc)) {
-                imgUrl = trimmed;
-              }
-            }
-            console.log('[Paste] imgUrl detected:', imgUrl, 'itemType:', itemType);
-            if (imgUrl) {
-              const { x, y } = getPasteXY();
-              fetchImageFromURL(imgUrl, x, y);
-              return;
-            }
-
             // If it's HTML or RTF, strip tags/formatting for plain text
             if (itemType === 'text/html' || itemType === 'text/richtext' || itemType === 'text/rtf') {
               trimmed = trimmed.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
@@ -21284,10 +21007,6 @@ viewport.addEventListener('mousedown', e => {
 
   // DRAW TOOL
   if (state.tool === 'draw') {
-    // v6.0: Alt key is reserved for pan/zoom — do NOT start a stroke.
-    // Wacom/XPPen users hold Alt + drag to pan the canvas while in
-    // draw mode (industry standard: Photoshop, Blender, Premiere).
-    if (e.altKey) return;
     const wx = (e.clientX - state.pan.x) / state.zoom;
     const wy = (e.clientY - state.pan.y) / state.zoom;
     // Check if hovering on an existing stroke — start move
@@ -21976,7 +21695,7 @@ document.addEventListener('mousemove', e => {
         const nx = M.pivotX + (s.x - M.pivotX) * scaleX;
         const ny = M.pivotY + (s.y - M.pivotY) * scaleY;
         s.item.x = nx; s.item.y = ny; s.item.w = nw; s.item.h = nh;
-        return { item: s.item, x: nx, y: ny, w: nw, h: nh, origW: s.w, origH: s.h, wrapEl: s.wrapEl };
+        return { item: s.item, x: nx, y: ny, w: nw, h: nh, wrapEl: s.wrapEl };
       });
       multiApply = applies;
     }
@@ -21988,11 +21707,7 @@ document.addEventListener('mousemove', e => {
       if (d.item.el && d.item.el.classList.contains('todo-item')) d.item._resized = true;
       // Mark text-items as user-resized so autoGrowTextItem respects the width
       // and only grows height on input (prevents width jumping on type).
-      if (d.item.el && d.item.el.classList.contains('text-item')) {
-        d.item.userResized = true;
-        // Font size is independent of box resize — user changes it manually in text props.
-        // Box resize only affects dimensions; text wraps naturally.
-      }
+      if (d.item.el && d.item.el.classList.contains('text-item')) d.item.userResized = true;
     }
     // Cache scale factors and pivot for group members
     const scaleX = w / d.origW;
@@ -22019,9 +21734,7 @@ document.addEventListener('mousemove', e => {
           el.style.transform = 'translate(' + a.x + 'px, ' + a.y + 'px) rotate(' + (a.item.rot || 0) + 'deg)';
           // Mark resized flags so other systems know this was a user drag
           if (el.classList.contains('todo-item')) a.item._resized = true;
-          if (el.classList.contains('text-item')) {
-            a.item.userResized = true;
-          }
+          if (el.classList.contains('text-item')) a.item.userResized = true;
         });
         // Keep any open annotation popovers parallel to the video as the
         // selection is resized (popovers anchor to .media-wrap rect)
@@ -22662,17 +22375,11 @@ function pickColorFromImage(e, item) {
 function getCachedImagePixels(src, callback) {
   if (maskImageCache[src]) {
     const { img, canvas, ctx } = maskImageCache[src];
-    if (!img) return; // previously failed (no CORS) — silently skip
     callback(img, canvas, ctx);
     return;
   }
   const img = new Image();
   img.crossOrigin = 'anonymous';
-  // Suppress CORS error log for hotlinked images — server doesn't send
-  // Access-Control-Allow-Origin, so the load fails. Mark as failed in
-  // cache so we don't retry (and re-log the browser CORS warning) every
-  // time the canvas re-renders.
-  img.onerror = () => { maskImageCache[src] = { img: null }; };
   img.onload = () => {
     const canvas = document.createElement('canvas');
     canvas.width = img.naturalWidth;
@@ -28127,168 +27834,6 @@ function getPasteXY() {
   };
 }
 
-// Fetch an image from a URL and embed it on the canvas.
-// Used for cross-origin paste (copy image from another website → paste into Krafted).
-// Tries direct fetch first; if CORS-blocked, falls back to an image element load
-// (which works for most public images but won't give us the raw bytes — we use
-// a canvas to convert to data URL for persistence).
-function fetchImageFromURL(url, x, y) {
-  console.log('[fetchImageFromURL] start:', url);
-  try { hideWelcome(); } catch (err) {}
-  toast('Fetching image…');
-  // 1) Try direct fetch (works if server has CORS headers or same-origin)
-  fetch(url, { mode: 'cors' })
-    .then(res => {
-      console.log('[fetchImageFromURL] fetch response status:', res.status);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res.blob();
-    })
-    .then(blob => {
-      console.log('[fetchImageFromURL] got blob size:', blob.size);
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const img = new Image();
-        img.onload = () => {
-          addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
-          toast('Pasted image from URL');
-        };
-        img.onerror = () => { console.log('[fetchImageFromURL] data URL img decode failed'); toast('Failed to decode image'); };
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(blob);
-    })
-    .catch(err => {
-      console.log('[fetchImageFromURL] direct fetch failed:', err.message);
-      // 2) Fallback: load via img tag (no CORS). Then convert to data
-      // URL via fetch(no-cors) so the embedded image is same-origin
-      // and never triggers CORS again on re-render.
-      const img = new Image();
-      img.onload = () => {
-        console.log('[fetchImageFromURL] hotlink img loaded:', img.naturalWidth, 'x', img.naturalHeight);
-        // Pre-mark mask cache as failed BEFORE addImage
-        if (typeof maskImageCache !== 'undefined') {
-          maskImageCache[url] = { img: null };
-        }
-        // Try fetch(no-cors) to get the bytes — opaque response still
-        // gives us a Blob, which we convert to objectURL. This avoids
-        // any future CORS check since objectURL is same-origin.
-        fetch(url, { mode: 'no-cors' })
-          .then(res => res.blob())
-          .then(blob => {
-            const objUrl = URL.createObjectURL(blob);
-            addImage(objUrl, img.naturalWidth, img.naturalHeight, x, y);
-            toast('Pasted image (hotlinked)');
-          })
-          .catch(() => {
-            // Even blob conversion failed — fall back to direct URL.
-            // The browser's <img> cache will at least make re-renders
-            // not re-trigger CORS for this src.
-            addImage(url, img.naturalWidth, img.naturalHeight, x, y);
-            toast('Pasted image (hotlinked)');
-          });
-      };
-      img.onerror = () => {
-        console.log('[fetchImageFromURL] hotlink also failed, trying CORS proxy');
-        if (typeof state !== 'undefined' && state.allowCorsProxy) {
-          tryCorsProxy(url, x, y);
-        } else {
-          toast('Image blocked. Enable proxy: kraftedEnableCorsProxy()');
-          console.log('[fetchImageFromURL] CORS proxy not enabled — giving up');
-        }
-      };
-      img.src = url;
-    });
-}
-
-// Last-resort: fetch through a public CORS proxy. Only invoked if the user
-// has explicitly enabled state.allowCorsProxy in settings (privacy: the proxy
-// sees the URL you're fetching). Uses images.weserv.nl as the primary proxy
-// (designed for image hotlinking, no rate limit on free tier) with
-// corsproxy.io as fallback.
-// To enable, run in console: kraftedEnableCorsProxy()
-function tryCorsProxy(url, x, y) {
-  const proxy = 'https://images.weserv.nl/?url=' + encodeURIComponent(url);
-  console.log('[tryCorsProxy]', proxy);
-  toast('Fetching via CORS proxy…');
-  fetch(proxy)
-    .then(res => {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res.blob();
-    })
-    .then(blob => {
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const img = new Image();
-        img.onload = () => {
-          addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
-          toast('Pasted image (via proxy)');
-        };
-        img.onerror = () => { toast('Proxy returned invalid image'); };
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(blob);
-    })
-    .catch(err => {
-      console.log('[tryCorsProxy] weserv failed:', err.message);
-      // Fallback proxy
-      const fallback = 'https://corsproxy.io/?' + encodeURIComponent(url);
-      fetch(fallback)
-        .then(res => res.blob())
-        .then(blob => {
-          const reader = new FileReader();
-          reader.onload = ev => {
-            const img = new Image();
-            img.onload = () => {
-              addImage(ev.target.result, img.naturalWidth, img.naturalHeight, x, y);
-              toast('Pasted image (via fallback proxy)');
-            };
-            img.onerror = () => { toast('Proxy returned invalid image'); };
-            img.src = ev.target.result;
-          };
-          reader.readAsDataURL(blob);
-        })
-    .catch(e2 => {
-      console.log('[tryCorsProxy] fallback also failed:', e2.message);
-      toast('All CORS proxies failed. Image cannot be loaded.');
-    });
-  });
-}
-
-// Console command: enable CORS proxy for cross-origin image paste.
-// Persists in localStorage. To disable: kraftedDisableCorsProxy()
-window.kraftedEnableCorsProxy = function() {
-  try {
-    if (typeof state === 'undefined') state = {};
-    state.allowCorsProxy = true;
-    localStorage.setItem('krafted-allow-cors-proxy', '1');
-    console.log('[Krafted] CORS proxy ENABLED. Cross-origin image paste will use images.weserv.nl as fallback.');
-    toast('CORS proxy enabled — try paste again');
-  } catch (e) { console.warn(e); }
-};
-window.kraftedDisableCorsProxy = function() {
-  try {
-    if (typeof state === 'undefined') state = {};
-    state.allowCorsProxy = false;
-    localStorage.removeItem('krafted-allow-cors-proxy');
-    console.log('[Krafted] CORS proxy DISABLED.');
-    toast('CORS proxy disabled');
-  } catch (e) { console.warn(e); }
-};
-// Load on init — default to ENABLED so cross-origin image drag/paste
-// just works. The proxy (images.weserv.nl) only sees the image URL,
-// not user content. Users can opt out via kraftedDisableCorsProxy().
-try {
-  if (localStorage.getItem('krafted-allow-cors-proxy') === '0') {
-    if (typeof state === 'undefined') state = {};
-    state.allowCorsProxy = false;
-    console.log('[Krafted] CORS proxy DISABLED (user preference)');
-  } else {
-    if (typeof state === 'undefined') state = {};
-    state.allowCorsProxy = true;
-    console.log('[Krafted] CORS proxy enabled (default). Disable: kraftedDisableCorsProxy()');
-  }
-} catch (e) {}
-
 // Helper: toggle "capturing" mode — hides all media UI (per-item controls bar,
 // type badge, global media player) so they don't bleed into the captured image
 // or screen capture. CSS rule at body.capturing handles the actual hiding.
@@ -28444,48 +27989,6 @@ async function translateSelectedText(fromLang, toLang) {
   }
 }
 
-// ── v6.0: translate test harness (run in DevTools console) ──
-// Usage:
-//   _testTranslate()             — quick test (en→zh: "hello world")
-//   _testTranslate('你好')       — test zh→en
-//   _testTranslate('bonjour')    — test en→zh (French detected as en, MyMemory handles)
-//   _testBulkTranslate()         — test bulk translate with 3 fake comments
-// Results are logged to console AND shown as a toast.
-window._testTranslate = async function(text) {
-  if (!text) text = 'hello world';
-  const hasCjk = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(text);
-  const fromLang = hasCjk ? 'zh' : 'en';
-  const toLang = hasCjk ? 'en' : 'zh';
-  console.log('[_testTranslate] "' + text + '" ' + fromLang + '→' + toLang);
-  try {
-    const result = await translateText(text, fromLang, toLang);
-    console.log('[_testTranslate] RESULT: "' + result + '"');
-    if (typeof toast === 'function') toast('OK: ' + result);
-    return result;
-  } catch (e) {
-    console.error('[_testTranslate] FAILED:', e.message);
-    if (typeof toast === 'function') toast('FAIL: ' + e.message);
-    throw e;
-  }
-};
-window._testBulkTranslate = async function() {
-  var samples = ['hello world', 'good morning', 'thank you'];
-  console.log('[_testBulkTranslate] ' + samples.length + ' samples');
-  var ok = 0, fail = 0;
-  for (var s of samples) {
-    try {
-      var r = await translateText(s, 'en', 'zh');
-      if (r && r !== s) { console.log('[_testBulkTranslate]   OK: "' + s + '" → "' + r + '"'); ok++; }
-      else { console.log('[_testBulkTranslate]   NO CHANGE: "' + s + '"'); fail++; }
-    } catch (e) {
-      console.error('[_testBulkTranslate]   ERROR:', e.message); fail++;
-    }
-  }
-  console.log('[_testBulkTranslate] done: ' + ok + ' ok, ' + fail + ' failed');
-  if (typeof toast === 'function') toast('Bulk test: ' + ok + '/' + samples.length + ' ok');
-};
-// ── end test harness ──
-
 async function translateText(text, fromLang, toLang) {
   const sl = fromLang === 'zh' ? 'zh-CN' : fromLang;
   const tl = toLang === 'zh' ? 'zh-CN' : toLang;
@@ -28500,17 +28003,16 @@ async function translateText(text, fromLang, toLang) {
   const chunks = splitTextChunks(text, 500);
   let combined = '';
 
-  // 2) Try a list of providers. MyMemory direct is CORS-enabled
-  //    (Access-Control-Allow-Origin: *) and free with no key. Google
-  //    gtx is now 404 (shut down in 2025) so we use MyMemory as primary
-  //    with JSONP proxy fallback. Promise.race lets the fastest response
-  //    win instead of waiting 6s per provider to fail.
-  const fetchProviders = [
-    { name: 'MyMemory', build: (chunk) => ({ url: 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(chunk) + '&langpair=' + sl + '|' + tl, parse: parseMyMemory }) },
-    { name: 'MyMemory de', build: (chunk) => ({ url: 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(chunk) + '&de=kincheung%40kraft.app&langpair=' + sl + '|' + tl, parse: parseMyMemory }) },
-  ];
+  // 2) Try a list of providers, JSONP first (works from file://) then fetch
+  //    Each provider is given a 7s budget. We try fetch providers in parallel
+  //    with JSONP ones so the fastest one wins.
   const jsonpProviders = [
     { name: 'MyMemory+JSONP', build: (chunk) => ({ url: 'https://jsonp.afeld.me/?callback=__mmcb&url=' + encodeURIComponent('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(chunk) + '&langpair=' + sl + '|' + tl), parse: parseMyMemory }) },
+    { name: 'MyMemory direct', build: (chunk) => ({ url: 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(chunk) + '&langpair=' + sl + '|' + tl, parse: parseMyMemory }) },
+  ];
+  const fetchProviders = [
+    { name: 'Lingva',   build: (chunk) => ({ url: 'https://lingva.ml/api/v1/' + sl + '/' + tl + '/' + encodeURIComponent(chunk), parse: parseLingva }) },
+    { name: 'Google',   build: (chunk) => ({ url: 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + sl + '&tl=' + tl + '&dt=t&q=' + encodeURIComponent(chunk), parse: parseGoogle }) },
   ];
 
   const fetchWithTimeout = (url, ms) => Promise.race([
@@ -28518,41 +28020,44 @@ async function translateText(text, fromLang, toLang) {
     new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
   ]);
 
-  // For each chunk, race fetch providers. If all fail, fall back to JSONP.
-  try {
-    combined = '';
-    for (const chunk of chunks) {
-      let gotPart = '';
-      try {
-        const reqs = fetchProviders.map(p => {
-          const req = p.build(chunk);
-          return fetchWithTimeout(req.url, 6000)
-            .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
-            .then(data => { const part = req.parse(data); if (!part) throw new Error('empty'); return part; })
-            .catch(e => { throw e; });
-        });
-        // Promise.any resolves with the first successful result
-        gotPart = await Promise.any(reqs);
-      } catch (e1) {
-        // All fetch providers failed — try JSONP fallback
-        for (const p of jsonpProviders) {
-          try {
-            const req = p.build(chunk);
-            const data = await jsonpRequest(req.url, 7000);
-            const part = req.parse(data);
-            if (part) { gotPart = part; break; }
-          } catch (e2) { console.warn('[' + p.name + ']', e2.message); }
-        }
-        if (!gotPart) throw new Error('all providers failed for chunk: ' + chunk.slice(0, 40));
+  // Try each provider (sequentially), translate all chunks with the first that works
+  for (const p of jsonpProviders) {
+    try {
+      combined = '';
+      for (const chunk of chunks) {
+        const req = p.build(chunk);
+        const data = await jsonpRequest(req.url, 7000);
+        const part = req.parse(data);
+        if (part) combined += part + ' ';
       }
-      combined += gotPart + ' ';
-    }
-    combined = combined.trim();
-    if (combined) {
-      translationCache.set(cacheKey, combined);
-      return combined;
-    }
-  } catch (e) { console.warn('[translate]', e.message); }
+      combined = combined.trim();
+      if (combined) {
+        translationCache.set(cacheKey, combined);
+        return combined;
+      }
+    } catch (e) { console.warn('[' + p.name + ']', e.message); }
+  }
+
+  for (const p of fetchProviders) {
+    try {
+      combined = '';
+      let ok = true;
+      for (const chunk of chunks) {
+        const req = p.build(chunk);
+        const resp = await fetchWithTimeout(req.url, 6000);
+        if (!resp.ok) { ok = false; break; }
+        const data = await resp.json();
+        const part = req.parse(data);
+        if (!part) { ok = false; break; }
+        combined += part + ' ';
+      }
+      if (ok && combined.trim()) {
+        combined = combined.trim();
+        translationCache.set(cacheKey, combined);
+        return combined;
+      }
+    } catch (e) { console.warn('[' + p.name + ']', e.message); }
+  }
 
   throw new Error('All providers failed');
 }
@@ -28689,39 +28194,15 @@ function exportMediaSelected() {
         ext = item.src.split('.').pop().split('?')[0] || 'mp3';
       }
     } else if (item.isVideo) {
-      // Use the original video filename if available (e.g. "myclip.mp4"),
-      // otherwise fall back to "video_<timestamp>". Previously this
-      // was hardcoded to "video_" + Date.now() which always lost the
-      // original name, and for blob: URLs the .split('.').pop() trick
-      // picked up the trailing GUID as a bogus extension, producing
-      // files like "video_1784253900344.io_d9ea9eb3-...cacb3c0b9eda"
-      // that Windows couldn't open because there was no real .mp4
-      // extension and the GUID confused the type-detection.
-      name = item.filename || ('video_' + Date.now());
+      name = 'video_' + Date.now();
       if (item.src.startsWith('data:')) {
         const m = item.src.match(/^data:video\/(\w+)/);
         if (m) ext = m[1];
       } else {
-        // For non-data URLs, prefer the real extension after the last
-        // slash. For blob: URLs (blob:https://host/<uuid>) there is no
-        // useful extension in the path, so validate the candidate is a
-        // plausible 2-5 char ext; otherwise default to 'mp4' for video.
-        try {
-          const u = new URL(item.src, location.href);
-          const parts = u.pathname.split('.');
-          if (parts.length > 1) {
-            const candidate = parts[parts.length - 1].toLowerCase();
-            if (/^[a-z0-9]{2,5}$/.test(candidate)) ext = candidate;
-            else ext = 'mp4';
-          } else {
-            ext = 'mp4';
-          }
-        } catch (e) {
-          ext = 'mp4';
-        }
+        ext = item.src.split('.').pop().split('?')[0] || 'mp4';
       }
     } else if (item.src) {
-      name = item.filename || ('image_' + Date.now());
+      name = 'image_' + Date.now();
       if (item.src.startsWith('data:')) {
         const m = item.src.match(/^data:image\/(\w+)/);
         if (m) ext = m[1];
@@ -29655,15 +29136,6 @@ function restoreBoard(data) {
   pushUndo();
   cleanupAllItems();
   state.items = []; state.texts = []; state.todos = []; state.mindmaps = []; state.selected.clear();
-  // Reset viewport transform so the loaded board renders at 100% zoom,
-  // centered. Without this, a previously-zoomed-in session would leave
-  // the freshly-loaded items tiny (the zoom shrinks every .item element
-  // including the media controls) and the user would have to find and
-  // click the zoom-reset button manually. We leave the actual zoom-to-
-  // fit for the end of restoreBoard (after items exist) so it can size
-  // to the loaded bbox.
-  state.zoom = 1;
-  state.pan = { x: 0, y: 0 };
   G.nextZ = 1; let maxId = 0;
   data.items.forEach(d => {
     try {
@@ -30104,34 +29576,6 @@ function restoreBoard(data) {
   updateCanvas();
   redrawDrawLayer();
   _frozenGifs.clear();
-  // v6.0: fit-to-content after load. If the user was previously zoomed
-  // in on a different board, the loaded items would render at the wrong
-  // scale / off-screen. Compute the bounding box of all loaded items
-  // and frame the viewport so the user sees them on first paint.
-  try {
-    var allLoaded = [].concat(state.items, state.texts, state.todos || [], state.mindmaps || []);
-    if (allLoaded.length > 0) {
-      var _minX = Infinity, _minY = Infinity, _maxX = -Infinity, _maxY = -Infinity;
-      allLoaded.forEach(function(it) {
-        if (it.x < _minX) _minX = it.x;
-        if (it.y < _minY) _minY = it.y;
-        if (it.x + it.w > _maxX) _maxX = it.x + it.w;
-        if (it.y + it.h > _maxY) _maxY = it.y + it.h;
-      });
-      if (isFinite(_minX) && isFinite(_maxX)) {
-        var _cx = (_minX + _maxX) / 2;
-        var _cy = (_minY + _maxY) / 2;
-        var _bw = Math.max(1, _maxX - _minX);
-        var _bh = Math.max(1, _maxY - _minY);
-        var _sw = window.innerWidth, _sh = window.innerHeight;
-        var _z = Math.min(_sw / (_bw * 1.24), _sh / (_bh * 1.24));
-        state.zoom = Math.max(0.02, Math.min(10, _z));
-        state.pan.x = _sw / 2 - _cx * state.zoom;
-        state.pan.y = _sh / 2 - _cy * state.zoom;
-        updateCanvas();
-      }
-    }
-  } catch (e) { console.warn('[restoreBoard] fit-to-content failed:', e); }
   updateMediaBar();
   // Render mask overlays for restored items
   state.items.forEach(item => {

@@ -18015,52 +18015,6 @@ console.log('%c[Krafted v' + KRAFTED_VERSION + '] Text item handle z-index raise
   if (wv) wv.textContent = 'V ' + KRAFTED_VERSION.split('.').join(' . ');
 })();
 
-// ── Version check: fetch latest version from GitHub Pages ──
-// Compares current KRAFTED_VERSION with the remote version.json.
-// If newer, shows a non-intrusive update toast.
-(function _checkForUpdate(){
-  try {
-    var REMOTE_VERSION_URL = 'https://jokerhead912-ctrl.github.io/Krafted/version.json';
-    // Cache-bust to avoid CDN stale cache
-    var url = REMOTE_VERSION_URL + '?t=' + Date.now();
-    fetch(url, { cache: 'no-store' })
-      .then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(function(data) {
-        var remote = data.version;
-        if (!remote) return;
-        var current = KRAFTED_VERSION;
-        if (remote !== current) {
-          var partsCur = current.split('.').map(Number);
-          var partsRem = remote.split('.').map(Number);
-          var isNewer = false;
-          for (var i = 0; i < Math.max(partsCur.length, partsRem.length); i++) {
-            var a = partsRem[i] || 0, b = partsCur[i] || 0;
-            if (a > b) { isNewer = true; break; }
-            if (a < b) break;
-          }
-          if (isNewer) {
-            console.log('%c[Krafted] Update available: v' + remote + ' (current: v' + current + ')',
-              'color:#f59e0b;font-weight:bold;');
-            var toastEl = document.getElementById('toast');
-            if (toastEl) {
-              toastEl.textContent = 'Update v' + remote + ' available! Hard refresh to update.';
-              toastEl.classList.add('show');
-              clearTimeout(toastEl._t);
-              toastEl._t = setTimeout(function(){ toastEl.classList.remove('show'); }, 6000);
-            }
-          }
-        }
-      })
-      .catch(function(e) {
-        // Silently fail — version check is non-critical
-        console.log('[Krafted] Version check skipped (offline or blocked):', e.message);
-      });
-  } catch(e) {}
-})();
-
 
 // ==== ui-utils.js ====
 
@@ -18252,11 +18206,11 @@ function _buildHelpContent(overlay) {
   // Tabs
   var tabs = document.createElement('div');
   tabs.style.cssText = 'display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);';
-  ['guide','shortcuts','version'].forEach(function(tabId){
+  ['guide','shortcuts'].forEach(function(tabId){
     var t = document.createElement('button');
     t.className = 'help-tab';
     t.setAttribute('data-tab', tabId);
-    t.textContent = tabId === 'guide' ? '📖 Guide' : tabId === 'shortcuts' ? '⌨️ Shortcuts' : '🔢 Version';
+    t.textContent = tabId === 'guide' ? '📖 Guide' : '⌨️ Shortcuts';
     t.style.cssText = 'background:none;border:none;color:#888;padding:8px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;';
     t.onclick = function(){ _switchTab(tabId); };
     tabs.appendChild(t);
@@ -18282,64 +18236,12 @@ function _buildHelpContent(overlay) {
   scPanel.innerHTML = '<div style="text-align:center;color:#888;padding:20px;">Loading shortcuts…</div>';
   panels.appendChild(scPanel);
 
-  // ── VERSION TAB ─────────────────────────────────────────────
-  var verPanel = document.createElement('div');
-  verPanel.id = 'help-panel-version';
-  verPanel.className = 'help-panel';
-  verPanel.style.display = 'none';
-  verPanel.style.cssText = 'color:#ccc;font-size:13px;line-height:1.7;';
-  // Build version panel HTML dynamically
-  (function _buildVersionPanel(){
-    var html = '<h3 style="color:#00e5ff;margin:0 0 12px;">🔢 Version &amp; Rollback</h3>';
-    html += '<p style="color:#888;margin:0 0 16px;">Current version: <b style="color:#fff;">v' + KRAFTED_VERSION + '</b></p>';
-
-    html += '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;margin-bottom:14px;">';
-    html += '<p style="margin:0 0 10px;color:#aaa;font-weight:bold;">Available versions (click to switch):</p>';
-
-    // Fetch version.json and list available versions
-    html += '<div id="krafted-version-list" style="display:flex;flex-direction:column;gap:6px;">';
-    html += '<span style="color:#666;">Loading version list…</span>';
-    html += '</div>';
-    html += '</div>';
-
-    html += '<p style="color:#666;font-size:11px;margin-top:8px;">Rollback loads an older version directly from GitHub Pages.<br>Your .kpak save files are forward-compatible with older versions.</p>';
-    html += '<p style="color:#555;font-size:10px;margin-top:8px;">To rollback manually: change the URL to<br><code style="color:#888;">kraftpub-vX.Y.html</code></p>';
-
-    verPanel.innerHTML = html;
-
-    // Fetch available versions
-    fetch('https://jokerhead912-ctrl.github.io/Krafted/version.json?t=' + Date.now(), { cache: 'no-store' })
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        var listEl = document.getElementById('krafted-version-list');
-        if (!listEl) return;
-        var versions = data.versions || {};
-        var keys = Object.keys(versions).sort().reverse();
-        if (keys.length === 0) { listEl.innerHTML = '<span style="color:#666;">No previous versions available</span>'; return; }
-        var html2 = '';
-        keys.forEach(function(v){
-          var isCurrent = (v === KRAFTED_VERSION);
-          var file = versions[v];
-          var url = 'https://jokerhead912-ctrl.github.io/Krafted/' + file;
-          html2 += '<a href="' + url + '" style="display:block;padding:8px 12px;background:' + (isCurrent ? 'rgba(0,229,255,0.1)' : 'rgba(255,255,255,0.04)') + ';border-radius:6px;color:' + (isCurrent ? '#00e5ff' : '#aaa') + ';text-decoration:none;font-size:12px;transition:background 0.15s;"';
-          if (isCurrent) html2 += ' onclick="return false;"';
-          html2 += '>v' + v + (isCurrent ? ' <span style="color:#666;font-size:10px;">(current)</span>' : '') + '</a>';
-        });
-        listEl.innerHTML = html2;
-      })
-      .catch(function(e){
-        var listEl = document.getElementById('krafted-version-list');
-        if (listEl) listEl.innerHTML = '<span style="color:#666;">Could not load version list (offline?)</span>';
-      });
-  })();
-  panels.appendChild(verPanel);
-
   box.appendChild(panels);
 
   // Footer
   var footer = document.createElement('p');
   footer.style.cssText = 'margin-top:20px;font-size:10px;color:#555;text-align:center;';
-  footer.textContent = 'Krafted v' + KRAFTED_VERSION + ' — by Joker Head Studios';
+  footer.textContent = 'Krafted v5.5 — by Joker Head Studios';
   box.appendChild(footer);
 
   overlay.appendChild(box);
