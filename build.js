@@ -1,5 +1,5 @@
 /**
- * Krafted v6.0 — Build Script
+ * Krafted v5.4 — Build Script
  *
  * Takes the modular source in src/ and bundles everything into a single
  * self-contained kraftpub.html, ready for GitHub Pages deployment.
@@ -11,7 +11,7 @@
  * 4. Write the final HTML to the output path
  *
  * Usage: node build.js [output_path]
- *   Default output: docs/kraftpub.html
+ *   Default output: ../krafted-build/docs/kraftpub.html
  */
 
 const esbuild = require('esbuild');
@@ -21,11 +21,10 @@ const path = require('path');
 const SRC_DIR = path.join(__dirname, 'src');
 const JS_DIR = path.join(SRC_DIR, 'js');
 const LIB_DIR = path.join(SRC_DIR, 'lib');
-const OUTPUT = process.argv[2] || path.join(__dirname, 'docs', 'kraftpub.html');
-const VERSION = '6.0.1';
+const OUTPUT = process.argv[2] || path.join(__dirname, '..', 'krafted-build', 'docs', 'kraftpub.html');
 
 async function build() {
-  console.log('🔨 Krafted v6.0 — Building...\n');
+  console.log('🔨 Krafted v5.4 — Building...\n');
 
   // ── Step 1: Bundle JS modules with esbuild ──
   console.log('  📦 Bundling JS modules...');
@@ -38,9 +37,6 @@ async function build() {
     platform: 'browser',
     target: 'es2020',
     write: false,
-    define: {
-      '__KRAFTED_VERSION__': JSON.stringify(VERSION)
-    },
     outfile: 'app.bundle.js',
     minify: false,
     keepNames: true,
@@ -67,42 +63,41 @@ async function build() {
     window.state = state;
     window.IS_TOUCH_DEVICE = IS_TOUCH_DEVICE;
     window._frozenGifs = _frozenGifs;
-    window.KRAFTED_VERSION = ${JSON.stringify(VERSION)};
-    var _expNames = [
-      "hideWelcome","showWelcome","addImage","addText","addLinkCard","addMindMap","addTodo",
-      "addAudioItem","selectOnly","clearSelection","toggleSelect","deleteSelected",
-      "updatePropsPanel","updateCanvas","frameSelection","zoomBy","zoomTo","setTool",
-      "saveBoard","loadBoardFile","openLinkModal","closeLinkModal","showCtx","hideCtx",
-      "toast","triggerPaste","toggleGrid","toggleAppFullscreen","toggleAltPan",
-      "showHelp","hideHelp","togglePaper","setPaperSize","setPaperColor","toggleAutoFit",
-      "openGifEditor","captureArea","captureScreen","startExportDrag","setCaptureMode",
-      "toggleTextStyle","setTextProp","setTextAlign","enterReframe","exitReframe",
-      "enterCrop","exitCrop","enterCutMode","enterLassoMode","copySelected",
-      "pasteClipboard","duplicateSelected","undo","redo","pushUndo","playAllMedia",
-      "pauseAllMedia","restartVideo","toggleVideoPlay","setVideoVolume",
-      "groupSelected","ungroupSelected","alignItems","layerOrder","setDrawMode",
-      "clearDraw","undoDraw","discardCaptureResult","saveCaptureResult",
-      "pasteCaptureToBoard","saveCapturePanelToFolder","translateSelectedText",
-      "newBoard","updatePaper","tidySelection","tidyAll","exportMediaSelected",
-      "formatBytes","buildKpakBlob","downloadBlob","showSaveLockPrompt",
-      "closeSaveLockPrompt","showPasswordDisplayModal","closePasswordDisplay",
-      "copyGeneratedPassword","showUnlockModal","closeUnlockModal","tryUnlockFile",
-      "addMaskLayer","deleteMaskLayer","toggleMask","setCanvasBg","showTextQuickBar",
-      "updateTextQuickBarActive","applyTextColorToSelected","applyTextStyleToSelected",
-      "applyInlineColor","applyInlineSize","getEditingText","flipH","flipV","toggleLock",
-      "setOpacity","setRotation","setPhotoFilter","resetPhotoFilters","setCgiFilter",
-      "resetVideoTrim","seekVideo","setVideoPlaybackRate","setVideoTimeMode",
-      "handleAudioUpload","_handleFileDrop","sanitizeTextHtml","updateAltPanBadge",
-      "buildMediaControls","updateMediaBar","restoreBoard","serializeBoard",
-      "buildManifest","updateItemStyle","autoGrowTextItem","applyTextProps",
-      "refreshSelection","getSelectedItems","getSelectedImages","redrawDrawLayer",
-      "updateAllGroupBorders","initTextToolbar","scheduleAutoSave","loadAutoSave"
+    window.KRAFTED_VERSION = KRAFTED_VERSION;
+    var _expFuncs = [
+      hideWelcome,showWelcome,addImage,addText,addLinkCard,addMindMap,addTodo,
+      addAudioItem,selectOnly,clearSelection,toggleSelect,deleteSelected,
+      updatePropsPanel,updateCanvas,frameSelection,zoomBy,zoomTo,setTool,
+      saveBoard,loadBoardFile,openLinkModal,closeLinkModal,showCtx,hideCtx,
+      toast,triggerPaste,toggleGrid,toggleAppFullscreen,toggleAltPan,
+      showHelp,hideHelp,togglePaper,setPaperSize,setPaperColor,toggleAutoFit,
+      openGifEditor,captureArea,captureScreen,startExportDrag,setCaptureMode,
+      toggleTextStyle,setTextProp,setTextAlign,enterReframe,exitReframe,
+      enterCrop,exitCrop,enterCutMode,enterLassoMode,copySelected,
+      pasteClipboard,duplicateSelected,undo,redo,pushUndo,playAllMedia,
+      pauseAllMedia,restartVideo,toggleVideoPlay,setVideoVolume,
+      groupSelected,ungroupSelected,alignItems,layerOrder,setDrawMode,
+      clearDraw,undoDraw,discardCaptureResult,saveCaptureResult,
+      pasteCaptureToBoard,saveCapturePanelToFolder,translateSelectedText,
+      newBoard,updatePaper,tidySelection,tidyAll,exportMediaSelected,
+      formatBytes,buildKpakBlob,downloadBlob,showSaveLockPrompt,
+      closeSaveLockPrompt,showPasswordDisplayModal,closePasswordDisplay,
+      copyGeneratedPassword,showUnlockModal,closeUnlockModal,tryUnlockFile,
+      addMaskLayer,deleteMaskLayer,toggleMask,setCanvasBg,showTextQuickBar,
+      updateTextQuickBarActive,applyTextColorToSelected,applyTextStyleToSelected,
+      applyInlineColor,applyInlineSize,getEditingText,flipH,flipV,toggleLock,
+      setOpacity,setRotation,setPhotoFilter,resetPhotoFilters,setCgiFilter,
+      resetVideoTrim,seekVideo,setVideoPlaybackRate,setVideoTimeMode,
+      handleAudioUpload,_handleFileDrop,sanitizeTextHtml,updateAltPanBadge,
+      buildMediaControls,updateMediaBar,restoreBoard,serializeBoard,
+      buildManifest,updateItemStyle,autoGrowTextItem,applyTextProps,
+      refreshSelection,getSelectedItems,getSelectedImages,redrawDrawLayer,
+      updateAllGroupBorders,initTextToolbar,scheduleAutoSave,loadAutoSave
     ];
-    for (var _ei = 0; _ei < _expNames.length; _ei++) {
-      try {
-        var _fn = eval(_expNames[_ei]);
-        if (typeof _fn === "function") window[_expNames[_ei]] = _fn;
-      } catch(_e) {}
+    for (var _ei = 0; _ei < _expFuncs.length; _ei++) {
+      if (typeof _expFuncs[_ei] === "function") {
+        window[_expFuncs[_ei].name] = _expFuncs[_ei];
+      }
     }
   }
 `;
@@ -241,13 +236,6 @@ async function build() {
 })();
 `;
   allJS += globalExposure;
-
-  // ── Post-process: replace any remaining __KRAFTED_VERSION__ placeholders ──
-  // The exposure blocks are injected as raw strings AFTER esbuild, so they
-  // aren't processed by esbuild's define. Replace them manually.
-  // In JS context: use JSON.stringify (quoted). In HTML context: use raw version.
-  allJS = allJS.replace(/__KRAFTED_VERSION__/g, JSON.stringify(VERSION));
-  html = html.replace(/__KRAFTED_VERSION__/g, VERSION);
 
   // ── Step 5: Write output ──
   const outDir = path.dirname(OUTPUT);
