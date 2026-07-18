@@ -9,6 +9,7 @@ import { getCurrentFps, updateVideoPlayhead, updateVideoTimeline } from './video
 import { addImage, addText, autoGrowTextItem, updateItemStyle } from './add-items.js';
 import { scheduleAutoSave } from './save-load.js';
 import { toast } from './ui-utils.js';
+import { updateStatus } from './canvas-view.js';
 
 // ============================================================
 //  VIDEO FRAME COMMENTS — per-frame text annotations (DRAW removed)

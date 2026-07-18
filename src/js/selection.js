@@ -1,5 +1,9 @@
 
 import { state, canvasContent } from './core-state.js';
+import { removeBrushCanvas } from './masking.js';
+import { updatePropsPanel } from './props-panel.js';
+import { updateStatus } from './canvas-view.js';
+import { updateTextColorPalette } from './text-style.js';
 
 export function getSelectedItems() {
   return [...state.items, ...state.texts, ...(state.todos||[]), ...(state.mindmaps||[])].filter(i => state.selected.has(i.id));
@@ -41,10 +45,10 @@ export function refreshSelection() {
   if (state.reframing) return;
   // Clean up mask editing if selected item changed
   const sel = getSelectedItems();
-  if (sel.length !== 1 || !sel[0].masks || !sel[0].masks.find(m => m.id === activeMaskId)) {
-    if (maskBrushActive) { maskBrushActive = false; removeBrushCanvas(); }
-    if (maskPickColorActive) { maskPickColorActive = false; document.getElementById('viewport').classList.remove('mask-pick-mode'); }
-    activeMaskId = null;
+  if (sel.length !== 1 || !sel[0].masks || !sel[0].masks.find(m => m.id === window.activeMaskId)) {
+    if (window.maskBrushActive) { window.maskBrushActive = false; removeBrushCanvas(); }
+    if (window.maskPickColorActive) { window.maskPickColorActive = false; document.getElementById('viewport').classList.remove('mask-pick-mode'); }
+    window.activeMaskId = null;
   }
   // Round 67 — MULTI-SELECT UNION HANDLES: when 2+ items are selected,
   // skip the per-item addHandles() loop and add ONE set of 8 resize

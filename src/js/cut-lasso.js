@@ -2,6 +2,8 @@
 import { state, canvasContent } from './core-state.js';
 import { scheduleAutoSave } from './save-load.js';
 import { toast } from './ui-utils.js';
+import { addImage } from './add-items.js';
+import { setTool } from './tools.js';
 
 // ============================================================
 //  FREE SHAPE CUT — draw a freehand path on an image, extract
@@ -171,7 +173,7 @@ export function applyCutExtract() {
 // ============================================================
 //  LASSO — click points to define polygon, extract with border
 // ============================================================
-let lassoState = null; // { itemId, points: [{x,y}], closed }
+export let lassoState = null; // { itemId, points: [{x,y}], closed }
 const lassoOverlay = document.getElementById('lasso-overlay');
 const lassoSvg = document.getElementById('lasso-svg');
 const lassoPathEl = document.getElementById('lasso-path');

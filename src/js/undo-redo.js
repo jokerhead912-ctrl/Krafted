@@ -1,5 +1,25 @@
 
-import { state, G, canvasContent } from './core-state.js';;
+import { state, G, canvasContent } from './core-state.js';
+import { _isBlobUrlLive } from './clipboard.js';
+import { addAudioItem } from './audio.js';
+import { applyTextProps, autoGrowTextItem, rebuildLinkCard, updateItemStyle } from './add-items.js';
+import { buildMediaControls } from './media-player.js';
+import { cleanupAllItems } from './delete.js';
+import { clearSelection, refreshSelection } from './selection.js';
+import { redrawDrawLayer } from './draw-layer.js';
+import { renderMindMap } from './mindmap.js';
+import { renderRelations } from './relations.js';
+import { renderTodo } from './todo.js';
+import { sanitizeTextHtml } from './text-sanitizer.js';
+import { scheduleAutoSave } from './save-load.js';
+import { setTool } from './tools.js';
+import { setupVideoTrim } from './video-trim.js';
+import { showTextQuickBar, updateTextQuickBarActive } from './text-style.js';
+import { toast } from './ui-utils.js';
+import { updateAllGroupBorders } from './groups.js';
+import { updateAutoFitPaper } from './paper.js';
+import { updateStatus } from './canvas-view.js';
+import { videoAnnoRefreshCommentList } from './frame-comments.js';
 
 // ============================================================
 //  UNDO / REDO

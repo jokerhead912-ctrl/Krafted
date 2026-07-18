@@ -1,5 +1,11 @@
 
 import { state, canvas, viewport, captureBox, captureOverlay, captureHint, exportBox, toolBadge, IS_TOUCH_DEVICE } from './core-state.js';
+import { _startRelationTool } from './relations.js';
+import { cancelCut, cancelLasso, cutState, lassoState } from './cut-lasso.js';
+import { removeBrushCanvas } from './masking.js';
+import { setCaptureMode } from './capture.js';
+import { showTextQuickBar } from './text-style.js';
+import { toast } from './ui-utils.js';
 
 // ============================================================
 //  TOOLS
@@ -14,8 +20,8 @@ export function setTool(tool) {
   // Clean up lasso mode
   if (lassoState) cancelLasso();
   // Clean up mask editing
-  if (maskPickColorActive) { maskPickColorActive = false; document.getElementById('viewport').classList.remove('mask-pick-mode'); }
-  if (maskBrushActive) { maskBrushActive = false; removeBrushCanvas(); }
+  if (window.maskPickColorActive) { window.maskPickColorActive = false; document.getElementById('viewport').classList.remove('mask-pick-mode'); }
+  if (window.maskBrushActive) { window.maskBrushActive = false; removeBrushCanvas(); }
   // Hide text quick bar
   showTextQuickBar(false);
 

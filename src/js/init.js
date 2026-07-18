@@ -2,13 +2,14 @@ import { state, G, paperState, captureResultPanel, captureResultImg, _frozenGifs
 import './quick-save.js';
 import { initTextToolbar } from './text-style.js';
 import { updateCanvas } from './canvas-view.js';
-import { restoreBoard, formatBytes } from './save-load.js';
+import { restoreBoard, formatBytes, serializeBoard } from './save-load.js';
 import { updateMediaBar } from './media-bar.js';
 import { canvas } from './core-state.js';
 import { updateAltPanBadge } from './text-sanitizer.js';
 import { redrawDrawLayer } from './draw-layer.js';
-import { initVideoLazyLoad } from './selection.js';
+import { initVideoLazyLoad, getSelectedImages, refreshSelection } from './selection.js';
 import { cutState, updateCutTargetHighlight } from './cut-lasso.js';
+import { cleanupAllItems } from './delete.js';
 import { toast } from './ui-utils.js';
 
 //  HELP PANEL — now in help.js (R79)

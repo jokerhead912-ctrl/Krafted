@@ -1,6 +1,9 @@
 
 import { state, canvasContent } from './core-state.js';
-import { toast } from './ui-utils.js';
+import { hideCtx, toast } from './ui-utils.js';
+import { refreshSelection } from './selection.js';
+import { scheduleAutoSave } from './save-load.js';
+import { setTool } from './tools.js';
 
 // ============================================================
 //  RELATION LINES — XMind-style connector lines between items

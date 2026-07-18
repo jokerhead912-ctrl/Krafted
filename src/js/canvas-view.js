@@ -4,6 +4,10 @@ import { redrawDrawLayer } from './draw-layer.js';
 import { updateAllGroupBorders } from './groups.js';
 import { renderRelations } from './relations.js';
 import { mmUpdateConnectors } from './mindmap.js';
+import { repositionAllAnnoToolbars, repositionAllAnnoPopovers } from './delete.js';
+import { isAnimatedGif } from './gif-editor.js';
+import { toast } from './ui-utils.js';
+import { cutState, lassoState } from './cut-lasso.js';
 
 // ============================================================
 //  CANVAS / VIEW

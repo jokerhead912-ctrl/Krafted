@@ -1,6 +1,9 @@
 
 import { state, G, canvasContent } from './core-state.js';
-import { scheduleAutoSave } from './save-load.js';;
+import { scheduleAutoSave } from './save-load.js';
+import { pushUndo } from './undo-redo.js';
+import { selectOnly, toggleSelect } from './selection.js';
+import { updateItemStyle } from './add-items.js';
 
 // ============================================================
 //  TO-DO LIST ITEMS

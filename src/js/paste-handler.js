@@ -1,6 +1,15 @@
 
 import { state } from './core-state.js';
 import { fetchImageFromURL } from './file-drop.js';
+import { addAudioItem } from './audio.js';
+import { addImage, addLinkCard, addText, autoGrowTextItem } from './add-items.js';
+import { getPasteXY } from './capture.js';
+import { mmAutoFit, renderMindMap } from './mindmap.js';
+import { pasteClipboard } from './clipboard.js';
+import { pushUndo } from './undo-redo.js';
+import { refreshSelection } from './selection.js';
+import { scheduleAutoSave } from './save-load.js';
+import { toast, triggerPaste } from './ui-utils.js';
 
 // PASTE FROM CLIPBOARD (handles Explorer files, screenshots, text, URLs, internal items)
 document.addEventListener('paste', e => {

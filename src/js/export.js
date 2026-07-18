@@ -1,7 +1,9 @@
 
 import { state, G, exportBox, canvasContent, canvas, viewport } from './core-state.js';
 import { scheduleAutoSave } from './save-load.js';
-import { toast } from './ui-utils.js';;
+import { toast } from './ui-utils.js';
+import { drawMasksOnCanvas } from './masking.js';
+import { setCaptureMode } from './capture.js';;
 
 // ============================================================
 //  EXPORT PNG

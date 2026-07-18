@@ -4,7 +4,6 @@ import { getSelectedItems, refreshSelection } from './selection.js';
 import { addTodo, renderTodo } from './todo.js';
 import { state, canvasContent } from './core-state.js';
 import { scheduleAutoSave } from './save-load.js';
-import { toast } from './ui-utils.js';
 import { toast, triggerPaste } from './ui-utils.js';
 import { addImage, addLinkCard, addText, applyTextProps, updateItemStyle } from './add-items.js';
 import { setupVideoTrim } from './video-trim.js';

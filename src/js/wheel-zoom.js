@@ -1,6 +1,6 @@
 
 import { state, viewport, Platform } from './core-state.js';
-import { updateCanvas, zoomBy, frameSelection } from './canvas-view.js';
+import { updateCanvas, updateStatus, zoomBy, frameSelection } from './canvas-view.js';
 
 // TRACKPAD TWO-FINGER PAN DETECTION
 // A real mouse wheel and a two-finger trackpad drag both arrive as `wheel`

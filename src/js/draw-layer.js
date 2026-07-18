@@ -1,7 +1,8 @@
 
 import { state, drawTool, G, drawLayer } from './core-state.js';
 import { scheduleAutoSave } from './save-load.js';
-import { toast } from './ui-utils.js';;
+import { toast } from './ui-utils.js';
+import { renderRelations } from './relations.js';;
 
 // ============================================================
 //  DRAWING

@@ -1,7 +1,9 @@
 
 import { state, G, canvasContent } from './core-state.js';
 import { scheduleAutoSave } from './save-load.js';
-import { toast } from './ui-utils.js';;
+import { toast } from './ui-utils.js';
+import { redrawDrawLayer } from './draw-layer.js';
+import { updateItemStyle } from './add-items.js';;
 
 // ============================================================
 //  CREATE DRAW ITEM — convert stroke into selectable/grooupable item

@@ -4,7 +4,6 @@ import { copySelected, duplicateSelected } from './clipboard.js';
 import { deleteSelected } from './delete.js';
 import { groupSelected, ungroupSelected } from './groups.js';
 import { hideHelp, showHelp } from './help.js';
-import { hideHelp, showHelp } from './init.js';
 import { addMindMap } from './mindmap.js';
 import { _deleteRelation, _exitRelationTool } from './relations.js';
 import { clearSelection, getSelectedItems, refreshSelection } from './selection.js';

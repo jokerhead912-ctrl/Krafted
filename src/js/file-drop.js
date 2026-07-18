@@ -1,6 +1,10 @@
 
 import { IS_TOUCH_DEVICE, state, viewport } from './core-state.js';
 import { maskImageCache } from './masking.js';
+import { addAudioItem } from './audio.js';
+import { addImage } from './add-items.js';
+import { pushUndo } from './undo-redo.js';
+import { showCtx, toast } from './ui-utils.js';
 
 // MIDDLE MOUSE / ALT+LEFT PAN (Mac trackpad fallback)
 viewport.addEventListener('mousedown', e => {

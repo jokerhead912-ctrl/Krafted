@@ -1,5 +1,11 @@
 
 import { state } from './core-state.js';
+import { mmUpdateConnectors } from './mindmap.js';
+import { pushUndo } from './undo-redo.js';
+import { scheduleAutoSave } from './save-load.js';
+import { toast } from './ui-utils.js';
+import { updateCanvas } from './canvas-view.js';
+import { updateItemStyle } from './add-items.js';
 
 // ============================================================
 //  TIDY SELECTION — Masonry layout for selected items

@@ -1,5 +1,6 @@
 
 import { state } from './core-state.js';
+import { toast } from './ui-utils.js';
 
 // ── Sanitize text-item innerHTML on restore ──
 // Text items can contain inline <span style="color:.."> from per-word recolor.

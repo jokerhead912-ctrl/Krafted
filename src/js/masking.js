@@ -7,9 +7,13 @@ import { toast } from './ui-utils.js';;
 // ============================================================
 //  MASK LAYERS — per-area adjustments via CSS mask-image
 // ============================================================
-let maskPickColorActive = false;
-let maskBrushActive = false;
-let activeMaskId = null;
+export let maskPickColorActive = false;
+export let maskBrushActive = false;
+export let activeMaskId = null;
+// Also expose on window for cross-module mutation (ES import bindings are immutable)
+window.maskPickColorActive = maskPickColorActive;
+window.maskBrushActive = maskBrushActive;
+window.activeMaskId = activeMaskId;
 let maskBrushCanvas = null;
 let maskBrushCtx = null;
 let maskBrushDrawing = false;

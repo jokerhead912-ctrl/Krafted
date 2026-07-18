@@ -4,6 +4,9 @@
 //  overwrites. On app start, auto-restores from last save path.
 // ============================================================
 
+import { restoreBoard, saveBoard, serializeBoard } from './save-load.js';
+import { toast } from './ui-utils.js';
+
 var _qs = {
   // IndexedDB key for persisting the directory handle
   DB_NAME: 'krafted-quick-save',

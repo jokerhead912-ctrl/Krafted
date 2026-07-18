@@ -5,7 +5,7 @@ import { state, canvasContent } from './core-state.js';
 
 import { videoAnnoAddComment, videoAnnoCaptureSnapshot, videoAnnoDeleteComment, videoAnnoEnsure, videoAnnoJumpToComment, videoAnnoOpenLightbox, videoAnnoRefreshCommentList, videoAnnoUpdateComment } from './frame-comments.js';
 import { pushUndo } from './undo-redo.js';
-import { getCurrentFps, refreshVideoPanelTimes, updateVideoTimeline } from './video-trim.js';
+import { formatTime, getCurrentFps, refreshVideoPanelTimes, updateVideoTimeline } from './video-trim.js';
 import { addImage } from './add-items.js';
 import { scheduleAutoSave } from './save-load.js';
 import { trimGifSelected } from './props-panel.js';
