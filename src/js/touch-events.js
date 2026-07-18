@@ -2,7 +2,6 @@ import { clearSelection, refreshSelection, selectOnly } from './selection.js';
 import { IS_TOUCH_DEVICE, touchState, state, viewport } from './core-state.js';
 import { updateTextColorPalette } from './text-style.js';
 import { updateCanvas } from './canvas-view.js';
-import { state } from './core-state.js';
 
 // ============================================================
 //  MOBILE TOUCH EVENTS (iPhone/iPad — map-style gestures)

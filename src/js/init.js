@@ -42,6 +42,19 @@ import './video-trim.js';
 import './file-drop.js';
 import './media-player.js';
 import './selection.js';
+import './mouse-events.js';
+import './keyboard.js';
+import './paste-handler.js';
+import './wheel-zoom.js';
+import './pointer-events.js';
+import './touch-events.js';
+import './frame-comments.js';
+import './relations.js';
+import './i18n.js';
+import './shortcut-editor.js';
+import './storage.js';
+import './auto-save.js';
+import './draw-items.js';
 
 //  HELP PANEL — now in help.js (R79)
 // ============================================================
