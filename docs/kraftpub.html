@@ -15590,40 +15590,41 @@ var __kraft = (() => {
     window.IS_TOUCH_DEVICE = IS_TOUCH_DEVICE;
     window._frozenGifs = _frozenGifs;
     window.KRAFTED_VERSION = "6.0.1";
-    var _expFuncs = [
-      hideWelcome,showWelcome,addImage,addText,addLinkCard,addMindMap,addTodo,
-      addAudioItem,selectOnly,clearSelection,toggleSelect,deleteSelected,
-      updatePropsPanel,updateCanvas,frameSelection,zoomBy,zoomTo,setTool,
-      saveBoard,loadBoardFile,openLinkModal,closeLinkModal,showCtx,hideCtx,
-      toast,triggerPaste,toggleGrid,toggleAppFullscreen,toggleAltPan,
-      showHelp,hideHelp,togglePaper,setPaperSize,setPaperColor,toggleAutoFit,
-      openGifEditor,captureArea,captureScreen,startExportDrag,setCaptureMode,
-      toggleTextStyle,setTextProp,setTextAlign,enterReframe,exitReframe,
-      enterCrop,exitCrop,enterCutMode,enterLassoMode,copySelected,
-      pasteClipboard,duplicateSelected,undo,redo,pushUndo,playAllMedia,
-      pauseAllMedia,restartVideo,toggleVideoPlay,setVideoVolume,
-      groupSelected,ungroupSelected,alignItems,layerOrder,setDrawMode,
-      clearDraw,undoDraw,discardCaptureResult,saveCaptureResult,
-      pasteCaptureToBoard,saveCapturePanelToFolder,translateSelectedText,
-      newBoard,updatePaper,tidySelection,tidyAll,exportMediaSelected,
-      formatBytes,buildKpakBlob,downloadBlob,showSaveLockPrompt,
-      closeSaveLockPrompt,showPasswordDisplayModal,closePasswordDisplay,
-      copyGeneratedPassword,showUnlockModal,closeUnlockModal,tryUnlockFile,
-      addMaskLayer,deleteMaskLayer,toggleMask,setCanvasBg,showTextQuickBar,
-      updateTextQuickBarActive,applyTextColorToSelected,applyTextStyleToSelected,
-      applyInlineColor,applyInlineSize,getEditingText,flipH,flipV,toggleLock,
-      setOpacity,setRotation,setPhotoFilter,resetPhotoFilters,setCgiFilter,
-      resetVideoTrim,seekVideo,setVideoPlaybackRate,setVideoTimeMode,
-      handleAudioUpload,_handleFileDrop,sanitizeTextHtml,updateAltPanBadge,
-      buildMediaControls,updateMediaBar,restoreBoard,serializeBoard,
-      buildManifest,updateItemStyle,autoGrowTextItem,applyTextProps,
-      refreshSelection,getSelectedItems,getSelectedImages,redrawDrawLayer,
-      updateAllGroupBorders,initTextToolbar,scheduleAutoSave,loadAutoSave
+    var _expNames = [
+      "hideWelcome","showWelcome","addImage","addText","addLinkCard","addMindMap","addTodo",
+      "addAudioItem","selectOnly","clearSelection","toggleSelect","deleteSelected",
+      "updatePropsPanel","updateCanvas","frameSelection","zoomBy","zoomTo","setTool",
+      "saveBoard","loadBoardFile","openLinkModal","closeLinkModal","showCtx","hideCtx",
+      "toast","triggerPaste","toggleGrid","toggleAppFullscreen","toggleAltPan",
+      "showHelp","hideHelp","togglePaper","setPaperSize","setPaperColor","toggleAutoFit",
+      "openGifEditor","captureArea","captureScreen","startExportDrag","setCaptureMode",
+      "toggleTextStyle","setTextProp","setTextAlign","enterReframe","exitReframe",
+      "enterCrop","exitCrop","enterCutMode","enterLassoMode","copySelected",
+      "pasteClipboard","duplicateSelected","undo","redo","pushUndo","playAllMedia",
+      "pauseAllMedia","restartVideo","toggleVideoPlay","setVideoVolume",
+      "groupSelected","ungroupSelected","alignItems","layerOrder","setDrawMode",
+      "clearDraw","undoDraw","discardCaptureResult","saveCaptureResult",
+      "pasteCaptureToBoard","saveCapturePanelToFolder","translateSelectedText",
+      "newBoard","updatePaper","tidySelection","tidyAll","exportMediaSelected",
+      "formatBytes","buildKpakBlob","downloadBlob","showSaveLockPrompt",
+      "closeSaveLockPrompt","showPasswordDisplayModal","closePasswordDisplay",
+      "copyGeneratedPassword","showUnlockModal","closeUnlockModal","tryUnlockFile",
+      "addMaskLayer","deleteMaskLayer","toggleMask","setCanvasBg","showTextQuickBar",
+      "updateTextQuickBarActive","applyTextColorToSelected","applyTextStyleToSelected",
+      "applyInlineColor","applyInlineSize","getEditingText","flipH","flipV","toggleLock",
+      "setOpacity","setRotation","setPhotoFilter","resetPhotoFilters","setCgiFilter",
+      "resetVideoTrim","seekVideo","setVideoPlaybackRate","setVideoTimeMode",
+      "handleAudioUpload","_handleFileDrop","sanitizeTextHtml","updateAltPanBadge",
+      "buildMediaControls","updateMediaBar","restoreBoard","serializeBoard",
+      "buildManifest","updateItemStyle","autoGrowTextItem","applyTextProps",
+      "refreshSelection","getSelectedItems","getSelectedImages","redrawDrawLayer",
+      "updateAllGroupBorders","initTextToolbar","scheduleAutoSave","loadAutoSave"
     ];
-    for (var _ei = 0; _ei < _expFuncs.length; _ei++) {
-      if (typeof _expFuncs[_ei] === "function") {
-        window[_expFuncs[_ei].name] = _expFuncs[_ei];
-      }
+    for (var _ei = 0; _ei < _expNames.length; _ei++) {
+      try {
+        var _fn = eval(_expNames[_ei]);
+        if (typeof _fn === "function") window[_expNames[_ei]] = _fn;
+      } catch(_e) {}
     }
   }
 
