@@ -3715,6 +3715,9 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
     <button onclick="undoDraw()" title="Undo Last Stroke">Undo</button>
     <button onclick="clearDraw()" title="Clear All Draws">Clear All</button>
   </div>
+  <div class="btn-group" style="margin-top:3px;">
+    <button onclick="convertAllStrokesToItem()" title="Convert all continuous strokes into one movable/deletable item" style="background:var(--accent);color:#000;font-weight:600;">📦 Pack as Item</button>
+  </div>
   <p style="font-size:9px;color:var(--text-dim);margin:6px 0 0;line-height:1.4;letter-spacing:0.2px;">
     Tip: switch to <b>Select</b> (V), click any drawing to select it, then press <kbd style="background:var(--input-bg);border:1px solid var(--border);border-radius:2px;padding:0 3px;font-size:8px;font-family:inherit;">Del</kbd> to remove.
   </p>
@@ -24691,6 +24694,57 @@ function clearDraw() {
   renderRelations();
   redrawDrawLayer();
 }
+
+// v6.0: Convert all strokes on the draw layer into a single movable item.
+// Used after continuous sketching — the user draws freely with many strokes,
+// then hits "Pack as Item" to turn them all into one selectable/draggable/
+// deletable draw item. This avoids board clutter from one-tap items while
+// still allowing the user to reposition or delete the whole sketch later.
+function convertAllStrokesToItem() {
+  const strokes = G.drawStrokes.filter(s => s.mode !== 'eraser' && s.points && s.points.length >= 2);
+  if (strokes.length === 0) { toast('Nothing to pack — draw some strokes first'); return; }
+  // Find the union bounding box of all strokes
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  strokes.forEach(stroke => {
+    stroke.points.forEach(p => {
+      if (p[0] < minX) minX = p[0];
+      if (p[1] < minY) minY = p[1];
+      if (p[0] > maxX) maxX = p[0];
+      if (p[1] > maxY) maxY = p[1];
+    });
+  });
+  const pad = 12;
+  const x = minX - pad;
+  const y = minY - pad;
+  const w = Math.max(maxX - minX + pad * 2, 20);
+  const h = Math.max(maxY - minY + pad * 2, 20);
+
+  const el = document.createElement('div');
+  el.className = 'item draw-item';
+  el.style.cssText = 'background:transparent;border:none;pointer-events:auto;';
+  canvasContent.appendChild(el);
+
+  const item = {
+    id: G.nextId++, el, type: 'draw',
+    x, y, w, h, rot: 0, opacity: 1, flipH: false, flipV: false, locked: false,
+    z: G.nextZ++,
+    strokeIds: strokes.map(s => s.strokeId), // multi-stroke!
+    strokeId: strokes[0].strokeId, // backwards compat — first stroke as primary
+    drawMode: strokes[0].mode,
+    drawColor: strokes[0].color,
+    drawSize: strokes[0].size,
+    drawOpacity: strokes[0].opacity,
+  };
+  state.items.push(item);
+  updateItemStyle(item);
+  pushUndo();
+  scheduleAutoSave();
+  redrawDrawLayer();
+  toast('Packed ' + strokes.length + ' strokes into 1 item');
+  console.log('[convertAllStrokesToItem] Packed', strokes.length, 'strokes → item #' + item.id);
+}
+
+window.convertAllStrokesToItem = convertAllStrokesToItem;
 
 
 
