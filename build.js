@@ -63,7 +63,7 @@ async function build() {
     window.state = state;
     window.IS_TOUCH_DEVICE = IS_TOUCH_DEVICE;
     window._frozenGifs = _frozenGifs;
-    window.KRAFTED_VERSION = KRAFTED_VERSION;
+    window.KRAFTED_VERSION = "6.0.1";
     var _expFuncs = [
       hideWelcome,showWelcome,addImage,addText,addLinkCard,addMindMap,addTodo,
       addAudioItem,selectOnly,clearSelection,toggleSelect,deleteSelected,
