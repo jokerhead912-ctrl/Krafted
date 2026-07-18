@@ -3706,10 +3706,6 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
   </label>
   <label>Arrow Head Size</label>
   <input type="range" id="draw-arrowhead" min="5" max="40" value="15" oninput="drawTool.arrowHead=+this.value">
-  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--text);">
-    <input type="checkbox" id="draw-continuous" onchange="drawTool.continuous=this.checked" style="cursor:pointer;width:auto;height:auto;margin:0;">
-    Continuous Draw (keep pen active)
-  </label>
   <hr style="border:none;border-top:1px solid var(--border-light);margin:6px 0 4px;">
   <div class="btn-group">
     <button onclick="undoDraw()" title="Undo Last Stroke">Undo</button>
@@ -6290,6 +6286,7 @@ const DEFAULT_SHORTCUTS = [
   { id: 'nav-pan-space',   category: 'Navigation', label: 'Pan Canvas (hold)',   keys: [{ key: ' ' }] },
   { id: 'nav-help',        category: 'Navigation', label: 'Show Help / Shortcuts', keys: [{ key: 'h' }] },
   { id: 'nav-esc',         category: 'Navigation', label: 'Cancel / Deselect',   keys: [{ key: 'Escape' }] },
+  { id: 'draw-finish',     category: 'Draw',        label: 'Finish drawing → item', keys: [{ key: 'Enter' }] },
 
   // === TRANSLATE ===
   { id: 'translate-en-zh', category: 'Translate', label: 'Translate EN→中文',    keys: [{ key: 't', ctrl: true, shift: true }], macKeys: [{ key: 't', meta: true, shift: true }] },
@@ -20306,9 +20303,10 @@ function _dispatchShortcut(e) {
       if (_videoSelected()) return false;
       state.spaceDown = true; viewport.style.cursor = 'grab'; return true;
     case 'nav-help':         if (typeof showHelp === 'function') showHelp(); return true;
-    case 'nav-esc':          clearSelection(); hideCtx(); if (typeof hideHelp === 'function') hideHelp(); captureResultPanel.classList.remove('show'); _exitRelationTool(); // v6.0: continuous draw — Esc packs all strokes into one item then exits draw mode
-      if (state.tool === 'draw' && drawTool.continuous && G.drawStrokes.some(function(s){return s.mode!=='eraser'&&s.points&&s.points.length>=2;})) { convertAllStrokesToItem(); setTool('select'); return true; }
+    case 'nav-esc':          clearSelection(); hideCtx(); if (typeof hideHelp === 'function') hideHelp(); captureResultPanel.classList.remove('show'); _exitRelationTool(); // v6.0: draw mode — Esc packs all strokes into one item then exits draw mode
+      if (state.tool === 'draw') { convertAllStrokesToItem(); setTool('select'); return true; }
       if (state.tool !== 'select') setTool('select'); return true;
+    case 'draw-finish':      if (state.tool === 'draw') { convertAllStrokesToItem(); setTool('select'); return true; } return false;
     // Translate
     case 'translate-en-zh':  translateSelectedText('en', 'zh'); return true;
     // Media
@@ -22223,30 +22221,12 @@ document.addEventListener('mouseup', e => {
   if (G.currentStroke) {
     const stroke = G.currentStroke;
     G.currentStroke = null;
-    // Every stroke always becomes a draw item (selectable, groupable, deletable).
-    // Continuous draw mode just keeps the tool active so you can keep drawing
-    // without clicking the draw button again. Press Esc to merge all items from
-    // this continuous session into one.
-    if (stroke.points.length >= 2 && stroke.mode !== 'eraser') {
-      createDrawItem(stroke);
-    }
-    // R79: push an undo snapshot so undo walks back ONE stroke at a
-    // time. Previously mouseup of a draw stroke didn't push — undo
-    // reverted to the pre-stroke state and removed the stroke AND
-    // any text/items the user had added since, which the user
-    // reported as "撤一次清晒所有嘢". Pushing here gives proper
-    // per-stroke undo granularity.
+    // v6.0: Draw is always continuous — strokes stay on the draw layer.
+    // No per-stroke items are created. Press Enter or Esc to pack all
+    // strokes into a single item and exit draw mode.
     try { pushUndo(); } catch (e) {}
     scheduleAutoSave();
-    // v6.0: Continuous draw — keep draw mode active so the user can
-    // immediately start the next stroke. Items are created per-stroke
-    // as usual; Esc will merge them later if desired.
-    // Strokes stay on the draw layer (not converted to items) so the
-    // user can sketch freely without filling the board with one-tap items.
-    if (drawTool.continuous) {
-      // Keep draw mode active — don't switch back to select
-      setTool('draw');
-    }
+    redrawDrawLayer();
   }
 
   // DRAW STROKE MOVE END
@@ -24693,21 +24673,50 @@ function clearDraw() {
   redrawDrawLayer();
 }
 
-// v6.0: Merge all draw items into one group. Called on Esc when continuous
-// draw mode is active. Each stroke is already an individual item; this just
-// groups them together so the user can move/delete the whole sketch at once.
+// v6.0: Pack all draw-layer strokes into a single movable item.
+// Called on Enter/Esc when in draw mode. The user draws freely with
+// many strokes, then hits Enter to convert them all into one item.
 function convertAllStrokesToItem() {
-  const drawItems = state.items.filter(i => i.type === 'draw');
-  if (drawItems.length < 2) { 
-    // Only one item or none — nothing to merge. Just exit draw mode.
-    return;
-  }
-  // Select all draw items, then group them
-  clearSelection();
-  drawItems.forEach(i => state.selected.add(i.id));
-  groupSelected();
-  toast('Grouped ' + drawItems.length + ' strokes');
-  console.log('[convertAllStrokesToItem] Grouped', drawItems.length, 'draw items');
+  const strokes = G.drawStrokes.filter(s => s.mode !== 'eraser' && s.points && s.points.length >= 2);
+  if (strokes.length === 0) return;
+  // Find the union bounding box of all strokes
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  strokes.forEach(stroke => {
+    stroke.points.forEach(p => {
+      if (p[0] < minX) minX = p[0];
+      if (p[1] < minY) minY = p[1];
+      if (p[0] > maxX) maxX = p[0];
+      if (p[1] > maxY) maxY = p[1];
+    });
+  });
+  const pad = 12;
+  const x = minX - pad;
+  const y = minY - pad;
+  const w = Math.max(maxX - minX + pad * 2, 20);
+  const h = Math.max(maxY - minY + pad * 2, 20);
+
+  const el = document.createElement('div');
+  el.className = 'item draw-item';
+  el.style.cssText = 'background:transparent;border:none;pointer-events:auto;';
+  canvasContent.appendChild(el);
+
+  const item = {
+    id: G.nextId++, el, type: 'draw',
+    x, y, w, h, rot: 0, opacity: 1, flipH: false, flipV: false, locked: false,
+    z: G.nextZ++,
+    strokeIds: strokes.map(s => s.strokeId),
+    strokeId: strokes[0].strokeId,
+    drawMode: strokes[0].mode,
+    drawColor: strokes[0].color,
+    drawSize: strokes[0].size,
+    drawOpacity: strokes[0].opacity,
+  };
+  state.items.push(item);
+  updateItemStyle(item);
+  pushUndo();
+  scheduleAutoSave();
+  redrawDrawLayer();
+  toast('Packed ' + strokes.length + ' strokes into 1 item');
 }
 
 window.convertAllStrokesToItem = convertAllStrokesToItem;
