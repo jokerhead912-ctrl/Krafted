@@ -3944,6 +3944,10 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
      character in the main script silently kills the GET STARTED button.) ── -->
 
 <script>
+// v6.0: translation cache — must be defined early so all translation
+// functions (canvas text, video comments, mind-map nodes) can access it.
+const translationCache = new Map();
+
 function hideWelcome() {
   var el = document.getElementById('welcome');
   if (!el) return;
@@ -28259,7 +28263,8 @@ async function captureScreen() {
 // ============================================================
 //  TRANSLATE (EN ↔ ZH, multi-API with cache for instant repeat)
 // ============================================================
-const translationCache = new Map(); // "from|to|text" -> translation
+// translationCache is now defined at the top of the first <script> block
+// so it's available to all translation functions (line ~3949).
 async function translateSelectedText(fromLang, toLang) {
   // Support translating the currently-edited text item, or selected text items
   let sel;
