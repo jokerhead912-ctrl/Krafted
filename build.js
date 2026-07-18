@@ -67,7 +67,7 @@ async function build() {
     window.state = state;
     window.IS_TOUCH_DEVICE = IS_TOUCH_DEVICE;
     window._frozenGifs = _frozenGifs;
-    window.KRAFTED_VERSION = __KRAFTED_VERSION__;
+    window.KRAFTED_VERSION = ${JSON.stringify(VERSION)};
     var _expFuncs = [
       hideWelcome,showWelcome,addImage,addText,addLinkCard,addMindMap,addTodo,
       addAudioItem,selectOnly,clearSelection,toggleSelect,deleteSelected,
