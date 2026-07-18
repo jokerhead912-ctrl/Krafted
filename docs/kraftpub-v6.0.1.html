@@ -4907,12 +4907,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 // ============================================================
 //  STARTUP CHECKS
 // ============================================================
-console.log('[INIT] Krafted v5.5 loading...');
+console.log('[INIT] Krafted v' + KRAFTED_VERSION + ' loading...');
 console.log('[INIT] JSZip available:', typeof JSZip);
 console.log('[INIT] showSaveFilePicker available:', typeof window.showSaveFilePicker);
 // === COPYRIGHT — Krafted by Joker Head Studios ===
 console.log(
-  '%c Krafted v5.5 %c by Joker Head Studios ',
+  '%c Krafted v' + KRAFTED_VERSION + ' %c by Joker Head Studios ',
   'background:#7c8cf0;color:#000;font-weight:bold;padding:4px 8px;font-size:14px;',
   'background:#1a1a1a;color:#e8e8e8;padding:4px 8px;font-size:12px;'
 );
@@ -18325,7 +18325,7 @@ function _buildHelpContent(overlay) {
   // Footer
   var footer = document.createElement('p');
   footer.style.cssText = 'margin-top:20px;font-size:10px;color:#555;text-align:center;';
-  footer.textContent = 'Krafted v5.5 — by Joker Head Studios';
+  footer.textContent = 'Krafted v' + KRAFTED_VERSION + ' — by Joker Head Studios';
   box.appendChild(footer);
 
   overlay.appendChild(box);
