@@ -1,36 +1,44 @@
-name: Deploy Krafted to GitHub Pages
+name: Build & Deploy to GitHub Pages
 
 on:
   push:
     branches: [main]
     paths:
-      - 'docs/**'
-  workflow_dispatch:
+      - 'src/**'
+      - 'build.js'
+      - 'build.sh'
+      - 'package.json'
+      - '.github/workflows/deploy.yml'
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
+  contents: write
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          path: docs
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: node build.js
+
+      - name: Commit & push built output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/kraftpub.html
+          if git diff --staged --quiet; then
+            echo "No changes to kraftpub.html"
+          else
+            git commit -m "🤖 Auto-build: ${{ github.event.head_commit.message }}"
+            git push
+          fi
