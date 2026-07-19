@@ -4422,8 +4422,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   waitForKraftedState().then(function() {
     window._saveBoardLegacy = window.saveBoard; window._loadBoardFileLegacy = window.loadBoardFile;
-    window.saveBoard = window.saveBoardV5; window.loadBoardFile = window.loadBoardFileV5;
-    console.log('[KraftedBridge] Integration active — save/load now uses KraftedFormat engine.');
+    // v6.1.1: Disable Bridge load override — KraftedFormat's loadKpakBlob
+    // crashes on GitHub Pages with "Corrupted zip" (data length = 0) and
+    // remapMediaFromZip writes _blobUrl instead of src which breaks
+    // restoreBoard's audio/video branches. The v4 load path has been
+    // thoroughly tested and works for all media types.
+    // window.saveBoard = window.saveBoardV5; // keep save bridge disabled too — v4 saveBoard works
+    console.log('[KraftedBridge] Init complete — v4 load/save paths preserved (v6.1.1: Bridge load disabled).');
     console.log('[KraftedBridge] Schema v' + KF.Schema.VERSION + ' | ' + state.items.length + ' items on board.');
   });
 })();

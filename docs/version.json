@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: updatePaper null guard; fix: audio mimeToExt fallback; fix: remove save-picker on QS auto-reopen"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: disable KraftedBridge load override (corrupted zip on GitHub Pages)"}
