@@ -24262,9 +24262,16 @@ function copySelected() {
       writeImageToSystemClipboard(item.src)
         .then(() => { state.clipboardSystemWriteOk = true; })
         .catch(() => { state.clipboardSystemWriteOk = false; });
-    } else if (item && (item.text || (item.isLink && item.linkUrl))) {
-      // Text / link: try to mirror the text to the system clipboard.
-      const txt = item.isLink ? (item.linkUrl || '') : (item.text || '');
+    } else if (item && (item.type === 'text' || item.isLink)) {
+      // Text / link: mirror the content to system clipboard so Cmd+V pastes it.
+      // v6.1.1: Use item.content (set by copySelected) or item.el.textContent,
+      // NOT item.text — Krafted text items store content in the DOM element.
+      var txt = '';
+      if (item.isLink && item.linkUrl) {
+        txt = item.linkUrl;
+      } else if (item.type === 'text') {
+        txt = item.content || (item.el ? item.el.textContent : '') || '';
+      }
       if (txt && navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(txt)
           .then(() => { state.clipboardSystemWriteOk = true; })
