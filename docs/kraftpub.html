@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Krafted v6.0.3</title>
+<title>Krafted v6.0.2</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2393,23 +2393,6 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #toolbar button.tb-full { border-color:#22c55e; color:#22c55e; font-weight:600; background:rgba(34,197,94,0.08); }
 #toolbar button.tb-full:hover { background:#22c55e; color:#fff; border-color:#22c55e; }
 #toolbar kbd { font-size:9px; opacity:0.35; font-family:'Inter',monospace; }
-
-/* v6.0.3 — Quick Save dirty indicator (additive) */
-#toolbar #btn-qs-save { position: relative; }
-#toolbar #btn-qs-save.qs-dirty::after {
-  content: ''; position: absolute; top: 3px; right: 3px;
-  width: 7px; height: 7px; border-radius: 50%;
-  background: #d2991d; box-shadow: 0 0 0 2px var(--bg, #1a1a1a);
-  animation: qsDirtyPulse 1.4s ease-in-out infinite;
-}
-@keyframes qsDirtyPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.85); }
-}
-#toolbar #btn-qs-save.qs-clean::after {
-  content: '✓'; position: absolute; top: 1px; right: 2px;
-  font-size: 10px; color: #3fb950; font-weight: bold;
-}
 #toolbar .tb-label { font-size:11px; font-weight:500; }
 
 /* PROPERTIES PANEL */
@@ -3953,7 +3936,7 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
     <p class="welcome-sub">Professional reference board — images, video, audio, mind maps & more.</p>
     <button class="btn-primary btn-large" onclick="hideWelcome()">GET STARTED</button>
     <div class="welcome-creator">CREATED BY KINCHEUNG</div>
-    <div class="welcome-version" id="welcome-version">V 6 . 0 . 3</div>
+    <div class="welcome-version" id="welcome-version">V 6 . 0 . 2</div>
   </div>
 </div>
 
@@ -3987,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.0.3';
+var KRAFTED_VERSION = '6.0.2';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -18115,7 +18098,7 @@ document.addEventListener('webkitfullscreenchange', _syncAppFsIcon);
 // Marker so user can confirm new code is loaded (check DevTools console)
 // KRAFTED_VERSION is now defined in the early <script> block (line ~3966)
 // so startup console.log calls can access it. Kept here as a marker only.
-// var KRAFTED_VERSION = '6.0.3';  ← DO NOT redeclare; defined above.
+// var KRAFTED_VERSION = '6.0.2';  ← DO NOT redeclare; defined above.
 console.log('%c[Krafted v' + KRAFTED_VERSION + '] Text item handle z-index raised to 99999 — previously the right-side handles (NE/SE/E/W) could be hidden behind sibling items. Refresh the popover/comment list to re-render.',
   'color:#22c55e;font-weight:bold;font-size:13px;');
 
@@ -30550,8 +30533,6 @@ async function qsAutoReopen() {
 }
 
 // Add Cmd+Shift+S / Ctrl+Shift+S keyboard shortcut — additive listener
-// NOTE: must stopPropagation to prevent the existing keydown handler
-// (line ~20423) from also catching this and triggering setTool('capture')
 document.addEventListener('keydown', function(e) {
   // Only when not typing in input/textarea/contenteditable
   const tag = (e.target && e.target.tagName) || '';
@@ -30559,8 +30540,6 @@ document.addEventListener('keydown', function(e) {
   // Ctrl+Shift+S or Cmd+Shift+S = Quick Save
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'S' || e.key === 's')) {
     e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
     if (typeof qsSaveBoard === 'function') qsSaveBoard();
   }
 }, true);
@@ -30571,152 +30550,6 @@ window.addEventListener('load', function() {
     if (typeof qsAutoReopen === 'function') qsAutoReopen();
   }, 1500); // delay so welcome screen shows first
 });
-
-// ============================================================
-// DIRTY TRACKING + CLOSE WARNING (v6.0.3 — additive feature)
-// Wraps scheduleAutoSave to detect any user edit, then shows a dirty dot on
-// the QS button. Intercepts beforeunload to show a custom Save/Discard/Cancel modal.
-// NO existing function body is modified — pure wrapping.
-// ============================================================
-
-// --- Dirty state ---
-window.__qsDirty = false;       // true = user has made unsaved changes
-window.__qsAllowClose = false;  // bypass flag set by Discard button
-window.__qsLastSaveOk = false;  // set true after a successful save
-
-function _qsUpdateDirtyUI() {
-  const btn = document.getElementById('btn-qs-save');
-  if (!btn) return;
-  if (!window.__qsFileHandle) return; // only show indicator once user has done first save
-  if (window.__qsDirty) {
-    btn.classList.add('qs-dirty');
-    btn.classList.remove('qs-clean');
-    btn.title = 'Quick Save (Ctrl+Shift+S) — UNSAVED CHANGES';
-  } else {
-    btn.classList.remove('qs-dirty');
-    btn.classList.add('qs-clean');
-    btn.title = 'Quick Save (Ctrl+Shift+S) — all changes saved';
-  }
-}
-
-// --- Wrap scheduleAutoSave (pure wrapper, does not modify original) ---
-(function _qsWrapScheduleAutoSave() {
-  // Wait until scheduleAutoSave exists (it's defined later in the script)
-  function _tryWrap() {
-    if (typeof scheduleAutoSave !== 'function') {
-      setTimeout(_tryWrap, 50);
-      return;
-    }
-    if (scheduleAutoSave.__qsWrapped) return; // already wrapped
-    const _orig = scheduleAutoSave;
-    window.scheduleAutoSave = function() {
-      window.__qsDirty = true;
-      _qsUpdateDirtyUI();
-      return _orig.apply(this, arguments);
-    };
-    window.scheduleAutoSave.__qsWrapped = true;
-    console.log('[QS] scheduleAutoSave wrapped for dirty tracking');
-  }
-  _tryWrap();
-})();
-
-// --- Wrap saveBoard to clear dirty on success ---
-(function _qsWrapSaveBoard() {
-  function _tryWrap() {
-    if (typeof saveBoard !== 'function') { setTimeout(_tryWrap, 50); return; }
-    if (saveBoard.__qsWrapped) return;
-    const _orig = saveBoard;
-    window.saveBoard = async function() {
-      const r = await _orig.apply(this, arguments);
-      // After save completes, mark clean (whether handle or download)
-      window.__qsDirty = false;
-      window.__qsLastSaveOk = true;
-      _qsUpdateDirtyUI();
-      return r;
-    };
-    window.saveBoard.__qsWrapped = true;
-    console.log('[QS] saveBoard wrapped for dirty tracking');
-  }
-  _tryWrap();
-})();
-
-// --- Wrap qsSaveBoard to clear dirty on success ---
-(function _qsWrapQsSaveBoard() {
-  function _tryWrap() {
-    if (typeof qsSaveBoard !== 'function') { setTimeout(_tryWrap, 50); return; }
-    if (qsSaveBoard.__qsWrapped) return;
-    const _orig = qsSaveBoard;
-    window.qsSaveBoard = async function() {
-      const r = await _orig.apply(this, arguments);
-      // After QS completes successfully, mark clean
-      if (window.__qsFileHandle) {
-        window.__qsDirty = false;
-        window.__qsLastSaveOk = true;
-        _qsUpdateDirtyUI();
-      }
-      return r;
-    };
-    window.qsSaveBoard.__qsWrapped = true;
-    console.log('[QS] qsSaveBoard wrapped for dirty tracking');
-  }
-  _tryWrap();
-})();
-
-// --- Custom "unsaved changes" modal ---
-function _qsShowUnsavedModal() {
-  return new Promise(function(resolve) {
-    const modal = document.createElement('div');
-    modal.id = 'qs-unsaved-modal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:9999999;';
-    const fname = localStorage.getItem('krafted_qs_filename') || 'this file';
-    modal.innerHTML =
-      '<div style="background:var(--bg-panel,#222);border:1px solid var(--border,#333);border-radius:10px;padding:22px 26px;max-width:440px;color:var(--text,#e8e8e8);font-family:Inter,system-ui,sans-serif;box-shadow:0 8px 32px rgba(0,0,0,0.5);">' +
-        '<div style="font-size:13px;color:#d2991d;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;">⚠ Unsaved Changes</div>' +
-        '<div style="font-size:15px;line-height:1.5;margin:6px 0 18px;">You have unsaved changes to <b>' + _qsEscapeHtml(fname) + '</b>. Save before closing?</div>' +
-        '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">' +
-          '<button id="qs-unsaved-cancel" style="background:transparent;border:1px solid var(--border,#444);color:var(--text,#e8e8e8);padding:7px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Cancel</button>' +
-          '<button id="qs-unsaved-discard" style="background:transparent;border:1px solid #da3633;color:#da3633;padding:7px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Discard Changes</button>' +
-          '<button id="qs-unsaved-save" style="background:#3fb950;border:1px solid #3fb950;color:#000;padding:7px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">Save</button>' +
-        '</div>' +
-      '</div>';
-    document.body.appendChild(modal);
-    function close(result) { try { modal.remove(); } catch(e) {} document.removeEventListener('keydown', onKey); resolve(result); }
-    function onKey(e) { if (e.key === 'Escape') close('cancel'); }
-    document.getElementById('qs-unsaved-save').onclick = function() { close('save'); };
-    document.getElementById('qs-unsaved-discard').onclick = function() { close('discard'); };
-    document.getElementById('qs-unsaved-cancel').onclick = function() { close('cancel'); };
-    document.addEventListener('keydown', onKey);
-  });
-}
-
-function _qsEscapeHtml(s) {
-  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-// --- beforeunload interceptor: show native browser dialog if dirty ---
-// Browsers do not allow custom modals in beforeunload — only the native
-// "Leave site?" / "Changes you made may not be saved" dialog. We return a
-// string from this handler to trigger it. When user chooses "Stay", the page
-// remains. When user chooses "Leave", the close proceeds (no way to save at
-// that point because the page is unloading).
-window.addEventListener('beforeunload', function(e) {
-  // Only intercept if user has unsaved changes AND we have a QS handle
-  if (window.__qsAllowClose) return; // explicit bypass
-  if (!window.__qsDirty) return;      // clean state, no warning
-  if (!window.__qsFileHandle && !localStorage.getItem('krafted_qs_saved')) return; // never saved, no warning
-
-  // Set returnValue to trigger browser's native "Leave site?" dialog
-  e.preventDefault();
-  e.returnValue = 'You have unsaved changes to your Krafted board.';
-  return e.returnValue;
-});
-
-// --- Optional: in-app modal for explicit "Clear" / "New" actions ---
-// Browser beforeunload can only show the native dialog. If the user clicks
-// "Clear" or "New" inside the app, we CAN show a custom Save/Discard/Cancel
-// modal via _qsShowUnsavedModal(). The modal function is defined but not
-// auto-wired — call it from your Clear/New handlers if desired.
-console.log('[QS] Close warning installed (uses browser beforeunload native dialog)');
 
 
 // ==== init.js ====

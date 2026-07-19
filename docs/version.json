@@ -1,1 +1,1 @@
-{"version":"6.0.3","date":"2026-07-19","file":"kraftpub-v6.0.3.html","changes":"Dirty indicator on QS button (orange dot when unsaved, green check when saved). Browser native beforeunload warning when closing with unsaved changes. Fix: stopPropagation on Cmd+Shift+S to prevent Capture tool from activating."}
+{"version":"6.0.2","date":"2026-07-19","file":"kraftpub-v6.0.2.html","changes":"Quick Save (Cmd+Shift+S) + Auto Reopen with OK/Cancel dialog. Reuses FileSystemFileHandle, mirrors kpak to localStorage as base64. Additive — no existing function modified."}
