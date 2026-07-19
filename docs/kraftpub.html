@@ -20090,6 +20090,15 @@ document.addEventListener('paste', e => {
               trimmed = trimmed.replace(/\{\\[^{}]*\}/g, '').replace(/\\[a-z]+/gi, '').replace(/[{}]/g, '').trim();
             }
             if (!trimmed) return;
+            // v6.1.1: If the user hasn't copied text from within Krafted
+            // (no _textCopiedFromKrafted flag), and the internal clipboard
+            // is empty, don't auto-create a text box from system clipboard.
+            // This prevents stale system clipboard content from spamming
+            // the board every time the user hits Ctrl+V on empty canvas.
+            if (!state._textCopiedFromKrafted && (!state.clipboard || state.clipboard.length === 0)) {
+              console.log('[Paste] Skipping external text paste — no Krafted copy flag');
+              return;
+            }
             // URL detection
             if (/^https?:\/\/[^\s]+$/i.test(trimmed) || /^www\.[^\s]+\.[a-z]{2,}/i.test(trimmed) ||
                 /^[a-z0-9-]+\.[a-z]{2,}[^\s]*$/i.test(trimmed)) {
@@ -20431,8 +20440,9 @@ document.addEventListener('keydown', e => {
         }
       }
       if (textItem) {
-        // Save to internal clipboard as a text item
+        // v6.1.1: Save selected text to internal clipboard
         state.clipboard = [{ ...textItem, el: null, img: null, content: selectedText }];
+        state._textCopiedFromKrafted = true; // flag so paste handler knows this is OUR text
         e.preventDefault();
         e.stopPropagation();
         try { toast('Copied text'); } catch (ex) {}
