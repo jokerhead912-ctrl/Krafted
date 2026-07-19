@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: trust internal clipboard over system — always paste internal if it has content"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: capture Ctrl+C from text selection — save selected text to internal clipboard"}

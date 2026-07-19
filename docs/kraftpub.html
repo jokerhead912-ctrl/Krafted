@@ -20396,6 +20396,37 @@ function _dispatchShortcut(e) {
 //  KEYBOARD
 // ============================================================
 document.addEventListener('keydown', e => {
+  // v6.1.1: Capture-phase Ctrl+C from text selection. If user has selected
+  // text inside a contentEditable (Krafted text-item) and copies it, save
+  // the selected text to state.clipboard so the next Ctrl+V pastes it
+  // correctly. Without this, browser native copy writes to system clipboard
+  // (unreliable on GitHub Pages) and our internal clipboard stays stale.
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'c' || e.key === 'C')) {
+    const sel = window.getSelection();
+    const selectedText = sel ? sel.toString().trim() : '';
+    if (selectedText && e.target && e.target.contentEditable === 'true' && e.target.classList && e.target.classList.contains('text-item')) {
+      // Find the source text item by walking up from the selection node
+      let node = sel.anchorNode;
+      let textItem = null;
+      while (node && node !== document.body) {
+        if (node.classList && node.classList.contains('text-item') && node._kraftedId) {
+          textItem = state.items.find(it => it.id === node._kraftedId) ||
+                     state.texts.find(t => t.id === node._kraftedId);
+          break;
+        }
+        node = node.parentNode;
+      }
+      if (textItem) {
+        // Save to internal clipboard as a text item
+        state.clipboard = [{ ...textItem, el: null, img: null, content: selectedText }];
+        e.preventDefault();
+        e.stopPropagation();
+        try { toast('Copied text'); } catch (ex) {}
+        return;
+      }
+    }
+  }
+
   // Don't intercept when typing in text
   // Round 15: added TEXTAREA — the draw text tool spawns a <textarea>
   // overlay, and single-letter hotkeys (v, t, d, e, c, x, l, m, s, etc.)
