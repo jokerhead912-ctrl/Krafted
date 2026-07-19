@@ -19924,18 +19924,18 @@ document.addEventListener('paste', e => {
   {
     const recentCopy = state.clipboardTime && (Date.now() - state.clipboardTime) < 3000;
     if (state.clipboard && state.clipboard.length > 0 && recentCopy) {
-      // Check if the incoming paste has text — if so, compare with
-      // internal clipboard text to decide whether this is an external paste.
-      let hasIncomingText = false;
+      // Detect what the incoming paste is carrying
+      let hasIncomingText = false, hasIncomingImage = false, hasIncomingFile = false;
       for (const item of items) {
-        if (item.type === 'text/plain' || item.type === 'text/html') { hasIncomingText = true; break; }
+        if (item.type === 'text/plain' || item.type === 'text/html') hasIncomingText = true;
+        else if (item.type.startsWith('image/')) hasIncomingImage = true;
+        else if (item.kind === 'file') hasIncomingFile = true;
       }
       const hasInternalText = state.clipboard.some(c => c.type === 'text');
-      if (hasIncomingText && hasInternalText) {
-        // Both incoming and internal have text. Compare content to
-        // decide. e.clipboardData.getData('text/plain') is sync and
-        // returns the system clipboard text. If it differs from the
-        // internal clipboard's text content, it's an external paste.
+      const hasInternalMedia = state.clipboard.some(c => c.src || c.isVideo || c.isAudio || c.isGif);
+
+      // ── Case 1: Both internal and incoming are TEXT → compare content ──
+      if (hasIncomingText && hasInternalText && !hasIncomingImage && !hasIncomingFile) {
         let incomingText = '';
         try { incomingText = (e.clipboardData.getData('text/plain') || '').trim(); } catch (_) {}
         const internalText = state.clipboard
@@ -19945,20 +19945,20 @@ document.addEventListener('paste', e => {
         if (incomingText && incomingText !== internalText) {
           // External text paste — content differs, let it fall through
         } else {
-          e.preventDefault();
-          pasteClipboard();
-          return;
+          e.preventDefault(); pasteClipboard(); return;
         }
-      } else {
-        // v6.1.1: If internal clipboard has items (images, videos, audio, etc.)
-        // but NO text, always paste internal clipboard — don't fall through to
-        // the text handler just because the system clipboard has stale text.
-        // This fixes the bug where Ctrl+C an image → Ctrl+V pastes old text
-        // instead of the copied image.
-        e.preventDefault();
-        pasteClipboard();
-        return;
       }
+      // ── Case 2: Internal is media, incoming is ALSO media → paste internal ──
+      else if (hasInternalMedia && !hasInternalText && (hasIncomingImage || hasIncomingFile)) {
+        e.preventDefault(); pasteClipboard(); return;
+      }
+      // ── Case 3: Internal is text, incoming is media → paste internal ──
+      else if (hasInternalText && !hasInternalMedia && (hasIncomingImage || hasIncomingFile)) {
+        e.preventDefault(); pasteClipboard(); return;
+      }
+      // ── Case 4: Internal is media, incoming is TEXT only → external paste, fall through ──
+      // (user copied an image, then wants to paste external text)
+      // ── Case 5: Mixed or other → let the native paste handler decide ──
     }
   }
 

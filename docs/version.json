@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: Ctrl+V paste intercept — image copy now pastes image (not stale system clipboard text)"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: smarter Ctrl+V intercept — type-aware: image→image intercepts, image→text falls through"}
