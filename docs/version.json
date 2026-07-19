@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: simplify paste intercept — 3s internal clip always wins (predictable)"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: REMOVE in-app copy intercept — caused repeated pastes of stale content. Use right-click Paste for internal clipboard."}
