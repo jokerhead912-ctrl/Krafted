@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: reset _lastInternalPaste on copy; T1+T2+T4+T5 pass"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: clear _textCopiedFromKrafted flag when internal clipboard consumed — blocks external paste after"}

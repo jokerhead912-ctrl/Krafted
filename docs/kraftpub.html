@@ -20090,13 +20090,13 @@ document.addEventListener('paste', e => {
               trimmed = trimmed.replace(/\{\\[^{}]*\}/g, '').replace(/\\[a-z]+/gi, '').replace(/[{}]/g, '').trim();
             }
             if (!trimmed) return;
-            // v6.1.1: If the user hasn't copied text from within Krafted
-            // (no _textCopiedFromKrafted flag), and the internal clipboard
-            // is empty, don't auto-create a text box from system clipboard.
-            // This prevents stale system clipboard content from spamming
-            // the board every time the user hits Ctrl+V on empty canvas.
-            if (!state._textCopiedFromKrafted && (!state.clipboard || state.clipboard.length === 0)) {
-              console.log('[Paste] Skipping external text paste — no Krafted copy flag');
+            // v6.1.1: Only allow text paste if the user explicitly copied
+            // text FROM within Krafted. If internal clipboard is empty
+            // (one-shot paste already consumed it), clear the flag so
+            // subsequent external pastes don't create unwanted text boxes.
+            if (!state._textCopiedFromKrafted || !state.clipboard || state.clipboard.length === 0) {
+              state._textCopiedFromKrafted = false;
+              console.log('[Paste] Skipping text paste — no active Krafted copy');
               return;
             }
             // URL detection
