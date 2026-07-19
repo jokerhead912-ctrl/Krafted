@@ -19921,12 +19921,34 @@ document.addEventListener('paste', e => {
   // case where the user copied a text-item in Krafted, then copied text
   // from another app (WhatsApp, chat) and pastes — the old logic would
   // incorrectly intercept and duplicate the Krafted text-item instead.
-  // v6.1.1: REMOVED in-app copy intercept entirely.
-  // The 3-second rule (paste internal clipboard) caused repeated pastes of
-  // stale content when the user held Ctrl+V or when the timing logic
-  // misfired. Now: native paste always runs (handles system clipboard).
-  // For in-app copy, users can use the right-click Paste menu (triggerPaste)
-  // or the toolbar Paste button which explicitly reads state.clipboard.
+  // v6.1.1: One-shot in-app copy intercept.
+  // When user copies inside Krafted and then pastes, check: does the
+  // system clipboard have the SAME content as the internal clipboard?
+  // If yes → use internal clipboard (has richer data: position, styles).
+  // If no → external paste, let native handler run.
+  // The flag `_pasteUseInternal` is set by copySelected and cleared
+  // after ONE successful intercept, so it can never repeat-paste.
+  if (state._pasteUseInternal && state.clipboard && state.clipboard.length > 0) {
+    // Verify the system clipboard has the same text (not stale external content)
+    let sysText = '';
+    try { sysText = (e.clipboardData.getData('text/plain') || '').trim(); } catch (_) {}
+    const internalTexts = state.clipboard
+      .filter(c => c.type === 'text')
+      .map(c => (c.content || '').trim());
+    const hasInternalText = internalTexts.length > 0;
+    const internalMatchesSys = hasInternalText && sysText && internalTexts.includes(sysText);
+    const hasInternalMedia = state.clipboard.some(c => c.src || c.isVideo || c.isAudio);
+    
+    if (internalMatchesSys || hasInternalMedia) {
+      // System clipboard matches our internal copy (or we have media) → use internal
+      state._pasteUseInternal = false; // one-shot — next paste is native
+      e.preventDefault();
+      pasteClipboard();
+      return;
+    }
+    // System clipboard has different text → external paste, clear flag
+    state._pasteUseInternal = false;
+  }
 
   // ── 0) FILE PASTE from Explorer (files array + items array fallback) ──
   // Chrome may expose only 1 file in e.clipboardData.files when multiple are copied from Explorer.
@@ -24282,6 +24304,9 @@ function copySelected() {
   // Round X: visible feedback so the user knows the hotkey landed.
   // Previously this ran silently and looked broken.
   try { toast('Copied ' + sel.length + ' item' + (sel.length === 1 ? '' : 's')); } catch (e) {}
+  // v6.1.1: Set one-shot flag so the NEXT Ctrl+V uses internal clipboard.
+  // The paste handler verifies system clipboard matches, then clears this flag.
+  state._pasteUseInternal = true;
 }
 function pasteClipboard() {
   if (!state.clipboard) return;
