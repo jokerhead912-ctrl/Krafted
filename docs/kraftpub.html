@@ -19921,33 +19921,30 @@ document.addEventListener('paste', e => {
   // case where the user copied a text-item in Krafted, then copied text
   // from another app (WhatsApp, chat) and pastes — the old logic would
   // incorrectly intercept and duplicate the Krafted text-item instead.
-  // v6.1.1: One-shot in-app copy intercept.
-  // When user copies inside Krafted and then pastes, check: does the
-  // system clipboard have the SAME content as the internal clipboard?
-  // If yes → use internal clipboard (has richer data: position, styles).
-  // If no → external paste, let native handler run.
-  // The flag `_pasteUseInternal` is set by copySelected and cleared
-  // after ONE successful intercept, so it can never repeat-paste.
-  if (state._pasteUseInternal && state.clipboard && state.clipboard.length > 0) {
-    // Verify the system clipboard has the same text (not stale external content)
-    let sysText = '';
-    try { sysText = (e.clipboardData.getData('text/plain') || '').trim(); } catch (_) {}
+  // v6.1.1: Internal clipboard intercept — no flag, content-based.
+  // Compare the incoming system clipboard text with the internal clipboard.
+  // If they match → paste internal (preserves styles, position, etc.).
+  // If they don't match → external paste, let native handler run.
+  // This works even when copySelected wasn't called (e.g. text selection copy).
+  if (state.clipboard && state.clipboard.length > 0) {
+    const sysText = (function() {
+      try { return (e.clipboardData.getData('text/plain') || '').trim(); } catch (_) { return ''; }
+    })();
     const internalTexts = state.clipboard
       .filter(c => c.type === 'text')
-      .map(c => (c.content || '').trim());
-    const hasInternalText = internalTexts.length > 0;
-    const internalMatchesSys = hasInternalText && sysText && internalTexts.includes(sysText);
+      .map(c => (c.content || '').trim())
+      .filter(t => t.length > 0);
     const hasInternalMedia = state.clipboard.some(c => c.src || c.isVideo || c.isAudio);
     
-    if (internalMatchesSys || hasInternalMedia) {
-      // System clipboard matches our internal copy (or we have media) → use internal
-      state._pasteUseInternal = false; // one-shot — next paste is native
-      e.preventDefault();
-      pasteClipboard();
-      return;
+    if (hasInternalMedia) {
+      // Media items: always paste internal (system clipboard can't hold images reliably)
+      e.preventDefault(); pasteClipboard(); return;
     }
-    // System clipboard has different text → external paste, clear flag
-    state._pasteUseInternal = false;
+    if (internalTexts.length > 0 && sysText && internalTexts.some(t => t === sysText)) {
+      // System clipboard text matches our internal text → paste internal
+      e.preventDefault(); pasteClipboard(); return;
+    }
+    // Text doesn't match or sysText is empty → native paste (fall through)
   }
 
   // ── 0) FILE PASTE from Explorer (files array + items array fallback) ──
@@ -24314,9 +24311,6 @@ function copySelected() {
   // Round X: visible feedback so the user knows the hotkey landed.
   // Previously this ran silently and looked broken.
   try { toast('Copied ' + sel.length + ' item' + (sel.length === 1 ? '' : 's')); } catch (e) {}
-  // v6.1.1: Set one-shot flag so the NEXT Ctrl+V uses internal clipboard.
-  // The paste handler verifies system clipboard matches, then clears this flag.
-  state._pasteUseInternal = true;
 }
 function pasteClipboard() {
   if (!state.clipboard) return;

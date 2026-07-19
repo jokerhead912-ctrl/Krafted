@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: use execCommand copy fallback — navigator.clipboard.writeText fails on GitHub Pages"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: content-based paste intercept — no flag, compares system vs internal text directly"}
