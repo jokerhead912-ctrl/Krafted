@@ -30471,18 +30471,33 @@ async function _qsRestoreFromBlob(zipBlob, fname) {
       toast('Cannot auto-reopen locked kpak. Use Load to unlock.');
       return false;
     }
-    // Remap media/ entries to blob URLs (reuse loadBoardFile's pattern)
+    // Remap media/ entries to blob URLs.
+    // v6.1: track remappedIds so we can strip only stale blob URLs
+    // (items that didn't get a fresh remap) — preserves the new
+    // remapped blob URLs while eliminating dead ones that would
+    // produce ERR_FILE_NOT_FOUND on render.
     const mediaEntries = Object.keys(zip.files).filter(p => p.startsWith('media/') && !p.endsWith('/'));
     let restoredCount = 0;
+    const remappedIds = new Set();
     for (const dataItem of data.items || []) {
       const mediPrefix = 'media/' + dataItem.id + '.';
       const entryPath = mediaEntries.find(p => p.startsWith(mediPrefix));
       if (!entryPath) continue;
       try {
         const blob = await zip.file(entryPath).async('blob');
-        if (blob && blob.size > 0) { dataItem.src = URL.createObjectURL(blob); restoredCount++; }
+        if (blob && blob.size > 0) { dataItem.src = URL.createObjectURL(blob); remappedIds.add(dataItem.id); restoredCount++; }
       } catch (e) { console.warn('Failed to restore media:', dataItem.id, e); }
     }
+    // Strip dead blob: URLs that didn't get remapped
+    let deadBlobsStripped = 0;
+    for (const dataItem of data.items || []) {
+      if (typeof dataItem.src === 'string' && dataItem.src.startsWith('blob:') && !remappedIds.has(dataItem.id)) {
+        console.warn('[QS] Stripping dead blob URL for item', dataItem.id);
+        dataItem.src = '';
+        deadBlobsStripped++;
+      }
+    }
+    if (deadBlobsStripped > 0) console.log('[QS] Stripped ' + deadBlobsStripped + ' dead blob URL(s)');
     restoreBoard(data);
     toast('Reopened \u2714 ' + fname + ' (' + restoredCount + ' media)');
     return true;
