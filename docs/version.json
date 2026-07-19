@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: disable KraftedBridge load override (corrupted zip on GitHub Pages)"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: Ctrl+V paste intercept — image copy now pastes image (not stale system clipboard text)"}
