@@ -20410,17 +20410,24 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'c' || e.key === 'C')) {
     const sel = window.getSelection();
     const selectedText = sel ? sel.toString().trim() : '';
-    if (selectedText && e.target && e.target.contentEditable === 'true' && e.target.classList && e.target.classList.contains('text-item')) {
-      // Find the source text item by walking up from the selection node
+    if (selectedText && e.target && e.target.contentEditable === 'true') {
+      // Find the source text item by matching the DOM element.
+      // Walk up from the selection anchor to find the .text-item container,
+      // then look it up in state.texts by its `el` reference.
       let node = sel.anchorNode;
-      let textItem = null;
+      let textEl = null;
       while (node && node !== document.body) {
-        if (node.classList && node.classList.contains('text-item') && node._kraftedId) {
-          textItem = state.items.find(it => it.id === node._kraftedId) ||
-                     state.texts.find(t => t.id === node._kraftedId);
+        if (node.classList && node.classList.contains('text-item')) {
+          textEl = node;
           break;
         }
         node = node.parentNode;
+      }
+      var textItem = null;
+      if (textEl) {
+        for (var ti = 0; ti < state.texts.length; ti++) {
+          if (state.texts[ti].el === textEl) { textItem = state.texts[ti]; break; }
+        }
       }
       if (textItem) {
         // Save to internal clipboard as a text item
