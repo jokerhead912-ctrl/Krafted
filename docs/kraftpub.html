@@ -19931,7 +19931,8 @@ document.addEventListener('paste', e => {
       // Too soon — likely a keyboard repeat. Fall through to native.
     } else {
       const hasInternalMedia = state.clipboard.some(c => c.src || c.isVideo || c.isAudio);
-      const hasInternalText = state.clipboard.some(c => c.type === 'text' && (c.content || '').trim().length > 0);
+      // v6.1.1: detect text by content (Krafted text items have no type property)
+      const hasInternalText = state.clipboard.some(c => (c.content || '').trim().length > 0);
       if (hasInternalMedia || hasInternalText) {
         e.preventDefault();
         pasteClipboard();

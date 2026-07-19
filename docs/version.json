@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: Ctrl+C capture finds text item by el reference (not nonexistent _kraftedId)"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: paste intercept detects text by content (not type) — Krafted text items have no type prop"}
