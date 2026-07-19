@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: smarter Ctrl+V intercept — type-aware: image→image intercepts, image→text falls through"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: copySelected saves text content; pasteClipboard uses data.content (not null el)"}

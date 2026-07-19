@@ -24266,6 +24266,10 @@ function copySelected() {
   state.clipboard = sel.map(i => {
     const copy = { ...i, el: null, img: null };
     if (i.items) copy.items = i.items.map(it => ({ ...it }));
+    // v6.1.1: Preserve text content so pasteClipboard can restore it.
+    // copySelected nulls out `el` (DOM ref), but pasteClipboard needs
+    // the text to populate the new text box. Save it as `content`.
+    if (i.type === 'text' && i.el) copy.content = i.el.textContent || '';
     return copy;
   });
   // Round 17: timestamp so triggerPaste() can prefer the internal clipboard
@@ -24399,14 +24403,15 @@ function pasteClipboard() {
       state.selected.add(todo.id);
       pastedCount++;
     } else {
-      const tx = addText(px, py, data.el ? data.el.textContent : '');
+      const textContent = data.content || (data.el ? data.el.textContent : '');
+      const tx = addText(px, py, textContent);
       Object.assign(tx, {
         font: data.font, size: data.size, bold: data.bold, italic: data.italic,
         underline: data.underline, strike: data.strike, highlight: data.highlight,
         shadow: data.shadow, bg: data.bg, outline: data.outline, uppercase: data.uppercase,
         color: data.color, highlightColor: data.highlightColor, align: data.align,
       });
-      if (data.el && data.el.textContent) tx.el.textContent = data.el.textContent;
+      if (textContent) tx.el.textContent = textContent;
       applyTextProps(tx);
       updateItemStyle(tx);
       state.selected.add(tx.id);
