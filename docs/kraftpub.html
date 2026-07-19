@@ -20442,7 +20442,8 @@ document.addEventListener('keydown', e => {
       if (textItem) {
         // v6.1.1: Save selected text to internal clipboard
         state.clipboard = [{ ...textItem, el: null, img: null, content: selectedText }];
-        state._textCopiedFromKrafted = true; // flag so paste handler knows this is OUR text
+        state._textCopiedFromKrafted = true;
+        state._lastInternalPaste = 0; // reset guard so this copy can be pasted immediately
         e.preventDefault();
         e.stopPropagation();
         try { toast('Copied text'); } catch (ex) {}
@@ -24359,6 +24360,8 @@ function copySelected() {
   // Round X: visible feedback so the user knows the hotkey landed.
   // Previously this ran silently and looked broken.
   try { toast('Copied ' + sel.length + ' item' + (sel.length === 1 ? '' : 's')); } catch (e) {}
+  state._textCopiedFromKrafted = true;
+  state._lastInternalPaste = 0; // reset guard so immediate paste works
 }
 function pasteClipboard() {
   if (!state.clipboard) return;

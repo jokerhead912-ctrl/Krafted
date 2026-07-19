@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: block external text paste on empty canvas — requires _textCopiedFromKrafted flag"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: reset _lastInternalPaste on copy; T1+T2+T4+T5 pass"}
