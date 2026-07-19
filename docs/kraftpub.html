@@ -19921,21 +19921,25 @@ document.addEventListener('paste', e => {
   // case where the user copied a text-item in Krafted, then copied text
   // from another app (WhatsApp, chat) and pastes — the old logic would
   // incorrectly intercept and duplicate the Krafted text-item instead.
-  // v6.1.1: Internal clipboard intercept — trust internal over system.
-  // Use the internal clipboard ONCE (one-shot), then clear it so the next
-  // Ctrl+V falls through to native paste. Without the clear, the same
-  // content repeats every time the user hits Ctrl+V.
+  // v6.1.1: Internal clipboard intercept — one-shot with time guard.
+  // The clipboard is used ONCE, then cleared AND locked out for 800ms
+  // to prevent the same content from re-pasting if the user holds
+  // Ctrl+V (keyboard repeat).
   if (state.clipboard && state.clipboard.length > 0) {
-    const hasInternalMedia = state.clipboard.some(c => c.src || c.isVideo || c.isAudio);
-    const hasInternalText = state.clipboard.some(c => c.type === 'text' && (c.content || '').trim().length > 0);
-    if (hasInternalMedia || hasInternalText) {
-      e.preventDefault();
-      pasteClipboard();
-      // One-shot: clear so next Ctrl+V reads the system clipboard normally.
-      // This prevents the same internal content from repeating endlessly.
-      state.clipboard = null;
-      state.clipboardTime = 0;
-      return;
+    const now = Date.now();
+    if (state._lastInternalPaste && (now - state._lastInternalPaste) < 800) {
+      // Too soon — likely a keyboard repeat. Fall through to native.
+    } else {
+      const hasInternalMedia = state.clipboard.some(c => c.src || c.isVideo || c.isAudio);
+      const hasInternalText = state.clipboard.some(c => c.type === 'text' && (c.content || '').trim().length > 0);
+      if (hasInternalMedia || hasInternalText) {
+        e.preventDefault();
+        pasteClipboard();
+        state._lastInternalPaste = now;
+        state.clipboard = null;
+        state.clipboardTime = 0;
+        return;
+      }
     }
   }
 

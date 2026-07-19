@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: one-shot paste — clear internal clipboard after paste so next Ctrl+V is native"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: 800ms time guard on internal paste — prevents keyboard-repeat re-paste"}
