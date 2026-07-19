@@ -19921,30 +19921,20 @@ document.addEventListener('paste', e => {
   // case where the user copied a text-item in Krafted, then copied text
   // from another app (WhatsApp, chat) and pastes — the old logic would
   // incorrectly intercept and duplicate the Krafted text-item instead.
-  // v6.1.1: Internal clipboard intercept — no flag, content-based.
-  // Compare the incoming system clipboard text with the internal clipboard.
-  // If they match → paste internal (preserves styles, position, etc.).
-  // If they don't match → external paste, let native handler run.
-  // This works even when copySelected wasn't called (e.g. text selection copy).
+  // v6.1.1: Internal clipboard intercept — trust internal over system.
+  // The system clipboard mirror (writeText/execCommand) is unreliable on
+  // GitHub Pages and in non-secure contexts. Strategy: if internal
+  // clipboard has a TEXT item, always use it. If it has MEDIA, use it.
+  // For external-only pastes (user copied text in another app),
+  // internal clipboard will be empty, so we fall through to native.
   if (state.clipboard && state.clipboard.length > 0) {
-    const sysText = (function() {
-      try { return (e.clipboardData.getData('text/plain') || '').trim(); } catch (_) { return ''; }
-    })();
-    const internalTexts = state.clipboard
-      .filter(c => c.type === 'text')
-      .map(c => (c.content || '').trim())
-      .filter(t => t.length > 0);
     const hasInternalMedia = state.clipboard.some(c => c.src || c.isVideo || c.isAudio);
-    
-    if (hasInternalMedia) {
-      // Media items: always paste internal (system clipboard can't hold images reliably)
-      e.preventDefault(); pasteClipboard(); return;
+    const hasInternalText = state.clipboard.some(c => c.type === 'text' && (c.content || '').trim().length > 0);
+    if (hasInternalMedia || hasInternalText) {
+      e.preventDefault();
+      pasteClipboard();
+      return;
     }
-    if (internalTexts.length > 0 && sysText && internalTexts.some(t => t === sysText)) {
-      // System clipboard text matches our internal text → paste internal
-      e.preventDefault(); pasteClipboard(); return;
-    }
-    // Text doesn't match or sysText is empty → native paste (fall through)
   }
 
   // ── 0) FILE PASTE from Explorer (files array + items array fallback) ──
