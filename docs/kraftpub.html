@@ -24281,7 +24281,10 @@ function copySelected() {
     // v6.1.1: Preserve text content so pasteClipboard can restore it.
     // copySelected nulls out `el` (DOM ref), but pasteClipboard needs
     // the text to populate the new text box. Save it as `content`.
-    if (i.type === 'text' && i.el) copy.content = i.el.textContent || '';
+    // Note: addText does NOT set type:'text' on the item, so we detect
+    // text items by checking for el.contentEditable or el.classList.
+    if (i.el && i.el.contentEditable === 'true') copy.content = i.el.textContent || '';
+    if (i.el && i.el.classList && i.el.classList.contains('text-item')) copy.content = i.el.textContent || '';
     return copy;
   });
   // Round 17: timestamp so triggerPaste() can prefer the internal clipboard

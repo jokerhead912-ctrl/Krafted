@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: 800ms time guard on internal paste — prevents keyboard-repeat re-paste"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: copySelected detects text items by contentEditable (not missing type property); one-shot paste + 800ms guard"}
