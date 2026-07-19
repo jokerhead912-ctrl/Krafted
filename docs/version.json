@@ -1,1 +1,1 @@
-{"version":"6.1.1","date":"2026-07-19","changes":"fix: one-shot paste intercept — verifies system clip matches, clears flag after use"}
+{"version":"6.1.1","date":"2026-07-19","changes":"fix: use execCommand copy fallback — navigator.clipboard.writeText fails on GitHub Pages"}

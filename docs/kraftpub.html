@@ -24285,19 +24285,29 @@ function copySelected() {
         .then(() => { state.clipboardSystemWriteOk = true; })
         .catch(() => { state.clipboardSystemWriteOk = false; });
     } else if (item && (item.type === 'text' || item.isLink)) {
-      // Text / link: mirror the content to system clipboard so Cmd+V pastes it.
-      // v6.1.1: Use item.content (set by copySelected) or item.el.textContent,
-      // NOT item.text — Krafted text items store content in the DOM element.
+      // v6.1.1: Mirror text to system clipboard using execCommand('copy')
+      // via a hidden textarea. navigator.clipboard.writeText fails silently
+      // on GitHub Pages (clipboard-write permission denied) and on
+      // insecure contexts. execCommand is the reliable fallback.
       var txt = '';
       if (item.isLink && item.linkUrl) {
         txt = item.linkUrl;
       } else if (item.type === 'text') {
         txt = item.content || (item.el ? item.el.textContent : '') || '';
       }
-      if (txt && navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(txt)
-          .then(() => { state.clipboardSystemWriteOk = true; })
-          .catch(() => { state.clipboardSystemWriteOk = false; });
+      if (txt) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = txt;
+          ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+          document.body.appendChild(ta);
+          ta.focus(); ta.select();
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          state.clipboardSystemWriteOk = !!ok;
+        } catch (e) {
+          state.clipboardSystemWriteOk = false;
+        }
       }
     }
   }
