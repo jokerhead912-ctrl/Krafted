@@ -24362,6 +24362,10 @@ function copySelected() {
   try { toast('Copied ' + sel.length + ' item' + (sel.length === 1 ? '' : 's')); } catch (e) {}
   state._textCopiedFromKrafted = true;
   state._lastInternalPaste = 0; // reset guard so immediate paste works
+  // v6.1.1 debug
+  if (sel.length === 1 && sel[0].el && sel[0].el.contentEditable === 'true') {
+    console.log('[Copy] text item: color=' + sel[0].color + ' font=' + sel[0].font + ' size=' + sel[0].size + ' bold=' + sel[0].bold + ' italic=' + sel[0].italic + ' content=' + (sel[0].content || sel[0].el.textContent));
+  }
 }
 function pasteClipboard() {
   if (!state.clipboard) return;
