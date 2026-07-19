@@ -29425,13 +29425,17 @@ async function loadBoardFile(event) {
         delete data._kraftedLock;
       }
 
-      // Remap media/ entries to blob URLs
+      // Remap media/ entries to blob URLs.
       if (prog) prog.innerHTML = '<div class="pct">Restoring media...</div>';
       const mediaEntries = Object.keys(zip.files).filter(p => p.startsWith('media/') && !p.endsWith('/'));
       let restoredCount = 0;
+      const remappedIds = new Set();
       for (const dataItem of data.items || []) {
-        if (!dataItem.src || (!dataItem.src.startsWith('blob:') && !dataItem.src.startsWith('data:'))) continue;
-        // Find matching media entry: media/<item_id>.*
+        // v6.1: try to remap whenever a matching media/ entry exists,
+        // regardless of d.src's current value. The old prefix check
+        // (blob:/data:) was too strict — items with dead/empty src
+        // were skipped, then restoreBoard tried the stale src and
+        // produced ERR_FILE_NOT_FOUND.
         const mediPrefix = 'media/' + dataItem.id + '.';
         const entryPath = mediaEntries.find(p => p.startsWith(mediPrefix));
         if (!entryPath) continue;
@@ -29439,12 +29443,26 @@ async function loadBoardFile(event) {
           const blob = await zip.file(entryPath).async('blob');
           if (blob && blob.size > 0) {
             dataItem.src = URL.createObjectURL(blob);
+            remappedIds.add(dataItem.id);
             restoredCount++;
           }
         } catch (e) {
           console.warn('Failed to restore media for item', dataItem.id, e);
         }
       }
+      // After remap: if any item still has a stale blob: URL that was NOT
+      // remapped (no media/ entry existed), strip it. Only touch items
+      // that didn't get a fresh remappedId — freshly-remapped blob: URLs
+      // are alive and must be preserved.
+      let deadBlobsStripped = 0;
+      for (const dataItem of data.items || []) {
+        if (typeof dataItem.src === 'string' && dataItem.src.startsWith('blob:') && !remappedIds.has(dataItem.id)) {
+          console.warn('[Load] Stripping dead blob URL for item', dataItem.id);
+          dataItem.src = '';
+          deadBlobsStripped++;
+        }
+      }
+      if (deadBlobsStripped > 0) console.log('[Load] Stripped ' + deadBlobsStripped + ' unrecoverable blob URL(s)');
       console.log('[Krafted Load] kpak format, v' + (data._kraftedVersion || '?') + ', ' + (data.items || []).length + ' items, ' + restoredCount + ' media restored, ' + formatBytes(file.size));
 
       restoreBoard(data);
