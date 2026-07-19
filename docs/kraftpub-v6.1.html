@@ -30380,38 +30380,15 @@ async function _qsWriteToCachedHandle() {
     const writable = await window.__qsFileHandle.createWritable();
     await writable.write(zipBlob);
     await writable.close();
-    // Mirror to localStorage as base64 string (for cross-session auto-reopen).
-    // localStorage has ~5MB limit; if the kpak exceeds that, skip mirroring
-    // and only rely on the FileSystemFileHandle for same-session quick-save.
-    // The auto-reopen prompt will still show but won't be able to restore
-    // across sessions — user can use regular Load instead.
+    // Mirror to IndexedDB for cross-session auto-reopen.
+    // IDB can store large blobs (hundreds of MB) unlike localStorage (~5MB).
     try {
-      const MAX_LOCALSTORAGE_BYTES = 4 * 1024 * 1024; // 4MB safe ceiling
-      if (zipBlob.size > MAX_LOCALSTORAGE_BYTES) {
-        console.warn('[QS] kpak too large for localStorage mirror (' + formatBytes(zipBlob.size) + ' > ' + formatBytes(MAX_LOCALSTORAGE_BYTES) + '). Skipping cross-session backup.');
-        // Still flag as saved so same-session quick-save works via handle
-        localStorage.setItem('krafted_qs_saved', '1');
-        localStorage.setItem('krafted_qs_filename', window.__qsFileName);
-        localStorage.setItem('krafted_qs_ts', String(Date.now()));
-      } else {
-        const ab = await zipBlob.arrayBuffer();
-        const bytes = new Uint8Array(ab);
-        let bin = '';
-        const CHUNK = 0x8000;
-        for (let i = 0; i < bytes.length; i += CHUNK) {
-          bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
-        }
-        const b64 = btoa(bin);
-        localStorage.setItem('krafted_qs_blob_b64', b64);
-        localStorage.setItem('krafted_qs_saved', '1');
-        localStorage.setItem('krafted_qs_filename', window.__qsFileName);
-        localStorage.setItem('krafted_qs_ts', String(Date.now()));
-        console.log('[QS] localStorage mirror OK: ' + formatBytes(zipBlob.size));
-      }
-      // Also try IDB (will fail on Blob but doesn't matter)
-      if (window.KraftedStorage && window.KraftedStorage.setItem) {
-        window.KraftedStorage.setItem('krafted_qs_meta', { name: window.__qsFileName, ts: Date.now() }).catch(function(){});
-      }
+      // Store the zip blob directly in IDB
+      await _qsStoreBlobInIDB(zipBlob);
+      localStorage.setItem('krafted_qs_saved', '1');
+      localStorage.setItem('krafted_qs_filename', window.__qsFileName);
+      localStorage.setItem('krafted_qs_ts', String(Date.now()));
+      console.log('[QS] IDB mirror OK: ' + formatBytes(zipBlob.size));
     } catch (idbErr) {
       console.warn('[QS] localStorage mirror failed (continuing):', idbErr.message);
     }
@@ -30434,6 +30411,34 @@ async function _qsWriteToCachedHandle() {
   } finally {
     try { prog.remove(); } catch (e) {}
   }
+}
+
+// ── IDB helpers for cross-session QS blob storage ──
+function _qsOpenIDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('KraftedQS', 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('blobs'); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function _qsStoreBlobInIDB(blob) {
+  const db = await _qsOpenIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('blobs', 'readwrite');
+    tx.objectStore('blobs').put(blob, 'latest');
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+async function _qsLoadBlobFromIDB() {
+  const db = await _qsOpenIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('blobs', 'readonly');
+    const req = tx.objectStore('blobs').get('latest');
+    req.onsuccess = () => { db.close(); resolve(req.result || null); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  });
 }
 
 // Restore a kpak blob via the same code path as loadBoardFile, but from an in-memory Blob
@@ -30518,21 +30523,33 @@ async function qsAutoReopen() {
   }
   const fname = localStorage.getItem('krafted_qs_filename') || 'last-session.kpak';
   const ts = Number(localStorage.getItem('krafted_qs_ts') || 0);
-  // Try to load blob from localStorage base64 (v6.0.2 storage strategy)
+  // v6.1: try IndexedDB first (supports large blobs), fall back to legacy localStorage b64
   let zipBlob = null;
   try {
-    const b64 = localStorage.getItem('krafted_qs_blob_b64');
-    if (b64) {
-      const bin = atob(b64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      zipBlob = new Blob([bytes], { type: 'application/zip' });
-    }
+    zipBlob = await _qsLoadBlobFromIDB();
+    if (zipBlob) console.log('[QS] Loaded blob from IDB: ' + (typeof formatBytes === 'function' ? formatBytes(zipBlob.size) : zipBlob.size + ' bytes'));
   } catch (e) {
-    console.warn('[QS] Could not retrieve localStorage blob:', e.message);
+    console.warn('[QS] IDB load failed, trying legacy localStorage:', e.message);
+  }
+  // Legacy fallback: try localStorage base64 (v6.0.2 format)
+  if (!zipBlob || zipBlob.size === 0) {
+    try {
+      const b64 = localStorage.getItem('krafted_qs_blob_b64');
+      if (b64) {
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        zipBlob = new Blob([bytes], { type: 'application/zip' });
+        console.log('[QS] Loaded blob from legacy localStorage: ' + (typeof formatBytes === 'function' ? formatBytes(zipBlob.size) : zipBlob.size + ' bytes'));
+        // Migrate to IDB for next time
+        try { await _qsStoreBlobInIDB(zipBlob); localStorage.removeItem('krafted_qs_blob_b64'); } catch(e) {}
+      }
+    } catch (e) {
+      console.warn('[QS] Could not retrieve localStorage blob:', e.message);
+    }
   }
   if (!zipBlob || zipBlob.size === 0) {
-    console.log('[QS] No localStorage blob found — clearing flag');
+    console.log('[QS] No blob found — clearing flag');
     localStorage.removeItem('krafted_qs_saved');
     localStorage.removeItem('krafted_qs_blob_b64');
     return;
@@ -30543,6 +30560,7 @@ async function qsAutoReopen() {
     // User wants fresh board — clear flag so next time we don't ask
     localStorage.removeItem('krafted_qs_saved');
     localStorage.removeItem('krafted_qs_blob_b64');
+    try { _qsStoreBlobInIDB(new Blob([])); } catch(e) {} // clear IDB too
     toast('Starting with a blank board');
     return;
   }
