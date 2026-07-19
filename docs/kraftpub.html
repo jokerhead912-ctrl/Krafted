@@ -19924,41 +19924,15 @@ document.addEventListener('paste', e => {
   {
     const recentCopy = state.clipboardTime && (Date.now() - state.clipboardTime) < 3000;
     if (state.clipboard && state.clipboard.length > 0 && recentCopy) {
-      // Detect what the incoming paste is carrying
-      let hasIncomingText = false, hasIncomingImage = false, hasIncomingFile = false;
-      for (const item of items) {
-        if (item.type === 'text/plain' || item.type === 'text/html') hasIncomingText = true;
-        else if (item.type.startsWith('image/')) hasIncomingImage = true;
-        else if (item.kind === 'file') hasIncomingFile = true;
-      }
-      const hasInternalText = state.clipboard.some(c => c.type === 'text');
-      const hasInternalMedia = state.clipboard.some(c => c.src || c.isVideo || c.isAudio || c.isGif);
-
-      // ── Case 1: Both internal and incoming are TEXT → compare content ──
-      if (hasIncomingText && hasInternalText && !hasIncomingImage && !hasIncomingFile) {
-        let incomingText = '';
-        try { incomingText = (e.clipboardData.getData('text/plain') || '').trim(); } catch (_) {}
-        const internalText = state.clipboard
-          .filter(c => c.type === 'text')
-          .map(c => (c.content || '').trim())
-          .join('\n');
-        if (incomingText && incomingText !== internalText) {
-          // External text paste — content differs, let it fall through
-        } else {
-          e.preventDefault(); pasteClipboard(); return;
-        }
-      }
-      // ── Case 2: Internal is media, incoming is ALSO media → paste internal ──
-      else if (hasInternalMedia && !hasInternalText && (hasIncomingImage || hasIncomingFile)) {
-        e.preventDefault(); pasteClipboard(); return;
-      }
-      // ── Case 3: Internal is text, incoming is media → paste internal ──
-      else if (hasInternalText && !hasInternalMedia && (hasIncomingImage || hasIncomingFile)) {
-        e.preventDefault(); pasteClipboard(); return;
-      }
-      // ── Case 4: Internal is media, incoming is TEXT only → external paste, fall through ──
-      // (user copied an image, then wants to paste external text)
-      // ── Case 5: Mixed or other → let the native paste handler decide ──
+      // v6.1.1: Simple rule — if user copied something in-app within 3s,
+      // paste the internal clipboard. If they want to paste external content,
+      // wait 3s or press Esc to clear the internal clipboard.
+      // The old type-aware compare logic had too many edge cases
+      // (system clipboard not updated, text content mismatches, etc.)
+      // and the user just wants predictable: "I copied this → paste this."
+      e.preventDefault();
+      pasteClipboard();
+      return;
     }
   }
 
