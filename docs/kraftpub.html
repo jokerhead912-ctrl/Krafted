@@ -30085,14 +30085,12 @@ function restoreBoard(data) {
     delete tx.html;
     G.nextZ = Math.max(G.nextZ, tx.z + 1);
     state.texts.push(tx);
-    // v6.0.2-p3: convert text from save-time on-screen pixels to world coordinates.
-    // Text w/h/x/y/size are stored as on-screen pixels at save-time zoom level.
-    // After load, state.zoom is reset to 1, so we must scale them to world coords
-    // so updateItemStyle (which divides by state.zoom) produces the correct CSS size.
+    // v6.1: convert text dimensions from save-time on-screen pixels to world coordinates.
+    // Text w/h/size are stored as on-screen pixels at save-time zoom level (because
+    // updateItemStyle divides w/h by state.zoom). x/y are already world coordinates
+    // (same as image/video items) — do NOT scale them.
     var _textZoom = (typeof d._textZoom === 'number' && d._textZoom > 0) ? d._textZoom : 1;
     if (_textZoom !== 1) {
-      tx.x = (tx.x || 0) * _textZoom;
-      tx.y = (tx.y || 0) * _textZoom;
       tx.w = (tx.w || 200) * _textZoom;
       tx.h = (tx.h || 40) * _textZoom;
       tx.size = (tx.size || 16) * _textZoom;
