@@ -30600,24 +30600,12 @@ async function qsAutoReopen() {
   // Try to restore
   const ok = await _qsRestoreFromBlob(zipBlob, fname);
   if (ok) {
-    // Also try to re-acquire the file handle (silent) so next quick-save works without picker
-    if (window.showSaveFilePicker && !window.__qsFileHandle) {
-      try {
-        // Browsers will only grant if user has previously authorized this origin+filename
-        const h = await window.showSaveFilePicker({
-          suggestedName: fname,
-          types: [{ description: 'Krafted Package', accept: { 'application/zip': ['.kpak'] } }]
-        });
-        window.__qsFileHandle = h;
-        window.__qsFileName = h.name;
-        const qsBtn = document.getElementById('btn-qs-save');
-        if (qsBtn) qsBtn.style.display = '';
-        console.log('[QS] Handle re-acquired silently:', h.name);
-      } catch (e) {
-        // User denied or browser doesn't auto-grant — that's fine, next quick-save will show picker
-        console.log('[QS] Handle re-acquire deferred (will show picker on next quick-save):', e.name);
-      }
-    }
+    // v6.1.1: Don't re-acquire file handle on load — it forces a save-picker
+    // dialog every time the user reopens. The handle will be acquired naturally
+    // on the next Cmd+Shift+S (qsSaveBoard already handles first-time picker).
+    const qsBtn = document.getElementById('btn-qs-save');
+    if (qsBtn) qsBtn.style.display = '';
+    console.log('[QS] Auto-reopen complete — QS button enabled');
   }
 }
 
