@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.3p';
+var KRAFTED_VERSION = '6.1.6';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -15494,10 +15494,11 @@ async function videoAnnoSendToBoard() {
     try { v.pause(); } catch (e) {}
     toast('Capturing ' + comments.length + ' snapshot' + (comments.length === 1 ? '' : 's') + '…');
   }
-  const dataUrls = [];
-  for (let i = 0; i < comments.length; i++) {
-    dataUrls.push(await captureOne(comments[i]));
-  }
+  // v6.1.6: Don't accumulate all dataUrls in an array — each 800px JPEG
+  // data URL is ~200KB and gets decoded into a ~2.5MB RGBA bitmap when
+  // addImage creates an <img>. 30+ comments = 75MB+ decoded bitmaps
+  // simultaneously → Out of Memory crash. Instead, capture+place one
+  // comment at a time and release the dataUrl reference immediately.
   // Restore the user's previous playhead + play state (only if we
   // disturbed the video above)
   if (needsFreshCapture) {
@@ -15656,9 +15657,12 @@ async function videoAnnoSendToBoard() {
   // push the right column's row 3 down — they stay independent.
   const colY = [startY, startY];
   let actualRowsRendered = 0;  // total row count actually placed (for viewport pan)
+  // v6.1.6: capture+place one comment at a time, release dataUrl ref immediately.
+  // Old code captured ALL dataUrls into an array first, then placed them —
+  // 30+ comments = 30+ decoded RGBA bitmaps in memory = Out of Memory crash.
   for (let i = 0; i < comments.length; i++) {
     const c = comments[i];
-    const dataUrl = dataUrls[i];
+    const dataUrl = await captureOne(comments[i]); // one at a time
     if (!dataUrl) continue;
     const col = i % COLS;            // 0 = left, 1 = right
     const rowY = colY[col];
@@ -20090,9 +20094,13 @@ document.addEventListener('paste', e => {
               trimmed = trimmed.replace(/\{\\[^{}]*\}/g, '').replace(/\\[a-z]+/gi, '').replace(/[{}]/g, '').trim();
             }
             if (!trimmed) return;
-            // v6.1.3: Allow external text paste (WeChat, browser, etc.).
-            // Only block stale internal repeats after one-shot consumption.
+            // v6.1.3: Allow external text paste (from WeChat, browser, etc.).
+            // Only block when: internal clipboard was consumed (one-shot) AND
+            // the user hasn't re-copied from Krafted — that's the keyboard-repeat
+            // / stale-paste guard. External paste always goes through.
             if (state._textCopiedFromKrafted && (!state.clipboard || state.clipboard.length === 0)) {
+              // Internal clipboard was consumed — this is a stale/repeat paste.
+              // Clear flag so next external paste works normally.
               state._textCopiedFromKrafted = false;
               console.log('[Paste] Skipping text paste — internal clipboard consumed');
               return;
