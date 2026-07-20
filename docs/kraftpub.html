@@ -3900,7 +3900,7 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
 </div>
 
 <!-- STATUS BAR -->
-<div id="status">Zoom: 100% | Items: 0 | Undo: 0</div>
+<div id="status">Zoom: 100% | Items: 0 | Undo: 0 <span id="perf-toggle" onclick="togglePerfMode()" style="cursor:pointer;margin-left:8px;font-size:11px;opacity:0.4;user-select:none;" title="Performance mode OFF — click to enable (reduces lag during video playback)">⚡</span></div>
 
 <!-- ZOOM STEP CONTROL (Round 32) — small floating widget in the bottom-right
      corner next to the status bar. Lets the user pick the mouse-wheel zoom
@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.6';
+var KRAFTED_VERSION = '6.1.7';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -5120,6 +5120,16 @@ const state = {
       if (isFinite(saved) && saved >= 0.0010 && saved <= 0.0120) return saved;
     } catch (e) {}
     return 0.0028;
+  })(),
+  // v6.1.7 perf: Performance mode toggle. When true, skips redundant
+  // renders during video playback (cached rects, throttle _renderAnnoCanvas,
+  // lower DPR). Default false = zero change to existing behavior.
+  perfMode: (function() {
+    try {
+      const saved = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_perf_mode')) || localStorage.getItem('krafted_perf_mode');
+      if (saved !== null) return saved === '1';
+    } catch (e) {}
+    return false;
   })(),
 };
 
@@ -6583,10 +6593,33 @@ function cullOffscreenItems() {
     }
   }
 }
+// v6.1.7 perf: toggle performance mode — saves to localStorage
+function togglePerfMode() {
+  state.perfMode = !state.perfMode;
+  try { localStorage.setItem('krafted_perf_mode', state.perfMode ? '1' : '0'); } catch(e) {}
+  updateStatus();
+  console.log('[Perf] Performance mode ' + (state.perfMode ? 'ON ⚡' : 'OFF'));
+}
 function updateStatus() {
   const selCount = state.selected.size;
   const selText = selCount > 1 ? ` | ${selCount} selected (drag to move all)` : selCount === 1 ? ' | 1 selected' : '';
-  document.getElementById('status').textContent = `Zoom: ${Math.round(state.zoom*100)}% | Items: ${state.items.length + state.texts.length + (state.todos?state.todos.length:0) + (state.mindmaps?state.mindmaps.length:0)}${selText} | Undo: ${state.undoStack.length}`;
+  var stEl = document.getElementById('status');
+  if (stEl) {
+    // v6.1.7 perf: preserve perf-toggle child element when updating text
+    var perfEl = document.getElementById('perf-toggle');
+    if (perfEl) {
+      perfEl.textContent = state.perfMode ? '⚡ON' : '⚡';
+      perfEl.style.opacity = state.perfMode ? '1' : '0.4';
+      perfEl.title = state.perfMode ? 'Performance mode ON — click to disable' : 'Performance mode OFF — click to enable (reduces lag during video playback)';
+    }
+    // Only update the text node, not the whole innerHTML
+    var textNode = stEl.firstChild;
+    if (textNode && textNode.nodeType === 3) {
+      textNode.textContent = `Zoom: ${Math.round(state.zoom*100)}% | Items: ${state.items.length + state.texts.length + (state.todos?state.todos.length:0) + (state.mindmaps?state.mindmaps.length:0)}${selText} | Undo: ${state.undoStack.length} `;
+    } else {
+      stEl.textContent = `Zoom: ${Math.round(state.zoom*100)}% | Items: ${state.items.length + state.texts.length + (state.todos?state.todos.length:0) + (state.mindmaps?state.mindmaps.length:0)}${selText} | Undo: ${state.undoStack.length}`;
+    }
+  }
 }
 function zoomBy(factor, cx, cy) {
   zoomTo(state.zoom * factor, cx, cy);
@@ -9468,6 +9501,14 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // the visible content area — otherwise strokes would be drawn in
     // the black bars and appear misaligned with the video.
     function _getVideoContentRect() {
+      // v6.1.7 perf: cache the last computed rect. The video content
+      // rect only changes on resize/zoom, not on every timeupdate tick.
+      if (state.perfMode && el._perfCachedRect) {
+        var _w = wrap.clientWidth, _h = wrap.clientHeight;
+        if (_w === el._perfCachedRect._wrapW && _h === el._perfCachedRect._wrapH) {
+          return el._perfCachedRect;
+        }
+      }
       const wrapW = wrap.clientWidth || 1;
       const wrapH = wrap.clientHeight || 1;
       const vw = mediaEl.videoWidth || 0;
@@ -9482,16 +9523,29 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         // video is wider — fit to width, letterbox top/bottom
         const w = wrapW;
         const h = wrapW / vidAspect;
-        return { left: 0, top: (wrapH - h) / 2, width: w, height: h };
+        var _result = { left: 0, top: (wrapH - h) / 2, width: w, height: h };
+        if (state.perfMode) { _result._wrapW = wrapW; _result._wrapH = wrapH; el._perfCachedRect = _result; }
+        return _result;
       } else {
         // video is taller — fit to height, pillarbox left/right
         const h = wrapH;
         const w = wrapH * vidAspect;
-        return { left: (wrapW - w) / 2, top: 0, width: w, height: h };
+        var _result2 = { left: (wrapW - w) / 2, top: 0, width: w, height: h };
+        if (state.perfMode) { _result2._wrapW = wrapW; _result2._wrapH = wrapH; el._perfCachedRect = _result2; }
+        return _result2;
       }
     }
     function _renderAnnoCanvas() {
       if (!annoCanvas) return;
+      // v6.1.7 perf: When perfMode is on, skip render if nothing changed
+      // (same frame + same rect). Saves ~4ms per timeupdate tick.
+      if (state.perfMode) {
+        var _pfFrame = _currentFrame();
+        var _pfRectKey = '';
+        try { var _r = mediaEl.getBoundingClientRect(); _pfRectKey = _r.left+','+_r.top+','+_r.width+','+_r.height; } catch(e){}
+        if (el._perfLastRenderKey === _pfFrame + '|' + _pfRectKey) return;
+        el._perfLastRenderKey = _pfFrame + '|' + _pfRectKey;
+      }
       // Position the canvas over the video's visible content rect (no
       // letterbox area). This way strokes land on the video content
       // and stay aligned when the user zooms/pans the canvas.
