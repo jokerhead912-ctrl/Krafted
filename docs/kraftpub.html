@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.3';
+var KRAFTED_VERSION = '6.1.3p';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -20090,13 +20090,9 @@ document.addEventListener('paste', e => {
               trimmed = trimmed.replace(/\{\\[^{}]*\}/g, '').replace(/\\[a-z]+/gi, '').replace(/[{}]/g, '').trim();
             }
             if (!trimmed) return;
-            // v6.1.3: Allow external text paste (from WeChat, browser, etc.).
-            // Only block when: internal clipboard was consumed (one-shot) AND
-            // the user hasn't re-copied from Krafted — that's the keyboard-repeat
-            // / stale-paste guard. External paste always goes through.
+            // v6.1.3: Allow external text paste (WeChat, browser, etc.).
+            // Only block stale internal repeats after one-shot consumption.
             if (state._textCopiedFromKrafted && (!state.clipboard || state.clipboard.length === 0)) {
-              // Internal clipboard was consumed — this is a stale/repeat paste.
-              // Clear flag so next external paste works normally.
               state._textCopiedFromKrafted = false;
               console.log('[Paste] Skipping text paste — internal clipboard consumed');
               return;
