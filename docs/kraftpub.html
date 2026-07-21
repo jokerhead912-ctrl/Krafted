@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.8r';
+var KRAFTED_VERSION = '6.1.8s';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6593,6 +6593,23 @@ function cullOffscreenItems() {
     }
   }
 }
+// v6.1.8s: Implement missing toggleProps function
+function toggleProps() {
+  var p = document.getElementById('props');
+  if (!p) return;
+  p.classList.toggle('collapsed');
+  // Persist preference
+  try { localStorage.setItem('krafted_props_collapsed', p.classList.contains('collapsed') ? '1' : '0'); } catch(e) {}
+}
+// v6.1.8s: On load, restore collapsed state
+(function() {
+  try {
+    if (localStorage.getItem('krafted_props_collapsed') === '1') {
+      var p = document.getElementById('props');
+      if (p) p.classList.add('collapsed');
+    }
+  } catch(e) {}
+})();
 // v6.1.7 perf: toggle performance mode — saves to localStorage
 function togglePerfMode() {
   state.perfMode = !state.perfMode;
