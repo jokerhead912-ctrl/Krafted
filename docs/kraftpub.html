@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.8p';
+var KRAFTED_VERSION = '6.1.8q';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -10987,9 +10987,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     let _swipeActive = false;     // true while a horizontal scrub gesture is in progress
     let _swipeEndTimer = null;    // timeout id for ending the gesture after finger lift
     let _scrubRafId = null;       // rAF id for batching DOM updates during scrub
-    // v6.1.8 perf: throttle video seek during fast scrub drags
-    let _throttledSeekTarget = undefined;
-    let _throttledSeekRaf = null;
+    // v6.1.8 perf: throttle video seek during fast scrub drags.
+    // NOTE: these live on `window` because seekToX() is defined in a
+    // different inner-function scope and can't see `let` declarations here.
+    window._throttledSeekTarget = undefined;
+    window._throttledSeekRaf = null;
     // Round 64: Mac-only two-finger scrub — Two-fix rollout (v5.3).
     //   Fix 1 — Per-event synchronous seek: each wheel event directly
     //     sets mediaEl.currentTime (no accumulation), giving real-time
@@ -13360,17 +13362,18 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // (50+/sec) triggers a browser video seek + decode, which causes
       // visible lag on 1080p+ sources. UI updates (fill bar, labels) are
       // cheap and run on every mousemove; only the expensive currentTime
-      // assignment is throttled.
+      // assignment is throttled. Use window. so seekToX (different scope)
+      // can access these vars.
       if (state.perfMode && !snap) {
         updateSeekUI(pct);
-        _throttledSeekTarget = pct * (isFinite(mediaEl.duration) ? mediaEl.duration : 0);
-        if (!_throttledSeekRaf) {
-          _throttledSeekRaf = requestAnimationFrame(function() {
-            _throttledSeekRaf = null;
-            if (_throttledSeekTarget !== undefined && isFinite(mediaEl.duration) && mediaEl.duration > 0) {
-              mediaEl.currentTime = Math.max(0, Math.min(mediaEl.duration, _throttledSeekTarget));
-              seekDragTarget = _throttledSeekTarget;
-              _throttledSeekTarget = undefined;
+        window._throttledSeekTarget = pct * (isFinite(mediaEl.duration) ? mediaEl.duration : 0);
+        if (!window._throttledSeekRaf) {
+          window._throttledSeekRaf = requestAnimationFrame(function() {
+            window._throttledSeekRaf = null;
+            if (window._throttledSeekTarget !== undefined && isFinite(mediaEl.duration) && mediaEl.duration > 0) {
+              mediaEl.currentTime = Math.max(0, Math.min(mediaEl.duration, window._throttledSeekTarget));
+              seekDragTarget = window._throttledSeekTarget;
+              window._throttledSeekTarget = undefined;
             }
           });
         }
