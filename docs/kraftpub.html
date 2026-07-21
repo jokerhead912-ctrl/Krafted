@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.8q';
+var KRAFTED_VERSION = '6.1.8r';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -10987,11 +10987,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     let _swipeActive = false;     // true while a horizontal scrub gesture is in progress
     let _swipeEndTimer = null;    // timeout id for ending the gesture after finger lift
     let _scrubRafId = null;       // rAF id for batching DOM updates during scrub
-    // v6.1.8 perf: throttle video seek during fast scrub drags.
-    // NOTE: these live on `window` because seekToX() is defined in a
-    // different inner-function scope and can't see `let` declarations here.
-    window._throttledSeekTarget = undefined;
-    window._throttledSeekRaf = null;
+    // v6.1.8q perf: simple throttle — skip seeks within 16ms of last one
+    window._lastPerfSeekTime = 0;
     // Round 64: Mac-only two-finger scrub — Two-fix rollout (v5.3).
     //   Fix 1 — Per-event synchronous seek: each wheel event directly
     //     sets mediaEl.currentTime (no accumulation), giving real-time
@@ -13357,27 +13354,20 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       var rect = track.getBoundingClientRect();
       if (rect.width <= 0) return;
       var pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      // v6.1.8 perf: During fast scrub drags, throttle actual video seek
-      // to one per animation frame. Without this, every mousemove event
-      // (50+/sec) triggers a browser video seek + decode, which causes
-      // visible lag on 1080p+ sources. UI updates (fill bar, labels) are
-      // cheap and run on every mousemove; only the expensive currentTime
-      // assignment is throttled. Use window. so seekToX (different scope)
-      // can access these vars.
+      // v6.1.8q perf: During fast scrub, skip intermediate seeks while
+      // the browser is still processing the previous one. This avoids
+      // queueing up dozens of seeks that all compete for decode time.
+      // Strategy: always seek immediately (no rAF delay), but skip
+      // mousemove events that arrive within 16ms of the last seek.
+      // snap=true (initial click) always seeks immediately.
       if (state.perfMode && !snap) {
-        updateSeekUI(pct);
-        window._throttledSeekTarget = pct * (isFinite(mediaEl.duration) ? mediaEl.duration : 0);
-        if (!window._throttledSeekRaf) {
-          window._throttledSeekRaf = requestAnimationFrame(function() {
-            window._throttledSeekRaf = null;
-            if (window._throttledSeekTarget !== undefined && isFinite(mediaEl.duration) && mediaEl.duration > 0) {
-              mediaEl.currentTime = Math.max(0, Math.min(mediaEl.duration, window._throttledSeekTarget));
-              seekDragTarget = window._throttledSeekTarget;
-              window._throttledSeekTarget = undefined;
-            }
-          });
+        var _now = performance.now();
+        if (_now - (window._lastPerfSeekTime || 0) < 16) {
+          // Too soon — update UI only, skip the actual video seek
+          updateSeekUI(pct);
+          return;
         }
-        return;
+        window._lastPerfSeekTime = _now;
       }
       // Apply to video immediately. Browser will clip to [0, duration].
       // Set even if duration isn't ready — it will be applied once metadata loads.
