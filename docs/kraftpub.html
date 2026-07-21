@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.7p';
+var KRAFTED_VERSION = '6.1.8';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -21601,6 +21601,27 @@ viewport.addEventListener('mousedown', e => {
           _toMoveCache: toMoveNow,
           _moveRafId: null,
         };
+        // v6.1.8 perf: During drag, replace live <video> with a static poster
+        // so the browser doesn't re-composite decoded video frames on every
+        // mousemove. Video decode + composite is the #1 cause of drag lag.
+        if (state.perfMode) {
+          toMoveNow.forEach(function(it) {
+            if (it.video && it.video.readyState >= 2) {
+              // Capture current frame as poster, pause video rendering
+              it._dragPoster = it.video.poster || '';
+              try {
+                var _c = document.createElement('canvas');
+                _c.width = it.video.videoWidth; _c.height = it.video.videoHeight;
+                var _ctx = _c.getContext('2d');
+                _ctx.drawImage(it.video, 0, 0);
+                it.video.poster = _c.toDataURL('image/jpeg', 0.7);
+              } catch(e) {}
+              it.video.style.visibility = 'hidden';
+              // v5.5.9: also hide anno canvas during drag
+              if (it._annoCanvas) it._annoCanvas.style.visibility = 'hidden';
+            }
+          });
+        }
         // Physically remove handles from DOM to prevent GPU-composited ghosting (video/GIF)
         document.querySelectorAll('.item-handle, .item-rot').forEach(el => el.remove());
       // Round 67 — also wipe the empty union multi-select container left
@@ -22262,6 +22283,19 @@ document.addEventListener('mouseup', e => {
       return;
     }
     if (state.dragging.type === 'move') {
+      // v6.1.8 perf: restore video visibility after drag (frozen to poster during drag)
+      if (state.perfMode) {
+        var _movedItems = state.dragging._toMoveCache || new Set(getSelectedItems());
+        _movedItems.forEach(function(it) {
+          if (it.video && it._dragPoster !== undefined) {
+            it.video.style.visibility = '';
+            it.video.poster = it._dragPoster || '';
+            delete it._dragPoster;
+            // v5.5.9: restore anno canvas visibility
+            if (it._annoCanvas) it._annoCanvas.style.visibility = '';
+          }
+        });
+      }
       // Cancel any pending rAF — final sync run synchronously below
       if (state.dragging._moveRafId) { cancelAnimationFrame(state.dragging._moveRafId); state.dragging._moveRafId = null; }
       // Run one final full updateItemStyle on moved items to sync filter/overlay/mask
