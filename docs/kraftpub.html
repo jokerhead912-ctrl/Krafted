@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.17';
+var KRAFTED_VERSION = '6.1.18';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7889,18 +7889,23 @@ async function _doTranscode(srcUrl, fname, mediaEl, ownerItem) {
     }
     _ffmpegLoading = true;
     try {
-      // v6.1.17: use FFmpeg.wasm 0.11.x — single-threaded, doesn't require
-      // SharedArrayBuffer (no COOP/COEP headers needed, works on GitHub Pages).
+      // v6.1.18: use latest FFmpeg.wasm 0.12.x — multi-threaded, requires
+      // SharedArrayBuffer. The service worker (sw.js) injects the
+      // COOP/COEP headers needed to enable SharedArrayBuffer on
+      // GitHub Pages (which doesn't support custom headers natively).
       var script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
+      script.src = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js';
       await new Promise(function(resolve, reject) {
         script.onload = resolve;
         script.onerror = function() { reject(new Error('FFmpeg CDN load failed')); };
         document.head.appendChild(script);
       });
-      _ffmpegInstance = FFmpeg.createFFmpeg({ log: false });
+      _ffmpegInstance = new FFmpegWASM.FFmpeg();
+      _ffmpegInstance.on('progress', function(e) {
+        try { toast('Converting… ' + Math.round((e.progress || 0) * 100) + '%', 0); } catch(_){}
+      });
       await _ffmpegInstance.load({
-        corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
+        coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
       });
       _ffmpegLoaded = true;
     } catch(e) {
@@ -7931,28 +7936,24 @@ async function _doTranscode(srcUrl, fname, mediaEl, ownerItem) {
   var inputName = 'input' + (fname.match(/\.\w+$/)?.[0] || '.mov');
   var outputName = fname.replace(/\.\w+$/i, '') + '_h264.mp4';
 
-  // v6.1.17: FFmpeg 0.11.x uses callback-based API + plain Uint8Array
+  // v6.1.18: FFmpeg 0.12.x uses promise-based API
   try {
-    _ffmpegInstance.FS('writeFile', inputName, inputData);
-    await new Promise(function(resolve, reject) {
-      _ffmpegInstance.run(
-        '-i', inputName,
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-crf', '23',
-        '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac',
-        '-b:a', '128k',
-        '-movflags', '+faststart',
-        '-y',
-        outputName,
-        function() { resolve(); },
-        function(err) { reject(new Error(err || 'ffmpeg run failed')); }
-      );
-    });
-    var outData = _ffmpegInstance.FS('readFile', outputName);
-    try { _ffmpegInstance.FS('unlink', inputName); } catch(e) {}
-    try { _ffmpegInstance.FS('unlink', outputName); } catch(e) {}
+    await _ffmpegInstance.writeFile(inputName, inputData);
+    await _ffmpegInstance.exec([
+      '-i', inputName,
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '23',
+      '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-movflags', '+faststart',
+      '-y',
+      outputName
+    ]);
+    var outData = await _ffmpegInstance.readFile(outputName);
+    try { await _ffmpegInstance.deleteFile(inputName); } catch(e) {}
+    try { await _ffmpegInstance.deleteFile(outputName); } catch(e) {}
   } catch(e) {
     console.error('[Transcode] FFmpeg exec error:', e);
     try { toast('Conversion failed. The file may be corrupted or use an unsupported codec.', 5000); } catch(ex) {}
