@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.9';
+var KRAFTED_VERSION = '6.1.9p';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -11018,33 +11018,53 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     var _preBufTimer = null;
     var _preBufPending = false;
     var _preBufLastPct = -1;
+    // v6.1.9p: Only pre-buffer when mouse is STATIONARY on the seek bar
+    // for 400ms. During active drag/scrub, pre-buffer is paused so it
+    // doesn't compete with the user's own seeks (which causes floaty lag).
+    // A small progress indicator shows pre-buffer is warming nearby frames.
+    var _preBufIndicator = null;
+    function _ensurePreBufIndicator() {
+      if (_preBufIndicator) return _preBufIndicator;
+      _preBufIndicator = document.createElement('div');
+      _preBufIndicator.style.cssText = 'position:absolute;bottom:100%;right:0;margin-bottom:2px;font-size:9px;color:rgba(124,140,240,0.7);pointer-events:none;display:none;white-space:nowrap;';
+      seekBar.appendChild(_preBufIndicator);
+      return _preBufIndicator;
+    }
     function _schedulePreBuffer(pct) {
       if (!state.perfMode) return;
       if (!isFinite(mediaEl.duration) || mediaEl.duration <= 0) return;
-      // Only re-schedule if the cursor moved significantly (0.5% of timeline)
-      if (Math.abs(pct - _preBufLastPct) < 0.005) return;
+      if (dragActive) return; // NEVER pre-buffer during active drag
       _preBufLastPct = pct;
       if (_preBufTimer) clearTimeout(_preBufTimer);
+      // Hide indicator while waiting
+      var _ind = _ensurePreBufIndicator();
+      _ind.style.display = 'none';
       _preBufTimer = setTimeout(function() {
         _preBufTimer = null;
-        if (_preBufPending) return; // still processing last batch
+        if (dragActive || _preBufPending) return;
         _doPreBuffer(pct);
-      }, 200);
+      }, 400); // only start after 400ms stationary
     }
     function _doPreBuffer(pct) {
-      if (!state.perfMode) return;
+      if (!state.perfMode || dragActive) return;
       var dur = mediaEl.duration;
       if (!isFinite(dur) || dur <= 0) return;
       _preBufPending = true;
       var curT = pct * dur;
-      // Pre-buffer: current ± 2 seconds, stepped at 0.5s intervals
       var OFFSETS = [-2, -1.5, -1, -0.5, 0.5, 1, 1.5, 2];
+      var total = OFFSETS.length;
       var idx = 0;
       var origTime = mediaEl.currentTime;
+      var _ind = _ensurePreBufIndicator();
+      _ind.style.display = 'block';
+      function _updateIndicator() {
+        _ind.textContent = '⚡ buff ' + idx + '/' + total;
+      }
+      _updateIndicator();
       function _nextBuf() {
-        if (idx >= OFFSETS.length || !state.perfMode) {
+        if (idx >= OFFSETS.length || !state.perfMode || dragActive) {
           _preBufPending = false;
-          // Restore original position (if user hasn't clicked elsewhere)
+          _ind.style.display = 'none';
           if (!dragActive && !seeking) {
             try { mediaEl.currentTime = origTime; } catch(e) {}
           }
@@ -11052,16 +11072,15 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         }
         var t = Math.max(0, Math.min(dur, curT + OFFSETS[idx]));
         idx++;
+        _updateIndicator();
         try { mediaEl.currentTime = t; } catch(e) {}
-        // Wait for seek to complete, then move to next offset
         var _done = false;
         function _onSeeked() {
           if (_done) return; _done = true;
           mediaEl.removeEventListener('seeked', _onSeeked);
-          setTimeout(_nextBuf, 30); // small gap between seeks
+          setTimeout(_nextBuf, 50);
         }
         mediaEl.addEventListener('seeked', _onSeeked, { once: true });
-        // Fallback timeout
         setTimeout(function() {
           if (!_done) { _done = true; try { mediaEl.removeEventListener('seeked', _onSeeked); } catch(e) {} _nextBuf(); }
         }, 1500);
