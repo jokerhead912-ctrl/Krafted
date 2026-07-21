@@ -3900,7 +3900,7 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
 </div>
 
 <!-- STATUS BAR -->
-<div id="status">Zoom: 100% | Items: 0 | Undo: 0 <span id="perf-toggle" onclick="togglePerfMode()" style="cursor:pointer;margin-left:8px;font-size:11px;opacity:0.4;user-select:none;" title="Performance mode OFF — click to enable (reduces lag during video playback)">⚡</span></div>
+<div id="status">Zoom: 100% | Items: 0 | Undo: 0 <span id="perf-toggle" onclick="togglePerfMode()" style="cursor:pointer;margin-left:8px;font-size:13px;opacity:0.55;user-select:none;vertical-align:middle;" title="Performance mode OFF — click to enable (reduces lag during video playback)">⚡</span></div>
 
 <!-- ZOOM STEP CONTROL (Round 32) — small floating widget in the bottom-right
      corner next to the status bar. Lets the user pick the mouse-wheel zoom
@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.7';
+var KRAFTED_VERSION = '6.1.7p';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -20510,6 +20510,13 @@ document.addEventListener('keydown', e => {
         return;
       }
     }
+  }
+
+  // v6.1.7 perf: Ctrl+Shift+P toggles performance mode
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.key === 'P' || e.key === 'p')) {
+    e.preventDefault();
+    togglePerfMode();
+    return;
   }
 
   // Don't intercept when typing in text
