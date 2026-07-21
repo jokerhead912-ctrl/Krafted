@@ -13462,7 +13462,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       if (state.perfMode && !snap) {
         updateSeekUI(pct);
         var _now = performance.now();
-        if (_now - (window._lastPerfSeekTime || 0) < 50) return;
+        if (_now - (window._lastPerfSeekTime || 0) < 30) return;
         window._lastPerfSeekTime = _now;
       }
       // Apply to video immediately. Browser will clip to [0, duration].
