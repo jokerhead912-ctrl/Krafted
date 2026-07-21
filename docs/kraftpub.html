@@ -10518,7 +10518,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // it's instant (zero video decode). Only enabled in perfMode.
   const thumbPreview = document.createElement('div');
   thumbPreview.className = 'media-thumb-preview';
-  thumbPreview.style.cssText = 'display:none;position:absolute;bottom:100%;left:0;width:160px;height:90px;margin-bottom:8px;background-color:#000;background-size:auto 100%;background-repeat:no-repeat;border-radius:4px;border:1px solid rgba(255,255,255,0.12);pointer-events:none;z-index:10;';
+  thumbPreview.style.cssText = 'display:none;position:absolute;top:100%;left:0;width:160px;height:90px;margin-top:8px;background-color:#000;background-size:auto 100%;background-repeat:no-repeat;border-radius:4px;border:1px solid rgba(255,255,255,0.2);pointer-events:none;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.6);';
   seekBar.appendChild(thumbPreview);
   // Round 48: hover/drag tooltip showing frame number + time at the
   // cursor's X position. Two lines (frame on top in accent purple, time
