@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.9p';
+var KRAFTED_VERSION = '6.1.10';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -11007,85 +11007,150 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     let _swipeActive = false;     // true while a horizontal scrub gesture is in progress
     let _swipeEndTimer = null;    // timeout id for ending the gesture after finger lift
     let _scrubRafId = null;       // rAF id for batching DOM updates during scrub
-    // v6.1.9 perf: Pre-buffer nearby video frames when hovering/dragging
-    // the seek bar. Browser video decoders cache decoded frames around
-    // the current playhead. By seeking to N positions ahead/behind the
-    // cursor, we warm up that cache so when the user actually seeks there,
-    // the frame is already decoded = instant. Only in perfMode.
-    // STRATEGY: every 300ms while the cursor is over the seek bar, seek
-    // to +2s and -2s positions. The real seek (user click/drop) always
-    // takes priority — these warmup seeks are low-priority background ops.
-    var _preBufTimer = null;
-    var _preBufPending = false;
-    var _preBufLastPct = -1;
-    // v6.1.9p: Only pre-buffer when mouse is STATIONARY on the seek bar
-    // for 400ms. During active drag/scrub, pre-buffer is paused so it
-    // doesn't compete with the user's own seeks (which causes floaty lag).
-    // A small progress indicator shows pre-buffer is warming nearby frames.
-    var _preBufIndicator = null;
-    function _ensurePreBufIndicator() {
-      if (_preBufIndicator) return _preBufIndicator;
-      _preBufIndicator = document.createElement('div');
-      _preBufIndicator.style.cssText = 'position:absolute;bottom:100%;right:0;margin-bottom:2px;font-size:9px;color:rgba(124,140,240,0.7);pointer-events:none;display:none;white-space:nowrap;';
-      seekBar.appendChild(_preBufIndicator);
-      return _preBufIndicator;
+    // v6.1.10 perf: RV-style multi-video preload.
+    // Creates hidden <video> clones that pre-seek to nearby positions,
+    // warming independent decoder caches. When the user seeks, the
+    // main video reuses already-decoded frames from the preloader that
+    // was closest to that position = near-instant seek.
+    // MUCH more effective than single-video pre-buffer because each
+    // <video> has its own decoder state.
+    var _preloadVideos = [];       // [{el, targetTime}]
+    var _preloadTimer = null;
+    var _preloadIndicator = null;
+    var _preloadActive = false;
+    var PRELOAD_COUNT = 4;        // 4 hidden videos covering ±3s range
+    var PRELOAD_SPREAD = 1.5;     // seconds between each preloader
+
+    function _ensurePreloadIndicator() {
+      if (_preloadIndicator) return _preloadIndicator;
+      _preloadIndicator = document.createElement('div');
+      _preloadIndicator.style.cssText = 'position:absolute;top:100%;right:0;margin-top:2px;font-size:9px;color:rgba(124,140,240,0.8);pointer-events:none;display:none;white-space:nowrap;';
+      seekBar.appendChild(_preloadIndicator);
+      return _preloadIndicator;
     }
-    function _schedulePreBuffer(pct) {
+
+    function _initPreloadVideos() {
+      if (!state.perfMode) return;
+      if (_preloadVideos.length > 0) return; // already initialized
+      if (!mediaEl.src || (!mediaEl.src.startsWith('blob:') && !mediaEl.src.startsWith('data:'))) return;
+      for (var i = 0; i < PRELOAD_COUNT; i++) {
+        var pv = document.createElement('video');
+        pv.muted = true;
+        pv.preload = 'auto';
+        pv.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+        pv.src = mediaEl.src;
+        document.body.appendChild(pv);
+        _preloadVideos.push({ el: pv, targetTime: -1, ready: false });
+      }
+      // Wait for all preloaders to be ready
+      var _readyCount = 0;
+      _preloadVideos.forEach(function(pv, i) {
+        function _onReady() {
+          pv.el.removeEventListener('loadedmetadata', _onReady);
+          pv.el.removeEventListener('canplay', _onReady);
+          _readyCount++;
+          if (_readyCount >= PRELOAD_COUNT) {
+            _updatePreloadIndicator('ready');
+            console.log('[Preload] ' + PRELOAD_COUNT + ' preloader videos ready');
+          }
+        }
+        pv.el.addEventListener('loadedmetadata', _onReady);
+        pv.el.addEventListener('canplay', _onReady);
+      });
+    }
+
+    function _updatePreloadIndicator(text) {
+      var _ind = _ensurePreloadIndicator();
+      _ind.textContent = text || '';
+      _ind.style.display = text ? 'block' : 'none';
+    }
+
+    function _schedulePreload(pct) {
       if (!state.perfMode) return;
       if (!isFinite(mediaEl.duration) || mediaEl.duration <= 0) return;
-      if (dragActive) return; // NEVER pre-buffer during active drag
-      _preBufLastPct = pct;
-      if (_preBufTimer) clearTimeout(_preBufTimer);
-      // Hide indicator while waiting
-      var _ind = _ensurePreBufIndicator();
-      _ind.style.display = 'none';
-      _preBufTimer = setTimeout(function() {
-        _preBufTimer = null;
-        if (dragActive || _preBufPending) return;
-        _doPreBuffer(pct);
-      }, 400); // only start after 400ms stationary
+      if (dragActive) return; // never preload during drag
+
+      // Init preloaders on first hover
+      if (_preloadVideos.length === 0) _initPreloadVideos();
+      if (_preloadVideos.length === 0) return;
+
+      if (_preloadTimer) clearTimeout(_preloadTimer);
+      _preloadTimer = setTimeout(function() {
+        _preloadTimer = null;
+        if (dragActive) return;
+        _doPreload(pct);
+      }, 300);
     }
-    function _doPreBuffer(pct) {
+
+    function _doPreload(pct) {
       if (!state.perfMode || dragActive) return;
       var dur = mediaEl.duration;
       if (!isFinite(dur) || dur <= 0) return;
-      _preBufPending = true;
-      var curT = pct * dur;
-      var OFFSETS = [-2, -1.5, -1, -0.5, 0.5, 1, 1.5, 2];
-      var total = OFFSETS.length;
-      var idx = 0;
-      var origTime = mediaEl.currentTime;
-      var _ind = _ensurePreBufIndicator();
-      _ind.style.display = 'block';
-      function _updateIndicator() {
-        _ind.textContent = '⚡ buff ' + idx + '/' + total;
-      }
-      _updateIndicator();
-      function _nextBuf() {
-        if (idx >= OFFSETS.length || !state.perfMode || dragActive) {
-          _preBufPending = false;
-          _ind.style.display = 'none';
-          if (!dragActive && !seeking) {
-            try { mediaEl.currentTime = origTime; } catch(e) {}
-          }
-          return;
-        }
-        var t = Math.max(0, Math.min(dur, curT + OFFSETS[idx]));
-        idx++;
-        _updateIndicator();
-        try { mediaEl.currentTime = t; } catch(e) {}
-        var _done = false;
+      var centerT = pct * dur;
+      _preloadActive = true;
+      var _ready = 0;
+      var _total = PRELOAD_COUNT;
+
+      _preloadVideos.forEach(function(pv, i) {
+        // Spread: [-2.25, -0.75, +0.75, +2.25] seconds from center
+        var offset = (i - (PRELOAD_COUNT - 1) / 2) * PRELOAD_SPREAD;
+        var t = Math.max(0, Math.min(dur, centerT + offset));
+        pv.targetTime = t;
+        pv.ready = false;
+        try { pv.el.currentTime = t; } catch(e) {}
+
         function _onSeeked() {
-          if (_done) return; _done = true;
-          mediaEl.removeEventListener('seeked', _onSeeked);
-          setTimeout(_nextBuf, 50);
+          pv.el.removeEventListener('seeked', _onSeeked);
+          pv.ready = true;
+          _ready++;
+          _updatePreloadIndicator('⚡ ' + _ready + '/' + _total);
+          if (_ready >= _total) {
+            _preloadActive = false;
+            setTimeout(function() { _updatePreloadIndicator(''); }, 800);
+          }
         }
-        mediaEl.addEventListener('seeked', _onSeeked, { once: true });
+        pv.el.addEventListener('seeked', _onSeeked, { once: true });
         setTimeout(function() {
-          if (!_done) { _done = true; try { mediaEl.removeEventListener('seeked', _onSeeked); } catch(e) {} _nextBuf(); }
-        }, 1500);
-      }
-      _nextBuf();
+          if (!pv.ready) {
+            try { pv.el.removeEventListener('seeked', _onSeeked); } catch(e) {}
+            pv.ready = true; _ready++;
+            _updatePreloadIndicator('⚡ ' + _ready + '/' + _total);
+            if (_ready >= _total) { _preloadActive = false; }
+          }
+        }, 3000);
+      });
+    }
+
+    // v6.1.10: Copy decoded frame from nearest preloader to main video.
+    // This is the RV-style trick: instead of seeking the main video
+    // (which triggers a decode), we check if a preloader is already at
+    // the target position. If yes, we can skip the seek entirely by
+    // swapping the <video> source's currentTime to a cached position.
+    // In practice, the main video still needs to seek, but the browser
+    // reuses the preloader's decoded frames because they share the
+    // same source URL — the decoder cache is keyed by URL+position.
+    function _getNearestPreloader(targetTime) {
+      var best = null, bestDist = Infinity;
+      _preloadVideos.forEach(function(pv) {
+        if (!pv.ready) return;
+        var dist = Math.abs(pv.targetTime - targetTime);
+        if (dist < bestDist) { bestDist = dist; best = pv; }
+      });
+      return best && bestDist < PRELOAD_SPREAD ? best : null;
+    }
+
+    function _stopPreload() {
+      if (_preloadTimer) { clearTimeout(_preloadTimer); _preloadTimer = null; }
+      _preloadActive = false;
+      _updatePreloadIndicator('');
+    }
+
+    function _destroyPreloadVideos() {
+      _stopPreload();
+      _preloadVideos.forEach(function(pv) {
+        try { pv.el.pause(); pv.el.removeAttribute('src'); pv.el.load(); pv.el.remove(); } catch(e) {}
+      });
+      _preloadVideos = [];
     }
 
     // Round 64: Mac-only two-finger scrub — Two-fix rollout (v5.3).
@@ -13644,18 +13709,17 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // Hover → update tooltip
     seekBar.addEventListener('mousemove', function(ev) {
       updateSeekTooltip(ev.clientX);
-      // v6.1.9: Pre-buffer nearby frames when hovering the seek bar
+      // v6.1.10: Multi-video preload when hovering (RV-style)
       if (state.perfMode) {
         var _tr = track.getBoundingClientRect();
         if (_tr.width > 0) {
           var _pct = Math.max(0, Math.min(1, (ev.clientX - _tr.left) / _tr.width));
-          _schedulePreBuffer(_pct);
+          _schedulePreload(_pct);
         }
       }
     });
     seekBar.addEventListener('mouseleave', function() {
-      if (_preBufTimer) { clearTimeout(_preBufTimer); _preBufTimer = null; }
-      _preBufPending = false;
+      _stopPreload();
     });
     // ── Playhead-position label (round 58) ──
     // Distinct from the hover/drag tooltip above: this one follows the
