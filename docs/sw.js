@@ -1,18 +1,11 @@
 // Krafted v6.1.20 Service Worker
-// Standalone file (replaces the previous inline blob-URL approach which
-// failed on GitHub Pages with "The URL protocol of the script ('blob:...')
-// is not supported"). Browsers require SW scripts to be real same-origin
-// file URLs, not blob: URLs, on secure origins.
+// Standalone file for PWA caching on GitHub Pages.
 
 const CACHE_NAME = 'krafted-v6.1.20-' + Date.now();
 const APP_VERSION = '6.1.20';
 
-// Files to pre-cache on install
-const PRE_CACHE = [
-  './',
-];
+const PRE_CACHE = ['./'];
 
-// ===== INSTALL: pre-cache core assets =====
 self.addEventListener('install', function(event) {
   console.log('[Krafted SW] Install v' + APP_VERSION);
   self.skipWaiting();
@@ -25,7 +18,6 @@ self.addEventListener('install', function(event) {
   );
 });
 
-// ===== ACTIVATE: clean old caches =====
 self.addEventListener('activate', function(event) {
   console.log('[Krafted SW] Activate v' + APP_VERSION);
   event.waitUntil(
@@ -40,14 +32,11 @@ self.addEventListener('activate', function(event) {
   );
 });
 
-// ===== FETCH: network-first with cache fallback =====
 self.addEventListener('fetch', function(event) {
-  // Skip non-GET requests and chrome-extension URLs
   if (event.request.method !== 'GET') return;
   const url = event.request.url;
   if (url.startsWith('chrome-extension://') || url.startsWith('blob:') || url.startsWith('data:')) return;
 
-  // For CDN scripts (libgif, gif.js, gif.worker): cache-first after first load
   if (url.includes('cdn.jsdelivr.net') || url.includes('unpkg.com')) {
     event.respondWith(
       caches.match(event.request).then(function(cached) {
@@ -55,9 +44,7 @@ self.addEventListener('fetch', function(event) {
         return fetch(event.request).then(function(response) {
           if (response && response.status === 200) {
             const clone = response.clone();
-            caches.open(CACHE_NAME).then(function(cache) {
-              cache.put(event.request, clone);
-            });
+            caches.open(CACHE_NAME).then(function(cache) { cache.put(event.request, clone); });
           }
           return response;
         });
@@ -66,14 +53,11 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // For same-origin requests (the HTML, local JS): network-first
   event.respondWith(
     fetch(event.request).then(function(response) {
       if (response && response.status === 200) {
         const clone = response.clone();
-        caches.open(CACHE_NAME).then(function(cache) {
-          cache.put(event.request, clone);
-        });
+        caches.open(CACHE_NAME).then(function(cache) { cache.put(event.request, clone); });
       }
       return response;
     }).catch(function() {
@@ -82,7 +66,6 @@ self.addEventListener('fetch', function(event) {
   );
 });
 
-// ===== MESSAGE: handle version check requests =====
 self.addEventListener('message', function(event) {
   if (event.data && event.data.type === 'GET_VERSION') {
     if (event.ports && event.ports[0]) {
