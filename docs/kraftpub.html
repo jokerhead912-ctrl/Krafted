@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.12';
+var KRAFTED_VERSION = '6.1.13';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7776,6 +7776,27 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
   updateItemStyle(item);
   if (isBatch ? isLast : true) selectOnly(item.id);
   if (isVideo) { setupVideoTrim(item); }
+  // v6.1.12: When video is added with estimated/default dimensions
+  // (high-bitrate files skip the temp-video metadata wait), update
+  // the item's natW/natH once the real metadata loads asynchronously.
+  if (isVideo && mediaEl) {
+    var _metaHandler = function() {
+      mediaEl.removeEventListener('loadedmetadata', _metaHandler);
+      var vw = mediaEl.videoWidth || 0;
+      var vh = mediaEl.videoHeight || 0;
+      if (vw && vh && (vw !== item.natW || vh !== item.natH)) {
+        item.natW = vw; item.natH = vh;
+        // Recalculate display size preserving the same max-width constraint
+        var maxW = 720;
+        var w2 = vw, h2 = vh;
+        if (w2 > maxW) { h2 = h2 * (maxW / w2); w2 = maxW; }
+        item.w = w2; item.h = h2;
+        updateItemStyle(item);
+        scheduleAutoSave();
+      }
+    };
+    mediaEl.addEventListener('loadedmetadata', _metaHandler);
+  }
   // Round 13: sync the file name pill on the player. The badge is
   // created in buildMediaControls with an empty name (because the
   // item didn't exist yet). Now that the item is in hand, set the
@@ -19960,13 +19981,11 @@ function _handleFileDrop(e, files) {
     processNextImage();
     if (imageFiles.length > 1) toast('Importing ' + imageFiles.length + ' images…');
   }
-  // Process videos sequentially (one at a time to avoid memory crash).
-  // We use a temporary blob URL just to read the dimensions, then call addImage
-  // with the SAME blob URL — the addImage path also creates its own blob URL
-  // for the live <video> element. This is fast and reliable for in-session use.
-  // Note: blob URLs do NOT survive page reload — videos imported this way
-  // exist for the current session only. (Saving to localStorage for full
-  // persistence is a separate, much bigger change — would need IndexedDB.)
+  // Process videos: create blob URL and add directly — don't wait for
+  // metadata. Large/high-bitrate files (20+ Mbps) can take seconds to
+  // parse the moov atom; blocking on loadedmetadata makes the UI appear
+  // frozen. Instead, add with estimated/default dimensions and let the
+  // main video element resolve actual dimensions when metadata loads.
   if (videoFiles.length > 0) pushUndo();
   let videoQueueIdx = 0;
   function processNextVideo() {
@@ -19976,44 +19995,16 @@ function _handleFileDrop(e, files) {
     const dropY = dropY0 + idx * 20;
     const isLast = (videoQueueIdx === videoFiles.length - 1);
     const blobUrl = URL.createObjectURL(file);
-    // Use preload=metadata on temp element to read dimensions, then clean up
-    const videoEl = document.createElement('video');
-    videoEl.preload = 'metadata';  // v5.5: metadata-only to avoid memory spike
-    videoEl.muted = true;
-    videoEl.src = blobUrl;
-    let done = false;
-    const finish = (w, h) => {
-      if (done) return;
-      done = true;
-      // Clean up temp video element to free memory
-      videoEl.removeAttribute('src');
-      videoEl.load();
-      // Capture the original file name so the export can use it
-      // (drag-drop → file.name is available; paste also has it)
-      const newItem = addImage(blobUrl, w, h, dropX, dropY, true, isLast);
-      if (newItem && file && file.name) {
-        newItem.filename = file.name;
-        // Round 13: push the file name to the player badge so the user
-        // can identify the video on the canvas.
-        try { if (newItem.el && newItem.el._setFilenameBadge) newItem.el._setFilenameBadge(file.name); } catch (e) {}
-      }
-      videoQueueIdx++;
-      // Process next video after a short delay to let GC run
-      setTimeout(processNextVideo, 100);
-    };
-    videoEl.onloadedmetadata = () => {
-      finish(videoEl.videoWidth || 640, videoEl.videoHeight || 360);
-    };
-    videoEl.onerror = () => {
-      if (done) return;
-      done = true;
-      toast('Failed to load video: ' + file.name);
-      URL.revokeObjectURL(blobUrl);
-      videoQueueIdx++;
-      setTimeout(processNextVideo, 100);
-    };
-    // Safety timeout — if metadata doesn't load in 15s, skip
-    setTimeout(() => { if (!done) { finish(640, 360); } }, 15000);
+    // Use a generous default size; the real dimensions will be picked up
+    // by the main <video> element once metadata loads asynchronously.
+    // 720p default covers most common video sources without looking wrong.
+    const newItem = addImage(blobUrl, 1280, 720, dropX, dropY, true, isLast);
+    if (newItem && file && file.name) {
+      newItem.filename = file.name;
+      try { if (newItem.el && newItem.el._setFilenameBadge) newItem.el._setFilenameBadge(file.name); } catch (e) {}
+    }
+    videoQueueIdx++;
+    setTimeout(processNextVideo, 50);
   }
   processNextVideo();
   // Process audio files
