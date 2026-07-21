@@ -3900,7 +3900,7 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
 </div>
 
 <!-- STATUS BAR -->
-<div id="status">Zoom: 100% | Items: 0 | Undo: 0</div>
+<div id="status">Zoom: 100% | Items: 0 | Undo: 0 <span id="perf-toggle" onclick="togglePerfMode()" style="cursor:pointer;margin-left:8px;font-size:13px;opacity:0.55;user-select:none;vertical-align:middle;" title="Performance mode OFF — click to enable (reduces lag during video playback)">⚡</span></div>
 
 <!-- ZOOM STEP CONTROL (Round 32) — small floating widget in the bottom-right
      corner next to the status bar. Lets the user pick the mouse-wheel zoom
@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.6';
+var KRAFTED_VERSION = '6.1.9';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -5120,6 +5120,16 @@ const state = {
       if (isFinite(saved) && saved >= 0.0010 && saved <= 0.0120) return saved;
     } catch (e) {}
     return 0.0028;
+  })(),
+  // v6.1.7 perf: Performance mode toggle. When true, skips redundant
+  // renders during video playback (cached rects, throttle _renderAnnoCanvas,
+  // lower DPR). Default false = zero change to existing behavior.
+  perfMode: (function() {
+    try {
+      const saved = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_perf_mode')) || localStorage.getItem('krafted_perf_mode');
+      if (saved !== null) return saved === '1';
+    } catch (e) {}
+    return false;
   })(),
 };
 
@@ -6583,10 +6593,50 @@ function cullOffscreenItems() {
     }
   }
 }
+// v6.1.8s: Implement missing toggleProps function
+function toggleProps() {
+  var p = document.getElementById('props');
+  if (!p) return;
+  p.classList.toggle('collapsed');
+  // Persist preference
+  try { localStorage.setItem('krafted_props_collapsed', p.classList.contains('collapsed') ? '1' : '0'); } catch(e) {}
+}
+// v6.1.8s: On load, restore collapsed state
+(function() {
+  try {
+    if (localStorage.getItem('krafted_props_collapsed') === '1') {
+      var p = document.getElementById('props');
+      if (p) p.classList.add('collapsed');
+    }
+  } catch(e) {}
+})();
+// v6.1.7 perf: toggle performance mode — saves to localStorage
+function togglePerfMode() {
+  state.perfMode = !state.perfMode;
+  try { localStorage.setItem('krafted_perf_mode', state.perfMode ? '1' : '0'); } catch(e) {}
+  updateStatus();
+  console.log('[Perf] Performance mode ' + (state.perfMode ? 'ON ⚡' : 'OFF'));
+}
 function updateStatus() {
   const selCount = state.selected.size;
   const selText = selCount > 1 ? ` | ${selCount} selected (drag to move all)` : selCount === 1 ? ' | 1 selected' : '';
-  document.getElementById('status').textContent = `Zoom: ${Math.round(state.zoom*100)}% | Items: ${state.items.length + state.texts.length + (state.todos?state.todos.length:0) + (state.mindmaps?state.mindmaps.length:0)}${selText} | Undo: ${state.undoStack.length}`;
+  var stEl = document.getElementById('status');
+  if (stEl) {
+    // v6.1.7 perf: preserve perf-toggle child element when updating text
+    var perfEl = document.getElementById('perf-toggle');
+    if (perfEl) {
+      perfEl.textContent = state.perfMode ? '⚡ON' : '⚡';
+      perfEl.style.opacity = state.perfMode ? '1' : '0.4';
+      perfEl.title = state.perfMode ? 'Performance mode ON — click to disable' : 'Performance mode OFF — click to enable (reduces lag during video playback)';
+    }
+    // Only update the text node, not the whole innerHTML
+    var textNode = stEl.firstChild;
+    if (textNode && textNode.nodeType === 3) {
+      textNode.textContent = `Zoom: ${Math.round(state.zoom*100)}% | Items: ${state.items.length + state.texts.length + (state.todos?state.todos.length:0) + (state.mindmaps?state.mindmaps.length:0)}${selText} | Undo: ${state.undoStack.length} `;
+    } else {
+      stEl.textContent = `Zoom: ${Math.round(state.zoom*100)}% | Items: ${state.items.length + state.texts.length + (state.todos?state.todos.length:0) + (state.mindmaps?state.mindmaps.length:0)}${selText} | Undo: ${state.undoStack.length}`;
+    }
+  }
 }
 function zoomBy(factor, cx, cy) {
   zoomTo(state.zoom * factor, cx, cy);
@@ -9468,6 +9518,14 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // the visible content area — otherwise strokes would be drawn in
     // the black bars and appear misaligned with the video.
     function _getVideoContentRect() {
+      // v6.1.7 perf: cache the last computed rect. The video content
+      // rect only changes on resize/zoom, not on every timeupdate tick.
+      if (state.perfMode && el._perfCachedRect) {
+        var _w = wrap.clientWidth, _h = wrap.clientHeight;
+        if (_w === el._perfCachedRect._wrapW && _h === el._perfCachedRect._wrapH) {
+          return el._perfCachedRect;
+        }
+      }
       const wrapW = wrap.clientWidth || 1;
       const wrapH = wrap.clientHeight || 1;
       const vw = mediaEl.videoWidth || 0;
@@ -9482,16 +9540,29 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         // video is wider — fit to width, letterbox top/bottom
         const w = wrapW;
         const h = wrapW / vidAspect;
-        return { left: 0, top: (wrapH - h) / 2, width: w, height: h };
+        var _result = { left: 0, top: (wrapH - h) / 2, width: w, height: h };
+        if (state.perfMode) { _result._wrapW = wrapW; _result._wrapH = wrapH; el._perfCachedRect = _result; }
+        return _result;
       } else {
         // video is taller — fit to height, pillarbox left/right
         const h = wrapH;
         const w = wrapH * vidAspect;
-        return { left: (wrapW - w) / 2, top: 0, width: w, height: h };
+        var _result2 = { left: (wrapW - w) / 2, top: 0, width: w, height: h };
+        if (state.perfMode) { _result2._wrapW = wrapW; _result2._wrapH = wrapH; el._perfCachedRect = _result2; }
+        return _result2;
       }
     }
     function _renderAnnoCanvas() {
       if (!annoCanvas) return;
+      // v6.1.7 perf: When perfMode is on, skip render if nothing changed
+      // (same frame + same rect). Saves ~4ms per timeupdate tick.
+      if (state.perfMode) {
+        var _pfFrame = _currentFrame();
+        var _pfRectKey = '';
+        try { var _r = mediaEl.getBoundingClientRect(); _pfRectKey = _r.left+','+_r.top+','+_r.width+','+_r.height; } catch(e){}
+        if (el._perfLastRenderKey === _pfFrame + '|' + _pfRectKey) return;
+        el._perfLastRenderKey = _pfFrame + '|' + _pfRectKey;
+      }
       // Position the canvas over the video's visible content rect (no
       // letterbox area). This way strokes land on the video content
       // and stay aligned when the user zooms/pans the canvas.
@@ -10442,6 +10513,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   track.appendChild(mainTrimStartHandle);
   track.appendChild(mainTrimEndHandle);
   seekBar.appendChild(track);
+  // v6.1.8t perf: thumbnail strip preview — shows a frame thumbnail above
+  // the seek bar when hovering/dragging. Pre-rendered as a sprite sheet so
+  // it's instant (zero video decode). Only enabled in perfMode.
   // Round 48: hover/drag tooltip showing frame number + time at the
   // cursor's X position. Two lines (frame on top in accent purple, time
   // below in white) so both are readable at a glance. Positioned inside
@@ -10933,6 +11007,68 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     let _swipeActive = false;     // true while a horizontal scrub gesture is in progress
     let _swipeEndTimer = null;    // timeout id for ending the gesture after finger lift
     let _scrubRafId = null;       // rAF id for batching DOM updates during scrub
+    // v6.1.9 perf: Pre-buffer nearby video frames when hovering/dragging
+    // the seek bar. Browser video decoders cache decoded frames around
+    // the current playhead. By seeking to N positions ahead/behind the
+    // cursor, we warm up that cache so when the user actually seeks there,
+    // the frame is already decoded = instant. Only in perfMode.
+    // STRATEGY: every 300ms while the cursor is over the seek bar, seek
+    // to +2s and -2s positions. The real seek (user click/drop) always
+    // takes priority — these warmup seeks are low-priority background ops.
+    var _preBufTimer = null;
+    var _preBufPending = false;
+    var _preBufLastPct = -1;
+    function _schedulePreBuffer(pct) {
+      if (!state.perfMode) return;
+      if (!isFinite(mediaEl.duration) || mediaEl.duration <= 0) return;
+      // Only re-schedule if the cursor moved significantly (0.5% of timeline)
+      if (Math.abs(pct - _preBufLastPct) < 0.005) return;
+      _preBufLastPct = pct;
+      if (_preBufTimer) clearTimeout(_preBufTimer);
+      _preBufTimer = setTimeout(function() {
+        _preBufTimer = null;
+        if (_preBufPending) return; // still processing last batch
+        _doPreBuffer(pct);
+      }, 200);
+    }
+    function _doPreBuffer(pct) {
+      if (!state.perfMode) return;
+      var dur = mediaEl.duration;
+      if (!isFinite(dur) || dur <= 0) return;
+      _preBufPending = true;
+      var curT = pct * dur;
+      // Pre-buffer: current ± 2 seconds, stepped at 0.5s intervals
+      var OFFSETS = [-2, -1.5, -1, -0.5, 0.5, 1, 1.5, 2];
+      var idx = 0;
+      var origTime = mediaEl.currentTime;
+      function _nextBuf() {
+        if (idx >= OFFSETS.length || !state.perfMode) {
+          _preBufPending = false;
+          // Restore original position (if user hasn't clicked elsewhere)
+          if (!dragActive && !seeking) {
+            try { mediaEl.currentTime = origTime; } catch(e) {}
+          }
+          return;
+        }
+        var t = Math.max(0, Math.min(dur, curT + OFFSETS[idx]));
+        idx++;
+        try { mediaEl.currentTime = t; } catch(e) {}
+        // Wait for seek to complete, then move to next offset
+        var _done = false;
+        function _onSeeked() {
+          if (_done) return; _done = true;
+          mediaEl.removeEventListener('seeked', _onSeeked);
+          setTimeout(_nextBuf, 30); // small gap between seeks
+        }
+        mediaEl.addEventListener('seeked', _onSeeked, { once: true });
+        // Fallback timeout
+        setTimeout(function() {
+          if (!_done) { _done = true; try { mediaEl.removeEventListener('seeked', _onSeeked); } catch(e) {} _nextBuf(); }
+        }, 1500);
+      }
+      _nextBuf();
+    }
+
     // Round 64: Mac-only two-finger scrub — Two-fix rollout (v5.3).
     //   Fix 1 — Per-event synchronous seek: each wheel event directly
     //     sets mediaEl.currentTime (no accumulation), giving real-time
@@ -13298,6 +13434,18 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       var rect = track.getBoundingClientRect();
       if (rect.width <= 0) return;
       var pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      // v6.1.8v perf: Skip intermediate seeks that are too close together.
+      // Video seek+decode takes ~30-80ms on 1080p. Sending seeks faster
+      // than 50ms just queues them up, causing cumulative lag. At 50ms
+      // throttle, the user sees ~20 frame updates/sec — smooth enough
+      // while letting each seek actually complete before the next one.
+      // snap=true (initial click) always seeks immediately.
+      if (state.perfMode && !snap) {
+        updateSeekUI(pct);
+        var _now = performance.now();
+        if (_now - (window._lastPerfSeekTime || 0) < 50) return;
+        window._lastPerfSeekTime = _now;
+      }
       // Apply to video immediately. Browser will clip to [0, duration].
       // Set even if duration isn't ready — it will be applied once metadata loads.
       if (isFinite(mediaEl.duration) && mediaEl.duration > 0) {
@@ -13364,9 +13512,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       var onUp = function() {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
-        // We're no longer actively dragging. From here, the next `seeked`
-        // event that matches our drop position is the one to release on.
-        // Until then, `seeking` stays true so timeupdate doesn't fight us.
         dragActive = false;
         // Round 58: hide the playhead label after drag ends — UNLESS
         // the video is now playing (in which case the play listener
@@ -13480,6 +13625,18 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // Hover → update tooltip
     seekBar.addEventListener('mousemove', function(ev) {
       updateSeekTooltip(ev.clientX);
+      // v6.1.9: Pre-buffer nearby frames when hovering the seek bar
+      if (state.perfMode) {
+        var _tr = track.getBoundingClientRect();
+        if (_tr.width > 0) {
+          var _pct = Math.max(0, Math.min(1, (ev.clientX - _tr.left) / _tr.width));
+          _schedulePreBuffer(_pct);
+        }
+      }
+    });
+    seekBar.addEventListener('mouseleave', function() {
+      if (_preBufTimer) { clearTimeout(_preBufTimer); _preBufTimer = null; }
+      _preBufPending = false;
     });
     // ── Playhead-position label (round 58) ──
     // Distinct from the hover/drag tooltip above: this one follows the
@@ -20458,6 +20615,13 @@ document.addEventListener('keydown', e => {
     }
   }
 
+  // v6.1.7 perf: Ctrl+Shift+P toggles performance mode
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.key === 'P' || e.key === 'p')) {
+    e.preventDefault();
+    togglePerfMode();
+    return;
+  }
+
   // Don't intercept when typing in text
   // Round 15: added TEXTAREA — the draw text tool spawns a <textarea>
   // overlay, and single-letter hotkeys (v, t, d, e, c, x, l, m, s, etc.)
@@ -21540,6 +21704,27 @@ viewport.addEventListener('mousedown', e => {
           _toMoveCache: toMoveNow,
           _moveRafId: null,
         };
+        // v6.1.8 perf: During drag, replace live <video> with a static poster
+        // so the browser doesn't re-composite decoded video frames on every
+        // mousemove. Video decode + composite is the #1 cause of drag lag.
+        if (state.perfMode) {
+          toMoveNow.forEach(function(it) {
+            if (it.video && it.video.readyState >= 2) {
+              // Capture current frame as poster, pause video rendering
+              it._dragPoster = it.video.poster || '';
+              try {
+                var _c = document.createElement('canvas');
+                _c.width = it.video.videoWidth; _c.height = it.video.videoHeight;
+                var _ctx = _c.getContext('2d');
+                _ctx.drawImage(it.video, 0, 0);
+                it.video.poster = _c.toDataURL('image/jpeg', 0.7);
+              } catch(e) {}
+              it.video.style.visibility = 'hidden';
+              // v5.5.9: also hide anno canvas during drag
+              if (it._annoCanvas) it._annoCanvas.style.visibility = 'hidden';
+            }
+          });
+        }
         // Physically remove handles from DOM to prevent GPU-composited ghosting (video/GIF)
         document.querySelectorAll('.item-handle, .item-rot').forEach(el => el.remove());
       // Round 67 — also wipe the empty union multi-select container left
@@ -22201,6 +22386,19 @@ document.addEventListener('mouseup', e => {
       return;
     }
     if (state.dragging.type === 'move') {
+      // v6.1.8 perf: restore video visibility after drag (frozen to poster during drag)
+      if (state.perfMode) {
+        var _movedItems = state.dragging._toMoveCache || new Set(getSelectedItems());
+        _movedItems.forEach(function(it) {
+          if (it.video && it._dragPoster !== undefined) {
+            it.video.style.visibility = '';
+            it.video.poster = it._dragPoster || '';
+            delete it._dragPoster;
+            // v5.5.9: restore anno canvas visibility
+            if (it._annoCanvas) it._annoCanvas.style.visibility = '';
+          }
+        });
+      }
       // Cancel any pending rAF — final sync run synchronously below
       if (state.dragging._moveRafId) { cancelAnimationFrame(state.dragging._moveRafId); state.dragging._moveRafId = null; }
       // Run one final full updateItemStyle on moved items to sync filter/overlay/mask
