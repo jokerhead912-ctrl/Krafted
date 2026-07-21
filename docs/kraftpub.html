@@ -10516,18 +10516,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // v6.1.8t perf: thumbnail strip preview — shows a frame thumbnail above
   // the seek bar when hovering/dragging. Pre-rendered as a sprite sheet so
   // it's instant (zero video decode). Only enabled in perfMode.
-  // v6.1.8v7 perf: thumbnail preview lives on <body> as fixed position
-  // so it's never clipped by canvas overflow. Position via mouse x/y.
-  // Created lazily on first hover (perfMode + thumb ready).
-  var thumbPreview = null;
-  function _ensureThumbPreview() {
-    if (thumbPreview) return thumbPreview;
-    thumbPreview = document.createElement('div');
-    thumbPreview.className = 'media-thumb-preview';
-    thumbPreview.style.cssText = 'display:none;position:fixed;width:160px;height:90px;background-color:#000;background-size:auto 100%;background-repeat:no-repeat;border-radius:4px;border:1px solid rgba(255,255,255,0.25);pointer-events:none;z-index:99999999;box-shadow:0 6px 20px rgba(0,0,0,0.8);';
-    document.body.appendChild(thumbPreview);
-    return thumbPreview;
-  }
   // Round 48: hover/drag tooltip showing frame number + time at the
   // cursor's X position. Two lines (frame on top in accent purple, time
   // below in white) so both are readable at a glance. Positioned inside
@@ -11022,81 +11010,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // v6.1.8q perf: simple throttle — skip seeks within 16ms of last one
     window._lastPerfSeekTime = 0;
 
-    // v6.1.8t perf: Thumbnail strip generator. Renders a sprite sheet
-    // of frame thumbnails (one every 0.5s of video) so the user sees an
-    // instant preview when hovering/dragging the seek bar — no video
-    // decode needed. Only built when perfMode is ON.
-    var _thumbStripDataUrl = null;
-    var _thumbStripReady = false;
-    var _thumbStripBuilding = false;
-    function _buildThumbStrip() {
-      if (!state.perfMode || _thumbStripBuilding || _thumbStripReady) return;
-      if (!mediaEl || mediaEl.readyState < 2 || !mediaEl.duration) return;
-      _thumbStripBuilding = true;
-      var STEP = 0.5; // one thumbnail every 0.5 seconds
-      var THUMB_W = 160, THUMB_H = 90;
-      var totalThumbs = Math.ceil(mediaEl.duration / STEP);
-      if (totalThumbs < 2) { _thumbStripBuilding = false; return; }
-      var spriteCanvas = document.createElement('canvas');
-      spriteCanvas.width = THUMB_W * totalThumbs;
-      spriteCanvas.height = THUMB_H;
-      var ctx = spriteCanvas.getContext('2d');
-      var idx = 0;
-      var origTime = mediaEl.currentTime;
-      var wasPaused = mediaEl.paused;
-      function _nextThumb() {
-        if (idx >= totalThumbs) {
-          // Done — save sprite
-          _thumbStripDataUrl = spriteCanvas.toDataURL('image/jpeg', 0.6);
-          var _tp = _ensureThumbPreview();
-          _tp.style.backgroundImage = 'url(' + _thumbStripDataUrl + ')';
-          _thumbStripReady = true;
-          _thumbStripBuilding = false;
-          try { mediaEl.currentTime = origTime; } catch(e) {}
-          if (!wasPaused) try { mediaEl.play().catch(function(){}) } catch(e) {}
-          console.log('[ThumbStrip] Built ' + totalThumbs + ' thumbs (' + spriteCanvas.width + 'x' + THUMB_H + ')');
-          return;
-        }
-        var t = idx * STEP;
-        try { mediaEl.currentTime = t; } catch(e) {}
-        var _onSeeked = function() {
-          mediaEl.removeEventListener('seeked', _onSeeked);
-          try {
-            var vw = mediaEl.videoWidth, vh = mediaEl.videoHeight;
-            if (vw && vh) {
-              // Letterbox to 160x90
-              var scale = Math.min(THUMB_W / vw, THUMB_H / vh);
-              var dw = vw * scale, dh = vh * scale;
-              var dx = (THUMB_W - dw) / 2, dy = (THUMB_H - dh) / 2;
-              ctx.fillStyle = '#000';
-              ctx.fillRect(idx * THUMB_W, 0, THUMB_W, THUMB_H);
-              ctx.drawImage(mediaEl, idx * THUMB_W + dx, dy, dw, dh);
-            }
-          } catch(e) {}
-          idx++;
-          _nextThumb();
-        };
-        mediaEl.addEventListener('seeked', _onSeeked, { once: true });
-        // Fallback timeout if seeked never fires
-        setTimeout(function() {
-          try { mediaEl.removeEventListener('seeked', _onSeeked); } catch(e) {}
-          if (idx < totalThumbs) { idx++; _nextThumb(); }
-        }, 2000);
-      }
-      try { mediaEl.pause(); } catch(e) {}
-      _nextThumb();
-    }
-    // Kick off thumbnail build when metadata is ready (perfMode on)
-    if (state.perfMode) {
-      if (mediaEl.readyState >= 2 && mediaEl.duration) {
-        setTimeout(_buildThumbStrip, 500);
-      } else {
-        mediaEl.addEventListener('loadedmetadata', function _onMeta() {
-          mediaEl.removeEventListener('loadedmetadata', _onMeta);
-          setTimeout(_buildThumbStrip, 500);
-        });
-      }
-    }
     // Round 64: Mac-only two-finger scrub — Two-fix rollout (v5.3).
     //   Fix 1 — Per-event synchronous seek: each wheel event directly
     //     sets mediaEl.currentTime (no accumulation), giving real-time
@@ -13650,31 +13563,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       if (frameEl) frameEl.textContent = 'F ' + frame;
       if (timeEl) timeEl.textContent = fmtTT(t);
     }
-    // Hover → update tooltip + thumbnail preview
+    // Hover → update tooltip
     seekBar.addEventListener('mousemove', function(ev) {
       updateSeekTooltip(ev.clientX);
-      // v6.1.8v7: Show thumbnail preview on body (fixed position) so
-      // it's never clipped by the canvas overflow. Position above cursor.
-      if (state.perfMode && _thumbStripReady && _thumbStripDataUrl) {
-        var _tr = track.getBoundingClientRect();
-        if (_tr.width <= 0) return;
-        var _pct = Math.max(0, Math.min(1, (ev.clientX - _tr.left) / _tr.width));
-        var _thumbIdx = Math.floor(_pct * (Math.ceil(mediaEl.duration / 0.5)));
-        var _maxIdx = Math.ceil(mediaEl.duration / 0.5) - 1;
-        _thumbIdx = Math.max(0, Math.min(_maxIdx, _thumbIdx));
-        var _tp = _ensureThumbPreview();
-        _tp.style.display = 'block';
-        _tp.style.backgroundPosition = (-_thumbIdx * 160) + 'px 0px';
-        // Position above cursor (fixed coordinates from mouse ev)
-        var _vw = window.innerWidth;
-        var _tpLeft = Math.max(4, Math.min(_vw - 164, ev.clientX - 80));
-        var _tpTop = Math.max(4, ev.clientY - 90 - 12);
-        _tp.style.left = _tpLeft + 'px';
-        _tp.style.top = _tpTop + 'px';
-      }
-    });
-    seekBar.addEventListener('mouseleave', function() {
-      if (thumbPreview) thumbPreview.style.display = 'none';
     });
     // ── Playhead-position label (round 58) ──
     // Distinct from the hover/drag tooltip above: this one follows the
