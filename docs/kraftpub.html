@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.10q';
+var KRAFTED_VERSION = '6.1.11';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -11030,7 +11030,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     }
 
     function _initPreloadVideos() {
-      if (!state.perfMode) return;
       if (_preloadVideos.length > 0) return; // already initialized
       if (!mediaEl.src) return; // guard: must have a video source loaded (any protocol)
       // Create an isolated container for preload videos — off-screen,
@@ -11073,7 +11072,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     }
 
     function _schedulePreload(pct) {
-      if (!state.perfMode) return;
       if (!isFinite(mediaEl.duration) || mediaEl.duration <= 0) return;
       if (dragActive) return; // never preload during drag
 
@@ -11090,7 +11088,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     }
 
     function _doPreload(pct) {
-      if (!state.perfMode || dragActive) return;
+      if (dragActive) return;
       var dur = mediaEl.duration;
       if (!isFinite(dur) || dur <= 0) return;
       var centerT = pct * dur;
@@ -13719,13 +13717,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // Hover → update tooltip
     seekBar.addEventListener('mousemove', function(ev) {
       updateSeekTooltip(ev.clientX);
-      // v6.1.10: Multi-video preload when hovering (RV-style)
-      if (state.perfMode) {
-        var _tr = track.getBoundingClientRect();
-        if (_tr.width > 0) {
-          var _pct = Math.max(0, Math.min(1, (ev.clientX - _tr.left) / _tr.width));
-          _schedulePreload(_pct);
-        }
+      // v6.1.10: Multi-video preload when hovering (RV-style) — always-on
+      var _tr = track.getBoundingClientRect();
+      if (_tr.width > 0) {
+        var _pct = Math.max(0, Math.min(1, (ev.clientX - _tr.left) / _tr.width));
+        _schedulePreload(_pct);
       }
     });
     seekBar.addEventListener('mouseleave', function() {
