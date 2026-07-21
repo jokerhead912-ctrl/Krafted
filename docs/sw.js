@@ -8,8 +8,8 @@
 // SharedArrayBuffer (needed by FFmpeg.wasm transcoder for .mov/ProRes files).
 // GitHub Pages doesn't support custom headers, so the SW does it instead.
 
-const CACHE_NAME = 'krafted-v6.1.18-' + Date.now();
-const APP_VERSION = '6.1.18';
+const CACHE_NAME = 'krafted-v6.1.19-' + Date.now();
+const APP_VERSION = '6.1.19';
 
 // Files to pre-cache on install
 const PRE_CACHE = [
@@ -69,11 +69,24 @@ self.addEventListener('fetch', function(event) {
     });
   }
 
-  // For CDN scripts (libgif, gif.js, gif.worker, ffmpeg.wasm): cache-first after first load
+  // v6.1.18: Helper to inject CORP header on CDN responses so they pass
+  // the COEP "require-corp" check on our HTML.
+  function addCrossOriginResourcePolicy(response) {
+    if (!response || response.status !== 200) return response;
+    var newHeaders = new Headers(response.headers);
+    newHeaders.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders
+    });
+  }
+
+  // For CDN scripts (libgif, gif.js, gif.worker, ffmpeg.wasm): cache-first + CORP inject
   if (url.includes('cdn.jsdelivr.net') || url.includes('unpkg.com')) {
     event.respondWith(
       caches.match(event.request).then(function(cached) {
-        if (cached) return cached;
+        if (cached) return addCrossOriginResourcePolicy(cached);
         return fetch(event.request).then(function(response) {
           if (response && response.status === 200) {
             const clone = response.clone();
@@ -81,7 +94,7 @@ self.addEventListener('fetch', function(event) {
               cache.put(event.request, clone);
             });
           }
-          return response;
+          return addCrossOriginResourcePolicy(response);
         });
       })
     );
