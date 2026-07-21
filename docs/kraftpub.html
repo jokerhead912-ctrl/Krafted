@@ -10516,10 +10516,18 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // v6.1.8t perf: thumbnail strip preview — shows a frame thumbnail above
   // the seek bar when hovering/dragging. Pre-rendered as a sprite sheet so
   // it's instant (zero video decode). Only enabled in perfMode.
-  const thumbPreview = document.createElement('div');
-  thumbPreview.className = 'media-thumb-preview';
-  thumbPreview.style.cssText = 'display:none;position:absolute;top:100%;left:0;width:160px;height:90px;margin-top:8px;background-color:#000;background-size:auto 100%;background-repeat:no-repeat;border-radius:4px;border:1px solid rgba(255,255,255,0.2);pointer-events:none;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.6);';
-  seekBar.appendChild(thumbPreview);
+  // v6.1.8v7 perf: thumbnail preview lives on <body> as fixed position
+  // so it's never clipped by canvas overflow. Position via mouse x/y.
+  // Created lazily on first hover (perfMode + thumb ready).
+  var thumbPreview = null;
+  function _ensureThumbPreview() {
+    if (thumbPreview) return thumbPreview;
+    thumbPreview = document.createElement('div');
+    thumbPreview.className = 'media-thumb-preview';
+    thumbPreview.style.cssText = 'display:none;position:fixed;width:160px;height:90px;background-color:#000;background-size:auto 100%;background-repeat:no-repeat;border-radius:4px;border:1px solid rgba(255,255,255,0.25);pointer-events:none;z-index:99999999;box-shadow:0 6px 20px rgba(0,0,0,0.8);';
+    document.body.appendChild(thumbPreview);
+    return thumbPreview;
+  }
   // Round 48: hover/drag tooltip showing frame number + time at the
   // cursor's X position. Two lines (frame on top in accent purple, time
   // below in white) so both are readable at a glance. Positioned inside
@@ -11040,7 +11048,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         if (idx >= totalThumbs) {
           // Done — save sprite
           _thumbStripDataUrl = spriteCanvas.toDataURL('image/jpeg', 0.6);
-          thumbPreview.style.backgroundImage = 'url(' + _thumbStripDataUrl + ')';
+          var _tp = _ensureThumbPreview();
+          _tp.style.backgroundImage = 'url(' + _thumbStripDataUrl + ')';
           _thumbStripReady = true;
           _thumbStripBuilding = false;
           try { mediaEl.currentTime = origTime; } catch(e) {}
@@ -13644,7 +13653,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // Hover → update tooltip + thumbnail preview
     seekBar.addEventListener('mousemove', function(ev) {
       updateSeekTooltip(ev.clientX);
-      // v6.1.8t: Show thumbnail preview if perf mode + strip ready
+      // v6.1.8v7: Show thumbnail preview on body (fixed position) so
+      // it's never clipped by the canvas overflow. Position above cursor.
       if (state.perfMode && _thumbStripReady && _thumbStripDataUrl) {
         var _tr = track.getBoundingClientRect();
         if (_tr.width <= 0) return;
@@ -13652,17 +13662,19 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         var _thumbIdx = Math.floor(_pct * (Math.ceil(mediaEl.duration / 0.5)));
         var _maxIdx = Math.ceil(mediaEl.duration / 0.5) - 1;
         _thumbIdx = Math.max(0, Math.min(_maxIdx, _thumbIdx));
-        thumbPreview.style.display = 'block';
-        thumbPreview.style.backgroundPosition = (-_thumbIdx * 160) + 'px 0px';
-        // Position centered above cursor, clamped within seekBar
-        var _barR = seekBar.getBoundingClientRect();
-        var _xInBar = ev.clientX - _barR.left;
-        var _left = Math.max(4, Math.min(_barR.width - 164, _xInBar - 80));
-        thumbPreview.style.left = _left + 'px';
+        var _tp = _ensureThumbPreview();
+        _tp.style.display = 'block';
+        _tp.style.backgroundPosition = (-_thumbIdx * 160) + 'px 0px';
+        // Position above cursor (fixed coordinates from mouse ev)
+        var _vw = window.innerWidth;
+        var _tpLeft = Math.max(4, Math.min(_vw - 164, ev.clientX - 80));
+        var _tpTop = Math.max(4, ev.clientY - 90 - 12);
+        _tp.style.left = _tpLeft + 'px';
+        _tp.style.top = _tpTop + 'px';
       }
     });
     seekBar.addEventListener('mouseleave', function() {
-      thumbPreview.style.display = 'none';
+      if (thumbPreview) thumbPreview.style.display = 'none';
     });
     // ── Playhead-position label (round 58) ──
     // Distinct from the hover/drag tooltip above: this one follows the
