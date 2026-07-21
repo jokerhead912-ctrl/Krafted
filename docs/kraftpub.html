@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.15';
+var KRAFTED_VERSION = '6.1.16';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7738,21 +7738,14 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
     mediaEl.muted = true;
     mediaEl.preload = 'auto';  // v6.1.13: auto-buffer needed for high-bitrate blob videos
     mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;will-change:transform;';
-    // v6.1.15: surface codec-unsupported errors so the user knows WHY
-    // playback fails (e.g. ProRes/DNxHR .mov files from screen recorders).
-    // Browser <video> only supports H.264/H.265/VP9/AV1 — anything else
-    // (ProRes, DNxHR, Cineform, etc.) silently fails to decode.
+    // v6.1.16: codec-unsupported → offer auto H.264 transcode via FFmpeg.wasm
     mediaEl.addEventListener('error', function() {
       var err = mediaEl.error;
       var code = err ? err.code : 0;
-      // code 4 = MEDIA_ERR_SRC_NOT_SUPPORTED — codec/container unsupported
       if (code === 4) {
-        var isMov = /\.mov$/i.test(src) || /\.avi$/i.test(src) || /\.mkv$/i.test(src);
-        var msg = isMov
-          ? 'Codec not supported: ' + (src.split('/').pop().split('?')[0] || 'video') + ' — .mov often uses ProRes/DNxHR which browsers can\'t play. Convert to H.264 MP4 first (e.g. via HandBrake or QuickTime export).'
-          : 'Codec not supported by browser. Try H.264 MP4 for best compatibility.';
-        try { toast(msg, 6000); } catch(e) {}
-        console.warn('[Video] Unsupported codec:', code, src);
+        var fname = src.split('/').pop().split('?')[0] || 'video';
+        console.warn('[Video] Unsupported codec:', code, fname);
+        _offerTranscode(src, fname, mediaEl);
       }
     });
   } else {
@@ -7852,6 +7845,136 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
 }
 function addVideoItem(src, natW, natH, x, y) {
   return addImage(src, natW, natH, x, y, true);
+}
+
+// ══════════════════════════════════════════════════════════════
+// v6.1.16 — Auto H.264 transcode via FFmpeg.wasm
+// ══════════════════════════════════════════════════════════════
+// When a video fails with MEDIA_ERR_SRC_NOT_SUPPORTED (codec not
+// supported by browser — e.g. ProRes/DNxHR .mov), offer the user
+// a one-click transcode to H.264 MP4 directly in the browser.
+// FFmpeg.wasm is lazy-loaded only when needed (~30 MB download).
+
+var _ffmpegLoaded = false;
+var _ffmpegLoading = false;
+var _ffmpegInstance = null;
+
+function _offerTranscode(srcUrl, fname, mediaEl) {
+  // Don't offer if already a blob URL from a previous transcode
+  if (srcUrl.startsWith('blob:') && window._transcodedBlobs && window._transcodedBlobs.has(srcUrl)) return;
+
+  // Find the item that owns this mediaEl
+  var ownerItem = null;
+  if (state.items) {
+    for (var i = 0; i < state.items.length; i++) {
+      if (state.items[i].video === mediaEl) { ownerItem = state.items[i]; break; }
+    }
+  }
+
+  var msg = fname + ' — codec not supported by browser.\nAuto-convert to H.264 MP4? (takes ~30s–2min depending on file size)';
+  if (confirm(msg)) {
+    _doTranscode(srcUrl, fname, mediaEl, ownerItem);
+  }
+}
+
+async function _doTranscode(srcUrl, fname, mediaEl, ownerItem) {
+  try { toast('Loading FFmpeg (~30 MB one-time download)…', 0); } catch(e) {}
+
+  // ── Lazy-load FFmpeg.wasm ──
+  if (!_ffmpegLoaded) {
+    if (_ffmpegLoading) {
+      // Already loading — wait
+      try { toast('FFmpeg still loading…', 2000); } catch(e) {}
+      return;
+    }
+    _ffmpegLoading = true;
+    try {
+      // Load FFmpeg.wasm from CDN
+      var script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js';
+      await new Promise(function(resolve, reject) {
+        script.onload = resolve;
+        script.onerror = function() { reject(new Error('FFmpeg CDN load failed')); };
+        document.head.appendChild(script);
+      });
+      _ffmpegInstance = new FFmpegWASM.FFmpeg();
+      await _ffmpegInstance.load({
+        coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
+      });
+      _ffmpegLoaded = true;
+    } catch(e) {
+      _ffmpegLoading = false;
+      console.error('[Transcode] FFmpeg load error:', e);
+      try { toast('FFmpeg failed to load. Try converting externally with HandBrake.', 5000); } catch(ex) {}
+      return;
+    }
+    _ffmpegLoading = false;
+  }
+
+  // ── Fetch the source blob ──
+  try { toast('Reading source file…', 0); } catch(e) {}
+  var inputData;
+  try {
+    var resp = await fetch(srcUrl);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    inputData = new Uint8Array(await resp.arrayBuffer());
+  } catch(e) {
+    console.error('[Transcode] Fetch error:', e);
+    try { toast('Failed to read source file for conversion.', 4000); } catch(ex) {}
+    return;
+  }
+
+  // ── Transcode ──
+  try { toast('Converting to H.264 MP4… (this may take a minute for large files)', 0); } catch(e) {}
+
+  var inputName = 'input' + (fname.match(/\.\w+$/)?.[0] || '.mov');
+  var outputName = fname.replace(/\.\w+$/i, '') + '_h264.mp4';
+
+  try {
+    await _ffmpegInstance.writeFile(inputName, inputData);
+    await _ffmpegInstance.exec([
+      '-i', inputName,
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '23',
+      '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-movflags', '+faststart',
+      '-y',
+      outputName
+    ]);
+    var outData = await _ffmpegInstance.readFile(outputName);
+    await _ffmpegInstance.deleteFile(inputName);
+    await _ffmpegInstance.deleteFile(outputName);
+  } catch(e) {
+    console.error('[Transcode] FFmpeg exec error:', e);
+    try { toast('Conversion failed. The file may be corrupted or use an unsupported codec.', 5000); } catch(ex) {}
+    return;
+  }
+
+  // ── Replace video source ──
+  var blob = new Blob([outData.buffer], { type: 'video/mp4' });
+  var newUrl = URL.createObjectURL(blob);
+
+  // Track transcoded blobs to avoid re-offering
+  if (!window._transcodedBlobs) window._transcodedBlobs = new Set();
+  window._transcodedBlobs.add(newUrl);
+
+  // Swap source on the video element
+  mediaEl.src = newUrl;
+  mediaEl.load();
+
+  // Update the item's src reference
+  if (ownerItem) {
+    ownerItem.src = newUrl;
+  }
+
+  // Update all preload videos too (they use mediaEl.src)
+  if (typeof _destroyPreloadVideos === 'function') _destroyPreloadVideos();
+
+  try { toast('✅ Converted to H.264 MP4 — ready to play!', 4000); } catch(e) {}
+  console.log('[Transcode] Done:', outputName, 'size:', (outData.length / 1024 / 1024).toFixed(1), 'MB');
 }
 
 // ============================================================
