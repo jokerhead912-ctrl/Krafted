@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.8t';
+var KRAFTED_VERSION = '6.1.8u';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -13453,20 +13453,33 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       var rect = track.getBoundingClientRect();
       if (rect.width <= 0) return;
       var pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      // v6.1.8q perf: During fast scrub, skip intermediate seeks while
-      // the browser is still processing the previous one. This avoids
-      // queueing up dozens of seeks that all compete for decode time.
-      // Strategy: always seek immediately (no rAF delay), but skip
-      // mousemove events that arrive within 16ms of the last seek.
-      // snap=true (initial click) always seeks immediately.
-      if (state.perfMode && !snap) {
-        var _now = performance.now();
-        if (_now - (window._lastPerfSeekTime || 0) < 16) {
-          // Too soon — update UI only, skip the actual video seek
-          updateSeekUI(pct);
-          return;
+      // v6.1.8u perf: During drag, DON'T seek the video at all.
+      // Video seek is the bottleneck — browser decode latency makes it
+      // impossible to get instant feedback. Instead:
+      //   1. Show thumbnail preview (instant, CSS background-position)
+      //   2. Update seek bar UI (instant, DOM writes)
+      //   3. Only seek the actual video on mouseup (final position).
+      // This matches Premiere/Resolve behavior: scrub shows thumbnails,
+      // video frame only updates when you release.
+      if (state.perfMode && !snap && dragActive) {
+        updateSeekUI(pct);
+        // Update thumbnail preview position (same logic as hover handler)
+        if (_thumbStripReady && _thumbStripDataUrl) {
+          var _thumbIdx = Math.floor(pct * (Math.ceil(mediaEl.duration / 0.5)));
+          var _maxIdx = Math.ceil(mediaEl.duration / 0.5) - 1;
+          _thumbIdx = Math.max(0, Math.min(_maxIdx, _thumbIdx));
+          thumbPreview.style.display = 'block';
+          thumbPreview.style.backgroundPosition = (-_thumbIdx * 160) + 'px 0px';
+          var _barR2 = seekBar.getBoundingClientRect();
+          var _xInBar2 = clientX - _barR2.left;
+          var _left2 = Math.max(4, Math.min(_barR2.width - 164, _xInBar2 - 80));
+          thumbPreview.style.left = _left2 + 'px';
         }
-        window._lastPerfSeekTime = _now;
+        // Also update the hover tooltip
+        updateSeekTooltip(clientX);
+        // Save target for mouseup seek
+        window._perfSeekFinalTarget = pct * (isFinite(mediaEl.duration) ? mediaEl.duration : 0);
+        return;
       }
       // Apply to video immediately. Browser will clip to [0, duration].
       // Set even if duration isn't ready — it will be applied once metadata loads.
@@ -13534,10 +13547,19 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       var onUp = function() {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
-        // We're no longer actively dragging. From here, the next `seeked`
-        // event that matches our drop position is the one to release on.
-        // Until then, `seeking` stays true so timeupdate doesn't fight us.
         dragActive = false;
+        // v6.1.8u: In perfMode, seek to the final drag position NOW.
+        // The entire drag was UI-only (thumbnail + fill bar); this is
+        // the first and only video seek, so the frame updates instantly
+        // at the drop point without any intermediate decode overhead.
+        if (state.perfMode && window._perfSeekFinalTarget !== undefined && isFinite(mediaEl.duration) && mediaEl.duration > 0) {
+          mediaEl.currentTime = Math.max(0, Math.min(mediaEl.duration, window._perfSeekFinalTarget));
+          seekDragTarget = window._perfSeekFinalTarget;
+          window._perfSeekFinalTarget = undefined;
+          updateSeekUI(seekDragTarget / mediaEl.duration);
+          // Hide thumbnail preview on drop
+          thumbPreview.style.display = 'none';
+        }
         // Round 58: hide the playhead label after drag ends — UNLESS
         // the video is now playing (in which case the play listener
         // will re-add the class). If the video stays paused, hide it
