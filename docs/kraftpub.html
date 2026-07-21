@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.13';
+var KRAFTED_VERSION = '6.1.14';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7736,7 +7736,7 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
     mediaEl.playsInline = true;
     mediaEl.loop = true;
     mediaEl.muted = true;
-    mediaEl.preload = 'none';  // v5.5.1: no preload — only load when selected/hovered/played
+    mediaEl.preload = 'auto';  // v6.1.13: auto-buffer needed for high-bitrate blob videos
     mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;will-change:transform;';
   } else {
     mediaEl = document.createElement('img');
@@ -11026,28 +11026,14 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       for (var i = 0; i < PRELOAD_COUNT; i++) {
         var pv = document.createElement('video');
         pv.muted = true;
-        pv.preload = 'auto';
+        pv.preload = 'none';  // don't compete with main video for blob reads
         pv.setAttribute('data-krafted-preload', '1'); // marker so app code can skip these
         pv.style.cssText = 'width:1px;height:1px;display:none;';
         pv.src = mediaEl.src;
         _container.appendChild(pv);
-        _preloadVideos.push({ el: pv, targetTime: -1, ready: false });
+        _preloadVideos.push({ el: pv, targetTime: -1, ready: true });
       }
-      // Wait for all preloaders to be ready
-      var _readyCount = 0;
-      _preloadVideos.forEach(function(pv, i) {
-        function _onReady() {
-          pv.el.removeEventListener('loadedmetadata', _onReady);
-          pv.el.removeEventListener('canplay', _onReady);
-          _readyCount++;
-          if (_readyCount >= PRELOAD_COUNT) {
-            _updatePreloadIndicator('ready');
-            console.log('[Preload] ' + PRELOAD_COUNT + ' preloader videos ready');
-          }
-        }
-        pv.el.addEventListener('loadedmetadata', _onReady);
-        pv.el.addEventListener('canplay', _onReady);
-      });
+      console.log('[Preload] ' + PRELOAD_COUNT + ' preloader videos ready (lazy — will buffer on seek)');
     }
 
     function _updatePreloadIndicator(text) {
