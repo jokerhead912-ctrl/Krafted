@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.10p';
+var KRAFTED_VERSION = '6.1.10q';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -11032,7 +11032,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     function _initPreloadVideos() {
       if (!state.perfMode) return;
       if (_preloadVideos.length > 0) return; // already initialized
-      if (!mediaEl.src || (!mediaEl.src.startsWith('blob:') && !mediaEl.src.startsWith('data:'))) return;
+      if (!mediaEl.src) return; // guard: must have a video source loaded (any protocol)
       // Create an isolated container for preload videos — off-screen,
       // non-interactive, and hidden from all querySelector/event paths.
       var _container = document.createElement('div');
