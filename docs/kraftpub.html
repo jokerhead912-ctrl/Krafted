@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.14';
+var KRAFTED_VERSION = '6.1.15';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7738,6 +7738,23 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
     mediaEl.muted = true;
     mediaEl.preload = 'auto';  // v6.1.13: auto-buffer needed for high-bitrate blob videos
     mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;will-change:transform;';
+    // v6.1.15: surface codec-unsupported errors so the user knows WHY
+    // playback fails (e.g. ProRes/DNxHR .mov files from screen recorders).
+    // Browser <video> only supports H.264/H.265/VP9/AV1 — anything else
+    // (ProRes, DNxHR, Cineform, etc.) silently fails to decode.
+    mediaEl.addEventListener('error', function() {
+      var err = mediaEl.error;
+      var code = err ? err.code : 0;
+      // code 4 = MEDIA_ERR_SRC_NOT_SUPPORTED — codec/container unsupported
+      if (code === 4) {
+        var isMov = /\.mov$/i.test(src) || /\.avi$/i.test(src) || /\.mkv$/i.test(src);
+        var msg = isMov
+          ? 'Codec not supported: ' + (src.split('/').pop().split('?')[0] || 'video') + ' — .mov often uses ProRes/DNxHR which browsers can\'t play. Convert to H.264 MP4 first (e.g. via HandBrake or QuickTime export).'
+          : 'Codec not supported by browser. Try H.264 MP4 for best compatibility.';
+        try { toast(msg, 6000); } catch(e) {}
+        console.warn('[Video] Unsupported codec:', code, src);
+      }
+    });
   } else {
     mediaEl = document.createElement('img');
     mediaEl.src = src;
