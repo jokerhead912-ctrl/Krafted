@@ -1,15 +1,11 @@
-// Krafted v6.1.18 Service Worker
+// Krafted v6.1.20 Service Worker
 // Standalone file (replaces the previous inline blob-URL approach which
 // failed on GitHub Pages with "The URL protocol of the script ('blob:...')
 // is not supported"). Browsers require SW scripts to be real same-origin
 // file URLs, not blob: URLs, on secure origins.
-//
-// v6.1.18: Inject COOP/COEP headers on HTML responses to enable
-// SharedArrayBuffer (needed by FFmpeg.wasm transcoder for .mov/ProRes files).
-// GitHub Pages doesn't support custom headers, so the SW does it instead.
 
-const CACHE_NAME = 'krafted-v6.1.19-' + Date.now();
-const APP_VERSION = '6.1.19';
+const CACHE_NAME = 'krafted-v6.1.20-' + Date.now();
+const APP_VERSION = '6.1.20';
 
 // Files to pre-cache on install
 const PRE_CACHE = [
@@ -51,42 +47,11 @@ self.addEventListener('fetch', function(event) {
   const url = event.request.url;
   if (url.startsWith('chrome-extension://') || url.startsWith('blob:') || url.startsWith('data:')) return;
 
-  // v6.1.18: Helper to inject COOP/COEP headers into HTML responses.
-  // Required for SharedArrayBuffer (used by FFmpeg.wasm transcoder for
-  // unsupported codecs like ProRes/DNxHR .mov files). GitHub Pages
-  // doesn't support custom headers, so the SW does it instead.
-  function addCrossOriginHeaders(response) {
-    if (!response || response.status !== 200) return response;
-    var ct = response.headers.get('content-type') || '';
-    if (!ct.includes('text/html')) return response;
-    var newHeaders = new Headers(response.headers);
-    newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin');
-    newHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp');
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: newHeaders
-    });
-  }
-
-  // v6.1.18: Helper to inject CORP header on CDN responses so they pass
-  // the COEP "require-corp" check on our HTML.
-  function addCrossOriginResourcePolicy(response) {
-    if (!response || response.status !== 200) return response;
-    var newHeaders = new Headers(response.headers);
-    newHeaders.set('Cross-Origin-Resource-Policy', 'cross-origin');
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: newHeaders
-    });
-  }
-
-  // For CDN scripts (libgif, gif.js, gif.worker, ffmpeg.wasm): cache-first + CORP inject
+  // For CDN scripts (libgif, gif.js, gif.worker): cache-first after first load
   if (url.includes('cdn.jsdelivr.net') || url.includes('unpkg.com')) {
     event.respondWith(
       caches.match(event.request).then(function(cached) {
-        if (cached) return addCrossOriginResourcePolicy(cached);
+        if (cached) return cached;
         return fetch(event.request).then(function(response) {
           if (response && response.status === 200) {
             const clone = response.clone();
@@ -94,14 +59,14 @@ self.addEventListener('fetch', function(event) {
               cache.put(event.request, clone);
             });
           }
-          return addCrossOriginResourcePolicy(response);
+          return response;
         });
       })
     );
     return;
   }
 
-  // For same-origin requests (the HTML, local JS): network-first + COOP/COEP inject
+  // For same-origin requests (the HTML, local JS): network-first
   event.respondWith(
     fetch(event.request).then(function(response) {
       if (response && response.status === 200) {
@@ -110,11 +75,9 @@ self.addEventListener('fetch', function(event) {
           cache.put(event.request, clone);
         });
       }
-      return addCrossOriginHeaders(response);
+      return response;
     }).catch(function() {
-      return caches.match(event.request).then(function(cached) {
-        return addCrossOriginHeaders(cached);
-      });
+      return caches.match(event.request);
     })
   );
 });
@@ -122,11 +85,9 @@ self.addEventListener('fetch', function(event) {
 // ===== MESSAGE: handle version check requests =====
 self.addEventListener('message', function(event) {
   if (event.data && event.data.type === 'GET_VERSION') {
-    // Only respond if the client sent a MessageChannel port
     if (event.ports && event.ports[0]) {
       event.ports[0].postMessage({ version: APP_VERSION });
     } else if (event.source) {
-      // Fallback: reply directly to the source client
       try { event.source.postMessage({ type: 'GET_VERSION_REPLY', version: APP_VERSION }); } catch (_) {}
     }
   }
