@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.10';
+var KRAFTED_VERSION = '6.1.10p';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -11033,13 +11033,20 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       if (!state.perfMode) return;
       if (_preloadVideos.length > 0) return; // already initialized
       if (!mediaEl.src || (!mediaEl.src.startsWith('blob:') && !mediaEl.src.startsWith('data:'))) return;
+      // Create an isolated container for preload videos — off-screen,
+      // non-interactive, and hidden from all querySelector/event paths.
+      var _container = document.createElement('div');
+      _container.id = 'krafted-preload-container';
+      _container.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;z-index:-1;';
+      document.body.appendChild(_container);
       for (var i = 0; i < PRELOAD_COUNT; i++) {
         var pv = document.createElement('video');
         pv.muted = true;
         pv.preload = 'auto';
-        pv.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+        pv.setAttribute('data-krafted-preload', '1'); // marker so app code can skip these
+        pv.style.cssText = 'width:1px;height:1px;display:none;';
         pv.src = mediaEl.src;
-        document.body.appendChild(pv);
+        _container.appendChild(pv);
         _preloadVideos.push({ el: pv, targetTime: -1, ready: false });
       }
       // Wait for all preloaders to be ready
@@ -11151,6 +11158,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         try { pv.el.pause(); pv.el.removeAttribute('src'); pv.el.load(); pv.el.remove(); } catch(e) {}
       });
       _preloadVideos = [];
+      // Also remove the isolated container
+      var _cont = document.getElementById('krafted-preload-container');
+      if (_cont) try { _cont.remove(); } catch(e) {}
     }
 
     // Round 64: Mac-only two-finger scrub — Two-fix rollout (v5.3).
