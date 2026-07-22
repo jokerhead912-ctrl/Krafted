@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.2.6';
+var KRAFTED_VERSION = '6.2.7';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -22386,11 +22386,14 @@ document.addEventListener('mousemove', e => {
     selBox.style.top = y1 + 'px';
     selBox.style.width = w + 'px';
     selBox.style.height = h + 'px';
-    // v6.2.3 perf: on every mousemove, only toggle .selected class (no DOM rebuild).
-    // refreshSelection() tears down + rebuilds 8 handles per item and scans the full
-    // DOM — that's O(N) per frame, crippling box-select with 100+ items. Defer the
-    // full refresh (handles, props panel) to mouseup.
-    //
+    // v6.2.6 perf: throttle intersection check to ~30 fps. The rubber band
+    // box still updates at full rate (CSS-only, cheap). The intersection
+    // loop (classList toggle on N items) runs at most once per ~32ms.
+    // This matters most at low zoom where the box covers many items.
+    const now = performance.now();
+    if (!d._lastCheckT) d._lastCheckT = 0;
+    if (now - d._lastCheckT < 32) return;
+    d._lastCheckT = now;
     // v6.2.5: _allItemsCache is pre-built at mousedown — the fallback below
     // should never trigger in normal flow, but we keep it as a safety net.
     if (!d._allItemsCache) {
