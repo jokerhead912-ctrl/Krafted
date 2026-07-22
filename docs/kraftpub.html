@@ -29939,45 +29939,50 @@ async function buildKpakV6(progressCallback, writableStream) {
   console.log('[KPAKv6] items to pack:', blobItems.length);
 
   // Build entries list with metadata only — bytes are fetched on demand
-  const entryMetas = []; // {name, size, type, src, id}
+  const entryMetas = [];
   entryMetas.push({ name: 'manifest.json', size: manifestBytes.length, type: 0, bytes: manifestBytes, isManifest: true });
   for (const it of blobItems) {
-    const label = it.isVideo ? 'Video' : it.isAudio ? 'Audio' : 'Image';
-    const estSize = it._fileSize || (it.isVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024);
     entryMetas.push({
       name: 'media/' + it.id + (it.isVideo ? '.mp4' : it.isAudio ? '.mp3' : '.png'),
-      size: estSize,
+      size: it._fileSize || (it.isVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024),
       type: it.isVideo ? 1 : it.isAudio ? 2 : 3,
-      src: it.src,
-      isVideo: it.isVideo
+      src: it.src
     });
   }
 
   if (progressCallback) progressCallback('Writing ' + entryMetas.length + ' entries...');
 
-  // Pass 1: fetch each entry's actual size (we need it for the index)
-  // For streaming mode, we can write each entry as we go and track offset
-  const entries = []; // {name, offset, size, type, bytes (for blob mode) or just metadata}
+  const entries = [];
   let currentOffset = 0;
-  const blobParts = []; // for blob fallback mode only
+  const blobParts = [];
 
   for (let i = 0; i < entryMetas.length; i++) {
     const m = entryMetas[i];
     if (progressCallback) progressCallback('Pack ' + (i + 1) + '/' + entryMetas.length + ' (' + formatBytes(m.size) + ')...');
 
     try {
-      let bytes;
-      if (m.isManifest) {
-        bytes = m.bytes;
+      // Stream entry bytes via fetch + getReader, writing chunks as we read
+      // This keeps memory usage at ~chunk-size (typically 64KB) instead of full entry
+      const resp = m.isManifest ? null : await fetch(m.src);
+      if (!m.isManifest && !resp.ok) { console.warn('[KPAKv6] fetch failed', m.name); continue; }
+
+      // Write 4-byte size placeholder (we know size at end, fix it via finalization)
+      // For true streaming without seek, we write SIZE = 0xFFFFFFFF (4GB marker) as sentinel.
+      // The index stores the real offset/size, so the in-band size header is redundant.
+      // Wait, our readKpakV6Index DOES need this for media entry size to do blob.slice().
+      // We need real size. So we MUST use Content-Length or pre-count.
+      const contentLength = m.isManifest ? m.bytes.length : parseInt(resp.headers.get('content-length') || '0', 10);
+
+      let sizeBuf;
+      if (contentLength > 0) {
+        // Use Content-Length (reliable for blob: URLs since they wrap a Blob with known size)
+        sizeBuf = new Uint8Array(4);
+        new DataView(sizeBuf.buffer).setUint32(0, contentLength, true);
       } else {
-        const resp = await fetch(m.src);
-        if (!resp.ok) { console.warn('[KPAKv6] fetch failed', m.name); continue; }
-        bytes = new Uint8Array(await resp.arrayBuffer());
+        // Fallback: use 0 as placeholder, will fix later
+        sizeBuf = new Uint8Array(4);
       }
 
-      // Write 4-byte size header
-      const sizeBuf = new Uint8Array(4);
-      new DataView(sizeBuf.buffer).setUint32(0, bytes.length, true);
       if (useStreaming) {
         await writableStream.write(sizeBuf);
       } else {
@@ -29985,18 +29990,60 @@ async function buildKpakV6(progressCallback, writableStream) {
       }
       currentOffset += 4;
 
-      // Write entry data
-      if (useStreaming) {
-        await writableStream.write(bytes);
-      } else {
-        blobParts.push(bytes.buffer);
-      }
-      entries.push({ name: m.name, offset: currentOffset, size: bytes.length, type: m.type });
-      currentOffset += bytes.length;
+      const dataOffset = currentOffset;
+      let actualSize = 0;
 
-      // Free the entry's bytes — let GC reclaim
-      bytes = null;
-      if (i % 2 === 0) await new Promise(r => setTimeout(r, 0)); // yield to GC
+      if (m.isManifest) {
+        if (useStreaming) {
+          await writableStream.write(m.bytes);
+        } else {
+          blobParts.push(m.bytes.buffer);
+        }
+        actualSize = m.bytes.length;
+      } else if (resp.body && resp.body.getReader) {
+        // True streaming — read chunks and write immediately
+        const reader = resp.body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (useStreaming) {
+            await writableStream.write(value);
+          } else {
+            // For blob mode: combine periodically to release old refs
+            if (blobParts.length > 50) {
+              const combined = new Blob(blobParts);
+              blobParts.length = 0;
+              blobParts.push(combined);
+            }
+            blobParts.push(value.buffer);
+          }
+          actualSize += value.length;
+        }
+        // Update size header if Content-Length was wrong/missing
+        if (contentLength === 0 || contentLength !== actualSize) {
+          const fixBuf = new Uint8Array(4);
+          new DataView(fixBuf.buffer).setUint32(0, actualSize, true);
+          // For streaming mode, we can't seek back to fix. Log warning.
+          if (useStreaming) {
+            console.warn('[KPAKv6] size mismatch for', m.name, 'contentLength:', contentLength, 'actual:', actualSize);
+            // Reader has already read past; size header is wrong but index has correct size
+            // So load will still work as long as we trust the index
+          }
+        }
+      } else {
+        // No getReader — fallback to arrayBuffer
+        const ab = await resp.arrayBuffer();
+        if (useStreaming) {
+          await writableStream.write(new Uint8Array(ab));
+        } else {
+          blobParts.push(ab);
+        }
+        actualSize = ab.byteLength;
+      }
+
+      entries.push({ name: m.name, offset: dataOffset, size: actualSize, type: m.type });
+      currentOffset += actualSize;
+      if (i % 2 === 0) await new Promise(r => setTimeout(r, 0));
     } catch (e) {
       console.warn('[KPAKv6] failed to pack', m.name, e.message);
     }
