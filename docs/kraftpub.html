@@ -30122,17 +30122,6 @@ async function saveBoardSplit() {
       const fname = 'krafted_' + dateStr + '_part' + (bi + 1) + '.kpak';
       updateProg('Part ' + (bi + 1) + '/' + batches.length + ': choose save location...');
 
-      // Get file handle
-      let fileHandle = null;
-      if (window.showSaveFilePicker) {
-        const h = await requestSaveHandle(fname, 'application/zip', '.kpak');
-        if (h.cancelled) { toast('Split save cancelled at part ' + (bi + 1)); return; }
-        fileHandle = h.handle;
-      } else {
-        toast('Split save requires Chrome/Edge (File System Access API)');
-        return;
-      }
-
       // Temporarily swap state for buildManifest:
       // - Part 1: includes all texts/todos/mindmaps (they're small, no need to split)
       // - Parts 2+: empty texts/todos/mindmaps (already loaded via part 1 append)
@@ -30146,9 +30135,42 @@ async function saveBoardSplit() {
       }
       updateProg('Part ' + (bi + 1) + '/' + batches.length + ': building...');
 
-      const writable = await fileHandle.createWritable();
-      await buildKpakStream(writable, updateProg, null);
-      console.log('[SPLIT] Part', bi + 1, 'saved:', fname);
+      // Try streaming path first (Chrome/Edge with File System Access API)
+      // Fallback to JSZip blob + download if user cancels, SecurityError, or API missing
+      let savedVia = null;
+      if (window.showSaveFilePicker) {
+        try {
+          const h = await requestSaveHandle(fname, 'application/zip', '.kpak');
+          if (h.cancelled) {
+            toast('Split save cancelled at part ' + (bi + 1));
+            return;
+          }
+          if (h.handle) {
+            const writable = await h.handle.createWritable();
+            await buildKpakStream(writable, updateProg, null);
+            savedVia = 'stream';
+            console.log('[SPLIT] Part', bi + 1, 'saved via stream:', fname);
+          }
+        } catch (e) {
+          console.warn('[SPLIT] stream path failed for part', bi + 1, e.name, e.message);
+          // Fall through to JSZip fallback below
+        }
+      }
+      if (!savedVia) {
+        // Fallback: build blob via JSZip and trigger download
+        updateProg('Part ' + (bi + 1) + '/' + batches.length + ': building blob...');
+        const result = await buildKpakBlob(updateProg);
+        const zipBlob = result.zipBlob || result;
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fname;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+        savedVia = 'blob-download';
+        console.log('[SPLIT] Part', bi + 1, 'saved via blob download:', fname, formatBytes(zipBlob.size));
+      }
     }
     toast('Split save complete — ' + batches.length + ' files saved');
   } catch (err) {
