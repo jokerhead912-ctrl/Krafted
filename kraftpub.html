@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.2.14';
+var KRAFTED_VERSION = '6.2.15';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6553,7 +6553,7 @@ function cullOffscreenItems() {
           // Pause video but remember it was playing
           it._wasPlaying = true;
           it.video.pause();
-        } else if (it.img && it.src && isAnimatedGif(it.src) && !_frozenGifs.has(it.id)) {
+        } else if (it.img && (it.isGif || isAnimatedGif(it.src)) && !_frozenGifs.has(it.id)) {
           // Freeze animated GIFs (replace with static first frame) — this is the biggest perf win
           try {
             const c = document.createElement('canvas');
@@ -17018,7 +17018,7 @@ function updateMediaBar() {
   // Collect all GIF and video items
   const mediaItems = state.items.filter(i => {
     if (i.video) return true;
-    if (i.img && i.src && isAnimatedGif(i.src)) return true;
+    if (i.img && (i.isGif || isAnimatedGif(i.src))) return true;
     return false;
   });
   if (mediaItems.length === 0) {
@@ -17130,7 +17130,7 @@ function pauseAllMedia() {
       item.video.pause();
     }
     // Freeze GIFs by replacing src with a static first frame
-    if (item.img && item.src && isAnimatedGif(item.src) && !_frozenGifs.has(item.id)) {
+    if (item.img && (item.isGif || isAnimatedGif(item.src)) && !_frozenGifs.has(item.id)) {
       try {
         const c = document.createElement('canvas');
         c.width = item.img.naturalWidth || item.natW;
@@ -17159,7 +17159,7 @@ function toggleMediaItem(itemId) {
     const origSrc = _frozenGifs.get(item.id);
     if (item.img) item.img.src = origSrc;
     _frozenGifs.delete(item.id);
-  } else if (item.img && item.src && isAnimatedGif(item.src)) {
+  } else if (item.img && (item.isGif || isAnimatedGif(item.src))) {
     try {
       const c = document.createElement('canvas');
       c.width = item.img.naturalWidth || item.natW;
@@ -17798,7 +17798,7 @@ function updatePropsPanel() {
   }
   // Show GIF section only for GIF images
   if (gifSection) {
-    gifSection.style.display = (item.img && item.src && isAnimatedGif(item.src)) ? 'block' : 'none';
+    gifSection.style.display = (item.img && (item.isGif || isAnimatedGif(item.src))) ? 'block' : 'none';
   }
   // Show Video section only for video items
   const videoSection = document.getElementById('video-section');
