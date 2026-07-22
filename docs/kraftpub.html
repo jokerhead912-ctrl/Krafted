@@ -31161,7 +31161,10 @@ function restoreBoard(data, append) {
     try {
     // Skip video items whose blob: URL was lost on reload
     // v6.5.0: also check _kpakEntry — v6 lazy videos have empty src but valid _kpakEntry
-    if (d.videoLost || (d.isVideo && !d.src && !d.mediaData && !d._kpakEntry && !d._lazyEntry)) return;
+    if (d.videoLost || (d.isVideo && !d.src && !d.mediaData && !d._kpakEntry && !d._lazyEntry)) {
+      console.log('[RESTORE] skip item id=' + d.id + ' isVideo=' + d.isVideo + ' src=' + (d.src ? 'set' : 'EMPTY') + ' _kpakEntry=' + !!d._kpakEntry);
+      return;
+    }
     // v5.5: Skip image items whose blob URL was lost (auto-save stripped src).
     // They'll show as a grey placeholder with dimensions preserved.
     if (d.imageLost && !d.mediaData) {
