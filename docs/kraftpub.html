@@ -18616,7 +18616,7 @@ function showCtx(x, y) {
   } else {
     html += `<div class="ctx-item" onclick="triggerPaste();hideCtx()">Paste <kbd>Ctrl+V</kbd></div>`;
     html += `<div class="ctx-item" onclick="document.getElementById('file-audio-input').click();hideCtx()">Import Audio</div>`;
-    html += `<div class="ctx-item" onclick="saveBoard();hideCtx()">Save Board</div>`;
+    html += `<div class="ctx-item" onclick="saveBoardV6();hideCtx()">Save Board</div>`;
     // Save all images (or selected) to a chosen local folder
     const _imgCount = (typeof getSelectedImages === 'function' ? getSelectedImages() : []).length || state.items.filter(i => i && i.img && i.src && !i.isVideo).length;
     const _ctxTitle = hasFileSystemAccess() ? 'Save images to a local folder (Chrome / Edge on Win + Mac)' : 'Folder picker unavailable — will download each image instead';
@@ -20681,7 +20681,7 @@ function _dispatchShortcut(e) {
     case 'edit-delete':      deleteSelected(); return true;
     case 'edit-select-all':  state.selected.clear(); var all = []; [].push.apply(all, state.items); [].push.apply(all, state.texts); [].push.apply(all, state.todos||[]); [].push.apply(all, state.mindmaps||[]); all.forEach(function(i){ state.selected.add(i.id); }); refreshSelection(); return true;
     // File
-    case 'file-save':        if (typeof saveBoard === 'function') saveBoard(); return true;
+    case 'file-save':        if (typeof saveBoardV6 === 'function') saveBoardV6(); return true;
     case 'file-save-as':     if (typeof setTool === 'function') setTool('capture'); return true; // Shift+Ctrl+S = screen cap
     case 'file-open':        if (typeof loadBoard === 'function') loadBoard(); return true;
     // Group
@@ -20995,7 +20995,7 @@ document.addEventListener('keydown', e => {
       return;
     }
     if (e.key === 'g' || e.key === 'G') { e.preventDefault(); if (e.shiftKey) ungroupSelected(); else groupSelected(); return; }
-    if (e.key === 's' || e.key === 'S') { e.preventDefault(); if (e.shiftKey) setTool('capture'); else saveBoard(); return; }
+    if (e.key === 's' || e.key === 'S') { e.preventDefault(); if (e.shiftKey) setTool('capture'); else saveBoardV6(); return; }
     if (e.key === 'a' || e.key === 'A') { e.preventDefault(); state.selected.clear(); [...state.items, ...state.texts, ...(state.todos||[]), ...(state.mindmaps||[])].forEach(i => state.selected.add(i.id)); refreshSelection(); return; }
     if (e.key === 'e' || e.key === 'E') { e.preventDefault(); setTool('export'); return; }
     if (e.key === 'l' || e.key === 'L') { e.preventDefault(); openLinkModal(); return; }
