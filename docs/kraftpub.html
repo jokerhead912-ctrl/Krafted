@@ -10447,6 +10447,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // Round 7: clicking the draw button (✏️ on the controls bar) now
       // goes DIRECTLY to pen mode, not arrow. Matches the D key
       // shortcut. Subsequent clicks toggle off.
+      // v6.5.0: Always reset lockToPlayer to OFF when entering draw mode.
+      if (window.G) window.G.lockToPlayer = false;
       const s = el._annoDrawState;
       s.mode = (s.mode === 'off') ? 'pen' : 'off';
       _applyDrawMode();
@@ -20954,6 +20956,8 @@ document.addEventListener('keydown', e => {
           setTimeout(function(){ window.__kraftedTDKeyHandled = false; }, 0);
           var sDT = _selVidDT.el._annoDrawState;
           var targetMode = (e.key === 'd' || e.key === 'D') ? 'pen' : 'text';
+          // v6.5.0: Always reset lockToPlayer to OFF when entering draw mode.
+          if (window.G) window.G.lockToPlayer = false;
           // Exactly the same logic as clicking the toolbar T/D button:
           // toggle the mode and call _applyDrawMode. Nothing else.
           sDT.mode = (sDT.mode === targetMode) ? 'off' : targetMode;
