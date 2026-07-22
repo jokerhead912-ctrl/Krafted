@@ -20686,7 +20686,12 @@ document.addEventListener('keydown', e => {
   // overlay, and single-letter hotkeys (v, t, d, e, c, x, l, m, s, etc.)
   // were being intercepted while the user typed, switching tools
   // underneath their fingers.
-  if (e.target.contentEditable === 'true' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+  // v6.5.0: check activeElement (where the cursor actually is), not e.target.
+  // e.target on a text-item div has contentEditable=true even when the user
+  // hasn't clicked into it — that incorrectly blocked F (frame selection) and
+  // other hotkeys while the text box was just selected, not being edited.
+  var ae = document.activeElement;
+  if (ae && (ae.contentEditable === 'true' || ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) {
     // Allow translate shortcut even while editing text
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'T' || e.key === 't')) {
       e.preventDefault();
