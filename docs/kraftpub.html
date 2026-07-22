@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.2.15';
+var KRAFTED_VERSION = '6.2.16';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6574,8 +6574,8 @@ function cullOffscreenItems() {
         if (it.video && it._wasPlaying) {
           it.video.play().catch(() => {});
           it._wasPlaying = false;
-        } else if (it.img && _frozenGifs.has(it.id)) {
-          // Restore animated GIF
+        } else if (it.img && _frozenGifs.has(it.id) && !it._userFrozen) {
+          // Restore animated GIF — only if cull froze it (not user-frozen)
           const origSrc = _frozenGifs.get(it.id);
           if (it.img) it.img.src = origSrc;
           _frozenGifs.delete(it.id);
@@ -7884,8 +7884,9 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize, isGifFla
           var _cctx = _c.getContext('2d');
           _cctx.drawImage(item.img, 0, 0);
           var _staticSrc = _c.toDataURL('image/png');
-          _frozenGifs.set(item.id, item.img.src);
+          _frozenGifs.set(it.id, item.img.src);
           item.img.src = _staticSrc;
+          item._userFrozen = true;  // v6.2.15: mark as user-frozen so cull doesn't unfreeze
         } catch(e) { console.warn('[GIF freeze] failed:', e.message); }
         return;
       }
@@ -17159,6 +17160,7 @@ function toggleMediaItem(itemId) {
     const origSrc = _frozenGifs.get(item.id);
     if (item.img) item.img.src = origSrc;
     _frozenGifs.delete(item.id);
+    delete item._userFrozen;  // user chose to unfreeze
   } else if (item.img && (item.isGif || isAnimatedGif(item.src))) {
     try {
       const c = document.createElement('canvas');
@@ -17169,6 +17171,7 @@ function toggleMediaItem(itemId) {
       const staticSrc = c.toDataURL('image/png');
       _frozenGifs.set(item.id, item.img.src);
       item.img.src = staticSrc;
+      item._userFrozen = true;  // user manually froze this GIF
     } catch(e) {}
   }
   updateMediaBar();
