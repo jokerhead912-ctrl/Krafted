@@ -6527,16 +6527,17 @@ function updateStatus() {
   }
   var memStr = '';
   if (blobCount > 0) {
+    // v6.5.0: removed 1.5GB warning — v6 streaming kpak uses Blob.slice()
+    // for on-demand extraction, so total kpak entry sizes don't reflect
+    // actual RAM usage. Showing "1.5 GB ⚠" misleads users into thinking
+    // the browser is about to OOM when in fact only a few MB are loaded.
     memStr = ' | Mem: ' + (memMB >= 1024 ? (memMB / 1024).toFixed(1) + ' GB' : Math.round(memMB) + ' MB');
-    if (memMB >= 1200) memStr += ' ⚠';
   }
   var stEl = document.getElementById('status');
   if (stEl) {
     stEl.textContent = 'Zoom: ' + Math.round(state.zoom * 100) + '% | Items: ' + (state.items.length + state.texts.length + (state.todos ? state.todos.length : 0) + (state.mindmaps ? state.mindmaps.length : 0)) + selText + ' | Undo: ' + state.undoStack.length + memStr;
-    // Color-code memory pressure
-    if (memMB >= 1500) stEl.style.color = '#ff4444';
-    else if (memMB >= 1000) stEl.style.color = '#ffaa00';
-    else stEl.style.color = '';
+    // v6.5.0: memory pressure color-coding removed (warning icon gone)
+    stEl.style.color = '';
   }
 }
 function zoomBy(factor, cx, cy) {
