@@ -7690,8 +7690,9 @@ function tidySelection() {
   // --- Refresh canvas ---
   try { updateCanvas(); } catch (e) {}
 
-  // --- Auto-frame to show all tidied items ---
-  frameTidiedSelection(selItems);
+  // v6.5.0: DON'T auto-frame after tidy — user wants to keep their current view.
+  // The zoom-jump was disorienting, especially on large boards.
+  // frameTidiedSelection(selItems);
 
   // --- Schedule auto-save ---
   try { scheduleAutoSave(); } catch (e) {}
