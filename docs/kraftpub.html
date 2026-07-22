@@ -22350,6 +22350,11 @@ document.addEventListener('mousemove', e => {
       if (!el.classList.contains('todo-item')) {
         el.style.height = (isMedia ? h + 54 : h) + 'px';
       }
+      // v6.6.0: Live text font scaling during resize — sync fontSize every frame
+      if (el.classList.contains('text-item') && d.item.size && Math.abs(scaleX - 1) > 0.001) {
+        const tz = Math.max(0.02, Math.min(10, (window.state && window.state.zoom) || 1));
+        el.style.fontSize = (d.item.size * scaleX / tz) + 'px';
+      }
       // Direct write to cached media-wrap (skip querySelector)
       if (d._mediaWrap) d._mediaWrap.style.height = h + 'px';
       // Direct transform write (position + rotation, scale handled by width/height)
