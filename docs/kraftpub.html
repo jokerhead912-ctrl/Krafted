@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.21';
+var KRAFTED_VERSION = '6.1.22';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -19924,11 +19924,10 @@ function _handleFileDrop(e, files) {
   const dropX0 = (e.clientX - state.pan.x) / state.zoom;
   const dropY0 = (e.clientY - state.pan.y) / state.zoom;
   // Process images SEQUENTIALLY (one at a time) to avoid memory crash.
-  // v6.1.21: Use blob URLs (URL.createObjectURL) instead of base64 data URLs.
-  // Blob URLs are zero-copy references — they don't duplicate the file data
-  // in memory. This is critical for large batches (45+ images at ~4MB each).
-  // We revoke each blob URL immediately after Image() decode to free memory.
-  // Spacing increased from 30ms to 100ms to give GC time between images.
+  // v6.1.22: Use blob URLs (zero-copy reference) — don't revoke, the
+  // canvas <img> elements need the blob to stay alive for the session.
+  // Earlier v6.1.21 revoked too early and caused ERR_FILE_NOT_FOUND on
+  // subsequent renders. Spacing 100ms gives GC time between decodes.
   if (imageFiles.length > 0) pushUndo();
   let imgIdx = 0;
   function processNextImage() {
@@ -19939,23 +19938,21 @@ function _handleFileDrop(e, files) {
     const isLast = (imgIdx === imageFiles.length - 1);
     const blobUrl = URL.createObjectURL(file);
     const img = new Image();
-    var _cleaned = false;
-    function _cleanup() {
-      if (_cleaned) return; _cleaned = true;
-      img.src = '';  // release decoded pixel buffer
-      URL.revokeObjectURL(blobUrl);
+    var _done = false;
+    function _next() {
+      if (_done) return; _done = true;
+      imgIdx++;
+      setTimeout(processNextImage, 100);
     }
     img.onload = function() {
       addImage(blobUrl, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
-      _cleanup();
-      imgIdx++;
-      setTimeout(processNextImage, 100);
+      img.src = '';  // release temp decode buffer (canvas <img> has its own)
+      _next();
     };
     img.onerror = function() {
       console.warn('[FileDrop] Image decode failed:', file.name);
-      _cleanup();
-      imgIdx++;
-      setTimeout(processNextImage, 100);
+      URL.revokeObjectURL(blobUrl); // safe to revoke — never added to canvas
+      _next();
     };
     img.src = blobUrl;
   }
