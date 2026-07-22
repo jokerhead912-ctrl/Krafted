@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.3.3';
+var KRAFTED_VERSION = '6.3.4';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -29368,6 +29368,9 @@ var StreamingZipWriter = (function() {
 
     return self._writer.write(header).then(function() {
       return self._writer.write(bytes);
+    }).catch(function(err) {
+      console.error('[ZipWriter] addBytes write FAILED for entry:', name, 'size:', size, 'err:', err.message);
+      throw err;
     });
   };
 
@@ -29434,6 +29437,9 @@ var StreamingZipWriter = (function() {
       return self._writer.write(eocd);
     }).then(function() {
       return self._writer.close();
+    }).catch(function(err) {
+      console.error('[ZipWriter] finalize FAILED at offset', self._offset, 'entries:', self._entries.length, 'err:', err.message);
+      throw err;
     });
   };
 
@@ -29955,6 +29961,16 @@ async function saveBoard() {
 
     let fileHandle = null;
     let handleName = null;
+
+    // v6.3.3: pause all playing videos before save — they can interfere with
+    // blob fetch and the streaming writer
+    let _pausedVideos = [];
+    state.items.forEach(function(it) {
+      if (it.video && !it.video.paused) {
+        _pausedVideos.push(it.video);
+        it.video.pause();
+      }
+    });
 
     if (hasFileAPI) {
       updateProg('Choose where to save...');
