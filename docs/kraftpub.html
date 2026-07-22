@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.3.5';
+var KRAFTED_VERSION = '6.3.6';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7244,6 +7244,8 @@ function refreshSelection() {
   } else {
     sel.forEach(item => {
       item.el.classList.add('selected');
+      // v6.3.6: activate lazy video on select (extract blob from zip)
+      if (item._lazyEntry && window._activateLazyVideo) window._activateLazyVideo(item);
       // v5.5.1: lazy-load video when selected (preload="none" saves memory)
       if (item.video && item.video.preload === 'none') {
         item.video.preload = 'auto';
@@ -7440,6 +7442,10 @@ function initVideoLazyLoad() {
     hoveredVideo = itemEl;
     // Find the video element inside
     var vid = itemEl.querySelector('video');
+    // v6.3.6: activate lazy video on hover
+    if (itemEl._item && itemEl._item._lazyEntry && window._activateLazyVideo) {
+      window._activateLazyVideo(itemEl._item);
+    }
     if (vid && vid.preload === 'none') {
       vid.preload = 'auto';
       vid.load();
@@ -30162,6 +30168,20 @@ async function loadBoardFile(event) {
         const mediPrefix = 'media/' + dataItem.id + '.';
         const entryPath = mediaEntries.find(p => p.startsWith(mediPrefix));
         if (!entryPath) continue;
+
+        // v6.3.6: lazy video — defer blob extraction for video items.
+        // Videos can be hundreds of MB each; extracting them all at once
+        // during load OOMs the tab. Instead, store the zip entry reference
+        // and extract on first user interaction (select/click/hover).
+        if (dataItem.isVideo) {
+          dataItem._lazyEntry = entryPath;
+          dataItem._lazyZip = zip;
+          dataItem.src = ''; // placeholder — _activateLazyVideo sets real src
+          remappedIds.add(dataItem.id);
+          restoredCount++;
+          continue;
+        }
+
         try {
           const blob = await zip.file(entryPath).async('blob');
           if (blob && blob.size > 0) {
@@ -30191,6 +30211,29 @@ async function loadBoardFile(event) {
       console.log('[Krafted Load] kpak format, v' + (data._kraftedVersion || '?') + ', ' + (data.items || []).length + ' items, ' + restoredCount + ' media restored, ' + formatBytes(file.size));
 
       restoreBoard(data);
+
+      // v6.3.6: after restoreBoard, attach lazy video activator to items that have _lazyEntry.
+      // The zip reference is kept alive on each item so _activateLazyVideo can extract blobs on demand.
+      window._activateLazyVideo = async function(item) {
+        if (!item._lazyEntry || !item._lazyZip || !item.video) return;
+        var entryPath = item._lazyEntry;
+        var zip = item._lazyZip;
+        try {
+          var blob = await zip.file(entryPath).async('blob');
+          if (blob && blob.size > 0) {
+            var blobUrl = URL.createObjectURL(blob);
+            item.video.src = blobUrl;
+            item.src = blobUrl;
+            item.video.preload = 'auto';
+            item.video.load();
+            delete item._lazyEntry;
+            delete item._lazyZip;
+            console.log('[LazyVideo] Activated:', item.id, formatBytes(blob.size));
+          }
+        } catch(e) {
+          console.warn('[LazyVideo] Failed to activate:', item.id, e.message);
+        }
+      };
       toast('Loaded ' + formatBytes(file.size) + ' (' + restoredCount + ' media restored)');
       } // end regular kpak
     } else {
@@ -30618,7 +30661,9 @@ function restoreBoard(data) {
     let mediaEl;
     if (d.isVideo) {
       mediaEl = document.createElement('video');
-      mediaEl.src = d.src;
+      // v6.3.6: lazy video — if _lazyEntry is set, use empty src.
+      // The real blob URL is extracted on first user interaction via _activateLazyVideo.
+      mediaEl.src = d._lazyEntry ? '' : d.src;
       mediaEl.playsInline = true;
       mediaEl.loop = true;
       mediaEl.muted = true;
