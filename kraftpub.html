@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.2.1';
+var KRAFTED_VERSION = '6.2.2';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -17493,7 +17493,7 @@ function exportGifTrim() {
 // ==== audio.js ====
 
 
-function addAudioItem(src, fileName, x, y) {
+function addAudioItem(src, fileName, x, y, fileSize) {
   pushUndo();
   const w = 280, h = 64;
   const el = document.createElement('div');
@@ -17624,6 +17624,8 @@ function addAudioItem(src, fileName, x, y) {
     trimStart: 0, trimEnd: 0, playbackRate: 1,
   };
   state.items.push(item);
+  // v6.2.1: store file size for pre-save size estimation
+  if (fileSize && fileSize > 0) item._fileSize = fileSize;
   updateItemStyle(item);
   selectOnly(item.id);
   scheduleAutoSave();
@@ -17638,11 +17640,9 @@ function handleAudioUpload(event) {
   const pasteX = (G.lastScreenX - state.pan.x) / state.zoom;
   const pasteY = (G.lastScreenY - state.pan.y) / state.zoom;
   files.forEach((file, idx) => {
-    const reader = new FileReader();
-    reader.onload = ev => {
-      addAudioItem(ev.target.result, file.name, pasteX + idx * 20, pasteY + idx * 20);
-    };
-    reader.readAsDataURL(file);
+    // v6.2.1: use blob URL to avoid OOM on large WAVs
+    const blobUrl = URL.createObjectURL(file);
+    addAudioItem(blobUrl, file.name, pasteX + idx * 20, pasteY + idx * 20, file.size);
   });
   event.target.value = ''; // Reset for re-upload
 }
@@ -20010,11 +20010,11 @@ function _handleFileDrop(e, files) {
   audioFiles.forEach(({ file, idx }) => {
     const dropX = dropX0 + idx * 20;
     const dropY = dropY0 + idx * 20;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      addAudioItem(ev.target.result, file.name, dropX, dropY);
-    };
-    reader.readAsDataURL(file);
+    // v6.2.1: use blob URL instead of data URL — WAV files can be hundreds of MB,
+    // and readAsDataURL allocates a base64 string (~33% bigger) that OOMs the tab
+    // and crashes JSON.stringify during pushUndo/captureSnapshot.
+    const blobUrl = URL.createObjectURL(file);
+    addAudioItem(blobUrl, file.name, dropX, dropY, file.size);
   });
 }
 
@@ -20238,9 +20238,9 @@ document.addEventListener('paste', e => {
       audioFiles.forEach(f => {
         const curOffset = videoOffset + videoFiles.length + audioFiles.indexOf(f);
         const px = x + curOffset * 20, py = y + curOffset * 20;
-        const reader = new FileReader();
-        reader.onload = ev => addAudioItem(ev.target.result, f.name, px, py);
-        reader.readAsDataURL(f);
+        // v6.2.1: use blob URL to avoid OOM on large WAVs
+        const blobUrl = URL.createObjectURL(f);
+        addAudioItem(blobUrl, f.name, px, py, f.size);
       });
       toast('Pasted ' + (imageFiles.length + videoFiles.length + audioFiles.length) + ' files');
       return;
