@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.22';
+var KRAFTED_VERSION = '6.1.23';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -19924,38 +19924,36 @@ function _handleFileDrop(e, files) {
   const dropX0 = (e.clientX - state.pan.x) / state.zoom;
   const dropY0 = (e.clientY - state.pan.y) / state.zoom;
   // Process images SEQUENTIALLY (one at a time) to avoid memory crash.
-  // v6.1.22: Use blob URLs (zero-copy reference) — don't revoke, the
-  // canvas <img> elements need the blob to stay alive for the session.
-  // Earlier v6.1.21 revoked too early and caused ERR_FILE_NOT_FOUND on
-  // subsequent renders. Spacing 100ms gives GC time between decodes.
+  // v6.1.23: Use createImageBitmap() for dimension reading (zero-copy,
+  // no blob URL needed for the temp decode). The canvas <img> gets the
+  // blob URL only after we know the dimensions. createImageBitmap is
+  // async but doesn't create a separate <img> element, so no GC churn
+  // from detached DOM nodes. Bitmap is closed immediately after.
   if (imageFiles.length > 0) pushUndo();
   let imgIdx = 0;
-  function processNextImage() {
+  async function processNextImage() {
     if (imgIdx >= imageFiles.length) return;
     const { file, idx } = imageFiles[imgIdx];
     const dropX = dropX0 + idx * 20;
     const dropY = dropY0 + idx * 20;
     const isLast = (imgIdx === imageFiles.length - 1);
-    const blobUrl = URL.createObjectURL(file);
-    const img = new Image();
-    var _done = false;
-    function _next() {
-      if (_done) return; _done = true;
-      imgIdx++;
-      setTimeout(processNextImage, 100);
+    imgIdx++;
+    try {
+      // createImageBitmap is async, zero-copy, no DOM needed
+      const bitmap = await createImageBitmap(file);
+      const w = bitmap.width, h = bitmap.height;
+      bitmap.close();  // release immediately — we only needed dimensions
+      // Now create the blob URL for the canvas <img> (long-lived)
+      const blobUrl = URL.createObjectURL(file);
+      addImage(blobUrl, w, h, dropX, dropY, false, isLast);
+    } catch(e) {
+      console.warn('[FileDrop] Image decode failed:', file.name, e.message);
     }
-    img.onload = function() {
-      addImage(blobUrl, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
-      img.src = '';  // release temp decode buffer (canvas <img> has its own)
-      _next();
-    };
-    img.onerror = function() {
-      console.warn('[FileDrop] Image decode failed:', file.name);
-      URL.revokeObjectURL(blobUrl); // safe to revoke — never added to canvas
-      _next();
-    };
-    img.src = blobUrl;
+    // Brief pause to let GC run before next image
+    setTimeout(processNextImage, 50);
   }
+  // Start the chain
+  processNextImage();
   if (imageFiles.length > 0) {
     processNextImage();
     if (imageFiles.length > 1) toast('Importing ' + imageFiles.length + ' images…');
