@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.26';
+var KRAFTED_VERSION = '6.1.27';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -10165,6 +10165,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         // to a different frame during the typing interval).
         s.strokes = s.strokesByFrame[targetFrame];
         s.lastFrame = targetFrame;
+        el._perfLastRenderKey = '';  // v6.1.26: clear cache so text appears immediately
         _renderAnnoCanvas();
         _refreshDrawBtnBadge();
         if (el._refreshAllSeekMarkers) {
