@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.2.13';
+var KRAFTED_VERSION = '6.2.14';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7787,8 +7787,11 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize, isGifFla
   mediaEl.draggable = false;
   // ── Video / GIF: use buildMediaControls helper ──
   const isAnimatedGifSrc = isGifFlag || (!isVideo && isAnimatedGif(src));
-  if (isVideo || isAnimatedGifSrc) {
-    buildMediaControls(el, mediaEl, isVideo, isAnimatedGifSrc);
+  if (isVideo) {
+    buildMediaControls(el, mediaEl, true, false);
+  } else if (isAnimatedGifSrc) {
+    // GIF: plain image append (no video player), freeze handled below
+    el.appendChild(mediaEl);
   } else {
     // Plain image: media goes directly in .item
     el.appendChild(mediaEl);
@@ -7892,6 +7895,12 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize, isGifFla
       }
     };
     requestAnimationFrame(_tryFreezeGif);
+    // Double-click to toggle play/pause
+    el.addEventListener('dblclick', function(ev) {
+      ev.stopPropagation();
+      var it = state.items.find(function(i) { return i.el === el; });
+      if (it) toggleMediaItem(it.id);
+    });
   }
   scheduleAutoSave();
   updateMediaBar();
@@ -13846,12 +13855,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       ev.stopPropagation();
       var it = state.items.find(function(i) { return i.el === el; });
       if (it) { selectOnly(it.id); trimGifSelected(); }
-    });
-    // v6.2.8: double-click GIF to toggle play/pause (same as video double-click)
-    el.addEventListener('dblclick', function(ev) {
-      ev.stopPropagation();
-      var it = state.items.find(function(i) { return i.el === el; });
-      if (it) toggleMediaItem(it.id);
     });
   }
 }
