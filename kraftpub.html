@@ -30896,6 +30896,13 @@ function restoreBoard(data, append) {
       tx.h = (tx.h || 40) * _textZoom;
       tx.size = (tx.size || 16) * _textZoom;
     }
+    // v6.6.0: Recalibrate size for text items saved before proportional scaling.
+    // Old files have userResized=true but size=24 (default) while w may be larger.
+    // We scale size to match w so the visual result is identical to what the user
+    // saw when they originally saved. Does NOT touch content/color/font/position.
+    if (tx.userResized && (tx.size === 24 || tx.size === 16) && tx.w && tx.w !== 160) {
+      tx.size = (tx.size || 24) * (tx.w / 160);
+    }
     applyTextProps(tx);
     updateItemStyle(tx);
   // Auto-grow on input
