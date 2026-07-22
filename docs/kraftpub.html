@@ -31099,8 +31099,11 @@ function restoreBoard(data, append) {
   } else {
     G.drawStrokes.length = 0;
   }
-  state.pan = data.pan || { x: 0, y: 0 };
-  state.zoom = data.zoom || 1;
+  // v6.4.1: in append mode, preserve existing zoom/pan — don't overwrite with loaded file's values
+  if (!append) {
+    state.pan = data.pan || { x: 0, y: 0 };
+    state.zoom = data.zoom || 1;
+  }
   // Restore relations
   state.relations = (data.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 6, labelSize: r.labelSize || 16 }; });
   state.selectedRelation = null;
@@ -31147,6 +31150,8 @@ function restoreBoard(data, append) {
   // in on a different board, the loaded items would render at the wrong
   // scale / off-screen. Compute the bounding box of all loaded items
   // and frame the viewport so the user sees them on first paint.
+  // v6.4.1: skip in append mode — preserve user's existing zoom/pan.
+  if (!append) {
   try {
     var allLoaded = [].concat(state.items, state.texts, state.todos || [], state.mindmaps || []);
     if (allLoaded.length > 0) {
@@ -31171,6 +31176,7 @@ function restoreBoard(data, append) {
       }
     }
   } catch (e) { console.warn('[restoreBoard] fit-to-content failed:', e); }
+  }
   updateMediaBar();
   // Render mask overlays for restored items
   state.items.forEach(item => {
