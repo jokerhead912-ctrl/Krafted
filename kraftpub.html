@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.3.4';
+var KRAFTED_VERSION = '6.3.5';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30060,6 +30060,18 @@ async function loadBoardFile(event) {
     document.body.appendChild(prog);
   }
 
+  // v6.3.4: warn for very large files — JSZip async('blob') holds all media
+  // in memory as blob URLs. Files >1.5GB risk OOM on load.
+  if (file.size > 1.5 * 1024 * 1024 * 1024) {
+    const proceed = confirm(
+      '⚠ Very large kpak: ' + formatBytes(file.size) + '\n\n' +
+      'Loading may run out of memory (browser limit ~2GB).\n' +
+      'Tip: close other tabs, or split the project into multiple smaller kpaks.\n\n' +
+      'Continue loading?'
+    );
+    if (!proceed) { event.target.value = ''; return; }
+  }
+
   try {
     if (isKpak) {
       // Detect: locked kpak = JSON wrapper (starts with '{'), binary kpak = zip (starts with 'PK')
@@ -30157,6 +30169,8 @@ async function loadBoardFile(event) {
             remappedIds.add(dataItem.id);
             restoredCount++;
           }
+          // v6.3.4: yield to GC every 10 items to avoid peak memory buildup
+          if (restoredCount % 10 === 0) await new Promise(r => setTimeout(r, 0));
         } catch (e) {
           console.warn('Failed to restore media for item', dataItem.id, e);
         }
