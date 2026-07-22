@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Krafted v6.0.2</title>
+<title>Krafted v6.4.1</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -30112,6 +30112,9 @@ async function saveBoardSplit() {
   const updateProg = (t) => { prog.innerHTML = '<div class="pct">' + t + '</div>'; };
 
   const origItems = state.items.slice(); // preserve original order
+  const origTexts = state.texts.slice();
+  const origTodos = state.todos.slice();
+  const origMindmaps = state.mindmaps.slice();
 
   try {
     for (let bi = 0; bi < batches.length; bi++) {
@@ -30129,8 +30132,17 @@ async function saveBoardSplit() {
         return;
       }
 
-      // Temporarily swap state.items to only this batch for buildManifest
+      // Temporarily swap state for buildManifest:
+      // - Part 1: includes all texts/todos/mindmaps (they're small, no need to split)
+      // - Parts 2+: empty texts/todos/mindmaps (already loaded via part 1 append)
       state.items = batches[bi];
+      if (bi === 0) {
+        // keep origTexts/origTodos/origMindmaps as-is
+      } else {
+        state.texts = [];
+        state.todos = [];
+        state.mindmaps = [];
+      }
       updateProg('Part ' + (bi + 1) + '/' + batches.length + ': building...');
 
       const writable = await fileHandle.createWritable();
@@ -30145,6 +30157,9 @@ async function saveBoardSplit() {
     await new Promise(r => setTimeout(r, 3000));
   } finally {
     state.items = origItems; // restore
+    state.texts = origTexts;
+    state.todos = origTodos;
+    state.mindmaps = origMindmaps;
     try { prog.remove(); } catch (e) {}
   }
 }
@@ -30669,12 +30684,13 @@ function restoreBoard(data, append) {
     state.zoom = 1;
     state.pan = { x: 0, y: 0 };
   }
-  state.zoom = 1;
-  state.pan = { x: 0, y: 0 };
   if (!append) {
     G.nextZ = 1;
   }
-  let maxId = 0;
+  let maxId = append ? state.items.reduce((m, it) => Math.max(m, it.id || 0), 0) : 0;
+  if (append) {
+    G.nextZ = state.items.reduce((m, it) => Math.max(m, (it.z || 0) + 1), G.nextZ);
+  }
   data.items.forEach(d => {
     try {
     // Skip video items whose blob: URL was lost on reload
