@@ -29924,113 +29924,136 @@ function _kpakWriteStr(w, s) {
 }
 
 // v6.5.0: Build kpak blob — writes manifest + all media as raw entries
-// Uses the custom container format, then appends index + footer.
-// Returns a Blob. This is an in-memory build but each entry is appended
-// to a growing array of blobs; the final Blob is constructed from parts.
-async function buildKpakV6(progressCallback) {
-  console.log('[KPAKv6] buildKpakV6 starting...');
+// Uses the custom container format. Two modes:
+//   1) With FileSystemWritableFileStream (Chrome/Edge): stream each entry directly to disk
+//   2) Fallback: build Blob from array of ArrayBuffers (1 entry in memory at a time)
+async function buildKpakV6(progressCallback, writableStream) {
+  console.log('[KPAKv6] buildKpakV6 starting...', writableStream ? 'STREAMING' : 'BLOB');
+  const useStreaming = !!writableStream;
+
   const manifest = buildManifest();
   const manifestJson = JSON.stringify(manifest);
   const manifestBytes = new TextEncoder().encode(manifestJson);
 
-  // Collect entries: manifest first, then media
-  const entries = []; // {name, bytes, type}
-  entries.push({ name: 'manifest.json', bytes: manifestBytes, type: 0 });
-
   const blobItems = state.items.filter(it => it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:')));
-  let packed = 0, skipped = 0, idx = 0;
+  console.log('[KPAKv6] items to pack:', blobItems.length);
 
+  // Build entries list with metadata only — bytes are fetched on demand
+  const entryMetas = []; // {name, size, type, src, id}
+  entryMetas.push({ name: 'manifest.json', size: manifestBytes.length, type: 0, bytes: manifestBytes, isManifest: true });
   for (const it of blobItems) {
-    idx++;
     const label = it.isVideo ? 'Video' : it.isAudio ? 'Audio' : 'Image';
-    if (progressCallback) progressCallback('Packing ' + label + ' ' + idx + '/' + blobItems.length + '...');
+    const estSize = it._fileSize || (it.isVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024);
+    entryMetas.push({
+      name: 'media/' + it.id + (it.isVideo ? '.mp4' : it.isAudio ? '.mp3' : '.png'),
+      size: estSize,
+      type: it.isVideo ? 1 : it.isAudio ? 2 : 3,
+      src: it.src,
+      isVideo: it.isVideo
+    });
+  }
+
+  if (progressCallback) progressCallback('Writing ' + entryMetas.length + ' entries...');
+
+  // Pass 1: fetch each entry's actual size (we need it for the index)
+  // For streaming mode, we can write each entry as we go and track offset
+  const entries = []; // {name, offset, size, type, bytes (for blob mode) or just metadata}
+  let currentOffset = 0;
+  const blobParts = []; // for blob fallback mode only
+
+  for (let i = 0; i < entryMetas.length; i++) {
+    const m = entryMetas[i];
+    if (progressCallback) progressCallback('Pack ' + (i + 1) + '/' + entryMetas.length + ' (' + formatBytes(m.size) + ')...');
+
     try {
-      const resp = await fetch(it.src);
-      if (!resp.ok) { skipped++; continue; }
-      const ab = await resp.arrayBuffer();
-      const ext = mimeToExt(resp.headers.get('content-type') || '', it.isVideo ? 'mp4' : it.isAudio ? 'mp3' : 'png');
-      const name = 'media/' + it.id + '.' + ext;
-      entries.push({ name, bytes: new Uint8Array(ab), type: it.isVideo ? 1 : it.isAudio ? 2 : 3 });
-      packed++;
-      if (idx % 3 === 0) await new Promise(r => setTimeout(r, 0));
+      let bytes;
+      if (m.isManifest) {
+        bytes = m.bytes;
+      } else {
+        const resp = await fetch(m.src);
+        if (!resp.ok) { console.warn('[KPAKv6] fetch failed', m.name); continue; }
+        bytes = new Uint8Array(await resp.arrayBuffer());
+      }
+
+      // Write 4-byte size header
+      const sizeBuf = new Uint8Array(4);
+      new DataView(sizeBuf.buffer).setUint32(0, bytes.length, true);
+      if (useStreaming) {
+        await writableStream.write(sizeBuf);
+      } else {
+        blobParts.push(sizeBuf.buffer);
+      }
+      currentOffset += 4;
+
+      // Write entry data
+      if (useStreaming) {
+        await writableStream.write(bytes);
+      } else {
+        blobParts.push(bytes.buffer);
+      }
+      entries.push({ name: m.name, offset: currentOffset, size: bytes.length, type: m.type });
+      currentOffset += bytes.length;
+
+      // Free the entry's bytes — let GC reclaim
+      bytes = null;
+      if (i % 2 === 0) await new Promise(r => setTimeout(r, 0)); // yield to GC
     } catch (e) {
-      console.warn('[KPAKv6] failed to pack', it.id, e.message);
-      skipped++;
+      console.warn('[KPAKv6] failed to pack', m.name, e.message);
     }
   }
 
-  // Build the file: data blocks + index + footer
-  // We'll build as an array of ArrayBuffers then concatenate
-  if (progressCallback) progressCallback('Building container...');
-
-  // Phase 1: data blocks — build sequentially, track offsets
-  const indexEntries = [];
-  let currentOffset = 0;
-  const dataParts = [];
-
-  for (const entry of entries) {
-    // 4 bytes: size (LE)
-    const sizeBuf = new Uint8Array(4);
-    new DataView(sizeBuf.buffer).setUint32(0, entry.bytes.length, true);
-    dataParts.push(sizeBuf.buffer);
-    currentOffset += 4;
-    dataParts.push(entry.bytes.buffer);
-    indexEntries.push({ name: entry.name, offset: currentOffset, size: entry.bytes.length, type: entry.type });
-    currentOffset += entry.bytes.length;
-  }
-
-  // Phase 2: build index
+  // Pass 2: build index
+  if (progressCallback) progressCallback('Writing index...');
   const indexParts = [];
-  // entry_count (4B LE)
   const countBuf = new Uint8Array(4);
-  new DataView(countBuf.buffer).setUint32(0, indexEntries.length, true);
+  new DataView(countBuf.buffer).setUint32(0, entries.length, true);
   indexParts.push(countBuf.buffer);
-  let indexSize = 4;
 
-  for (const ie of indexEntries) {
-    const nameEnc = new TextEncoder().encode(ie.name);
+  for (const e of entries) {
+    const nameEnc = new TextEncoder().encode(e.name);
     const nameLenBuf = new Uint8Array(2);
     new DataView(nameLenBuf.buffer).setUint16(0, nameEnc.length, true);
-    indexParts.push(nameLenBuf.buffer); indexSize += 2;
-    indexParts.push(nameEnc.buffer); indexSize += nameEnc.length;
+    indexParts.push(nameLenBuf.buffer);
+    indexParts.push(nameEnc.buffer);
 
     const offsetBuf = new Uint8Array(8);
-    new DataView(offsetBuf.buffer).setBigUint64(0, BigInt(ie.offset), true);
-    indexParts.push(offsetBuf.buffer); indexSize += 8;
+    new DataView(offsetBuf.buffer).setBigUint64(0, BigInt(e.offset), true);
+    indexParts.push(offsetBuf.buffer);
 
     const sizeBuf2 = new Uint8Array(8);
-    new DataView(sizeBuf2.buffer).setBigUint64(0, BigInt(ie.size), true);
-    indexParts.push(sizeBuf2.buffer); indexSize += 8;
+    new DataView(sizeBuf2.buffer).setBigUint64(0, BigInt(e.size), true);
+    indexParts.push(sizeBuf2.buffer);
 
     const typeBuf = new Uint8Array(1);
-    typeBuf[0] = ie.type;
-    indexParts.push(typeBuf.buffer); indexSize += 1;
+    typeBuf[0] = e.type;
+    indexParts.push(typeBuf.buffer);
   }
 
-  // Phase 3: footer (magic + index_offset)
+  if (useStreaming) {
+    for (const p of indexParts) {
+      await writableStream.write(p);
+    }
+  } else {
+    blobParts.push(...indexParts);
+  }
+
+  // Pass 3: write footer
   const indexOffset = currentOffset;
   const footerBuf = new Uint8Array(12);
-  const footerView = new DataView(footerBuf.buffer);
   footerBuf.set(new TextEncoder().encode('KPAK'), 0);
-  footerView.setBigUint64(4, BigInt(indexOffset), true);
+  new DataView(footerBuf.buffer).setBigUint64(4, BigInt(indexOffset), true);
 
-  // Concatenate all parts
-  const totalSize = currentOffset + indexSize + 12;
-  const result = new Uint8Array(totalSize);
-  let pos = 0;
-  for (const part of dataParts) {
-    result.set(new Uint8Array(part), pos);
-    pos += part.byteLength;
+  if (useStreaming) {
+    await writableStream.write(footerBuf);
+    // Don't close stream — caller manages lifetime
+    return { entries, size: currentOffset + indexParts.reduce((s, p) => s + p.byteLength, 0) + 12, streamed: true };
+  } else {
+    blobParts.push(footerBuf.buffer);
+    const totalSize = blobParts.reduce((s, p) => s + p.byteLength, 0);
+    if (progressCallback) progressCallback('Finalized ' + formatBytes(totalSize));
+    console.log('[KPAKv6] blob built:', entries.length, 'entries,', formatBytes(totalSize));
+    return { blob: new Blob(blobParts, { type: 'application/octet-stream' }), size: totalSize, entries };
   }
-  for (const part of indexParts) {
-    result.set(new Uint8Array(part), pos);
-    pos += part.byteLength;
-  }
-  result.set(footerBuf, pos);
-
-  if (progressCallback) progressCallback('Finalized ' + formatBytes(totalSize));
-  console.log('[KPAKv6] built:', entries.length, 'entries,', formatBytes(totalSize), ', packed:', packed, 'skipped:', skipped);
-  return new Blob([result.buffer], { type: 'application/octet-stream' });
 }
 
 // v6.5.0: Read kpak index from a Blob (uses .slice() for random access)
@@ -30114,18 +30137,39 @@ async function saveBoardV6() {
   const updateProg = (t) => { prog.innerHTML = '<div class="pct">' + t + '</div>'; };
 
   try {
-    const blob = await buildKpakV6(updateProg);
+    // Try streaming first (Chrome/Edge with File System Access API) — only one entry in memory at a time
+    let saved = false;
+    if (window.showSaveFilePicker) {
+      try {
+        const h = await requestSaveHandle(fname, 'application/zip', '.kpak');
+        if (h.cancelled) { toast('Save cancelled'); return; }
+        if (h.handle) {
+          const writable = await h.handle.createWritable();
+          await buildKpakV6(updateProg, writable);
+          await writable.close();
+          saved = true;
+          console.log('[SAVE V6] streamed to file');
+          toast('Saved v6 kpak \u2714 ' + fname + ' (streamed)');
+        }
+      } catch (e) {
+        console.warn('[SAVE V6] stream failed, falling back to blob:', e.name, e.message);
+      }
+    }
 
-    // Download via <a> click (works everywhere, no File System API needed)
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fname;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
-
-    toast('Saved v6 kpak \u2714 ' + fname + ' (' + formatBytes(blob.size) + ')');
+    if (!saved) {
+      // Fallback: build blob (one entry in memory at a time, GC'd between)
+      const result = await buildKpakV6(updateProg, null);
+      const blob = result.blob;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
+      console.log('[SAVE V6] blob downloaded, size:', formatBytes(blob.size));
+      toast('Saved v6 kpak \u2714 ' + fname + ' (' + formatBytes(blob.size) + ')');
+    }
   } catch (err) {
     console.error('[SAVE V6] FAILED:', err.name, err.message);
     updateProg('Error: ' + (err.message || 'unknown'));
