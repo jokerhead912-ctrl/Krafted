@@ -3382,6 +3382,7 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
   <button onclick="ungroupSelected()" title="Ungroup (Ctrl+Shift+G)" id="btn-ungroup"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="1.5" width="4" height="4" rx="0.5"/><rect x="10.5" y="10.5" width="4" height="4" rx="0.5"/><path d="M7 4h5v5" stroke-dasharray="1.5 1.5"/></svg> <span class="tb-label">Ungroup</span></button>
   <div class="sep"></div>
   <button onclick="saveBoard()" class="tb-primary" title="Save Board (Ctrl+S)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8l2 2v8H3V3z"/><path d="M6 3v3h4V3M6 13V9h4v4"/></svg> <span class="tb-label">Save</span></button>
+  <button onclick="saveBoardSplit()" class="tb-primary" title="Split Save — divide into multiple ~800MB .kpak files for large projects"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8l2 2v8H3V3z"/><path d="M6 3v3h4V3M6 13V9h4v4"/><path d="M2 2v12M14 2v12" stroke-width="0.8"/></svg> <span class="tb-label">Split</span></button>
   <button onclick="qsSaveBoard()" id="btn-qs-save" class="tb-primary" title="Quick Save (Ctrl+Shift+S) — save to last location without picker" style="display:none"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8l2 2v8H3V3z"/><path d="M6 3v3h4V3M6 13V9h4v4"/><path d="M1 1l14 14" stroke="#3fb950" stroke-width="2"/></svg> <span class="tb-label">QS</span></button>
   <button onclick="toggleAppFullscreen()" id="btn-fullscreen" class="tb-primary" title="Fullscreen (Shift+F)">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v4M3 3h4M3 3l4 4M13 13v-4M13 13H9M13 13l-4-4"/></svg>
@@ -3970,7 +3971,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.3.7';
+var KRAFTED_VERSION = '6.4.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30048,6 +30049,106 @@ async function saveBoard() {
   }
 }
 
+// v6.4.0: Split save — divides a large project into multiple .kpak files
+// (~800MB each) so each can be loaded without OOM. Uses the same streaming
+// zip writer as saveBoard.
+async function saveBoardSplit() {
+  console.log('[SPLIT] saveBoardSplit() called');
+  const counts = countMediaItems();
+  console.log('[SPLIT] media counts:', counts);
+
+  // Estimate total size
+  let estTotalBytes = 0;
+  for (const it of state.items) {
+    if (it._fileSize) { estTotalBytes += it._fileSize; }
+    else if (it.src && it.src.startsWith('data:')) {
+      const b64Len = it.src.indexOf(';base64,') >= 0 ? it.src.split(',')[1]?.length || 0 : 0;
+      estTotalBytes += Math.round(b64Len * 0.75);
+    } else if (it.src && it.src.startsWith('blob:')) {
+      estTotalBytes += it.isVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024;
+    }
+  }
+  const estMB = Math.round(estTotalBytes / (1024 * 1024));
+  const PART_SIZE = 800 * 1024 * 1024; // 800MB per part
+  const numParts = Math.max(1, Math.ceil(estTotalBytes / PART_SIZE));
+
+  const proceed = confirm(
+    'Split project into ' + numParts + ' files\n\n' +
+    'Estimated total: ~' + (estMB >= 1024 ? (estMB / 1024).toFixed(1) + ' GB' : estMB + ' MB') + '\n' +
+    'Each file: ~' + Math.round(estMB / numParts) + ' MB\n' +
+    'Files: ' + new Date().toISOString().slice(0, 10) + '_part1.kpak ... part' + numParts + '.kpak\n\n' +
+    'You will be asked where to save each file.\n' +
+    'Load them one at a time to reassemble the board.'
+  );
+  if (!proceed) { toast('Split save cancelled'); return; }
+
+  // Group items into batches
+  const batches = [];
+  let currentBatch = [];
+  let currentSize = 0;
+  for (const it of state.items) {
+    let itSize = it._fileSize || (it.isVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024);
+    if (it.src && it.src.startsWith('data:')) {
+      const b64Len = it.src.indexOf(';base64,') >= 0 ? it.src.split(',')[1]?.length || 0 : 0;
+      itSize = Math.round(b64Len * 0.75);
+    }
+    if (currentSize + itSize > PART_SIZE && currentBatch.length > 0) {
+      batches.push(currentBatch);
+      currentBatch = [];
+      currentSize = 0;
+    }
+    currentBatch.push(it);
+    currentSize += itSize;
+  }
+  if (currentBatch.length > 0) batches.push(currentBatch);
+
+  console.log('[SPLIT] Divided into', batches.length, 'batches:', batches.map(b => b.length + ' items'));
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const prog = document.createElement('div');
+  prog.className = 'save-progress';
+  prog.innerHTML = '<div class="pct">Split save: 0/' + batches.length + '</div>';
+  document.body.appendChild(prog);
+  const updateProg = (t) => { prog.innerHTML = '<div class="pct">' + t + '</div>'; };
+
+  const origItems = state.items.slice(); // preserve original order
+
+  try {
+    for (let bi = 0; bi < batches.length; bi++) {
+      const fname = 'krafted_' + dateStr + '_part' + (bi + 1) + '.kpak';
+      updateProg('Part ' + (bi + 1) + '/' + batches.length + ': choose save location...');
+
+      // Get file handle
+      let fileHandle = null;
+      if (window.showSaveFilePicker) {
+        const h = await requestSaveHandle(fname, 'application/zip', '.kpak');
+        if (h.cancelled) { toast('Split save cancelled at part ' + (bi + 1)); return; }
+        fileHandle = h.handle;
+      } else {
+        toast('Split save requires Chrome/Edge (File System Access API)');
+        return;
+      }
+
+      // Temporarily swap state.items to only this batch for buildManifest
+      state.items = batches[bi];
+      updateProg('Part ' + (bi + 1) + '/' + batches.length + ': building...');
+
+      const writable = await fileHandle.createWritable();
+      await buildKpakStream(writable, updateProg, null);
+      console.log('[SPLIT] Part', bi + 1, 'saved:', fname);
+    }
+    toast('Split save complete — ' + batches.length + ' files saved');
+  } catch (err) {
+    console.error('[SPLIT] FAILED:', err.name, err.message);
+    updateProg('Error: ' + (err.message || 'unknown'));
+    toast('Split save failed: ' + (err.message || 'unknown error'));
+    await new Promise(r => setTimeout(r, 3000));
+  } finally {
+    state.items = origItems; // restore
+    try { prog.remove(); } catch (e) {}
+  }
+}
+
 // Load board from file — detects .kpak (zip) vs .json format
 async function loadBoardFile(event) {
   const file = event.target.files[0];
@@ -30213,7 +30314,17 @@ async function loadBoardFile(event) {
       if (deadBlobsStripped > 0) console.log('[Load] Stripped ' + deadBlobsStripped + ' unrecoverable blob URL(s)');
       console.log('[Krafted Load] kpak format, v' + (data._kraftedVersion || '?') + ', ' + (data.items || []).length + ' items, ' + restoredCount + ' media restored, ' + formatBytes(file.size));
 
-      restoreBoard(data);
+      // v6.4.0: if board already has items, ask whether to replace or append
+      var doAppend = false;
+      if (state.items.length > 0 || state.texts.length > 0) {
+        var appendChoice = confirm(
+          'Board already has ' + (state.items.length + state.texts.length) + ' items.\n\n' +
+          'OK = Append (add to existing board)\n' +
+          'Cancel = Replace (clear board first)'
+        );
+        doAppend = appendChoice;
+      }
+      restoreBoard(data, doAppend);
 
       // v6.3.6: after restoreBoard, attach lazy video activator to items that have _lazyEntry.
       // The zip reference is kept alive on each item so _activateLazyVideo can extract blobs on demand.
@@ -30519,7 +30630,7 @@ function migrateData(data) {
 
 // ============================================================
 
-function restoreBoard(data) {
+function restoreBoard(data, append) {
   // ── v5.5.1: schema migration ──
   // Automatically upgrade old save files to the current schema version.
   // This runs BEFORE any data processing, so all downstream code only
@@ -30539,9 +30650,14 @@ function restoreBoard(data) {
   }
   data = migration.data;
 
-  pushUndo();
-  cleanupAllItems();
-  state.items = []; state.texts = []; state.todos = []; state.mindmaps = []; state.selected.clear();
+  // v6.4.0: append mode — skip clearing, keep existing items
+  if (append) {
+    console.log('[Load] Append mode — keeping existing', state.items.length, 'items');
+  } else {
+    pushUndo();
+    cleanupAllItems();
+    state.items = []; state.texts = []; state.todos = []; state.mindmaps = []; state.selected.clear();
+  }
   // Reset viewport transform so the loaded board renders at 100% zoom,
   // centered. Without this, a previously-zoomed-in session would leave
   // the freshly-loaded items tiny (the zoom shrinks every .item element
@@ -30549,9 +30665,16 @@ function restoreBoard(data) {
   // click the zoom-reset button manually. We leave the actual zoom-to-
   // fit for the end of restoreBoard (after items exist) so it can size
   // to the loaded bbox.
+  if (!append) {
+    state.zoom = 1;
+    state.pan = { x: 0, y: 0 };
+  }
   state.zoom = 1;
   state.pan = { x: 0, y: 0 };
-  G.nextZ = 1; let maxId = 0;
+  if (!append) {
+    G.nextZ = 1;
+  }
+  let maxId = 0;
   data.items.forEach(d => {
     try {
     // Skip video items whose blob: URL was lost on reload
