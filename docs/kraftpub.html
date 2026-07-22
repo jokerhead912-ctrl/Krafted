@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.2.8';
+var KRAFTED_VERSION = '6.2.9';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -13816,6 +13816,12 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       ev.stopPropagation();
       var it = state.items.find(function(i) { return i.el === el; });
       if (it) { selectOnly(it.id); trimGifSelected(); }
+    });
+    // v6.2.8: double-click GIF to toggle play/pause (same as video double-click)
+    el.addEventListener('dblclick', function(ev) {
+      ev.stopPropagation();
+      var it = state.items.find(function(i) { return i.el === el; });
+      if (it) toggleMediaItem(it.id);
     });
   }
 }
