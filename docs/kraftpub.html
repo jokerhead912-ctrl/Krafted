@@ -30842,6 +30842,14 @@ function restoreBoard(data, append) {
     const el = document.createElement('div');
     el.className = 'text-item';
     el.contentEditable = true; el.spellcheck = false;
+    // v6.5.0: Strip formatting on paste — WeChat/external apps copy rich HTML
+    // (fonts, colors, sizes) that break Krafted's own text styling. Force
+    // text/plain so only the raw text is inserted.
+    el.addEventListener('paste', function(ev) {
+      ev.preventDefault();
+      var plain = (ev.clipboardData || window.clipboardData).getData('text/plain');
+      if (plain) document.execCommand('insertText', false, plain);
+    });
     el.setAttribute('data-placeholder', 'Type here...');
     // Restore innerHTML if available (preserves inline <span style="color:..">
     // from per-word recolor). Fall back to textContent for older data.
