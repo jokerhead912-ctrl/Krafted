@@ -30552,7 +30552,19 @@ async function loadBoardFile(event) {
 
   // v6.3.4: warn for very large files — JSZip async('blob') holds all media
   // in memory as blob URLs. Files >1.5GB risk OOM on load.
-  if (file.size > 1.5 * 1024 * 1024 * 1024) {
+  // v6.5.0: detect KPAK v6 format FIRST — it doesn't need the JSZip warning
+  // because readKpakV6Index only reads the index, not the full file
+  let isV6Kpak = false;
+  try {
+    const tailBuf = await file.slice(-12).arrayBuffer();
+    const tailMagic = new TextDecoder().decode(new Uint8Array(tailBuf, 0, 4));
+    isV6Kpak = (tailMagic === 'KPAK');
+  } catch (e) {}
+
+  if (isV6Kpak) {
+    // v6 kpak uses Blob.slice() — no JSZip, no OOM. Skip the 1.5GB warning entirely.
+  } else if (file.size > 1.5 * 1024 * 1024 * 1024) {
+    // Only show warning for legacy zip format
     const proceed = confirm(
       '⚠ Very large kpak: ' + formatBytes(file.size) + '\n\n' +
       'Loading may run out of memory (browser limit ~2GB).\n' +
@@ -30563,10 +30575,6 @@ async function loadBoardFile(event) {
   }
 
   try {
-    // v6.5.0: detect KPAK v6 format — check last 4 bytes for "KPAK" magic
-    const tailBuf = await file.slice(-12).arrayBuffer();
-    const tailMagic = new TextDecoder().decode(new Uint8Array(tailBuf, 0, 4));
-    const isV6Kpak = (tailMagic === 'KPAK');
     if (isV6Kpak) {
       // === KPAK v6 format — streaming load, no OOM ===
       if (prog) prog.innerHTML = '<div class="pct">Reading index...</div>';
@@ -30597,10 +30605,8 @@ async function loadBoardFile(event) {
         const mediPrefix = 'media/' + dataItem.id + '.';
         const entry = mediaEntries.find(e => e.name.startsWith(mediPrefix));
         if (!entry) continue;
-        // Store entry info for on-demand blob extraction (similar to lazy video)
         dataItem._kpakEntry = entry;
-        dataItem._kpakBlob = file; // the File object for .slice()
-        // For non-video: extract immediately (small files). For video: lazy.
+        dataItem._kpakBlob = file;
         if (!dataItem.isVideo) {
           try {
             dataItem.src = await extractKpakV6Entry(file, entry);
@@ -30608,12 +30614,11 @@ async function loadBoardFile(event) {
             if (remappedCount % 10 === 0) await new Promise(r => setTimeout(r, 0));
           } catch(e) { console.warn('Failed to extract', dataItem.id, e); }
         } else {
-          dataItem.src = ''; // lazy — extracted on first interaction
+          dataItem.src = '';
           remappedCount++;
         }
       }
 
-      // Append check
       let doAppend = false;
       if (state.items.length > 0 || state.texts.length > 0) {
         doAppend = confirm(
@@ -30623,7 +30628,6 @@ async function loadBoardFile(event) {
       }
       restoreBoard(data, doAppend);
 
-      // Attach lazy extractor for video items
       window._activateLazyVideoV6 = async function(item) {
         if (!item._kpakEntry || !item._kpakBlob || !item.video) return;
         try {
@@ -30634,7 +30638,7 @@ async function loadBoardFile(event) {
           item.video.load();
           delete item._kpakEntry;
           delete item._kpakBlob;
-          console.log('[V6 Lazy] Activated video:', item.id, formatBytes(item._kpakEntry.size));
+          console.log('[V6 Lazy] Activated video:', item.id, formatBytes(item._kpakEntry ? item._kpakEntry.size : 0));
         } catch(e) {
           console.warn('[V6 Lazy] Failed:', item.id, e.message);
         }
