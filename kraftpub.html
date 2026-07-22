@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.3.6';
+var KRAFTED_VERSION = '6.3.7';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30081,7 +30081,10 @@ async function loadBoardFile(event) {
   try {
     if (isKpak) {
       // Detect: locked kpak = JSON wrapper (starts with '{'), binary kpak = zip (starts with 'PK')
-      const firstByte = await file.slice(0, 1).text();
+      // v6.3.7: use arrayBuffer for first-byte peek — file.text() consumes the stream
+      // and breaks subsequent JSZip.loadAsync(file) (caused "permission" error).
+      const firstBuf = await file.slice(0, 1).arrayBuffer();
+      const firstByte = String.fromCharCode(new Uint8Array(firstBuf)[0]);
       if (firstByte === '{') {
         // === LOCKED KPAK (JSON wrapper with base64 zip inside) ===
         if (prog) prog.innerHTML = '<div class="pct">Unlocking ' + formatBytes(file.size) + '...</div>';
