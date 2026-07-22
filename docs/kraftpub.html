@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.3.2';
+var KRAFTED_VERSION = '6.3.3';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -8493,6 +8493,17 @@ function updateItemStyle(item, lightweight) {
   const el = item.el;
   // Skip style updates on the container during reframe — img is manually controlled
   if (el.classList.contains('reframing')) return;
+  // v6.3.2: during lightweight drag, only update transform/opacity/zIndex.
+  // Width/height don't change during move — skipping them avoids expensive
+  // reflow cascades (especially on complex video DOM trees).
+  if (lightweight) {
+    const flipS = `${item.flipH ? -1 : 1}, ${item.flipV ? -1 : 1}`;
+    el.style.transform = `translate3d(${item.x}px, ${item.y}px, 0) rotate(${item.rot || 0}deg) scale(${flipS})`;
+    el.style.opacity = item.opacity !== undefined ? item.opacity : 1;
+    el.style.zIndex = item.z || 1;
+    if (item.locked) el.classList.add('locked'); else el.classList.remove('locked');
+    return;
+  }
   // Round 54: text items store W/H as on-screen (CSS-px) values. The
   // canvas is `transform: scale(zoom)`, so to make the on-screen box
   // match tx.w/tx.h, we set CSS width/height to (tx.w / zoom). All
@@ -8538,7 +8549,7 @@ function updateItemStyle(item, lightweight) {
   // LIGHTWEIGHT PATH (drag): skip all GPU-expensive work that doesn't depend on position.
   // Filter strings, CGI overlays, mask layer updates all re-trigger GPU filter/canvas work.
   // transform/width/height/opacity/zIndex above are all we need for smooth dragging.
-  if (lightweight) return;
+  // (lightweight early-return is now at the top of the function for max perf.)
   // Sync mind map connectors when item moves
   if (el.classList.contains('mindmap-item') && item.nodes && item.nodes.length > 0) {
     requestAnimationFrame(() => mmUpdateConnectors(item));
