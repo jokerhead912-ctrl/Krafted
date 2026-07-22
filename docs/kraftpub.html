@@ -20693,14 +20693,6 @@ document.addEventListener('keydown', e => {
       translateSelectedText('en', 'zh');
       return;
     }
-    // v6.5.0: Allow F (frame selection) and Delete/Backspace (delete item)
-    // while editing text — these don't conflict with typing.
-    if (e.key === 'f' || e.key === 'F') {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      e.preventDefault();
-      if (e.shiftKey) { toggleAppFullscreen(); } else { frameSelection(); }
-      return;
-    }
     if (e.key === 'Escape') e.target.blur();
     return;
   }
