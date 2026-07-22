@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.2.2';
+var KRAFTED_VERSION = '6.2.3';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -17591,6 +17591,20 @@ function addAudioItem(src, fileName, x, y, fileSize) {
     if (audio.paused) { audio.play(); playBtn.innerHTML = '⏸'; } else { audio.pause(); playBtn.innerHTML = '▶'; }
   };
   audio.addEventListener('ended', () => { playBtn.innerHTML = '▶'; });
+  // Restart button
+  const restartBtn = document.createElement('button');
+  restartBtn.style.cssText = 'background:rgba(0,229,255,0.08);border:1px solid rgba(0,229,255,0.25);color:#00e5ff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;flex-shrink:0;padding:0;';
+  restartBtn.innerHTML = '↺';
+  restartBtn.title = 'Restart';
+  restartBtn.addEventListener('mousedown', e => e.stopPropagation());
+  restartBtn.onclick = (ev) => {
+    ev.stopPropagation();
+    audio.currentTime = 0;
+    audio.play();
+    playBtn.innerHTML = '⏸';
+  };
+  // Insert restart button between playBtn and seekBar
+  player.insertBefore(restartBtn, seekBar);
   audio.addEventListener('loadedmetadata', () => {
     timeLabel.textContent = '0:00 / ' + fmtTime(audio.duration);
   });
