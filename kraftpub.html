@@ -31330,11 +31330,9 @@ document.addEventListener('keydown', function(e) {
 }, true);
 
 // On app load, ask if user wants to reopen last quick-saved file (additive listener — does NOT replace existing init)
-window.addEventListener('load', function() {
-  setTimeout(function() {
-    if (typeof qsAutoReopen === 'function') qsAutoReopen();
-  }, 1500); // delay so welcome screen shows first
-});
+// v6.5.0: QS auto-reopen disabled — always start with a clean board.
+// User loads kpak via Load button when ready.
+// (Previously: window.addEventListener('load', qsAutoReopen))
 
 
 // ==== init.js ====
