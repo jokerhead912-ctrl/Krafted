@@ -20626,6 +20626,20 @@ function _dispatchShortcut(e) {
 // ============================================================
 //  KEYBOARD
 // ============================================================
+// v6.5.0: Capture-phase Ctrl+S / Cmd+S → saveBoardV6().
+// Without capture, browser default "Save Page As" (or "Save Image" in
+// some browsers) intercepts the key combo before Krafted sees it.
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 's' || e.key === 'S')) {
+    // Don't steal from text inputs
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof saveBoardV6 === 'function') saveBoardV6();
+    return;
+  }
+}, true); // capture phase — fires before browser default
 document.addEventListener('keydown', e => {
   // v6.1.1: Capture-phase Ctrl+C from text selection. If user has selected
   // text inside a contentEditable (Krafted text-item) and copies it, save
