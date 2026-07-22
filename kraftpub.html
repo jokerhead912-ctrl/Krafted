@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.2.4';
+var KRAFTED_VERSION = '6.2.5';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -22381,14 +22381,24 @@ document.addEventListener('mousemove', e => {
     // refreshSelection() tears down + rebuilds 8 handles per item and scans the full
     // DOM — that's O(N) per frame, crippling box-select with 100+ items. Defer the
     // full refresh (handles, props panel) to mouseup.
-    // Use cached merged array to avoid creating a new spread array every mousemove.
+    //
+    // v6.2.4: Also avoid getBoundingClientRect() per item per frame — it forces
+    // a synchronous layout reflow. Instead, snapshot all screen rects once at drag
+    // start and use the cache for every mousemove. Items don't move during box-select
+    // (user isn't dragging items, just dragging a rubber band), so the cache is valid.
     if (!d._allItemsCache) {
-      d._allItemsCache = state.items.concat(state.texts, (state.todos || []), (state.mindmaps || []));
+      const merged = state.items.concat(state.texts, (state.todos || []), (state.mindmaps || []));
+      // Snapshot screen rects in one layout pass (the first getBoundingClientRect
+      // call triggers layout; subsequent calls in the same frame are cheap, but we
+      // still want to avoid them on every mousemove).
+      d._allItemsCache = merged.map(it => ({
+        item: it,
+        r: it.el.getBoundingClientRect(),
+      }));
     }
     const allItems = d._allItemsCache;
     for (let i = 0; i < allItems.length; i++) {
-      const item = allItems[i];
-      const r = item.el.getBoundingClientRect();
+      const { item, r } = allItems[i];
       const inside = r.left < x1 + w && r.right > x1 && r.top < y1 + h && r.bottom > y1;
       if (inside) {
         state.selected.add(item.id);
