@@ -6610,11 +6610,14 @@ function updateStatus() {
   const selCount = state.selected.size;
   const selText = selCount > 1 ? ` | ${selCount} selected (drag to move all)` : selCount === 1 ? ' | 1 selected' : '';
   // v6.2.7: real-time memory meter — sum blob: / data: URL sizes
+  // v6.5.0: also count lazy videos via _kpakEntry / _lazyEntry size
   var memMB = 0;
   var blobCount = 0;
   var allItems = state.items.concat(state.texts, (state.todos || []), (state.mindmaps || []));
   for (var i = 0; i < allItems.length; i++) {
     var it = allItems[i];
+    if (it._kpakEntry && it._kpakEntry.size) { memMB += it._kpakEntry.size / (1024 * 1024); blobCount++; continue; }
+    if (it._lazyEntry && it._lazyEntry.size) { memMB += it._lazyEntry.size / (1024 * 1024); blobCount++; continue; }
     if (!it.src) continue;
     if (it._fileSize) { memMB += it._fileSize / (1024 * 1024); blobCount++; }
     else if (it.src.startsWith('data:')) {
