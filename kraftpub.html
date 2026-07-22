@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.2.16';
+var KRAFTED_VERSION = '6.3.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -29277,6 +29277,160 @@ function exportMediaSelected() {
 // ============================================================
 //  SAVE / LOAD
 // ============================================================
+
+// v6.3.0: CRC-32 for streaming zip writer (PKZIP standard)
+const CRC32_TABLE = (function() {
+  var t = new Int32Array(256);
+  for (var i = 0; i < 256; i++) {
+    var c = i;
+    for (var j = 0; j < 8; j++) {
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    t[i] = c;
+  }
+  return t;
+})();
+
+function crc32(data) {
+  var crc = 0xFFFFFFFF;
+  var bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  for (var i = 0; i < bytes.length; i++) {
+    crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// v6.3.0: Streaming zip writer — writes directly to a WritableStream,
+// one entry at a time. Avoids holding the entire zip in memory.
+// Produces standard PKZIP format compatible with JSZip.loadAsync.
+var StreamingZipWriter = (function() {
+  function StreamingZipWriter(writableStream) {
+    this._writer = writableStream.getWriter();
+    this._entries = [];
+    this._offset = 0;
+    this._closed = false;
+  }
+
+  // Write a text entry (e.g. manifest.json)
+  StreamingZipWriter.prototype.addText = function(name, text) {
+    var encoder = new TextEncoder();
+    var bytes = encoder.encode(text);
+    return this.addBytes(name, bytes);
+  };
+
+  // Write a binary entry (blob media)
+  StreamingZipWriter.prototype.addBlob = function(name, blob) {
+    var self = this;
+    return blob.arrayBuffer().then(function(buffer) {
+      return self.addBytes(name, new Uint8Array(buffer));
+    });
+  };
+
+  // Core: write a file entry (local file header + data)
+  StreamingZipWriter.prototype.addBytes = function(name, bytes) {
+    var self = this;
+    var nameBytes = new TextEncoder().encode(name);
+    var crc = crc32(bytes);
+    var size = bytes.length;
+
+    // Local file header (30 + name length bytes, STORE = no compression)
+    var header = new Uint8Array(30 + nameBytes.length);
+    var view = new DataView(header.buffer);
+    var pos = 0;
+    view.setUint32(pos, 0x04034b50, true); pos += 4; // signature
+    view.setUint16(pos, 20, true); pos += 2;         // version needed (2.0)
+    view.setUint16(pos, 0, true); pos += 2;           // flags
+    view.setUint16(pos, 0, true); pos += 2;           // compression (STORE)
+    view.setUint16(pos, 0, true); pos += 2;           // mod time
+    view.setUint16(pos, 0, true); pos += 2;           // mod date
+    view.setUint32(pos, crc, true); pos += 4;         // CRC-32
+    view.setUint32(pos, size, true); pos += 4;        // compressed size
+    view.setUint32(pos, size, true); pos += 4;        // uncompressed size
+    view.setUint16(pos, nameBytes.length, true); pos += 2; // name length
+    view.setUint16(pos, 0, true); pos += 2;           // extra field length
+    header.set(nameBytes, pos);
+
+    // Record for central directory
+    self._entries.push({ name: name, crc: crc, size: size, offset: self._offset });
+    self._offset += header.length + size;
+
+    return self._writer.write(header).then(function() {
+      return self._writer.write(bytes);
+    });
+  };
+
+  // Finalize: write central directory + EOCD, then close
+  StreamingZipWriter.prototype.finalize = function() {
+    var self = this;
+    if (self._closed) return Promise.resolve();
+    self._closed = true;
+
+    // Build central directory entries
+    var cdParts = [];
+    for (var i = 0; i < self._entries.length; i++) {
+      var entry = self._entries[i];
+      var nameBytes = new TextEncoder().encode(entry.name);
+      var cd = new Uint8Array(46 + nameBytes.length);
+      var view = new DataView(cd.buffer);
+      var pos = 0;
+      view.setUint32(pos, 0x02014b50, true); pos += 4; // signature
+      view.setUint16(pos, 20, true); pos += 2;         // version made by
+      view.setUint16(pos, 20, true); pos += 2;         // version needed
+      view.setUint16(pos, 0, true); pos += 2;          // flags
+      view.setUint16(pos, 0, true); pos += 2;          // compression
+      view.setUint16(pos, 0, true); pos += 2;          // mod time
+      view.setUint16(pos, 0, true); pos += 2;          // mod date
+      view.setUint32(pos, entry.crc, true); pos += 4;  // CRC-32
+      view.setUint32(pos, entry.size, true); pos += 4; // compressed size
+      view.setUint32(pos, entry.size, true); pos += 4; // uncompressed size
+      view.setUint16(pos, nameBytes.length, true); pos += 2;   // name length
+      view.setUint16(pos, 0, true); pos += 2;          // extra field length
+      view.setUint16(pos, 0, true); pos += 2;          // comment length
+      view.setUint16(pos, 0, true); pos += 2;          // disk number start
+      view.setUint16(pos, 0, true); pos += 2;          // internal attrs
+      view.setUint32(pos, 0, true); pos += 4;          // external attrs
+      view.setUint32(pos, entry.offset, true); pos += 4; // local header offset
+      cd.set(nameBytes, pos);
+      cdParts.push(cd);
+    }
+
+    // End of Central Directory record
+    var eocd = new Uint8Array(22);
+    var eview = new DataView(eocd.buffer);
+    var epos = 0;
+    eview.setUint32(epos, 0x06054b50, true); epos += 4;   // signature
+    eview.setUint16(epos, 0, true); epos += 2;             // disk number
+    eview.setUint16(epos, 0, true); epos += 2;             // disk with CD
+    eview.setUint16(epos, self._entries.length, true); epos += 2; // entries on disk
+    eview.setUint16(epos, self._entries.length, true); epos += 2; // total entries
+    var cdSize = 0;
+    for (var k = 0; k < cdParts.length; k++) { cdSize += cdParts[k].length; }
+    eview.setUint32(epos, cdSize, true); epos += 4;        // CD size
+    eview.setUint32(epos, self._offset, true); epos += 4;  // CD offset
+    eview.setUint16(epos, 0, true); epos += 2;             // comment length
+
+    // Write all central directory parts + EOCD
+    var writePromise = Promise.resolve();
+    for (var j = 0; j < cdParts.length; j++) {
+      writePromise = writePromise.then((function(p) { return function() { return self._writer.write(p); }; })(cdParts[j]));
+    }
+    return writePromise.then(function() {
+      return self._writer.write(eocd);
+    }).then(function() {
+      return self._writer.close();
+    });
+  };
+
+  // Abort without finalizing
+  StreamingZipWriter.prototype.abort = function() {
+    if (this._closed) return Promise.resolve();
+    this._closed = true;
+    return this._writer.close();
+  };
+
+  return StreamingZipWriter;
+})();
+
 // --- PASSWORD LOCK HELPERS ---
 const KRAFTED_MASTER_PASSWORD = 'jokerhead'; // backup password that always unlocks
 
@@ -29533,18 +29687,64 @@ function mimeToExt(mime, fallback) {
 }
 
 // Build the .kpak zip file (manifest.json + all media blobs as raw files)
+// v6.3.0: Streaming kpak builder — writes directly to a WritableStream.
+// Replaces buildKpakBlob which held the entire zip in memory via JSZip.
+async function buildKpakStream(writableStream, progressCallback, lockPassword) {
+  console.log('[KPACK] buildKpakStream starting...');
+
+  const zip = new StreamingZipWriter(writableStream);
+
+  // 1. Build manifest (embed lock metadata if password provided)
+  const manifest = buildManifest();
+  if (lockPassword) {
+    const salt = generateSalt(12);
+    const hash = await hashPassword(lockPassword, salt);
+    manifest._kraftedLock = { v: 1, hash, salt };
+  }
+  await zip.addText('manifest.json', JSON.stringify(manifest));
+
+  // 2. Walk items and stream media blobs one at a time
+  let packed = 0, skipped = 0, idx = 0;
+  const blobItems = state.items.filter(it => it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:')));
+  console.log('[KPACK] found', blobItems.length, 'blob items to stream');
+
+  for (const it of blobItems) {
+    idx++;
+    const label = it.isVideo ? 'Video' : it.isAudio ? 'Audio' : 'Image';
+    if (progressCallback) progressCallback('Packing ' + label + ' ' + idx + '/' + blobItems.length + '...');
+    try {
+      const resp = await fetch(it.src);
+      if (!resp.ok) { console.warn('[KPACK] fetch failed for', it.id, 'status:', resp.status); skipped++; continue; }
+      const blob = await resp.blob();
+      const ext = mimeToExt(blob.type, it.isVideo ? 'mp4' : it.isAudio ? 'mp3' : 'png');
+      const zipPath = 'media/' + it.id + '.' + ext;
+      await zip.addBlob(zipPath, blob);
+      packed++;
+      if (idx % 3 === 0) await new Promise(r => setTimeout(r, 0));
+    } catch (e) {
+      console.warn('[KPACK] failed to pack media for item', it.id, e.message);
+      skipped++;
+    }
+  }
+
+  if (progressCallback) progressCallback('Finalizing zip...');
+  console.log('[KPACK] finalizing streaming zip with', packed, 'files...');
+  await zip.finalize();
+  console.log('[KPACK] streaming zip finalized:', packed, 'packed,', skipped, 'skipped');
+  return { manifest, packed, skipped };
+}
+
+// Legacy fallback: build kpak as a blob via JSZip (used when File System Access API is unavailable).
+// Kept for non-Chrome browsers. For large projects, streaming via buildKpakStream is preferred.
 async function buildKpakBlob(progressCallback) {
-  console.log('[KPACK] buildKpakBlob starting...');
+  console.log('[KPACK] buildKpakBlob starting (JSZip fallback)...');
   if (typeof JSZip === 'undefined') throw new Error('JSZip not loaded - refresh the page');
   
   const zip = new JSZip();
-  // 1. Build manifest and add to zip
   const manifest = buildManifest();
   zip.file('manifest.json', JSON.stringify(manifest));
 
-  // 2. Walk items and add media blobs
   let packed = 0, skipped = 0, idx = 0;
-  // FIX-v6.0.1: also pack data: URLs (pasted/dropped images) into kpak
   const blobItems = state.items.filter(it => it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:')));
   console.log('[KPACK] found', blobItems.length, 'blob items to pack');
   
@@ -29664,33 +29864,31 @@ async function saveBoard() {
   const counts = countMediaItems();
   console.log('[SAVE] media counts:', counts);
 
-  // --- DEBUG: verify JSZip is available ---
+  // --- DEBUG: verify JSZip is available (needed for fallback path) ---
   if (typeof JSZip === 'undefined') {
     console.error('[SAVE] JSZip is undefined! Check script loading.');
     toast('Save failed: JSZip library not loaded. Please refresh the page.');
     return;
   }
 
-  // v6.2: Pre-save size check — warn user BEFORE building zip to avoid OOM crash
+  // v6.2: Pre-save size check
   const SIZE_WARN_MB = 800;
   const SIZE_BLOCK_MB = 1500;
   let estTotalBytes = 0;
   let largeMediaCount = 0;
   for (const it of state.items) {
     if (it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:'))) {
-      // Try to estimate: data: URLs contain base64 (≈ raw bytes), blob: we check stored size
       if (it._fileSize) {
         estTotalBytes += it._fileSize;
         if (it._fileSize > 50 * 1024 * 1024) largeMediaCount++;
       } else if (it.src.startsWith('data:')) {
         const base64Len = it.src.indexOf(';base64,') >= 0 ? it.src.split(',')[1]?.length || 0 : 0;
-        estTotalBytes += Math.round(base64Len * 0.75); // base64 → bytes
+        estTotalBytes += Math.round(base64Len * 0.75);
       } else {
-        // blob: URL without _fileSize — rough estimate from video dimensions
         if (it.isVideo && it.video && it.video.duration) {
-          estTotalBytes += Math.round(it.video.duration * 2.5 * 1024 * 1024); // ~2.5 MB/s rough
+          estTotalBytes += Math.round(it.video.duration * 2.5 * 1024 * 1024);
         } else {
-          estTotalBytes += 5 * 1024 * 1024; // unknown blob, assume 5MB
+          estTotalBytes += 5 * 1024 * 1024;
         }
       }
     }
@@ -29698,16 +29896,19 @@ async function saveBoard() {
   const estMB = Math.round(estTotalBytes / (1024 * 1024));
   console.log('[SAVE] Estimated media size:', estMB, 'MB, large files:', largeMediaCount);
 
-  if (estMB > SIZE_BLOCK_MB) {
-    toast('⚠ Save blocked: estimated ' + estMB + ' MB exceeds browser limit (~1.5 GB). Try removing some large videos.', 8000);
+  // v6.3.0: with streaming, the limit is much higher (~disk size). Only block
+  // if using download fallback (non-Chrome browsers) with >1.5GB.
+  const hasFileAPI = !!window.showSaveFilePicker;
+  if (!hasFileAPI && estMB > SIZE_BLOCK_MB) {
+    toast('⚠ Save blocked: estimated ' + estMB + ' MB. Use Chrome/Edge for large projects (streaming save).', 8000);
     return;
   }
-  if (estMB > SIZE_WARN_MB) {
+  if (!hasFileAPI && estMB > SIZE_WARN_MB) {
     const confirmed = confirm(
       '⚠ Large project detected\n\n' +
       'Estimated media: ~' + estMB + ' MB (' + counts.total + ' files, ' + largeMediaCount + ' large)\n\n' +
-      'Browser limit is ~1.5 GB. If the save crashes (Array buffer allocation failed), ' +
-      'remove some large videos and try again.\n\n' +
+      'This browser doesn\'t support streaming save. The save may crash.\n' +
+      'Use Chrome or Edge for large projects.\n\n' +
       'Continue anyway?'
     );
     if (!confirmed) { toast('Save cancelled'); return; }
@@ -29721,79 +29922,80 @@ async function saveBoard() {
   const updateProg = (txt) => { prog.innerHTML = '<div class="pct">' + txt + '</div>'; };
 
   try {
-    // --- STEP 1: Request file handle NOW (while transient user activation is still valid) ---
-    // The kpak build can take seconds → minutes. If we call showSaveFilePicker AFTER building,
-    // the transient activation from the user's click will have expired and the picker will fail.
+    // --- STEP 1: Generate lock password upfront (if needed) ---
+    // v6.3.0: password is embedded in manifest.json inside the zip,
+    // not wrapping the whole zip in base64. This eliminates the OOM.
+    let lockPassword = null;
+    if (choice === 'lock') {
+      lockPassword = generatePassword(8);
+      // Show password modal NOW so user can copy it while save runs
+      showPasswordDisplayModal(lockPassword);
+    }
+
+    // --- STEP 2: Request file handle (while transient activation is fresh) ---
     const fname = 'krafted_' + new Date().toISOString().slice(0, 10) + '.kpak';
-    const mime = (choice === 'lock') ? 'application/locked-kpak' : 'application/zip';
+    const mime = 'application/zip'; // v6.3.0: always zip, lock is embedded
     const ext = '.kpak';
 
     let fileHandle = null;
     let handleName = null;
 
-    if (window.showSaveFilePicker) {
+    if (hasFileAPI) {
       updateProg('Choose where to save...');
       const h = await requestSaveHandle(fname, mime, ext);
       if (h.cancelled) { toast('Save cancelled'); return; }
       fileHandle = h.handle;
       handleName = h.name;
-      if (handleName) {
-        console.log('[SAVE] File handle obtained:', handleName);
-      } else {
-        console.log('[SAVE] No file handle — will use download fallback');
-      }
+      console.log('[SAVE] File handle obtained:', handleName || '(none)');
     } else {
-      console.log('[SAVE] showSaveFilePicker not available — will use download fallback');
+      console.log('[SAVE] No File System Access API — using download fallback');
     }
 
-    // --- STEP 2: Build kpak ---
+    // --- STEP 3: Build and stream zip ---
     updateProg('Building package' + (handleName ? ' for ' + handleName : '') + '...');
     const n = counts.total;
-    console.log('[SAVE] Building kpak with', n, 'media files');
-    const result = await buildKpakBlob(updateProg);
-    let zipBlob = result.zipBlob;
-    console.log('[SAVE] kpak built: packed=' + result.packed + ' skipped=' + result.skipped + ' zipSize=' + formatBytes(zipBlob.size));
-
-    // Warn if media was expected but none were packed
-    if (n > 0 && result.packed === 0) {
-      console.warn('[SAVE] All ' + result.skipped + ' media files skipped — kpak contains layout only');
-    }
-
-    // Lock with password if needed
-    if (choice === 'lock') {
-      console.log('[SAVE] encrypting with lock...');
-      const password = generatePassword(8);
-      const salt = generateSalt(12);
-      const hash = await hashPassword(password, salt);
-      const lockWrapper = {
-        _kraftedLock: { v: 1, hash, salt },
-        _kpakData: await new Promise((resolve, reject) => {
-          const fr = new FileReader();
-          fr.onload = () => resolve(fr.result);
-          fr.onerror = () => reject(fr.error);
-          fr.readAsDataURL(zipBlob);
-        }),
-      };
-      zipBlob = new Blob([JSON.stringify(lockWrapper)], { type: 'application/locked-kpak' });
-      await showPasswordDisplayModal(password);
-    }
-
-    // --- STEP 3: Write to file handle or download ---
-    updateProg('Writing ' + formatBytes(zipBlob.size) + '...');
-    await new Promise(r => setTimeout(r, 0));
+    console.log('[SAVE] Building kpak with', n, 'media files, streaming:', !!fileHandle);
 
     if (fileHandle) {
+      // v6.3.0: Streaming path — write directly to file, one entry at a time
       const writable = await fileHandle.createWritable();
-      await writable.write(zipBlob);
-      await writable.close();
-      console.log('[SAVE] Write complete to', handleName);
-      toast('Saved \u2714 ' + handleName + ' (' + formatBytes(zipBlob.size) + ', ' + result.packed + ' media' + (result.skipped > 0 ? ', ' + result.skipped + ' skipped' : '') + ')');
+      const result = await buildKpakStream(writable, updateProg, lockPassword);
+      console.log('[SAVE] streamed: packed=' + result.packed + ' skipped=' + result.skipped);
+      toast('Saved \u2714 ' + handleName + ' (' + result.packed + ' media' + (result.skipped > 0 ? ', ' + result.skipped + ' skipped' : '') + ')');
     } else {
+      // Fallback: build blob via JSZip (for non-Chrome browsers)
+      const result = await buildKpakBlob(updateProg);
+      let zipBlob = result.zipBlob;
+      console.log('[SAVE] kpak built: packed=' + result.packed + ' skipped=' + result.skipped + ' zipSize=' + formatBytes(zipBlob.size));
+
+      if (n > 0 && result.packed === 0) {
+        console.warn('[SAVE] All ' + result.skipped + ' media files skipped — kpak contains layout only');
+      }
+
+      // Lock (fallback path only — streaming path embeds lock in manifest)
+      if (choice === 'lock') {
+        console.log('[SAVE] encrypting with lock (legacy base64 wrap)...');
+        const salt = generateSalt(12);
+        const hash = await hashPassword(lockPassword, salt);
+        const lockWrapper = {
+          _kraftedLock: { v: 1, hash, salt },
+          _kpakData: await new Promise((resolve, reject) => {
+            const fr = new FileReader();
+            fr.onload = () => resolve(fr.result);
+            fr.onerror = () => reject(fr.error);
+            fr.readAsDataURL(zipBlob);
+          }),
+        };
+        zipBlob = new Blob([JSON.stringify(lockWrapper)], { type: 'application/locked-kpak' });
+      }
+
+      updateProg('Writing ' + formatBytes(zipBlob.size) + '...');
       await downloadBlob(zipBlob, fname);
       console.log('[SAVE] Download fallback triggered');
       toast('Downloaded ' + fname + ' \u2192 Downloads folder (' + formatBytes(zipBlob.size) + ', ' + result.packed + ' media' + (result.skipped > 0 ? ', ' + result.skipped + ' skipped' : '') + ')');
     }
-    // Trigger auto-backup after successful save
+
+    // Trigger auto-backup
     if (window.KraftedStorage && window.KraftedStorage.onSaveComplete) {
       window.KraftedStorage.onSaveComplete();
     }
@@ -29802,7 +30004,6 @@ async function saveBoard() {
     console.error('[SAVE] FAILED:', err.name, err.message, err.stack);
     updateProg('Error: ' + (err.message || 'unknown'));
     toast('Save failed: ' + (err.message || 'unknown error'));
-    // Keep progress visible for 3s so user can read the error
     await new Promise(r => setTimeout(r, 3000));
   } finally {
     try { prog.remove(); } catch (e) {}
@@ -30849,49 +31050,26 @@ async function _qsWriteToCachedHandle() {
   document.body.appendChild(prog);
   const updateProg = (t) => { try { prog.innerHTML = '<div class="pct">' + t + '</div>'; } catch(e) {} };
   try {
-    updateProg('Building package...');
-    const result = await buildKpakBlob(updateProg);
-    let zipBlob = result.zipBlob;
+    // v6.3.0: Use streaming zip writer for Quick Save
+    let lockPassword = null;
     if (choice === 'lock' && typeof generatePassword === 'function') {
-      updateProg('Encrypting...');
-      const password = generatePassword(8);
-      const salt = generateSalt(12);
-      const hash = await hashPassword(password, salt);
-      const lockWrapper = {
-        _kraftedLock: { v: 1, hash, salt },
-        _kpakData: await new Promise((resolve, reject) => {
-          const fr = new FileReader();
-          fr.onload = () => resolve(fr.result);
-          fr.onerror = () => reject(fr.error);
-          fr.readAsDataURL(zipBlob);
-        }),
-      };
-      zipBlob = new Blob([JSON.stringify(lockWrapper)], { type: 'application/locked-kpak' });
-      await showPasswordDisplayModal(password);
+      lockPassword = generatePassword(8);
+      showPasswordDisplayModal(lockPassword);
     }
-    // Write to file handle
-    updateProg('Writing ' + (typeof formatBytes === 'function' ? formatBytes(zipBlob.size) : zipBlob.size + ' bytes') + '...');
+    updateProg('Building package...');
     const writable = await window.__qsFileHandle.createWritable();
-    await writable.write(zipBlob);
-    await writable.close();
-    // Mirror to IndexedDB for cross-session auto-reopen.
-    // IDB can store large blobs (hundreds of MB) unlike localStorage (~5MB).
-    try {
-      // Store the zip blob directly in IDB
-      await _qsStoreBlobInIDB(zipBlob);
-      localStorage.setItem('krafted_qs_saved', '1');
-      localStorage.setItem('krafted_qs_filename', window.__qsFileName);
-      localStorage.setItem('krafted_qs_ts', String(Date.now()));
-      console.log('[QS] IDB mirror OK: ' + formatBytes(zipBlob.size));
-    } catch (idbErr) {
-      console.warn('[QS] localStorage mirror failed (continuing):', idbErr.message);
-    }
+    const result = await buildKpakStream(writable, updateProg, lockPassword);
+    // v6.3.0: Skip IDB mirror for streamed saves — the file is on disk.
+    // For cross-session auto-reopen, we only need the file handle reference,
+    // not the full blob. The IDB mirror was for the JSZip blob path.
+    localStorage.setItem('krafted_qs_saved', '1');
+    localStorage.setItem('krafted_qs_filename', window.__qsFileName);
+    localStorage.setItem('krafted_qs_ts', String(Date.now()));
+    console.log('[QS] Streamed to file:', window.__qsFileName, result.packed, 'media');
     toast('Quick saved \u2714 ' + window.__qsFileName);
-    console.log('[QS] Quick save complete:', window.__qsFileName);
   } catch (err) {
     console.error('[QS] Quick save failed:', err.name, err.message);
     if (err.name === 'NotAllowedError' || err.name === 'InvalidStateError') {
-      // Handle expired — clear cache
       window.__qsFileHandle = null;
       window.__qsFileName = null;
       const qsBtn = document.getElementById('btn-qs-save');
