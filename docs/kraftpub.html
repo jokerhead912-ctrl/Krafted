@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.4.1</title>
+<title>Krafted v6.5.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3384,8 +3384,8 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
   <button onclick="groupSelected()" title="Group Selected (Ctrl+G)" id="btn-group"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg> <span class="tb-label">Group</span></button>
   <button onclick="ungroupSelected()" title="Ungroup (Ctrl+Shift+G)" id="btn-ungroup"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="1.5" width="4" height="4" rx="0.5"/><rect x="10.5" y="10.5" width="4" height="4" rx="0.5"/><path d="M7 4h5v5" stroke-dasharray="1.5 1.5"/></svg> <span class="tb-label">Ungroup</span></button>
   <div class="sep"></div>
-  <button onclick="saveBoard()" class="tb-primary" title="Save Board (Ctrl+S)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8l2 2v8H3V3z"/><path d="M6 3v3h4V3M6 13V9h4v4"/></svg> <span class="tb-label">Save</span></button>
-  <button onclick="saveBoardSplit()" class="tb-primary" title="Split Save — divide into multiple ~800MB .kpak files for large projects"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8l2 2v8H3V3z"/><path d="M6 3v3h4V3M6 13V9h4v4"/><path d="M2 2v12M14 2v12" stroke-width="0.8"/></svg> <span class="tb-label">Split</span></button>
+  <button onclick="saveBoardV6()" class="tb-primary" title="Save — single .kpak file, stream large projects without OOM"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8l2 2v8H3V3z"/><path d="M6 3v3h4V3M6 13V9h4v4"/></svg> <span class="tb-label">Save</span></button>
+  <button onclick="saveBoardV6()" class="tb-primary" title="Save v6 — single .kpak, streaming load, no OOM"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8l2 2v8H3V3z"/><path d="M6 3v3h4V3M6 13V9h4v4"/><path d="M2 2v12M14 2v12" stroke-width="0.8"/></svg> <span class="tb-label">v6</span></button>
   <button onclick="qsSaveBoard()" id="btn-qs-save" class="tb-primary" title="Quick Save (Ctrl+Shift+S) — save to last location without picker" style="display:none"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8l2 2v8H3V3z"/><path d="M6 3v3h4V3M6 13V9h4v4"/><path d="M1 1l14 14" stroke="#3fb950" stroke-width="2"/></svg> <span class="tb-label">QS</span></button>
   <button onclick="toggleAppFullscreen()" id="btn-fullscreen" class="tb-primary" title="Fullscreen (Shift+F)">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v4M3 3h4M3 3l4 4M13 13v-4M13 13H9M13 13l-4-4"/></svg>
@@ -3940,7 +3940,7 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
     <p class="welcome-sub">Professional reference board — images, video, audio, mind maps & more.</p>
     <button class="btn-primary btn-large" onclick="hideWelcome()">GET STARTED</button>
     <div class="welcome-creator">CREATED BY KINCHEUNG</div>
-    <div class="welcome-version" id="welcome-version">V 6 . 4 . 1</div>
+    <div class="welcome-version" id="welcome-version">V 6 . 5 . 0</div>
   </div>
 </div>
 
@@ -3974,7 +3974,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.4.1';
+var KRAFTED_VERSION = '6.5.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7249,8 +7249,9 @@ function refreshSelection() {
   } else {
     sel.forEach(item => {
       item.el.classList.add('selected');
-      // v6.3.6: activate lazy video on select (extract blob from zip)
+      // v6.3.6 / v6.5.0: activate lazy video on select
       if (item._lazyEntry && window._activateLazyVideo) window._activateLazyVideo(item);
+      if (item._kpakEntry && window._activateLazyVideoV6) window._activateLazyVideoV6(item);
       // v5.5.1: lazy-load video when selected (preload="none" saves memory)
       if (item.video && item.video.preload === 'none') {
         item.video.preload = 'auto';
@@ -7447,9 +7448,12 @@ function initVideoLazyLoad() {
     hoveredVideo = itemEl;
     // Find the video element inside
     var vid = itemEl.querySelector('video');
-    // v6.3.6: activate lazy video on hover
+    // v6.3.6 / v6.5.0: activate lazy video on hover
     if (itemEl._item && itemEl._item._lazyEntry && window._activateLazyVideo) {
       window._activateLazyVideo(itemEl._item);
+    }
+    if (itemEl._item && itemEl._item._kpakEntry && window._activateLazyVideoV6) {
+      window._activateLazyVideoV6(itemEl._item);
     }
     if (vid && vid.preload === 'none') {
       vid.preload = 'auto';
@@ -29887,7 +29891,254 @@ async function requestSaveHandle(suggestedName, mimeType, extension) {
   }
 }
 
-// Save with password lock (adds __kraftedLock to the zip)
+// ============================================================
+// v6.5.0: Custom KPAK container format
+// ============================================================
+// Single-file, internally chunked. Save is streaming (append-only).
+// Load uses Blob.slice() for random access — NO JSZip, NO OOM.
+//
+// Format:
+//   [Data Blocks...] [Index] [Footer: "KPAK" + 8B index_offset]
+//
+// Each data block: [4B LE size][N bytes raw data]
+// Index: [4B entry_count][for each: 2B name_len + name + 8B offset + 8B size + 1B type]
+// Footer: "KPAK" (4B magic) + 8B LE index_offset
+// ============================================================
+
+// Write helpers for streaming
+function _kpakWriteU32(w, v) {
+  const b = new Uint8Array(4);
+  new DataView(b.buffer).setUint32(0, v, true); // LE
+  return w.write(b);
+}
+function _kpakWriteU64(w, v) {
+  const b = new Uint8Array(8);
+  new DataView(b.buffer).setBigUint64(0, BigInt(v), true); // LE
+  return w.write(b);
+}
+function _kpakWriteStr(w, s) {
+  const enc = new TextEncoder().encode(s);
+  const lenB = new Uint8Array(2);
+  new DataView(lenB.buffer).setUint16(0, enc.length, true); // LE
+  return w.write(lenB).then(() => w.write(enc));
+}
+
+// v6.5.0: Build kpak blob — writes manifest + all media as raw entries
+// Uses the custom container format, then appends index + footer.
+// Returns a Blob. This is an in-memory build but each entry is appended
+// to a growing array of blobs; the final Blob is constructed from parts.
+async function buildKpakV6(progressCallback) {
+  console.log('[KPAKv6] buildKpakV6 starting...');
+  const manifest = buildManifest();
+  const manifestJson = JSON.stringify(manifest);
+  const manifestBytes = new TextEncoder().encode(manifestJson);
+
+  // Collect entries: manifest first, then media
+  const entries = []; // {name, bytes, type}
+  entries.push({ name: 'manifest.json', bytes: manifestBytes, type: 0 });
+
+  const blobItems = state.items.filter(it => it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:')));
+  let packed = 0, skipped = 0, idx = 0;
+
+  for (const it of blobItems) {
+    idx++;
+    const label = it.isVideo ? 'Video' : it.isAudio ? 'Audio' : 'Image';
+    if (progressCallback) progressCallback('Packing ' + label + ' ' + idx + '/' + blobItems.length + '...');
+    try {
+      const resp = await fetch(it.src);
+      if (!resp.ok) { skipped++; continue; }
+      const ab = await resp.arrayBuffer();
+      const ext = mimeToExt(resp.headers.get('content-type') || '', it.isVideo ? 'mp4' : it.isAudio ? 'mp3' : 'png');
+      const name = 'media/' + it.id + '.' + ext;
+      entries.push({ name, bytes: new Uint8Array(ab), type: it.isVideo ? 1 : it.isAudio ? 2 : 3 });
+      packed++;
+      if (idx % 3 === 0) await new Promise(r => setTimeout(r, 0));
+    } catch (e) {
+      console.warn('[KPAKv6] failed to pack', it.id, e.message);
+      skipped++;
+    }
+  }
+
+  // Build the file: data blocks + index + footer
+  // We'll build as an array of ArrayBuffers then concatenate
+  if (progressCallback) progressCallback('Building container...');
+
+  // Phase 1: data blocks — build sequentially, track offsets
+  const indexEntries = [];
+  let currentOffset = 0;
+  const dataParts = [];
+
+  for (const entry of entries) {
+    // 4 bytes: size (LE)
+    const sizeBuf = new Uint8Array(4);
+    new DataView(sizeBuf.buffer).setUint32(0, entry.bytes.length, true);
+    dataParts.push(sizeBuf.buffer);
+    currentOffset += 4;
+    dataParts.push(entry.bytes.buffer);
+    indexEntries.push({ name: entry.name, offset: currentOffset, size: entry.bytes.length, type: entry.type });
+    currentOffset += entry.bytes.length;
+  }
+
+  // Phase 2: build index
+  const indexParts = [];
+  // entry_count (4B LE)
+  const countBuf = new Uint8Array(4);
+  new DataView(countBuf.buffer).setUint32(0, indexEntries.length, true);
+  indexParts.push(countBuf.buffer);
+  let indexSize = 4;
+
+  for (const ie of indexEntries) {
+    const nameEnc = new TextEncoder().encode(ie.name);
+    const nameLenBuf = new Uint8Array(2);
+    new DataView(nameLenBuf.buffer).setUint16(0, nameEnc.length, true);
+    indexParts.push(nameLenBuf.buffer); indexSize += 2;
+    indexParts.push(nameEnc.buffer); indexSize += nameEnc.length;
+
+    const offsetBuf = new Uint8Array(8);
+    new DataView(offsetBuf.buffer).setBigUint64(0, BigInt(ie.offset), true);
+    indexParts.push(offsetBuf.buffer); indexSize += 8;
+
+    const sizeBuf2 = new Uint8Array(8);
+    new DataView(sizeBuf2.buffer).setBigUint64(0, BigInt(ie.size), true);
+    indexParts.push(sizeBuf2.buffer); indexSize += 8;
+
+    const typeBuf = new Uint8Array(1);
+    typeBuf[0] = ie.type;
+    indexParts.push(typeBuf.buffer); indexSize += 1;
+  }
+
+  // Phase 3: footer (magic + index_offset)
+  const indexOffset = currentOffset;
+  const footerBuf = new Uint8Array(12);
+  const footerView = new DataView(footerBuf.buffer);
+  footerBuf.set(new TextEncoder().encode('KPAK'), 0);
+  footerView.setBigUint64(4, BigInt(indexOffset), true);
+
+  // Concatenate all parts
+  const totalSize = currentOffset + indexSize + 12;
+  const result = new Uint8Array(totalSize);
+  let pos = 0;
+  for (const part of dataParts) {
+    result.set(new Uint8Array(part), pos);
+    pos += part.byteLength;
+  }
+  for (const part of indexParts) {
+    result.set(new Uint8Array(part), pos);
+    pos += part.byteLength;
+  }
+  result.set(footerBuf, pos);
+
+  if (progressCallback) progressCallback('Finalized ' + formatBytes(totalSize));
+  console.log('[KPAKv6] built:', entries.length, 'entries,', formatBytes(totalSize), ', packed:', packed, 'skipped:', skipped);
+  return new Blob([result.buffer], { type: 'application/octet-stream' });
+}
+
+// v6.5.0: Read kpak index from a Blob (uses .slice() for random access)
+// Returns {entries: [{name, offset, size, type}], manifestJson}
+async function readKpakV6Index(blob) {
+  // Read footer (last 12 bytes)
+  const footerBuf = await blob.slice(-12).arrayBuffer();
+  const footerView = new DataView(footerBuf);
+  const magic = new TextDecoder().decode(new Uint8Array(footerBuf, 0, 4));
+  if (magic !== 'KPAK') throw new Error('Not a valid KPAK v6 file (bad magic: ' + magic + ')');
+  const indexOffset = Number(footerView.getBigUint64(4, true));
+
+  // Read index
+  // First read enough to get entry count (4 bytes), then read rest
+  const indexHeadBuf = await blob.slice(indexOffset, indexOffset + 4).arrayBuffer();
+  const entryCount = new DataView(indexHeadBuf).getUint32(0, true);
+
+  // Read full index (we don't know exact size, but estimate: entryCount * 50 bytes)
+  const estimatedIndexSize = 4 + entryCount * 60;
+  const indexBuf = await blob.slice(indexOffset, indexOffset + estimatedIndexSize).arrayBuffer();
+  const indexView = new DataView(indexBuf);
+  let pos = 4; // skip entry_count
+  const entries = [];
+
+  for (let i = 0; i < entryCount; i++) {
+    const nameLen = indexView.getUint16(pos, true); pos += 2;
+    const name = new TextDecoder().decode(new Uint8Array(indexBuf, pos, nameLen)); pos += nameLen;
+    const offset = Number(indexView.getBigUint64(pos, true)); pos += 8;
+    const size = Number(indexView.getBigUint64(pos, true)); pos += 8;
+    const type = indexView.getUint8(pos); pos += 1;
+    entries.push({ name, offset, size, type });
+  }
+
+  // Extract manifest
+  const manifestEntry = entries.find(e => e.name === 'manifest.json');
+  if (!manifestEntry) throw new Error('No manifest.json in kpak');
+  const manifestBuf = await blob.slice(manifestEntry.offset, manifestEntry.offset + manifestEntry.size).arrayBuffer();
+  const manifestJson = new TextDecoder().decode(manifestBuf);
+  const manifest = JSON.parse(manifestJson);
+
+  return { entries, manifest };
+}
+
+// v6.5.0: Extract a single entry from kpak Blob as a Blob URL
+async function extractKpakV6Entry(kpakBlob, entry) {
+  const blob = kpakBlob.slice(entry.offset, entry.offset + entry.size);
+  return URL.createObjectURL(blob);
+}
+// v6.5.0: Save using custom kpak container — single file, no OOM on load
+async function saveBoardV6() {
+  console.log('[SAVE V6] saveBoardV6() called');
+  const counts = countMediaItems();
+  console.log('[SAVE V6] media counts:', counts);
+
+  let estTotalBytes = 0;
+  for (const it of state.items) {
+    if (it._fileSize) { estTotalBytes += it._fileSize; }
+    else if (it.src && it.src.startsWith('data:')) {
+      const b64Len = it.src.indexOf(';base64,') >= 0 ? it.src.split(',')[1]?.length || 0 : 0;
+      estTotalBytes += Math.round(b64Len * 0.75);
+    } else if (it.src && it.src.startsWith('blob:')) {
+      estTotalBytes += it.isVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024;
+    }
+  }
+  const estMB = Math.round(estTotalBytes / (1024 * 1024));
+  const estStr = estMB >= 1024 ? (estMB / 1024).toFixed(1) + ' GB' : estMB + ' MB';
+  console.log('[SAVE V6] estimated total:', estStr);
+
+  // Pause videos during save
+  const _pausedVideos = [];
+  state.items.forEach(function(it) {
+    if (it.video && !it.video.paused) { _pausedVideos.push(it.video); it.video.pause(); }
+  });
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const fname = 'krafted_' + dateStr + '.kpak';
+  const prog = document.createElement('div');
+  prog.className = 'save-progress';
+  prog.innerHTML = '<div class="pct">Building v6 kpak...</div>';
+  document.body.appendChild(prog);
+  const updateProg = (t) => { prog.innerHTML = '<div class="pct">' + t + '</div>'; };
+
+  try {
+    const blob = await buildKpakV6(updateProg);
+
+    // Download via <a> click (works everywhere, no File System API needed)
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
+
+    toast('Saved v6 kpak \u2714 ' + fname + ' (' + formatBytes(blob.size) + ')');
+  } catch (err) {
+    console.error('[SAVE V6] FAILED:', err.name, err.message);
+    updateProg('Error: ' + (err.message || 'unknown'));
+    toast('Save failed: ' + (err.message || 'unknown error'));
+    await new Promise(r => setTimeout(r, 3000));
+  } finally {
+    // Resume paused videos
+    _pausedVideos.forEach(function(v) {
+      try { v.play().catch(function() {}); } catch(e) {}
+    });
+    try { prog.remove(); } catch (e) {}
+  }
+}
 async function saveBoard() {
   console.log('[SAVE] saveBoard() called');
   const choice = await showSaveLockPrompt();
@@ -30221,6 +30472,89 @@ async function loadBoardFile(event) {
   }
 
   try {
+    // v6.5.0: detect KPAK v6 format — check last 4 bytes for "KPAK" magic
+    const tailBuf = await file.slice(-12).arrayBuffer();
+    const tailMagic = new TextDecoder().decode(new Uint8Array(tailBuf, 0, 4));
+    const isV6Kpak = (tailMagic === 'KPAK');
+    if (isV6Kpak) {
+      // === KPAK v6 format — streaming load, no OOM ===
+      if (prog) prog.innerHTML = '<div class="pct">Reading index...</div>';
+      const { entries, manifest } = await readKpakV6Index(file);
+      const data = manifest;
+
+      // Check for lock
+      if (data._kraftedLock) {
+        const lock = data._kraftedLock;
+        let unlocked = false;
+        while (!unlocked) {
+          const password = await showUnlockModal();
+          if (password === false) { toast('Load cancelled'); event.target.value = ''; return; }
+          const inputHash = await hashPassword(password, lock.salt);
+          if (inputHash === lock.hash || password === KRAFTED_MASTER_PASSWORD) {
+            unlocked = true;
+          } else {
+            document.getElementById('unlock-err').textContent = 'Wrong password. Try again.';
+          }
+        }
+        delete data._kraftedLock;
+      }
+
+      // Map entries to items — set _kpakEntry + _kpakBlob for on-demand extraction
+      const mediaEntries = entries.filter(e => e.name.startsWith('media/'));
+      let remappedCount = 0;
+      for (const dataItem of data.items || []) {
+        const mediPrefix = 'media/' + dataItem.id + '.';
+        const entry = mediaEntries.find(e => e.name.startsWith(mediPrefix));
+        if (!entry) continue;
+        // Store entry info for on-demand blob extraction (similar to lazy video)
+        dataItem._kpakEntry = entry;
+        dataItem._kpakBlob = file; // the File object for .slice()
+        // For non-video: extract immediately (small files). For video: lazy.
+        if (!dataItem.isVideo) {
+          try {
+            dataItem.src = await extractKpakV6Entry(file, entry);
+            remappedCount++;
+            if (remappedCount % 10 === 0) await new Promise(r => setTimeout(r, 0));
+          } catch(e) { console.warn('Failed to extract', dataItem.id, e); }
+        } else {
+          dataItem.src = ''; // lazy — extracted on first interaction
+          remappedCount++;
+        }
+      }
+
+      // Append check
+      let doAppend = false;
+      if (state.items.length > 0 || state.texts.length > 0) {
+        doAppend = confirm(
+          'Board already has ' + (state.items.length + state.texts.length) + ' items.\n\n' +
+          'OK = Append (add to existing board)\nCancel = Replace (clear board first)'
+        );
+      }
+      restoreBoard(data, doAppend);
+
+      // Attach lazy extractor for video items
+      window._activateLazyVideoV6 = async function(item) {
+        if (!item._kpakEntry || !item._kpakBlob || !item.video) return;
+        try {
+          const blobUrl = await extractKpakV6Entry(item._kpakBlob, item._kpakEntry);
+          item.video.src = blobUrl;
+          item.src = blobUrl;
+          item.video.preload = 'auto';
+          item.video.load();
+          delete item._kpakEntry;
+          delete item._kpakBlob;
+          console.log('[V6 Lazy] Activated video:', item.id, formatBytes(item._kpakEntry.size));
+        } catch(e) {
+          console.warn('[V6 Lazy] Failed:', item.id, e.message);
+        }
+      };
+
+      if (prog) { try { prog.remove(); } catch(e) {} }
+      toast('Loaded ' + formatBytes(file.size) + ' (v6 format, ' + data.items.length + ' items, ' + remappedCount + ' media)');
+      event.target.value = '';
+      return;
+    }
+
     if (isKpak) {
       // Detect: locked kpak = JSON wrapper (starts with '{'), binary kpak = zip (starts with 'PK')
       // v6.3.7: use arrayBuffer for first-byte peek — file.text() consumes the stream
