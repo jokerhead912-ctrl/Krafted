@@ -31079,6 +31079,19 @@ function _cleanupBrokenPlaceholders() {
     }
     return !isBroken;
   });
+  // Also sweep broken text items (empty content after cache clear)
+  var textRemoved = 0;
+  if (state.texts && state.texts.length) {
+    state.texts = state.texts.filter(function(t) {
+      if (!t.html || t.html.trim() === '' || t.html === '<br>') {
+        textRemoved++;
+        if (t.el && t.el.parentNode) { try { t.el.parentNode.removeChild(t.el); } catch(e) {} }
+        return false;
+      }
+      return true;
+    });
+  }
+  removed += textRemoved;
   if (removed > 0) {
     console.log('[CLEANUP] removed ' + removed + ' broken placeholder(s) — restore them via Load');
     try { if (typeof updateStatus === 'function') updateStatus(); } catch(e) {}
