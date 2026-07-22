@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.2.5';
+var KRAFTED_VERSION = '6.2.6';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -21788,7 +21788,16 @@ viewport.addEventListener('mousedown', e => {
 
   // Box select
   if (!e.shiftKey) clearSelection();
-  state.dragging = { type: 'box-select', startX: e.clientX, startY: e.clientY };
+  // v6.2.5: snapshot all item screen rects at mousedown (drag start),
+  // NOT on first mousemove. 200 getBoundingClientRect() calls on the
+  // first mousemove frame cause a visible stutter. Doing it here means
+  // the cost is absorbed into the click-before-drag, which feels instant.
+  const merged = state.items.concat(state.texts, (state.todos || []), (state.mindmaps || []));
+  const rectCache = merged.map(it => ({
+    item: it,
+    r: it.el.getBoundingClientRect(),
+  }));
+  state.dragging = { type: 'box-select', startX: e.clientX, startY: e.clientY, _allItemsCache: rectCache };
   selBox.style.display = 'block';
   selBox.style.left = e.clientX + 'px';
   selBox.style.top = e.clientY + 'px';
@@ -22382,15 +22391,10 @@ document.addEventListener('mousemove', e => {
     // DOM — that's O(N) per frame, crippling box-select with 100+ items. Defer the
     // full refresh (handles, props panel) to mouseup.
     //
-    // v6.2.4: Also avoid getBoundingClientRect() per item per frame — it forces
-    // a synchronous layout reflow. Instead, snapshot all screen rects once at drag
-    // start and use the cache for every mousemove. Items don't move during box-select
-    // (user isn't dragging items, just dragging a rubber band), so the cache is valid.
+    // v6.2.5: _allItemsCache is pre-built at mousedown — the fallback below
+    // should never trigger in normal flow, but we keep it as a safety net.
     if (!d._allItemsCache) {
       const merged = state.items.concat(state.texts, (state.todos || []), (state.mindmaps || []));
-      // Snapshot screen rects in one layout pass (the first getBoundingClientRect
-      // call triggers layout; subsequent calls in the same frame are cheap, but we
-      // still want to avoid them on every mousemove).
       d._allItemsCache = merged.map(it => ({
         item: it,
         r: it.el.getBoundingClientRect(),
