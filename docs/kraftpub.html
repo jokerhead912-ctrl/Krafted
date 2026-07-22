@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.23';
+var KRAFTED_VERSION = '6.1.24';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -14128,8 +14128,14 @@ function resetVideoTrim() {
 
 function toggleVideoPlay() {
   const sel = getSelectedImages();
-  if (sel.length === 0 || !sel[0].video) return;
+  if (sel.length === 0) return;
   const item = sel[0];
+  // v6.1.24: GIF support — delegate to toggleMediaItem for animated GIFs
+  if (!item.video && item.isGif) {
+    toggleMediaItem(item.id);
+    return;
+  }
+  if (!item.video) return;
   const v = item.video;
   if (v.paused) {
     const ts = item.trimStart || 0;
@@ -17089,6 +17095,11 @@ function toggleMediaItem(itemId) {
     } catch(e) {}
   }
   updateMediaBar();
+  // v6.1.24: sync the play/pause button in the props panel for GIFs
+  try {
+    var btn = document.getElementById('btn-video-play');
+    if (btn) btn.textContent = _frozenGifs.has(item.id) ? '▶️ Play' : '⏸ Pause';
+  } catch(e) {}
 }
 
 
