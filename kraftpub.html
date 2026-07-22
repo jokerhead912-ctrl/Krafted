@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.3.0';
+var KRAFTED_VERSION = '6.3.1';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7874,23 +7874,23 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize, isGifFla
   // (browser is still parsing the GIF frames). We poll with rAF until ready.
   if (isAnimatedGifSrc && item.img) {
     var _gifFreezeAttempts = 0;
+    var _gifFreezeTarget = item;  // capture item ref for closure
     var _tryFreezeGif = function() {
       _gifFreezeAttempts++;
-      if (item.img.naturalWidth > 0 && item.img.naturalHeight > 0) {
+      if (_gifFreezeTarget.img.naturalWidth > 0 && _gifFreezeTarget.img.naturalHeight > 0) {
         try {
           var _c = document.createElement('canvas');
-          _c.width = item.img.naturalWidth;
-          _c.height = item.img.naturalHeight;
+          _c.width = _gifFreezeTarget.img.naturalWidth;
+          _c.height = _gifFreezeTarget.img.naturalHeight;
           var _cctx = _c.getContext('2d');
-          _cctx.drawImage(item.img, 0, 0);
+          _cctx.drawImage(_gifFreezeTarget.img, 0, 0);
           var _staticSrc = _c.toDataURL('image/png');
-          _frozenGifs.set(it.id, item.img.src);
-          item.img.src = _staticSrc;
-          item._userFrozen = true;  // v6.2.15: mark as user-frozen so cull doesn't unfreeze
+          _frozenGifs.set(_gifFreezeTarget.id, _gifFreezeTarget.img.src);
+          _gifFreezeTarget.img.src = _staticSrc;
+          _gifFreezeTarget._userFrozen = true;
         } catch(e) { console.warn('[GIF freeze] failed:', e.message); }
         return;
       }
-      // Keep polling up to 5s (100 attempts at ~50ms each via rAF)
       if (_gifFreezeAttempts < 100) {
         requestAnimationFrame(_tryFreezeGif);
       }
@@ -17141,6 +17141,7 @@ function pauseAllMedia() {
         const staticSrc = c.toDataURL('image/png');
         _frozenGifs.set(item.id, item.img.src);
         item.img.src = staticSrc;
+        item._userFrozen = true;  // v6.3.0: mark as user-frozen
       } catch(e) {
         // CORS or other error — skip freeze
       }
