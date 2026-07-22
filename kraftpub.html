@@ -2669,56 +2669,6 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #export-modal .export-bg-preset { padding:5px 10px !important; font-size:11px !important; }
 #export-modal .export-bg-row label.export-bg-transparent { display:flex; align-items:center; gap:5px; cursor:pointer; margin:0; }
 
-/* SAVE LOCK MODAL — prompt: lock? plain? cancel? */
-#save-lock-modal { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; z-index:99999999; justify-content:center; align-items:center; }
-#save-lock-modal.active { display:flex; }
-#save-lock-modal .lock-card { background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; min-width:340px; max-width:90vw; box-shadow:var(--shadow-heavy); font-family:'Inter',sans-serif; }
-#save-lock-modal .lock-title { font-size:15px; font-weight:600; color:var(--text); margin:0 0 8px 0; }
-#save-lock-modal .lock-desc { font-size:12px; color:var(--text-muted); line-height:1.5; margin:0 0 18px 0; }
-#save-lock-modal .lock-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
-#save-lock-modal .lock-actions button { padding:9px 16px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); border-radius:8px; cursor:pointer; font-size:12px; font-family:'Inter',sans-serif; font-weight:500; transition:all 0.2s ease; }
-#save-lock-modal .lock-actions button:hover { transform:translateY(-1px); border-color:var(--accent); }
-#save-lock-modal .lock-actions button.primary { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
-#save-lock-modal .lock-actions button.primary:hover { filter:brightness(1.08); }
-#save-lock-modal .lock-actions button.danger { background:transparent; color:var(--text-muted); }
-#save-lock-modal .lock-actions button.danger:hover { color:var(--text); }
-
-/* PASSWORD DISPLAY MODAL — shows auto-generated password */
-#password-display-modal { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; z-index:99999999; justify-content:center; align-items:center; }
-#password-display-modal.active { display:flex; }
-#password-display-modal .pwd-card { background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; min-width:380px; max-width:90vw; box-shadow:var(--shadow-heavy); font-family:'Inter',sans-serif; }
-#password-display-modal .pwd-title { font-size:15px; font-weight:600; color:var(--text); margin:0 0 6px 0; }
-#password-display-modal .pwd-sub { font-size:11px; color:var(--text-muted); margin:0 0 14px 0; }
-#password-display-modal .pwd-box { display:flex; align-items:center; gap:8px; background:var(--input-bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:12px; }
-#password-display-modal .pwd-value { flex:1; font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; font-size:18px; font-weight:600; letter-spacing:2px; color:var(--accent); user-select:all; -webkit-user-select:all; }
-#password-display-modal .pwd-copy { background:transparent; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:5px 10px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; transition:all 0.2s ease; }
-#password-display-modal .pwd-copy:hover { border-color:var(--accent); color:var(--accent); }
-#password-display-modal .pwd-copy.copied { border-color:#22c55e; color:#22c55e; }
-#password-display-modal .pwd-warn { font-size:11px; color:#f59e0b; line-height:1.5; margin:0 0 14px 0; padding:8px 10px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:6px; }
-#password-display-modal .pwd-actions { display:flex; gap:8px; justify-content:flex-end; }
-#password-display-modal .pwd-actions button { padding:9px 16px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); border-radius:8px; cursor:pointer; font-size:12px; font-family:'Inter',sans-serif; font-weight:500; transition:all 0.2s ease; }
-#password-display-modal .pwd-actions button:hover { transform:translateY(-1px); border-color:var(--accent); }
-#password-display-modal .pwd-actions button.primary { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
-#password-display-modal .pwd-actions button.primary:hover { filter:brightness(1.08); }
-
-/* UNLOCK MODAL — password input to open a locked file */
-#unlock-modal { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; z-index:99999999; justify-content:center; align-items:center; }
-#unlock-modal.active { display:flex; }
-#unlock-modal .unlock-card { background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; min-width:360px; max-width:90vw; box-shadow:var(--shadow-heavy); font-family:'Inter',sans-serif; }
-#unlock-modal .unlock-title { font-size:15px; font-weight:600; color:var(--text); margin:0 0 6px 0; display:flex; align-items:center; gap:8px; }
-#unlock-modal .unlock-title .lock-icon { font-size:18px; }
-#unlock-modal .unlock-desc { font-size:12px; color:var(--text-muted); line-height:1.5; margin:0 0 14px 0; }
-#unlock-modal .unlock-input { width:100%; padding:10px 12px; background:var(--input-bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; letter-spacing:1px; box-sizing:border-box; outline:none; transition:border-color 0.2s ease; }
-#unlock-modal .unlock-input:focus { border-color:var(--accent); }
-#unlock-modal .unlock-input::placeholder { color:var(--text-muted); font-family:'Inter',sans-serif; letter-spacing:0; }
-#unlock-modal .unlock-err { font-size:11px; color:#ef4444; margin:8px 0 0 0; min-height:14px; }
-#unlock-modal .unlock-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
-#unlock-modal .unlock-actions button { padding:9px 16px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); border-radius:8px; cursor:pointer; font-size:12px; font-family:'Inter',sans-serif; font-weight:500; transition:all 0.2s ease; }
-#unlock-modal .unlock-actions button:hover { transform:translateY(-1px); border-color:var(--accent); }
-#unlock-modal .unlock-actions button.primary { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
-#unlock-modal .unlock-actions button.primary:hover { filter:brightness(1.08); }
-#unlock-modal .unlock-actions button.danger { background:transparent; color:var(--text-muted); }
-#unlock-modal .unlock-actions button.danger:hover { color:var(--text); }
 
 /* STATUS BAR */
 #status { position:fixed; bottom:42px; right:12px; font-size:10px; color:var(--text-dim); background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:6px; padding:5px 10px; z-index:9999999; font-family:'Inter',sans-serif; letter-spacing:0.3px; transition: bottom 0.18s ease; }
@@ -3347,7 +3297,6 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
   <button onclick="document.getElementById('file-input').click()" title="Add Image">📷</button>
   <button onclick="document.getElementById('file-input-video').click()" title="Add Video">🎬</button>
   <span class="mt-sep"></span>
-  <button onclick="saveBoard()" title="Save">💾</button>
   <button onclick="zoomToFit()" title="Fit">⊡</button>
 </div>
 
@@ -4028,53 +3977,7 @@ function cleanupTrackedListeners() {
 <!-- Toast container -->
 <div id="toast"></div>
 
-<!-- SAVE FORMAT PROMPT -->
-<div id="save-lock-modal">
-  <div class="lock-card">
-    <h3 class="lock-title">Save Board</h3>
-    <p class="lock-desc">
-      <b>Full Package (.kpak)</b> — ZIP archive with all images/videos/audio embedded. No size limits. Share with your team.<br><br>
-      <b>Lock & Save (.kpak)</b> — Same as above, but encrypted with a password for extra security.<br><br>
-      <em style="opacity:0.5">Chrome/Edge: you'll choose where to save. Other browsers: file downloads automatically.</em>
-    </p>
-    <div class="lock-actions">
-      <button class="danger" onclick="closeSaveLockPrompt('cancel')">Cancel</button>
-      <button onclick="closeSaveLockPrompt('lock')">🔒 Lock & Save</button>
-      <button class="primary" onclick="closeSaveLockPrompt('kpak')">Full Package (.kpak)</button>
-    </div>
-  </div>
-</div>
-
-<!-- PASSWORD DISPLAY MODAL -->
-<div id="password-display-modal">
-  <div class="pwd-card">
-    <h3 class="pwd-title">Save with Password</h3>
-    <p class="pwd-sub">Your file is locked. Save this password somewhere safe — it cannot be recovered.</p>
-    <div class="pwd-box">
-      <span class="pwd-value" id="pwd-display-value"></span>
-      <button class="pwd-copy" id="pwd-copy-btn" onclick="copyGeneratedPassword()">Copy</button>
-    </div>
-    <p class="pwd-warn">Tip: The master password can also open this file as a backup.</p>
-    <div class="pwd-actions">
-      <button class="primary" onclick="closePasswordDisplay()">OK, Download</button>
-    </div>
-  </div>
-</div>
-
-<!-- UNLOCK MODAL -->
-<div id="unlock-modal">
-  <div class="unlock-card">
-    <h3 class="unlock-title"><span class="lock-icon">🔒</span> Locked Board</h3>
-    <p class="unlock-desc">This board was saved with a password. Enter the password to open it.</p>
-    <input type="password" class="unlock-input" id="unlock-input" placeholder="Enter password" autocomplete="off" />
-    <p class="unlock-err" id="unlock-err"></p>
-    <div class="unlock-actions">
-      <button class="danger" onclick="closeUnlockModal(false)">Cancel</button>
-      <button class="primary" onclick="tryUnlockFile()">Unlock</button>
-    </div>
-  </div>
-</div>
-
+<!-- SAVE FORMAT PROMPT removed in v6.5.0 — lock/password functionality deprecated -->
 <!-- HELP OVERLAY -->
 <div id="help-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:999999999;display:none;justify-content:center;align-items:center;" onclick="if(event.target===this)hideHelp()">
   <div style="background:#14142a;border:1px solid rgba(0,229,255,0.3);border-radius:16px;padding:32px;max-width:680px;max-height:85vh;overflow-y:auto;color:#e0e0e0;font-family:Inter,sans-serif;box-shadow:0 24px 80px rgba(0,0,0,0.6);">
@@ -4381,7 +4284,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   }
 
   window.saveBoardV5 = async function() {
-    var choice = await showSaveLockPrompt(); if (choice === 'cancel') return;
     var counts = countMediaItems();
     var prog = document.createElement('div'); prog.className = 'save-progress'; prog.innerHTML = '<div class="pct">Preparing save...</div>'; document.body.appendChild(prog);
     function updateProg(txt) { prog.innerHTML = '<div class="pct">' + txt + '</div>'; }
@@ -4401,7 +4303,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       };
       var result = await KF.Writer.buildKpak(manifest, { mediaFetcher: mediaFetcher, compression: 'STORE', onProgress: function(evt) { updateProg(evt.message); } });
       var zipBlob = result.zipBlob;
-      if (choice === 'lock') { updateProg('Encrypting with password...'); var password = KF.Writer.generatePassword(8); zipBlob = await KF.Writer.encryptWithLock(zipBlob, password); await showPasswordDisplayModal(password); }
       updateProg('Writing ' + KF.Writer.formatBytes(zipBlob.size) + '...'); await new Promise(function(r) { setTimeout(r, 0); });
       if (fileHandle) { await KF.Writer.writeToHandle(fileHandle, zipBlob); toast('Saved \u2714 ' + handleName + ' (' + KF.Writer.formatBytes(zipBlob.size) + ')'); }
       else { await KF.Writer.downloadBlob(zipBlob, fname); toast('Downloaded \u2192 ' + fname); }
@@ -4414,7 +4315,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var isLarge = file.size > 5 * 1024 * 1024; var prog = null;
     if (isLarge) { prog = document.createElement('div'); prog.className = 'save-progress'; prog.innerHTML = '<div class="pct">Loading ' + KF.Writer.formatBytes(file.size) + '...</div>'; document.body.appendChild(prog); }
     try {
-      var result = await KF.Reader.loadFile(file, { onProgress: function(evt) { if (prog) prog.innerHTML = '<div class="pct">' + evt.message + '</div>'; }, passwordProvider: async function() { var pw = await showUnlockModal(); return pw === false ? false : pw; }, masterPassword: (typeof KRAFTED_MASTER_PASSWORD !== 'undefined') ? KRAFTED_MASTER_PASSWORD : null });
+      var result = await KF.Reader.loadFile(file, { onProgress: function(evt) { if (prog) prog.innerHTML = '<div class="pct">' + evt.message + '</div>'; } });
       var data = manifestToV4Restore(result.manifest); restoreBoard(data);
       var msg = 'Loaded ' + KF.Writer.formatBytes(file.size); if (result.restoredCount > 0) msg += ' (' + result.restoredCount + ' media restored)'; toast(msg);
     } catch (err) {
@@ -4424,14 +4325,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   };
 
   waitForKraftedState().then(function() {
-    window._saveBoardLegacy = window.saveBoard; window._loadBoardFileLegacy = window.loadBoardFile;
-    // v6.1.1: Disable Bridge load override — KraftedFormat's loadKpakBlob
-    // crashes on GitHub Pages with "Corrupted zip" (data length = 0) and
-    // remapMediaFromZip writes _blobUrl instead of src which breaks
-    // restoreBoard's audio/video branches. The v4 load path has been
-    // thoroughly tested and works for all media types.
-    // window.saveBoard = window.saveBoardV5; // keep save bridge disabled too — v4 saveBoard works
-    console.log('[KraftedBridge] Init complete — v4 load/save paths preserved (v6.1.1: Bridge load disabled).');
+    // v6.5.0: Legacy save/load paths removed. Bridge load disabled (v6.1.1).
+    // All save/load now goes through saveBoardV6 / loadBoardFile with v6 kpak format.
+    console.log('[KraftedBridge] Init complete — v6 save/load (v6.5.0: legacy paths removed).');
     console.log('[KraftedBridge] Schema v' + KF.Schema.VERSION + ' | ' + state.items.length + ' items on board.');
   });
 })();
@@ -29471,123 +29367,6 @@ var StreamingZipWriter = (function() {
   return StreamingZipWriter;
 })();
 
-// --- PASSWORD LOCK HELPERS ---
-const KRAFTED_MASTER_PASSWORD = 'jokerhead'; // backup password that always unlocks
-
-function generatePassword(length) {
-  // 8-char password, no I/L/O/0/1 for readability
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  if (!length) length = 8;
-  const arr = new Uint8Array(length);
-  crypto.getRandomValues(arr);
-  let pwd = '';
-  for (let i = 0; i < length; i++) pwd += chars[arr[i] % chars.length];
-  return pwd;
-}
-function generateSalt(length) {
-  const arr = new Uint8Array(length || 12);
-  crypto.getRandomValues(arr);
-  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-async function hashPassword(password, salt) {
-  const enc = new TextEncoder();
-  const data = enc.encode(salt + ':' + password);
-  const hashBuf = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// --- SAVE LOCK MODAL ---
-let _saveLockResolve = null;
-function showSaveLockPrompt() {
-  return new Promise(resolve => {
-    _saveLockResolve = resolve;
-    document.getElementById('save-lock-modal').classList.add('active');
-  });
-}
-function closeSaveLockPrompt(choice) {
-  document.getElementById('save-lock-modal').classList.remove('active');
-  if (_saveLockResolve) { const r = _saveLockResolve; _saveLockResolve = null; r(choice); }
-}
-
-// --- PASSWORD DISPLAY MODAL ---
-let _pwdDisplayResolve = null;
-let _currentGeneratedPassword = '';
-function showPasswordDisplayModal(password) {
-  return new Promise(resolve => {
-    _currentGeneratedPassword = password;
-    _pwdDisplayResolve = resolve;
-    document.getElementById('pwd-display-value').textContent = password;
-    const copyBtn = document.getElementById('pwd-copy-btn');
-    copyBtn.classList.remove('copied');
-    copyBtn.textContent = 'Copy';
-    document.getElementById('password-display-modal').classList.add('active');
-  });
-}
-function closePasswordDisplay() {
-  document.getElementById('password-display-modal').classList.remove('active');
-  if (_pwdDisplayResolve) { const r = _pwdDisplayResolve; _pwdDisplayResolve = null; r(); }
-}
-async function copyGeneratedPassword() {
-  try {
-    await navigator.clipboard.writeText(_currentGeneratedPassword);
-    const copyBtn = document.getElementById('pwd-copy-btn');
-    copyBtn.classList.add('copied');
-    copyBtn.textContent = 'Copied';
-    setTimeout(() => { copyBtn.classList.remove('copied'); copyBtn.textContent = 'Copy'; }, 1500);
-  } catch(e) {
-    // Fallback: select the text
-    const range = document.createRange();
-    range.selectNode(document.getElementById('pwd-display-value'));
-    window.getSelection().removeAllRanges();
-    window.getSelection().addRange(range);
-  }
-}
-
-// --- UNLOCK MODAL ---
-let _unlockResolve = null;
-let _unlockInitialErr = ''; // error message to show when modal opens (cleared on success)
-function showUnlockModal() {
-  return new Promise(resolve => {
-    _unlockResolve = resolve;
-    const input = document.getElementById('unlock-input');
-    const err = document.getElementById('unlock-err');
-    input.value = '';
-    // Only show the initial error if no prior error is set (i.e. first open)
-    if (!err.textContent) err.textContent = _unlockInitialErr;
-    _unlockInitialErr = '';
-    document.getElementById('unlock-modal').classList.add('active');
-    setTimeout(() => input.focus(), 30);
-  });
-}
-function closeUnlockModal(success) {
-  document.getElementById('unlock-modal').classList.remove('active');
-  if (_unlockResolve) { const r = _unlockResolve; _unlockResolve = null; r(success); }
-}
-async function tryUnlockFile() {
-  const input = document.getElementById('unlock-input');
-  const err = document.getElementById('unlock-err');
-  const password = input.value;
-  if (!password) { err.textContent = 'Please enter a password'; return; }
-  err.textContent = '';
-  closeUnlockModal(password);
-}
-// Allow Enter to submit in the unlock modal
-document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && document.getElementById('unlock-modal').classList.contains('active')) {
-    e.preventDefault();
-    tryUnlockFile();
-  }
-  if (e.key === 'Escape') {
-    if (document.getElementById('save-lock-modal').classList.contains('active')) { e.preventDefault(); closeSaveLockPrompt('cancel'); }
-    if (document.getElementById('password-display-modal').classList.contains('active')) { e.preventDefault(); closePasswordDisplay(); }
-    if (document.getElementById('unlock-modal').classList.contains('active')) { e.preventDefault(); closeUnlockModal(false); }
-  }
-}, true);
-
-// Click outside modal-card to close (acts as Cancel)
-var _slm = document.getElementById('save-lock-modal'); if (_slm) _slm.addEventListener('click', e => { if (e.target.id === 'save-lock-modal') closeSaveLockPrompt('cancel'); });
-var _pdm = document.getElementById('password-display-modal'); if (_pdm) _pdm.addEventListener('click', e => { if (e.target.id === 'password-display-modal') closePasswordDisplay(); });
-var _um = document.getElementById('unlock-modal'); if (_um) _um.addEventListener('click', e => { if (e.target.id === 'unlock-modal') closeUnlockModal(false); });
 
 // --- SAVE / LOAD (Round 79: kpak zip format) ---
 //
@@ -29736,11 +29515,7 @@ async function buildKpakStream(writableStream, progressCallback, lockPassword) {
 
   // 1. Build manifest (embed lock metadata if password provided)
   const manifest = buildManifest();
-  if (lockPassword) {
-    const salt = generateSalt(12);
-    const hash = await hashPassword(lockPassword, salt);
-    manifest._kraftedLock = { v: 1, hash, salt };
-  }
+  // v6.5.0: Lock support removed
   await zip.addText('manifest.json', JSON.stringify(manifest));
 
   // 2. Walk items and stream media blobs one at a time
@@ -30233,307 +30008,6 @@ async function saveBoardV6() {
     try { prog.remove(); } catch (e) {}
   }
 }
-async function saveBoard() {
-  console.log('[SAVE] saveBoard() called');
-  const choice = await showSaveLockPrompt();
-  console.log('[SAVE] user chose:', choice);
-  if (choice === 'cancel') return;
-
-  const counts = countMediaItems();
-  console.log('[SAVE] media counts:', counts);
-
-  // --- DEBUG: verify JSZip is available (needed for fallback path) ---
-  if (typeof JSZip === 'undefined') {
-    console.error('[SAVE] JSZip is undefined! Check script loading.');
-    toast('Save failed: JSZip library not loaded. Please refresh the page.');
-    return;
-  }
-
-  // v6.2: Pre-save size check
-  const SIZE_WARN_MB = 800;
-  const SIZE_BLOCK_MB = 1500;
-  let estTotalBytes = 0;
-  let largeMediaCount = 0;
-  for (const it of state.items) {
-    if (it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:'))) {
-      if (it._fileSize) {
-        estTotalBytes += it._fileSize;
-        if (it._fileSize > 50 * 1024 * 1024) largeMediaCount++;
-      } else if (it.src.startsWith('data:')) {
-        const base64Len = it.src.indexOf(';base64,') >= 0 ? it.src.split(',')[1]?.length || 0 : 0;
-        estTotalBytes += Math.round(base64Len * 0.75);
-      } else {
-        if (it.isVideo && it.video && it.video.duration) {
-          estTotalBytes += Math.round(it.video.duration * 2.5 * 1024 * 1024);
-        } else {
-          estTotalBytes += 5 * 1024 * 1024;
-        }
-      }
-    }
-  }
-  const estMB = Math.round(estTotalBytes / (1024 * 1024));
-  console.log('[SAVE] Estimated media size:', estMB, 'MB, large files:', largeMediaCount);
-
-  // v6.3.0: with streaming, the limit is much higher (~disk size). Only block
-  // if using download fallback (non-Chrome browsers) with >1.5GB.
-  const hasFileAPI = !!window.showSaveFilePicker;
-  if (!hasFileAPI && estMB > SIZE_BLOCK_MB) {
-    toast('⚠ Save blocked: estimated ' + estMB + ' MB. Use Chrome/Edge for large projects (streaming save).', 8000);
-    return;
-  }
-  if (!hasFileAPI && estMB > SIZE_WARN_MB) {
-    const confirmed = confirm(
-      '⚠ Large project detected\n\n' +
-      'Estimated media: ~' + estMB + ' MB (' + counts.total + ' files, ' + largeMediaCount + ' large)\n\n' +
-      'This browser doesn\'t support streaming save. The save may crash.\n' +
-      'Use Chrome or Edge for large projects.\n\n' +
-      'Continue anyway?'
-    );
-    if (!confirmed) { toast('Save cancelled'); return; }
-  }
-
-  // Show progress
-  const prog = document.createElement('div');
-  prog.className = 'save-progress';
-  prog.innerHTML = '<div class="pct">Preparing save...</div>';
-  document.body.appendChild(prog);
-  const updateProg = (txt) => { prog.innerHTML = '<div class="pct">' + txt + '</div>'; };
-
-  try {
-    // --- STEP 1: Generate lock password upfront (if needed) ---
-    // v6.3.0: password is embedded in manifest.json inside the zip,
-    // not wrapping the whole zip in base64. This eliminates the OOM.
-    let lockPassword = null;
-    if (choice === 'lock') {
-      lockPassword = generatePassword(8);
-      // Show password modal NOW so user can copy it while save runs
-      showPasswordDisplayModal(lockPassword);
-    }
-
-    // --- STEP 2: Request file handle (while transient activation is fresh) ---
-    const fname = 'krafted_' + new Date().toISOString().slice(0, 10) + '.kpak';
-    const mime = 'application/zip'; // v6.3.0: always zip, lock is embedded
-    const ext = '.kpak';
-
-    let fileHandle = null;
-    let handleName = null;
-
-    // v6.3.3: pause all playing videos before save — they can interfere with
-    // blob fetch and the streaming writer
-    let _pausedVideos = [];
-    state.items.forEach(function(it) {
-      if (it.video && !it.video.paused) {
-        _pausedVideos.push(it.video);
-        it.video.pause();
-      }
-    });
-
-    if (hasFileAPI) {
-      updateProg('Choose where to save...');
-      const h = await requestSaveHandle(fname, mime, ext);
-      if (h.cancelled) { toast('Save cancelled'); return; }
-      fileHandle = h.handle;
-      handleName = h.name;
-      console.log('[SAVE] File handle obtained:', handleName || '(none)');
-    } else {
-      console.log('[SAVE] No File System Access API — using download fallback');
-    }
-
-    // --- STEP 3: Build and stream zip ---
-    updateProg('Building package' + (handleName ? ' for ' + handleName : '') + '...');
-    const n = counts.total;
-    console.log('[SAVE] Building kpak with', n, 'media files, streaming:', !!fileHandle);
-
-    if (fileHandle) {
-      // v6.3.0: Streaming path — write directly to file, one entry at a time
-      const writable = await fileHandle.createWritable();
-      const result = await buildKpakStream(writable, updateProg, lockPassword);
-      console.log('[SAVE] streamed: packed=' + result.packed + ' skipped=' + result.skipped);
-      toast('Saved \u2714 ' + handleName + ' (' + result.packed + ' media' + (result.skipped > 0 ? ', ' + result.skipped + ' skipped' : '') + ')');
-    } else {
-      // Fallback: build blob via JSZip (for non-Chrome browsers)
-      const result = await buildKpakBlob(updateProg);
-      let zipBlob = result.zipBlob;
-      console.log('[SAVE] kpak built: packed=' + result.packed + ' skipped=' + result.skipped + ' zipSize=' + formatBytes(zipBlob.size));
-
-      if (n > 0 && result.packed === 0) {
-        console.warn('[SAVE] All ' + result.skipped + ' media files skipped — kpak contains layout only');
-      }
-
-      // Lock (fallback path only — streaming path embeds lock in manifest)
-      if (choice === 'lock') {
-        console.log('[SAVE] encrypting with lock (legacy base64 wrap)...');
-        const salt = generateSalt(12);
-        const hash = await hashPassword(lockPassword, salt);
-        const lockWrapper = {
-          _kraftedLock: { v: 1, hash, salt },
-          _kpakData: await new Promise((resolve, reject) => {
-            const fr = new FileReader();
-            fr.onload = () => resolve(fr.result);
-            fr.onerror = () => reject(fr.error);
-            fr.readAsDataURL(zipBlob);
-          }),
-        };
-        zipBlob = new Blob([JSON.stringify(lockWrapper)], { type: 'application/locked-kpak' });
-      }
-
-      updateProg('Writing ' + formatBytes(zipBlob.size) + '...');
-      await downloadBlob(zipBlob, fname);
-      console.log('[SAVE] Download fallback triggered');
-      toast('Downloaded ' + fname + ' \u2192 Downloads folder (' + formatBytes(zipBlob.size) + ', ' + result.packed + ' media' + (result.skipped > 0 ? ', ' + result.skipped + ' skipped' : '') + ')');
-    }
-
-    // Trigger auto-backup
-    if (window.KraftedStorage && window.KraftedStorage.onSaveComplete) {
-      window.KraftedStorage.onSaveComplete();
-    }
-    console.log('[SAVE] done!');
-  } catch (err) {
-    console.error('[SAVE] FAILED:', err.name, err.message, err.stack);
-    updateProg('Error: ' + (err.message || 'unknown'));
-    toast('Save failed: ' + (err.message || 'unknown error'));
-    await new Promise(r => setTimeout(r, 3000));
-  } finally {
-    try { prog.remove(); } catch (e) {}
-  }
-}
-
-// v6.4.0: Split save — divides a large project into multiple .kpak files
-// (~800MB each) so each can be loaded without OOM. Uses the same streaming
-// zip writer as saveBoard.
-async function saveBoardSplit() {
-  console.log('[SPLIT] saveBoardSplit() called');
-  const counts = countMediaItems();
-  console.log('[SPLIT] media counts:', counts);
-
-  // Estimate total size
-  let estTotalBytes = 0;
-  for (const it of state.items) {
-    if (it._fileSize) { estTotalBytes += it._fileSize; }
-    else if (it.src && it.src.startsWith('data:')) {
-      const b64Len = it.src.indexOf(';base64,') >= 0 ? it.src.split(',')[1]?.length || 0 : 0;
-      estTotalBytes += Math.round(b64Len * 0.75);
-    } else if (it.src && it.src.startsWith('blob:')) {
-      estTotalBytes += it.isVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024;
-    }
-  }
-  const estMB = Math.round(estTotalBytes / (1024 * 1024));
-  const PART_SIZE = 800 * 1024 * 1024; // 800MB per part
-  const numParts = Math.max(1, Math.ceil(estTotalBytes / PART_SIZE));
-
-  const proceed = confirm(
-    'Split project into ' + numParts + ' files\n\n' +
-    'Estimated total: ~' + (estMB >= 1024 ? (estMB / 1024).toFixed(1) + ' GB' : estMB + ' MB') + '\n' +
-    'Each file: ~' + Math.round(estMB / numParts) + ' MB\n' +
-    'Files: ' + new Date().toISOString().slice(0, 10) + '_part1.kpak ... part' + numParts + '.kpak\n\n' +
-    'You will be asked where to save each file.\n' +
-    'Load them one at a time to reassemble the board.'
-  );
-  if (!proceed) { toast('Split save cancelled'); return; }
-
-  // Group items into batches
-  const batches = [];
-  let currentBatch = [];
-  let currentSize = 0;
-  for (const it of state.items) {
-    let itSize = it._fileSize || (it.isVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024);
-    if (it.src && it.src.startsWith('data:')) {
-      const b64Len = it.src.indexOf(';base64,') >= 0 ? it.src.split(',')[1]?.length || 0 : 0;
-      itSize = Math.round(b64Len * 0.75);
-    }
-    if (currentSize + itSize > PART_SIZE && currentBatch.length > 0) {
-      batches.push(currentBatch);
-      currentBatch = [];
-      currentSize = 0;
-    }
-    currentBatch.push(it);
-    currentSize += itSize;
-  }
-  if (currentBatch.length > 0) batches.push(currentBatch);
-
-  console.log('[SPLIT] Divided into', batches.length, 'batches:', batches.map(b => b.length + ' items'));
-
-  const dateStr = new Date().toISOString().slice(0, 10);
-  const prog = document.createElement('div');
-  prog.className = 'save-progress';
-  prog.innerHTML = '<div class="pct">Split save: 0/' + batches.length + '</div>';
-  document.body.appendChild(prog);
-  const updateProg = (t) => { prog.innerHTML = '<div class="pct">' + t + '</div>'; };
-
-  const origItems = state.items.slice(); // preserve original order
-  const origTexts = state.texts.slice();
-  const origTodos = state.todos.slice();
-  const origMindmaps = state.mindmaps.slice();
-
-  try {
-    for (let bi = 0; bi < batches.length; bi++) {
-      const fname = 'krafted_' + dateStr + '_part' + (bi + 1) + '.kpak';
-      updateProg('Part ' + (bi + 1) + '/' + batches.length + ': choose save location...');
-
-      // Temporarily swap state for buildManifest:
-      // - Part 1: includes all texts/todos/mindmaps (they're small, no need to split)
-      // - Parts 2+: empty texts/todos/mindmaps (already loaded via part 1 append)
-      state.items = batches[bi];
-      if (bi === 0) {
-        // keep origTexts/origTodos/origMindmaps as-is
-      } else {
-        state.texts = [];
-        state.todos = [];
-        state.mindmaps = [];
-      }
-      updateProg('Part ' + (bi + 1) + '/' + batches.length + ': building...');
-
-      // Try streaming path first (Chrome/Edge with File System Access API)
-      // Fallback to JSZip blob + download if user cancels, SecurityError, or API missing
-      let savedVia = null;
-      if (window.showSaveFilePicker) {
-        try {
-          const h = await requestSaveHandle(fname, 'application/zip', '.kpak');
-          if (h.cancelled) {
-            toast('Split save cancelled at part ' + (bi + 1));
-            return;
-          }
-          if (h.handle) {
-            const writable = await h.handle.createWritable();
-            await buildKpakStream(writable, updateProg, null);
-            savedVia = 'stream';
-            console.log('[SPLIT] Part', bi + 1, 'saved via stream:', fname);
-          }
-        } catch (e) {
-          console.warn('[SPLIT] stream path failed for part', bi + 1, e.name, e.message);
-          // Fall through to JSZip fallback below
-        }
-      }
-      if (!savedVia) {
-        // Fallback: build blob via JSZip and trigger download
-        updateProg('Part ' + (bi + 1) + '/' + batches.length + ': building blob...');
-        const result = await buildKpakBlob(updateProg);
-        const zipBlob = result.zipBlob || result;
-        const url = URL.createObjectURL(zipBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fname;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
-        savedVia = 'blob-download';
-        console.log('[SPLIT] Part', bi + 1, 'saved via blob download:', fname, formatBytes(zipBlob.size));
-      }
-    }
-    toast('Split save complete — ' + batches.length + ' files saved');
-  } catch (err) {
-    console.error('[SPLIT] FAILED:', err.name, err.message);
-    updateProg('Error: ' + (err.message || 'unknown'));
-    toast('Split save failed: ' + (err.message || 'unknown error'));
-    await new Promise(r => setTimeout(r, 3000));
-  } finally {
-    state.items = origItems; // restore
-    state.texts = origTexts;
-    state.todos = origTodos;
-    state.mindmaps = origMindmaps;
-    try { prog.remove(); } catch (e) {}
-  }
-}
 
 // Load board from file — detects .kpak (zip) vs .json format
 async function loadBoardFile(event) {
@@ -30588,23 +30062,7 @@ async function loadBoardFile(event) {
       const data = manifest;
       console.log('[V6 LOAD] manifest:', data.items ? data.items.length : 0, 'items');
 
-      // Check for lock
-      if (data._kraftedLock) {
-        const lock = data._kraftedLock;
-        let unlocked = false;
-        while (!unlocked) {
-          const password = await showUnlockModal();
-          if (password === false) { toast('Load cancelled'); event.target.value = ''; return; }
-          const inputHash = await hashPassword(password, lock.salt);
-          if (inputHash === lock.hash || password === KRAFTED_MASTER_PASSWORD) {
-            unlocked = true;
-          } else {
-            document.getElementById('unlock-err').textContent = 'Wrong password. Try again.';
-          }
-        }
-        delete data._kraftedLock;
-      }
-
+      // v6.5.0: Lock support removed — always load directly
       // Map entries to items — set _kpakEntry + _kpakBlob for on-demand extraction
       const mediaEntries = entries.filter(e => e.name.startsWith('media/'));
       let remappedCount = 0;
@@ -30671,50 +30129,12 @@ async function loadBoardFile(event) {
       const firstBuf = await file.slice(0, 1).arrayBuffer();
       const firstByte = String.fromCharCode(new Uint8Array(firstBuf)[0]);
       if (firstByte === '{') {
-        // === LOCKED KPAK (JSON wrapper with base64 zip inside) ===
-        if (prog) prog.innerHTML = '<div class="pct">Unlocking ' + formatBytes(file.size) + '...</div>';
-        const text = await file.text();
-        let data;
-        try { data = JSON.parse(text); } catch(e) { toast('Invalid .kpak file (not valid JSON)'); event.target.value = ''; return; }
-        if (!data._kraftedLock || !data._kpakData) { toast('Invalid locked kpak: missing lock data'); event.target.value = ''; return; }
-        const lock = data._kraftedLock;
-        let unlocked = false;
-        while (!unlocked) {
-          const password = await showUnlockModal();
-          if (password === false) { toast('Load cancelled'); event.target.value = ''; return; }
-          const inputHash = await hashPassword(password, lock.salt);
-          if (inputHash === lock.hash || password === KRAFTED_MASTER_PASSWORD) {
-            unlocked = true;
-          } else {
-            document.getElementById('unlock-err').textContent = 'Wrong password. Try again.';
-          }
-        }
-        // Decode base64 zip from JSON wrapper
-        if (prog) prog.innerHTML = '<div class="pct">Unpacking...</div>';
-        const binStr = atob(data._kpakData.split(',')[1] || data._kpakData);
-        const bytes = new Uint8Array(binStr.length);
-        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-        const zipBlob = new Blob([bytes], { type: 'application/zip' });
-        const zip = await JSZip.loadAsync(zipBlob);
-        const manifestFile = zip.file('manifest.json');
-        if (!manifestFile) { toast('Corrupted locked kpak: no manifest'); event.target.value = ''; return; }
-        const manifestJson = await manifestFile.async('string');
-        data = JSON.parse(manifestJson);
-        // Remap media
-        const mediaEntries = Object.keys(zip.files).filter(p => p.startsWith('media/') && !p.endsWith('/'));
-        let restoredCount = 0;
-        for (const dataItem of data.items || []) {
-          const mediPrefix = 'media/' + dataItem.id + '.';
-          const entryPath = mediaEntries.find(p => p.startsWith(mediPrefix));
-          if (!entryPath) continue;
-          try {
-            const blob = await zip.file(entryPath).async('blob');
-            if (blob && blob.size > 0) { dataItem.src = URL.createObjectURL(blob); restoredCount++; }
-          } catch (e) { console.warn('Failed to restore media:', dataItem.id, e); }
-        }
-        restoreBoard(data);
-        toast('Loaded ' + formatBytes(file.size) + ' (' + restoredCount + ' media restored)');
+        // v6.5.0: Locked kpak (JSON wrapper) no longer supported
+        toast('Locked kpak files are no longer supported in v6.5.0. Please re-save from an older version.');
+        event.target.value = '';
+        return;
       } else {
+      // === REGULAR KPAK (binary zip) ===
       // === REGULAR KPAK (binary zip) ===
       if (prog) prog.innerHTML = '<div class="pct">Unpacking ' + formatBytes(file.size) + '...</div>';
       const zip = await JSZip.loadAsync(file);
@@ -30725,22 +30145,6 @@ async function loadBoardFile(event) {
       const manifestJson = await manifestFile.async('string');
       const data = JSON.parse(manifestJson);
 
-      // Check for lock
-      if (data._kraftedLock) {
-        const lock = data._kraftedLock;
-        let unlocked = false;
-        while (!unlocked) {
-          const password = await showUnlockModal();
-          if (password === false) { toast('Load cancelled'); event.target.value = ''; return; }
-          const inputHash = await hashPassword(password, lock.salt);
-          if (inputHash === lock.hash || password === KRAFTED_MASTER_PASSWORD) {
-            unlocked = true;
-          } else {
-            document.getElementById('unlock-err').textContent = 'Wrong password. Try again.';
-          }
-        }
-        delete data._kraftedLock;
-      }
 
       // Remap media/ entries to blob URLs.
       if (prog) prog.innerHTML = '<div class="pct">Restoring media...</div>';
@@ -30862,59 +30266,11 @@ async function loadBoardFile(event) {
         return;
       }
 
-      // Handle locked .krafted files (base64-encoded kpak inside JSON)
-      if (data._kraftedLock && data._kpakData) {
-        // Locked kpak: extract the embedded zip, then continue as kpak
-        const lock = data._kraftedLock;
-        let unlocked = false;
-        while (!unlocked) {
-          const password = await showUnlockModal();
-          if (password === false) { toast('Load cancelled'); event.target.value = ''; return; }
-          const inputHash = await hashPassword(password, lock.salt);
-          if (inputHash === lock.hash || password === KRAFTED_MASTER_PASSWORD) {
-            unlocked = true;
-          } else {
-            document.getElementById('unlock-err').textContent = 'Wrong password. Try again.';
-          }
-        }
-        // Unwrap: data._kpakData is a base64 zip blob
-        const binStr = atob(data._kpakData.split(',')[1] || data._kpakData);
-        const bytes = new Uint8Array(binStr.length);
-        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-        const zipBlob = new Blob([bytes], { type: 'application/zip' });
-        const zip = await JSZip.loadAsync(zipBlob);
-
-        const manifestFile = zip.file('manifest.json');
-        if (!manifestFile) { toast('Corrupted locked kpak'); event.target.value = ''; return; }
-        const manifestJson = await manifestFile.async('string');
-        data = JSON.parse(manifestJson);
-
-        // Remap media
-        const mediaEntries = Object.keys(zip.files).filter(p => p.startsWith('media/') && !p.endsWith('/'));
-        for (const dataItem of data.items || []) {
-          const mediPrefix = 'media/' + dataItem.id + '.';
-          const entryPath = mediaEntries.find(p => p.startsWith(mediPrefix));
-          if (!entryPath) continue;
-          try {
-            const blob = await zip.file(entryPath).async('blob');
-            if (blob && blob.size > 0) dataItem.src = URL.createObjectURL(blob);
-          } catch (e) {}
-        }
-      } else if (data._kraftedLock) {
-        // Legacy locked plain JSON
-        const lock = data._kraftedLock;
-        let unlocked = false;
-        while (!unlocked) {
-          const password = await showUnlockModal();
-          if (password === false) { toast('Load cancelled'); event.target.value = ''; return; }
-          const inputHash = await hashPassword(password, lock.salt);
-          if (inputHash === lock.hash || password === KRAFTED_MASTER_PASSWORD) {
-            unlocked = true;
-          } else {
-            document.getElementById('unlock-err').textContent = 'Wrong password. Try again.';
-          }
-        }
-        delete data._kraftedLock;
+      // v6.5.0: Locked kpak/JSON no longer supported — skip to plain JSON load
+      if (data._kraftedLock) {
+        toast('Locked files are no longer supported in v6.5.0. Please re-save from an older version.');
+        event.target.value = '';
+        return;
       }
 
       // Log what we got
@@ -31708,8 +31064,7 @@ function loadAutoSave() {
 
 // ============================================================
 // QUICK SAVE + AUTO REOPEN (v6.0.2 — additive feature)
-// All new code. Revert by deleting this block — zero impact on existing code.
-// Wraps saveBoard() and loadBoardFile() flows without modifying them.
+// v6.5.0: Lock/password prompts removed — QS always saves plain kpak.
 // ============================================================
 
 // In-memory cache of last quick-save FileSystemFileHandle (lost on refresh — that's OK, IDB holds the kpak)
@@ -31727,7 +31082,7 @@ async function qsSaveBoard() {
   const fname = 'krafted_' + new Date().toISOString().slice(0, 10) + '.kpak';
   if (typeof window.showSaveFilePicker !== 'function') {
     toast('Quick Save not available in this browser. Use Save instead.');
-    return saveBoard();
+    return saveBoardV6();
   }
   try {
     const handle = await window.showSaveFilePicker({
@@ -31750,27 +31105,16 @@ async function qsSaveBoard() {
 
 async function _qsWriteToCachedHandle() {
   if (!window.__qsFileHandle) return;
-  // Show lock prompt (same as saveBoard)
-  let choice = 'unlock';
-  if (typeof showSaveLockPrompt === 'function') {
-    choice = await showSaveLockPrompt();
-    if (choice === 'cancel') return;
-  }
   const prog = document.createElement('div');
   prog.className = 'save-progress';
   prog.innerHTML = '<div class="pct">Quick saving...</div>';
   document.body.appendChild(prog);
   const updateProg = (t) => { try { prog.innerHTML = '<div class="pct">' + t + '</div>'; } catch(e) {} };
   try {
-    // v6.3.0: Use streaming zip writer for Quick Save
-    let lockPassword = null;
-    if (choice === 'lock' && typeof generatePassword === 'function') {
-      lockPassword = generatePassword(8);
-      showPasswordDisplayModal(lockPassword);
-    }
+    // v6.5.0: Always save plain kpak (lock removed)
     updateProg('Building package...');
     const writable = await window.__qsFileHandle.createWritable();
-    const result = await buildKpakStream(writable, updateProg, lockPassword);
+    const result = await buildKpakStream(writable, updateProg, null);
     // v6.3.0: Skip IDB mirror for streamed saves — the file is on disk.
     // For cross-session auto-reopen, we only need the file handle reference,
     // not the full blob. The IDB mirror was for the JSZip blob path.
@@ -31834,11 +31178,7 @@ async function _qsRestoreFromBlob(zipBlob, fname) {
     if (!manifestFile) { toast('Corrupted kpak: no manifest'); return false; }
     const manifestJson = await manifestFile.async('string');
     const data = JSON.parse(manifestJson);
-    // Check for lock
-    if (data._kraftedLock) {
-      toast('Cannot auto-reopen locked kpak. Use Load to unlock.');
-      return false;
-    }
+    // v6.5.0: Lock support removed — proceed directly
     // Remap media/ entries to blob URLs.
     // v6.1: track remappedIds so we can strip only stale blob URLs
     // (items that didn't get a fresh remap) — preserves the new
