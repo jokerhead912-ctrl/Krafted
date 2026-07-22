@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.20';
+var KRAFTED_VERSION = '6.1.21';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -19923,12 +19923,12 @@ function _handleFileDrop(e, files) {
   });
   const dropX0 = (e.clientX - state.pan.x) / state.zoom;
   const dropY0 = (e.clientY - state.pan.y) / state.zoom;
-  // Process images SEQUENTIALLY (one at a time) to avoid memory crash on 20+ images.
-  // v5.5: Use blob URLs instead of base64 data URLs. Blob URLs are 33% smaller
-  // in memory and won't bloat localStorage during auto-save (serializeBoard
-  // strips blob:/data: src). We still need Image() decode to get natural
-  // dimensions, but we pass the blob URL to addImage — the <img> element
-  // loads directly from the blob, no base64 overhead.
+  // Process images SEQUENTIALLY (one at a time) to avoid memory crash.
+  // v6.1.21: Use blob URLs (URL.createObjectURL) instead of base64 data URLs.
+  // Blob URLs are zero-copy references — they don't duplicate the file data
+  // in memory. This is critical for large batches (45+ images at ~4MB each).
+  // We revoke each blob URL immediately after Image() decode to free memory.
+  // Spacing increased from 30ms to 100ms to give GC time between images.
   if (imageFiles.length > 0) pushUndo();
   let imgIdx = 0;
   function processNextImage() {
@@ -19937,45 +19937,27 @@ function _handleFileDrop(e, files) {
     const dropX = dropX0 + idx * 20;
     const dropY = dropY0 + idx * 20;
     const isLast = (imgIdx === imageFiles.length - 1);
-    // v5.5.2: Use FileReader → data URL instead of blob URL for Image().
-    // blob URLs created from `new File([bytes])` can fail to decode in
-    // some browser/OS combos (especially on Windows where the file bytes
-    // are raw disk data). data URLs are universally reliable.
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-      const dataUrl = ev.target.result;
-      const img = new Image();
-      img.onload = function() {
-        addImage(dataUrl, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
-        imgIdx++;
-        setTimeout(processNextImage, 30);
-      };
-      img.onerror = function() {
-        console.warn('[FileDrop] Image decode failed, trying blob fallback:', file.name);
-        // Fallback: try blob URL directly
-        const blobUrl = URL.createObjectURL(file);
-        const img2 = new Image();
-        img2.onload = function() {
-          addImage(blobUrl, img2.naturalWidth, img2.naturalHeight, dropX, dropY, false, isLast);
-          imgIdx++;
-          setTimeout(processNextImage, 30);
-        };
-        img2.onerror = function() {
-          console.error('[FileDrop] Both data URL and blob URL failed for:', file.name);
-          toast('Failed to load image: ' + file.name);
-          imgIdx++;
-          setTimeout(processNextImage, 30);
-        };
-        img2.src = blobUrl;
-      };
-      img.src = dataUrl;
-    };
-    reader.onerror = function() {
-      console.error('[FileDrop] FileReader failed for:', file.name);
+    const blobUrl = URL.createObjectURL(file);
+    const img = new Image();
+    var _cleaned = false;
+    function _cleanup() {
+      if (_cleaned) return; _cleaned = true;
+      img.src = '';  // release decoded pixel buffer
+      URL.revokeObjectURL(blobUrl);
+    }
+    img.onload = function() {
+      addImage(blobUrl, img.naturalWidth, img.naturalHeight, dropX, dropY, false, isLast);
+      _cleanup();
       imgIdx++;
-      setTimeout(processNextImage, 30);
+      setTimeout(processNextImage, 100);
     };
-    reader.readAsDataURL(file);
+    img.onerror = function() {
+      console.warn('[FileDrop] Image decode failed:', file.name);
+      _cleanup();
+      imgIdx++;
+      setTimeout(processNextImage, 100);
+    };
+    img.src = blobUrl;
   }
   if (imageFiles.length > 0) {
     processNextImage();
