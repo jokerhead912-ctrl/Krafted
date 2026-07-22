@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.2.0';
+var KRAFTED_VERSION = '6.2.1';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7714,7 +7714,7 @@ function frameTidiedSelection(selItems) {
 
 
 // ============================================================
-function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
+function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize) {
   // BATCH MODE (isLast defined): caller manages the batch undo (push it ONCE at start),
   // so we skip pushUndo here. We only call selectOnly on the last item so the final dropped
   // image is the active selection. This prevents memory crash from N parallel FileReader/
@@ -7845,6 +7845,8 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast) {
     _cullLast.vx = -1e9;
     cullOffscreenItems();
   }
+  // v6.2: store file size for pre-save size estimation
+  if (fileSize && fileSize > 0) item._fileSize = fileSize;
   return item;
 }
 function addVideoItem(src, natW, natH, x, y) {
@@ -19965,7 +19967,7 @@ function _handleFileDrop(e, files) {
       bitmap.close();  // release immediately — we only needed dimensions
       // Now create the blob URL for the canvas <img> (long-lived)
       const blobUrl = URL.createObjectURL(file);
-      addImage(blobUrl, w, h, dropX, dropY, false, isLast);
+      addImage(blobUrl, w, h, dropX, dropY, false, isLast, file.size);
     } catch(e) {
       console.warn('[FileDrop] Image decode failed:', file.name, e.message);
     }
@@ -19995,7 +19997,7 @@ function _handleFileDrop(e, files) {
     // Use a generous default size; the real dimensions will be picked up
     // by the main <video> element once metadata loads asynchronously.
     // 720p default covers most common video sources without looking wrong.
-    const newItem = addImage(blobUrl, 1280, 720, dropX, dropY, true, isLast);
+    const newItem = addImage(blobUrl, 1280, 720, dropX, dropY, true, isLast, file.size);
     if (newItem && file && file.name) {
       newItem.filename = file.name;
       try { if (newItem.el && newItem.el._setFilenameBadge) newItem.el._setFilenameBadge(file.name); } catch (e) {}
@@ -20220,7 +20222,7 @@ document.addEventListener('paste', e => {
           if (done) return; done = true;
           tmpVid.removeAttribute('src'); tmpVid.load();
           // Capture the original file name so the export can use it
-          const newItem = addImage(blobUrl, w, h, px, py, true, isLast);
+          const newItem = addImage(blobUrl, w, h, px, py, true, isLast, f.size);
           if (newItem && f && f.name) {
             newItem.filename = f.name;
             // Round 13: push the file name to the player badge
@@ -20381,7 +20383,7 @@ document.addEventListener('paste', e => {
     const blobUrl = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {
-      addImage(blobUrl, img.naturalWidth, img.naturalHeight, x, y);
+      addImage(blobUrl, img.naturalWidth, img.naturalHeight, x, y, false, undefined, blob.size);
       toast('Pasted image ' + img.naturalWidth + 'x' + img.naturalHeight);
     };
     img.onerror = () => {
@@ -29552,6 +29554,48 @@ async function saveBoard() {
     console.error('[SAVE] JSZip is undefined! Check script loading.');
     toast('Save failed: JSZip library not loaded. Please refresh the page.');
     return;
+  }
+
+  // v6.2: Pre-save size check — warn user BEFORE building zip to avoid OOM crash
+  const SIZE_WARN_MB = 800;
+  const SIZE_BLOCK_MB = 1500;
+  let estTotalBytes = 0;
+  let largeMediaCount = 0;
+  for (const it of state.items) {
+    if (it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:'))) {
+      // Try to estimate: data: URLs contain base64 (≈ raw bytes), blob: we check stored size
+      if (it._fileSize) {
+        estTotalBytes += it._fileSize;
+        if (it._fileSize > 50 * 1024 * 1024) largeMediaCount++;
+      } else if (it.src.startsWith('data:')) {
+        const base64Len = it.src.indexOf(';base64,') >= 0 ? it.src.split(',')[1]?.length || 0 : 0;
+        estTotalBytes += Math.round(base64Len * 0.75); // base64 → bytes
+      } else {
+        // blob: URL without _fileSize — rough estimate from video dimensions
+        if (it.isVideo && it.video && it.video.duration) {
+          estTotalBytes += Math.round(it.video.duration * 2.5 * 1024 * 1024); // ~2.5 MB/s rough
+        } else {
+          estTotalBytes += 5 * 1024 * 1024; // unknown blob, assume 5MB
+        }
+      }
+    }
+  }
+  const estMB = Math.round(estTotalBytes / (1024 * 1024));
+  console.log('[SAVE] Estimated media size:', estMB, 'MB, large files:', largeMediaCount);
+
+  if (estMB > SIZE_BLOCK_MB) {
+    toast('⚠ Save blocked: estimated ' + estMB + ' MB exceeds browser limit (~1.5 GB). Try removing some large videos.', 8000);
+    return;
+  }
+  if (estMB > SIZE_WARN_MB) {
+    const confirmed = confirm(
+      '⚠ Large project detected\n\n' +
+      'Estimated media: ~' + estMB + ' MB (' + counts.total + ' files, ' + largeMediaCount + ' large)\n\n' +
+      'Browser limit is ~1.5 GB. If the save crashes (Array buffer allocation failed), ' +
+      'remove some large videos and try again.\n\n' +
+      'Continue anyway?'
+    );
+    if (!confirmed) { toast('Save cancelled'); return; }
   }
 
   // Show progress
