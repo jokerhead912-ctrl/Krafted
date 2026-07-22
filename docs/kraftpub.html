@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.3.1';
+var KRAFTED_VERSION = '6.3.2';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -29410,10 +29410,14 @@ var StreamingZipWriter = (function() {
     eview.setUint32(epos, self._offset, true); epos += 4;  // CD offset
     eview.setUint16(epos, 0, true); epos += 2;             // comment length
 
-    // Write all central directory parts + EOCD
+    // Write all central directory entries + EOCD sequentially.
+    // Use chained promises with IIFE to capture the CURRENT cdPart in each iteration
+    // (var is function-scoped, so a single for-loop variable would be reused).
     var writePromise = Promise.resolve();
     for (var j = 0; j < cdParts.length; j++) {
-      writePromise = writePromise.then((function(p) { return function() { return self._writer.write(p); }; })(cdParts[j]));
+      (function(p) {
+        writePromise = writePromise.then(function() { return self._writer.write(p); });
+      })(cdParts[j]);
     }
     return writePromise.then(function() {
       return self._writer.write(eocd);
