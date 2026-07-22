@@ -22615,6 +22615,16 @@ document.addEventListener('mouseup', e => {
           if (m) { delete m._origX; delete m._origY; delete m._origW; delete m._origH; }
         });
       }
+      // v6.5.1: Text resize — scale font size proportionally so text
+      // scales like an image (no re-wrap). Ratio from origW→newW is
+      // applied to item.size for uniform proportional scaling.
+      if (item.el && item.el.classList.contains('text-item') && d.origW > 0) {
+        const textScale = item.w / d.origW;
+        if (Math.abs(textScale - 1) > 0.001) {
+          item.size = (item.size || 16) * textScale;
+          if (typeof applyTextProps === 'function') applyTextProps(item);
+        }
+      }
       delete item._origW; delete item._origH;
       // Update connectors after mind map resize
       if (item.el && item.el.classList.contains('mindmap-item')) {
