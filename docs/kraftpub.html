@@ -31057,46 +31057,9 @@ function scheduleAutoSave() {
   }, 2000);
 }
 function loadAutoSave() {
-  try {
-    const data = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_autosave')) || localStorage.getItem('krafted_autosave');
-    if (data) { var parsed = safeJSONParse(data, null); if (parsed) { restoreBoard(parsed); _cleanupBrokenPlaceholders(); toast('Auto-saved board restored'); } }
-  } catch(e) {}
-}
-
-// v6.5.0: sweep broken placeholders after restore — clear cache or reload
-// leaves videoLost / empty-src items with no recoverable media. Auto-remove
-// so the user doesn't have to manually click "New Board" every time.
-function _cleanupBrokenPlaceholders() {
-  if (!state || !state.items) return;
-  var removed = 0;
-  state.items = state.items.filter(function(it) {
-    var isBroken = (it.videoLost === true) ||
-                   (it.imageLost === true && !it.mediaData) ||
-                   (it.isVideo && !it.src && !it.mediaData && !it._kpakEntry && !it._lazyEntry);
-    if (isBroken) {
-      removed++;
-      if (it.el && it.el.parentNode) { try { it.el.parentNode.removeChild(it.el); } catch(e) {} }
-    }
-    return !isBroken;
-  });
-  // Also sweep broken text items (empty content after cache clear)
-  var textRemoved = 0;
-  if (state.texts && state.texts.length) {
-    state.texts = state.texts.filter(function(t) {
-      if (!t.html || t.html.trim() === '' || t.html === '<br>') {
-        textRemoved++;
-        if (t.el && t.el.parentNode) { try { t.el.parentNode.removeChild(t.el); } catch(e) {} }
-        return false;
-      }
-      return true;
-    });
-  }
-  removed += textRemoved;
-  if (removed > 0) {
-    console.log('[CLEANUP] removed ' + removed + ' broken placeholder(s) — restore them via Load');
-    try { if (typeof updateStatus === 'function') updateStatus(); } catch(e) {}
-    try { if (typeof updateCanvas === 'function') updateCanvas(); } catch(e) {}
-  }
+  // v6.5.0: Startup autosave restore disabled — always starts clean.
+  // User loads kpak manually via Load button.
+  return;
 }
 
 // ============================================================
@@ -31387,13 +31350,10 @@ updateCanvas();
 initVideoLazyLoad();
 // ALWAYS show welcome page on load — user must click GET STARTED every time
 showWelcome();
-// Auto-save restore: if data exists, restore in background but keep welcome page visible
+// v6.5.0: Skip autosave restore on startup — always start with a clean board.
+// Clear cache / reopen = fresh board. No more broken placeholder cleanup needed.
 window.addEventListener('load', async () => {
-  // Restore autosave in background
-  setTimeout(() => {
-    const saved = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_autosave')) || localStorage.getItem('krafted_autosave');
-    if (saved) { try { restoreBoard(JSON.parse(saved)); _cleanupBrokenPlaceholders(); } catch(e) {} }
-  }, 100);
+  // Autosave restore DISABLED — user loads kpak via Load button when ready
   // Show alt-pan status badge if enabled (MacBook trackpad mode)
   updateAltPanBadge();
 });
