@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.25';
+var KRAFTED_VERSION = '6.1.27';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -10165,6 +10165,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         // to a different frame during the typing interval).
         s.strokes = s.strokesByFrame[targetFrame];
         s.lastFrame = targetFrame;
+        el._perfLastRenderKey = '';  // v6.1.26: clear cache so text appears immediately
         _renderAnnoCanvas();
         _refreshDrawBtnBadge();
         if (el._refreshAllSeekMarkers) {
@@ -10231,6 +10232,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         s.drawing.points[s.drawing.points.length - 1] = pt;
       }
       _queueRender();
+      // v6.1.26: clear render cache on each pointermove so the drawing
+      // preview (in-progress stroke) always paints, even though the frame
+      // and rect haven't changed.
+      el._perfLastRenderKey = '';
     });
     function _endStroke(ev) {
       const s = el._annoDrawState;
@@ -21732,11 +21737,15 @@ viewport.addEventListener('mousedown', e => {
           _toMoveCache: toMoveNow,
           _moveRafId: null,
         };
-        // During drag, replace live <video> with a static poster
-        // so the browser doesn't re-composite decoded video frames on every
-        // mousemove. Video decode + composite is the #1 cause of drag lag.
+        // During drag, pause video + set poster so the browser doesn't
+        // re-composite decoded video frames on every mousemove (the #1
+        // cause of drag lag). Poster auto-displays when video is paused,
+        // so we don't need visibility:hidden (which caused a transparent
+        // gap during drag).
         toMoveNow.forEach(function(it) {
           if (it.video && it.video.readyState >= 2) {
+            it._dragWasPlaying = !it.video.paused;
+            it.video.pause();
             it._dragPoster = it.video.poster || '';
             try {
               var _c = document.createElement('canvas');
@@ -21745,7 +21754,6 @@ viewport.addEventListener('mousedown', e => {
               _ctx.drawImage(it.video, 0, 0);
               it.video.poster = _c.toDataURL('image/jpeg', 0.7);
             } catch(e) {}
-            it.video.style.visibility = 'hidden';
             if (it._annoCanvas) it._annoCanvas.style.visibility = 'hidden';
           }
         });
@@ -22410,13 +22418,18 @@ document.addEventListener('mouseup', e => {
       return;
     }
     if (state.dragging.type === 'move') {
-      // Restore video visibility after drag (frozen to poster during drag)
+      // Restore video after drag: restore poster, resume playback, show anno canvas
       var _movedItems = state.dragging._toMoveCache || new Set(getSelectedItems());
       _movedItems.forEach(function(it) {
         if (it.video && it._dragPoster !== undefined) {
-          it.video.style.visibility = '';
+          // Restore poster
           it.video.poster = it._dragPoster || '';
           delete it._dragPoster;
+          // Resume playback if it was playing before drag
+          if (it._dragWasPlaying) {
+            it.video.play().catch(function(){});
+            delete it._dragWasPlaying;
+          }
           if (it._annoCanvas) it._annoCanvas.style.visibility = '';
         }
       });
