@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.2.12';
+var KRAFTED_VERSION = '6.2.13';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7741,7 +7741,7 @@ function frameTidiedSelection(selItems) {
 
 
 // ============================================================
-function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize) {
+function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize, isGifFlag) {
   // BATCH MODE (isLast defined): caller manages the batch undo (push it ONCE at start),
   // so we skip pushUndo here. We only call selectOnly on the last item so the final dropped
   // image is the active selection. This prevents memory crash from N parallel FileReader/
@@ -7786,7 +7786,7 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize) {
   }
   mediaEl.draggable = false;
   // ── Video / GIF: use buildMediaControls helper ──
-  const isAnimatedGifSrc = !isVideo && isAnimatedGif(src);
+  const isAnimatedGifSrc = isGifFlag || (!isVideo && isAnimatedGif(src));
   if (isVideo || isAnimatedGifSrc) {
     buildMediaControls(el, mediaEl, isVideo, isAnimatedGifSrc);
   } else {
@@ -20044,7 +20044,8 @@ function _handleFileDrop(e, files) {
       bitmap.close();  // release immediately — we only needed dimensions
       // Now create the blob URL for the canvas <img> (long-lived)
       const blobUrl = URL.createObjectURL(file);
-      addImage(blobUrl, w, h, dropX, dropY, false, isLast, file.size);
+      const isGif = file.type === 'image/gif' || /\.gif$/i.test(file.name);
+      addImage(blobUrl, w, h, dropX, dropY, false, isLast, file.size, isGif);
     } catch(e) {
       console.warn('[FileDrop] Image decode failed:', file.name, e.message);
     }
