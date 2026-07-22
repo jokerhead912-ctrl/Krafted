@@ -3970,7 +3970,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.1.24';
+var KRAFTED_VERSION = '6.1.25';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -10283,6 +10283,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       s.drawing = null;
       try { annoCanvas.releasePointerCapture(_activePointerId); } catch (e) {}
       _activePointerId = null;
+      // v6.1.24: clear render cache so the new stroke actually paints.
+      // The perf skip (same frame + same rect) would otherwise suppress
+      // the re-render because the frame/rect hasn't changed.
+      el._perfLastRenderKey = '';
       _renderAnnoCanvas();
       _refreshDrawBtnBadge();
       // Round 10: refresh drawing markers on the seek bar so the new
