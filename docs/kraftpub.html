@@ -30577,9 +30577,13 @@ async function loadBoardFile(event) {
   try {
     if (isV6Kpak) {
       // === KPAK v6 format — streaming load, no OOM ===
+      try {
       if (prog) prog.innerHTML = '<div class="pct">Reading index...</div>';
+      console.log('[V6 LOAD] reading index from', formatBytes(file.size), 'file');
       const { entries, manifest } = await readKpakV6Index(file);
+      console.log('[V6 LOAD] index read:', entries.length, 'entries');
       const data = manifest;
+      console.log('[V6 LOAD] manifest:', data.items ? data.items.length : 0, 'items');
 
       // Check for lock
       if (data._kraftedLock) {
@@ -30648,6 +30652,13 @@ async function loadBoardFile(event) {
       toast('Loaded ' + formatBytes(file.size) + ' (v6 format, ' + data.items.length + ' items, ' + remappedCount + ' media)');
       event.target.value = '';
       return;
+      } catch (err) {
+        console.error('[V6 LOAD] FAILED:', err.name, err.message, err.stack);
+        if (prog) { try { prog.remove(); } catch(e) {} }
+        toast('V6 load failed: ' + (err.message || 'unknown error') + ' — check console');
+        event.target.value = '';
+        return;
+      }
     }
 
     if (isKpak) {
