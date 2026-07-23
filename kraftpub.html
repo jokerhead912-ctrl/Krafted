@@ -7585,6 +7585,18 @@ function tidySelection() {
     // v6.6.0: text items need applyTextProps to sync fontSize (updateItemStyle skips it)
     if (si.isText && typeof applyTextProps === 'function') {
       try { applyTextProps(si.item); } catch (e) {}
+      // v6.6.0: refresh text handle container position/size after tidy
+      // — otherwise resize handles stay at old position and break resize.
+      try {
+        var hCont = si.item.el.parentElement.querySelector('.text-handles[data-owner="' + si.item.id + '"]');
+        if (hCont) {
+          var tz2 = Math.max(0.02, Math.min(10, state.zoom || 1));
+          hCont.style.left = si.item.x + 'px';
+          hCont.style.top = si.item.y + 'px';
+          hCont.style.width = (si.item.w / tz2) + 'px';
+          hCont.style.height = (si.item.h / tz2) + 'px';
+        }
+      } catch (e) {}
     }
 
     // Store tidied position for framing (use new scaled w/h)
