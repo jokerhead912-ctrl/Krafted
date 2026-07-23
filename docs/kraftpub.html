@@ -21673,6 +21673,11 @@ viewport.addEventListener('mousedown', e => {
           multiData = { bbox: bb, pivotX, pivotY, handleOrigX, handleOrigY, snaps, dir };
         }
       }
+      // v6.6.0: promote text items to own composite layer during resize
+      // so 40+ images on board don't cause frame drops via shared reflow.
+      if (item.el && item.el.classList.contains('text-item')) {
+        item.el.style.willChange = 'transform, width, height, font-size';
+      }
       state.dragging = { type: 'resize', item, dir, startX: e.clientX, startY: e.clientY, origW: item.w, origH: item.h, origX: item.x, origY: item.y, _rafId: null, _mediaWrap: cachedMediaWrap, _group: cachedGroup, _members: cachedMembers, _multi: multiData };
       document.body.classList.add('is-dragging');
       document.querySelectorAll('.item-handle, .item-rot').forEach(el => el.remove());
@@ -22648,6 +22653,10 @@ document.addEventListener('mouseup', e => {
           item.size = origSz * textScale;
           if (typeof applyTextProps === 'function') applyTextProps(item);
         }
+      }
+      // v6.6.0: remove will-change after resize to free GPU memory
+      if (item.el && item.el.classList.contains('text-item')) {
+        item.el.style.willChange = 'auto';
       }
       delete item._origW; delete item._origH;
       // Update connectors after mind map resize
