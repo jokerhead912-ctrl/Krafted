@@ -22627,13 +22627,15 @@ document.addEventListener('mouseup', e => {
           if (m) { delete m._origX; delete m._origY; delete m._origW; delete m._origH; }
         });
       }
-      // v6.5.1: Text resize — scale font size proportionally so text
-      // scales like an image (no re-wrap). Ratio from origW→newW is
-      // applied to item.size for uniform proportional scaling.
+      // v6.6.0: Text resize — commit final size. During drag, item.size
+      // was already updated via rAF. Here we just ensure it's final and
+      // run applyTextProps once. Use d._origTextSize (cached at mousedown)
+      // to avoid double-scaling since rAF already wrote to item.size.
       if (item.el && item.el.classList.contains('text-item') && d.origW > 0) {
+        const origSz = d._origTextSize || item.size;
         const textScale = item.w / d.origW;
         if (Math.abs(textScale - 1) > 0.001) {
-          item.size = (item.size || 16) * textScale;
+          item.size = origSz * textScale;
           if (typeof applyTextProps === 'function') applyTextProps(item);
         }
       }
