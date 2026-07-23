@@ -7557,10 +7557,16 @@ function tidySelection() {
       try { mmUpdateConnectors(si.item); } catch (e) {}
     } else if (si.isText) {
       // Text items: x/y are world coords, w/h are screen pixels (CSS-px)
+      // v6.6.0: Tidy may resize text items. Sync font size proportionally
+      // so the visual result matches the new dimensions.
+      var _oldW = si.item.w || 160;
       si.item.x = finalX;
       si.item.y = finalY;
       si.item.w = si._newW * _z;  // convert world-coord width back to screen pixels
       si.item.h = si._newH * _z;
+      if (_oldW > 0 && si.item.w !== _oldW) {
+        si.item.size = (si.item.size || 24) * (si.item.w / _oldW);
+      }
     } else if (si.isTodo) {
       si.item.x = finalX;
       si.item.y = finalY;
@@ -7576,6 +7582,10 @@ function tidySelection() {
 
     // Update DOM via updateItemStyle
     try { updateItemStyle(si.item); } catch (e) {}
+    // v6.6.0: text items need applyTextProps to sync fontSize (updateItemStyle skips it)
+    if (si.isText && typeof applyTextProps === 'function') {
+      try { applyTextProps(si.item); } catch (e) {}
+    }
 
     // Store tidied position for framing (use new scaled w/h)
     si._newX = finalX;
