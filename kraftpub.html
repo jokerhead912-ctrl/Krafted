@@ -22381,12 +22381,16 @@ document.addEventListener('mousemove', e => {
         });
         updateGroupBorder(d._group);
       }
-      // Refresh relation lines so they follow resized items
-      if (state.relations && state.relations.length) renderRelations();
-      // Keep any open annotation popovers parallel to the video as the
-      // item is resized (video height changes, so the popover's parallel
-      // span must follow).
-      repositionAllAnnoPopovers();
+      // Refresh relation lines so they follow resized items.
+      // v6.6.0 perf: text-item resize doesn't move other items — skip.
+      if (state.relations && state.relations.length && !el.classList.contains('text-item')) {
+        renderRelations();
+      }
+      // Reposition annotation popovers (needed when video height changes).
+      // v6.6.0 perf: text-item resize doesn't affect popover position — skip.
+      if (!el.classList.contains('text-item')) {
+        repositionAllAnnoPopovers();
+      }
     });
     return;
   }
