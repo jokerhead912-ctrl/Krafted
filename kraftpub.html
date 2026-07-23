@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.6.2</title>
+<title>Krafted v6.6.3</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3921,7 +3921,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.6.2';
+var KRAFTED_VERSION = '6.6.3';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -20086,20 +20086,13 @@ document.addEventListener('paste', e => {
   // still has focus but no selection) is silently swallowed by the text-item's contentEditable.
   const ae = document.activeElement;
   const isOurText = ae && ae.contentEditable === 'true' && ae.classList.contains('text-item');
-  if (isOurText) {
-    if (ae.classList.contains('editing')) {
-      const sel = window.getSelection();
-      let hasSelectionInText = false;
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        if (ae.contains(range.commonAncestorContainer)) {
-          hasSelectionInText = true;
-        }
-      }
-      if (hasSelectionInText) return; // genuine in-text paste — let browser handle
-      // No active selection in this text-item — blur it, handle paste on canvas
-      ae.blur();
-    }
+  // v6.6.2: If a Krafted text-item is focused and editing, ALWAYS let the
+  // text-item's own paste handler deal with it (strip formatting, insert plain
+  // text). The old logic blurred the text-item when there was no selection,
+  // which caused the global paste handler to try importing clipboard images/HTML
+  // and fail on file:// references from WeChat — corrupting the text item state.
+  if (isOurText && ae.classList.contains('editing')) {
+    return; // let text-item's own paste listener handle it
   }
 
   // If some other contentEditable is focused (but NOT our text-item), blur it first
