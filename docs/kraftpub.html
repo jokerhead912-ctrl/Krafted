@@ -22350,10 +22350,13 @@ document.addEventListener('mousemove', e => {
       if (!el.classList.contains('todo-item')) {
         el.style.height = (isMedia ? h + 54 : h) + 'px';
       }
-      // v6.6.0: Live text font scaling during resize — sync fontSize every frame
+      // v6.6.0: Live text font scaling during resize — commit size to state
+      // every frame so applyTextProps (called by reflows, imports, etc.)
+      // always picks up the correct value. No more CSS-only drift.
       if (el.classList.contains('text-item') && d.item.size && Math.abs(scaleX - 1) > 0.001) {
         const tz = Math.max(0.02, Math.min(10, (window.state && window.state.zoom) || 1));
-        el.style.fontSize = (d.item.size * scaleX / tz) + 'px';
+        d.item.size = (d._origTextSize || (d._origTextSize = d.item.size)) * scaleX;
+        el.style.fontSize = (d.item.size / tz) + 'px';
       }
       // Direct write to cached media-wrap (skip querySelector)
       if (d._mediaWrap) d._mediaWrap.style.height = h + 'px';
