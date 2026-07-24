@@ -3916,7 +3916,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.7.22';
+var KRAFTED_VERSION = '6.7.23';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30593,6 +30593,7 @@ function restoreBoard(data, append) {
     // was set to the saved value — leaving items with stale CSS sizes.
     state.zoom = (data.viewport || data).zoom || 1;
     state.pan = data.pan || { x: 0, y: 0 };
+    console.log('[RESTORE-ZOOM] data.zoom=' + ((data.viewport && data.viewport.zoom) || data.zoom) + ' -> state.zoom=' + state.zoom);
   }
   if (!append) {
     G.nextZ = 1;
