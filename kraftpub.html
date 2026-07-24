@@ -3916,7 +3916,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.7.23';
+var KRAFTED_VERSION = '6.7.24';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30947,7 +30947,7 @@ function restoreBoard(data, append) {
     // files — for modern saves it causes double-scaling and w/size drift.
     applyTextProps(tx);
     updateItemStyle(tx);
-    console.log('[LOAD-TEXT] id=' + tx.id + ' w=' + tx.w + ' h=' + tx.h + ' size=' + tx.size + ' zoom=' + state.zoom + ' cssW=' + el.style.width + ' cssFS=' + el.style.fontSize);
+    console.log('[LOAD-TEXT] id=' + tx.id + ' w=' + tx.w + ' h=' + tx.h + ' size=' + tx.size + ' zoom=' + state.zoom + ' cssW=["' + el.style.width + '"] cssH=["' + el.style.height + '"] cssFS=["' + el.style.fontSize + '"] userResized=' + tx.userResized);
   // Auto-grow on input
   el.addEventListener('input', () => autoGrowTextItem(tx));
   el.addEventListener('focus', () => { el.classList.add('editing'); showTextQuickBar(true); updateTextQuickBarActive(); });
@@ -30966,7 +30966,11 @@ function restoreBoard(data, append) {
       if (state.tool === 'text') setTool('select');
       scheduleAutoSave();
     });
-    setTimeout(() => autoGrowTextItem(tx), 50);
+    // v6.7.22: removed setTimeout(autoGrow) on load — it was measuring
+    // el.scrollHeight right after restore and overwriting tx.h with a
+    // huge value (e.g. 812 for a 5-char word that wraps to many lines
+    // because the CSS width hadn't settled yet). Autogrow now only runs
+    // on user focus/input, when the box is being actively used.
   });
   // Restore todo items
   state.todos = [];
