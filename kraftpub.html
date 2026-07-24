@@ -3916,7 +3916,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.7.14';
+var KRAFTED_VERSION = '6.7.15';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -14371,6 +14371,10 @@ function videoAnnoAddComment(text, targetItem) {
   // the comment object now).
   if (drawState) {
     drawState.strokes = [];
+    // v6.7.15: clear strokesByFrame after saving so the next comment
+    // doesn't inherit strokes from previous frames (was causing comment
+    // N+1 to show all of comment N's drawings as an overlay).
+    drawState.strokesByFrame = {};
     if (item.el._refreshDrawBtnBadge) item.el._refreshDrawBtnBadge();
     if (item.el._renderAnnoCanvas) item.el._renderAnnoCanvas();
     if (item.el._exitDrawMode) item.el._exitDrawMode();
