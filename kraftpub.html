@@ -3916,7 +3916,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.7.18';
+var KRAFTED_VERSION = '6.7.19';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30583,8 +30583,13 @@ function restoreBoard(data, append) {
   // fit for the end of restoreBoard (after items exist) so it can size
   // to the loaded bbox.
   if (!append) {
-    state.zoom = 1;
-    state.pan = { x: 0, y: 0 };
+    // v6.7.18: restore zoom/pan from the saved file BEFORE creating any
+    // items. Text items call applyTextProps which divides by state.zoom,
+    // so zoom must already be correct at creation time. Previously zoom
+    // was reset to 1 first, items were created with zoom=1, then zoom
+    // was set to the saved value — leaving items with stale CSS sizes.
+    state.zoom = (data.viewport || data).zoom || 1;
+    state.pan = data.pan || { x: 0, y: 0 };
   }
   if (!append) {
     G.nextZ = 1;
