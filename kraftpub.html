@@ -3916,7 +3916,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.7.24';
+var KRAFTED_VERSION = '6.7.25';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -31077,30 +31077,14 @@ function restoreBoard(data, append) {
   // and frame the viewport so the user sees them on first paint.
   // v6.4.1: skip in append mode — preserve user's existing zoom/pan.
   if (!append) {
-  try {
-    var allLoaded = [].concat(state.items, state.texts, state.todos || [], state.mindmaps || []);
-    if (allLoaded.length > 0) {
-      var _minX = Infinity, _minY = Infinity, _maxX = -Infinity, _maxY = -Infinity;
-      allLoaded.forEach(function(it) {
-        if (it.x < _minX) _minX = it.x;
-        if (it.y < _minY) _minY = it.y;
-        if (it.x + it.w > _maxX) _maxX = it.x + it.w;
-        if (it.y + it.h > _maxY) _maxY = it.y + it.h;
-      });
-      if (isFinite(_minX) && isFinite(_maxX)) {
-        var _cx = (_minX + _maxX) / 2;
-        var _cy = (_minY + _maxY) / 2;
-        var _bw = Math.max(1, _maxX - _minX);
-        var _bh = Math.max(1, _maxY - _minY);
-        var _sw = window.innerWidth, _sh = window.innerHeight;
-        var _z = Math.min(_sw / (_bw * 1.24), _sh / (_bh * 1.24));
-        state.zoom = Math.max(0.02, Math.min(10, _z));
-        state.pan.x = _sw / 2 - _cx * state.zoom;
-        state.pan.y = _sh / 2 - _cy * state.zoom;
-        updateCanvas();
-      }
-    }
-  } catch (e) { console.warn('[restoreBoard] fit-to-content failed:', e); }
+  // v6.7.24: skip the auto fit-to-content zoom/pan. The user's save-time
+  // viewport (data.zoom / data.pan) was already restored above. Running
+  // fit-to-content here overwrote the saved zoom (e.g. a small text box
+  // at w=160,h=56 made the viewport zoom out to 10x because the bbox
+  // was tiny relative to the screen), which is exactly what the user
+  // does NOT want — save/load should preserve the camera position.
+  // If we ever want fit-to-content on load, do it as a separate user
+  // action ("Reset view" button) so it doesn't surprise anyone.
   }
   updateMediaBar();
   // Render mask overlays for restored items
