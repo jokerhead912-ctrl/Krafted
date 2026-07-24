@@ -3916,7 +3916,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.7.15';
+var KRAFTED_VERSION = '6.7.16';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -14296,28 +14296,26 @@ function videoAnnoAddComment(text, targetItem) {
   // selected video may be different from the target, causing strokes from
   // the wrong frame to be captured (empty or mismatched).
   const _frame = frame;
-  // v5.5.9: merge strokes from ALL frames, not just the current one.
-  // Text annotations placed on frame 0 won't appear in a comment added
-  // on frame 37 unless we aggregate. The user expects ALL visible
-  // annotations to be captured in the snapshot regardless of which
-  // frame they were drawn on.
+  // v6.7.15: capture ONLY the current frame's strokes, not all frames.
+  // The user said: "Add button should only capture the strokes visible
+  // at this moment — not aggregate strokes from previous frames, which
+  // causes every new comment's snapshot to overlay earlier ones."
+  // The "Snap all annotated frames" batch export still walks
+  // strokesByFrame by itself (it doesn't go through this path), so
+  // batch export is unaffected.
   let strokes = [];
-  if (drawState && drawState.strokesByFrame) {
-    const sbf = drawState.strokesByFrame;
-    for (var _fk in sbf) {
-      if (sbf[_fk] && sbf[_fk].length) {
-        strokes = strokes.concat(sbf[_fk]);
-      }
-    }
-    // Also include current frame strokes (may have been set as alias)
-    if (sbf[_frame] && sbf[_frame].length) {
-      // already included via loop above, but dedupe just in case
-      var _existingIds = {};
-      strokes.forEach(function(s){ if(s._id) _existingIds[s._id]=true; });
-      sbf[_frame].forEach(function(s){
-        if (!s._id || !_existingIds[s._id]) strokes.push(s);
-      });
-    }
+  if (drawState && drawState.strokesByFrame && drawState.strokesByFrame[_frame]) {
+    strokes = strokes.concat(drawState.strokesByFrame[_frame]);
+  }
+  // Also include the live alias (`drawState.strokes` is the same array
+  // as strokesByFrame[currentFrame] in the runtime, but if the user
+  // is on a frame that hasn't been touched yet, both will be empty).
+  if (drawState && drawState.strokes && drawState.strokes.length) {
+    var _existingIds2 = {};
+    strokes.forEach(function(s){ if(s._id) _existingIds2[s._id]=true; });
+    drawState.strokes.forEach(function(s){
+      if (!s._id || !_existingIds2[s._id]) strokes.push(s);
+    });
   }
   // v5.5.9: also grab any uncommitted text editor content.
   // If the user typed text but hasn't blurred/Enter'd yet, the
@@ -14366,15 +14364,13 @@ function videoAnnoAddComment(text, targetItem) {
   anno.comments.sort((a, b) => a.frame - b.frame);
   scheduleAutoSave();
   videoAnnoRefreshCommentList(item, anno.comments[anno.comments.length - 1].id);
-  // After saving, clear the current strokes and exit draw mode so the
-  // next comment starts from a clean slate (the saved strokes live on
-  // the comment object now).
-  if (drawState) {
-    drawState.strokes = [];
-    if (item.el._refreshDrawBtnBadge) item.el._refreshDrawBtnBadge();
-    if (item.el._renderAnnoCanvas) item.el._renderAnnoCanvas();
-    if (item.el._exitDrawMode) item.el._exitDrawMode();
-  }
+  // v6.7.15: do NOT clear strokes or exit draw mode here. The user
+  // wants the annotations to remain visible on the video (so they
+  // stay as a persistent overlay), and they want to keep drawing
+  // across multiple Add clicks without having to re-enter draw mode.
+  // The strokes are already saved on the comment object as
+  // `annoStrokes` + baked into the snapshot, so they live there
+  // independently of the live strokesByFrame.
   // Auto-scroll the in-player list to the new comment so the user can see it
   const listEl = (item.el && item.el._annoCommentsList) || document.getElementById('video-anno-comments-list');
   if (listEl) {
