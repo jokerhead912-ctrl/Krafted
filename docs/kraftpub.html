@@ -3916,7 +3916,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.7.17';
+var KRAFTED_VERSION = '6.7.18';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30929,16 +30929,24 @@ function restoreBoard(data, append) {
     delete tx.html;
     G.nextZ = Math.max(G.nextZ, tx.z + 1);
     state.texts.push(tx);
-    // v6.1: convert text dimensions from save-time on-screen pixels to world coordinates.
-    // Text w/h/size are stored as on-screen pixels at save-time zoom level (because
-    // updateItemStyle divides w/h by state.zoom). x/y are already world coordinates
-    // (same as image/video items) — do NOT scale them.
-    var _textZoom = (typeof d._textZoom === 'number' && d._textZoom > 0) ? d._textZoom : 1;
-    if (_textZoom !== 1) {
-      tx.w = (tx.w || 200) * _textZoom;
-      tx.h = (tx.h || 40) * _textZoom;
-      tx.size = (tx.size || 16) * _textZoom;
-    }
+    // v6.7.18: REMOVED _textZoom multiplication. Text w/h/size in
+    // memory are already on-screen pixels (not world coords). Save
+    // path dumps t.size / t.w / t.h directly (line ~4223) — no
+    // transform applied. So load should also be a direct copy.
+    // The _textZoom multiplication was based on a wrong assumption
+    // (that w/h/size were stored as world coords), which caused
+    // load to halve/double them when save-time zoom != 1. The ratio
+    // stayed correct but the absolute values drifted, which made
+    // resize feel wrong on first drag (mismatch between on-screen
+    // CSS and the item.size value that drives text-wrap width).
+    // 
+    // Original (removed) code:
+    // var _textZoom = (typeof d._textZoom === 'number' && d._textZoom > 0) ? d._textZoom : 1;
+    // if (_textZoom !== 1) {
+    //   tx.w = (tx.w || 200) * _textZoom;
+    //   tx.h = (tx.h || 40) * _textZoom;
+    //   tx.size = (tx.size || 16) * _textZoom;
+    // }
     // v6.7.17: REMOVED recalibration block. The logic below was added in
     // v6.6.0 to fix old files saved before proportional text scaling was
     // introduced. It assumed size=24/16 meant "never resized" and tried to
