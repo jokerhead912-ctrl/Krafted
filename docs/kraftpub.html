@@ -3916,7 +3916,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.7.16';
+var KRAFTED_VERSION = '6.7.17';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30939,13 +30939,20 @@ function restoreBoard(data, append) {
       tx.h = (tx.h || 40) * _textZoom;
       tx.size = (tx.size || 16) * _textZoom;
     }
-    // v6.6.0: Recalibrate size for text items saved before proportional scaling.
-    // Old files have userResized=true but size=24 (default) while w may be larger.
-    // We scale size to match w so the visual result is identical to what the user
-    // saw when they originally saved. Does NOT touch content/color/font/position.
-    if (tx.userResized && (tx.size === 24 || tx.size === 16) && tx.w && tx.w !== 160) {
-      tx.size = (tx.size || 24) * (tx.w / 160);
-    }
+    // v6.7.17: REMOVED recalibration block. The logic below was added in
+    // v6.6.0 to fix old files saved before proportional text scaling was
+    // introduced. It assumed size=24/16 meant "never resized" and tried to
+    // back-calculate size from w. But for files saved *after* v6.6.0,
+    // size already reflects proportional scaling — applying this block
+    // again after _textZoom multiplication causes double-scaling and
+    // breaks text resize after reload. The proportional resize path
+    // (d._origTextSize + scaleX in the drag handler) handles this
+    // correctly on its own.
+    // 
+    // Original (removed) code:
+    // if (tx.userResized && (tx.size === 24 || tx.size === 16) && tx.w && tx.w !== 160) {
+    //   tx.size = (tx.size || 24) * (tx.w / 160);
+    // }
     applyTextProps(tx);
     updateItemStyle(tx);
   // Auto-grow on input
