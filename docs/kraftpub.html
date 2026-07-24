@@ -3916,7 +3916,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.7.16';
+var KRAFTED_VERSION = '6.7.18';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30929,23 +30929,13 @@ function restoreBoard(data, append) {
     delete tx.html;
     G.nextZ = Math.max(G.nextZ, tx.z + 1);
     state.texts.push(tx);
-    // v6.1: convert text dimensions from save-time on-screen pixels to world coordinates.
-    // Text w/h/size are stored as on-screen pixels at save-time zoom level (because
-    // updateItemStyle divides w/h by state.zoom). x/y are already world coordinates
-    // (same as image/video items) — do NOT scale them.
-    var _textZoom = (typeof d._textZoom === 'number' && d._textZoom > 0) ? d._textZoom : 1;
-    if (_textZoom !== 1) {
-      tx.w = (tx.w || 200) * _textZoom;
-      tx.h = (tx.h || 40) * _textZoom;
-      tx.size = (tx.size || 16) * _textZoom;
-    }
-    // v6.6.0: Recalibrate size for text items saved before proportional scaling.
-    // Old files have userResized=true but size=24 (default) while w may be larger.
-    // We scale size to match w so the visual result is identical to what the user
-    // saw when they originally saved. Does NOT touch content/color/font/position.
-    if (tx.userResized && (tx.size === 24 || tx.size === 16) && tx.w && tx.w !== 160) {
-      tx.size = (tx.size || 24) * (tx.w / 160);
-    }
+    // v6.7.18: Direct restore — no _textZoom multiplication, no recalibration.
+    // Save path dumps w/h/size as on-screen px directly (line ~4223), so load
+    // must use them as-is. applyTextProps / updateItemStyle divide by current
+    // state.zoom to set CSS, which brings the on-screen px back correctly.
+    // The old _textZoom block assumed save stored world-coords (wrong) and
+    // the v6.6.0 recalibration only helped very old pre-proportional-scaling
+    // files — for modern saves it causes double-scaling and w/size drift.
     applyTextProps(tx);
     updateItemStyle(tx);
   // Auto-grow on input
