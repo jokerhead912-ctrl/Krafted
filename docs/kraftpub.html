@@ -3916,7 +3916,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.7.21';
+var KRAFTED_VERSION = '6.7.22';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -22384,7 +22384,7 @@ document.addEventListener('mousemove', e => {
       // always picks up the correct value. No more CSS-only drift.
       if (el.classList.contains('text-item') && d.item.size && Math.abs(scaleX - 1) > 0.001) {
         const tz = Math.max(0.02, Math.min(10, (window.state && window.state.zoom) || 1));
-        d.item.size = (d._origTextSize || (d._origTextSize = d.item.size)) * scaleX;
+        d.item.size = Math.round((d._origTextSize || (d._origTextSize = d.item.size)) * scaleX * 10) / 10;
         el.style.fontSize = (d.item.size / tz) + 'px';
       }
       // Direct write to cached media-wrap (skip querySelector)
@@ -22664,7 +22664,7 @@ document.addEventListener('mouseup', e => {
         const origSz = d._origTextSize || item.size;
         const textScale = item.w / d.origW;
         if (Math.abs(textScale - 1) > 0.001) {
-          item.size = origSz * textScale;
+          item.size = Math.round(origSz * textScale * 10) / 10;
           if (typeof applyTextProps === 'function') applyTextProps(item);
         }
       }
@@ -30409,15 +30409,18 @@ function serializeBoard() {
       }
       return d;
     }),
-    texts: state.texts.map(t => ({
-      id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z,
-      font: t.font, size: t.size, bold: t.bold, italic: t.italic,
-      underline: t.underline, strike: t.strike, highlight: t.highlight,
-      shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase,
-      color: t.color, highlightColor: t.highlightColor, align: t.align,
-      html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '',
-      userResized: t.userResized || false,
-    })),
+    texts: state.texts.map(t => {
+      if (typeof console !== 'undefined') console.log('[SAVE-TEXT] id=' + t.id + ' w=' + t.w + ' h=' + t.h + ' size=' + t.size + ' zoom=' + state.zoom);
+      return {
+        id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z,
+        font: t.font, size: t.size, bold: t.bold, italic: t.italic,
+        underline: t.underline, strike: t.strike, highlight: t.highlight,
+        shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase,
+        color: t.color, highlightColor: t.highlightColor, align: t.align,
+        html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '',
+        userResized: t.userResized || false, _textZoom: 1
+      };
+    }),
     todos: (state.todos||[]).map(t => ({
       id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z,
       rot: t.rot || 0, opacity: t.opacity !== undefined ? t.opacity : 1, locked: t.locked || false,
