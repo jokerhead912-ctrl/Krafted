@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.6.4</title>
+<title>Krafted v6.7.8</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3078,19 +3078,14 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
 .mm-audio-volume-slider::-moz-range-thumb {
   width:10px; height:10px; border-radius:50%; background:var(--accent); border:1.5px solid #1a1a2e; cursor:pointer;
 }
-/* media-controls volume (video bottom bar) */
-.media-volume-wrap { position:relative; display:flex; align-items:center; margin-left:4px; }
+/* media-controls volume (video bottom bar) — inline slider */
+.media-volume-wrap { display:flex; align-items:center; gap:6px; margin-left:4px; }
 .media-volume-btn {
-  background:none; border:none; color:rgba(255,255,255,0.8); width:20px; height:20px;
+  background:none; border:none; color:rgba(255,255,255,0.8); width:18px; height:18px;
   display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; padding:0;
+  flex-shrink:0;
 }
 .media-volume-btn:hover { color:#fff; }
-.media-volume-popover {
-  position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
-  background:rgba(22,22,22,0.97); border:1px solid rgba(255,255,255,0.12); border-radius:8px;
-  padding:10px 8px; display:none; flex-direction:column; align-items:center; gap:6px;
-  z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,0.5); }
-.media-volume-wrap:hover .media-volume-popover { display:flex; }
 .media-volume-slider {
   -webkit-appearance:none; appearance:none; width:80px; height:4px; border-radius:2px;
   background:rgba(255,255,255,0.2); outline:none; cursor:pointer;
@@ -3102,7 +3097,7 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
 .media-volume-slider::-moz-range-thumb {
   width:12px; height:12px; border-radius:50%; background:#fff; border:2px solid rgba(255,255,255,0.3); cursor:pointer;
 }
-.media-volume-label { font-size:9px; color:rgba(255,255,255,0.6); font-family:"Inter",monospace; min-width:28px; text-align:center; }
+.media-volume-label { font-size:10px; color:rgba(255,255,255,0.6); font-family:"Inter",monospace; min-width:28px; text-align:center; }
 
 
 /* Video frame rendering optimization */
@@ -3921,7 +3916,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.6.4';
+var KRAFTED_VERSION = '6.7.8';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -10575,15 +10570,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   ctrlsRow.appendChild(centerGroup);
   ctrlsRow.appendChild(_makeSep());
 
-  // Volume control (video)
+  // Volume control (video) — inline
   const mVolWrap = document.createElement('div');
   mVolWrap.className = 'media-volume-wrap';
   const mVolBtn = document.createElement('button');
   mVolBtn.className = 'media-volume-btn';
   mVolBtn.innerHTML = '&#128264;';
   mVolBtn.title = 'Volume';
-  const mVolPop = document.createElement('div');
-  mVolPop.className = 'media-volume-popover';
   const mVolSlider = document.createElement('input');
   mVolSlider.type = 'range'; mVolSlider.min = '0'; mVolSlider.max = '1'; mVolSlider.step = '0.01';
   mVolSlider.value = String(mediaEl.volume);
@@ -10608,10 +10601,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     mVolLabel.textContent = Math.round(mediaEl.volume * 100) + '%';
     mVolBtn.innerHTML = mediaEl.volume === 0 || mediaEl.muted ? '&#128263;' : '&#128264;';
   });
-  mVolPop.appendChild(mVolSlider);
-  mVolPop.appendChild(mVolLabel);
   mVolWrap.appendChild(mVolBtn);
-  mVolWrap.appendChild(mVolPop);
+  mVolWrap.appendChild(mVolSlider);
+  mVolWrap.appendChild(mVolLabel);
 
   // ── RIGHT GROUP: comments button + snap + volume ──
   // R51: the on-video comments FAB is GONE. The comments button now
@@ -13538,12 +13530,12 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       var pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       // v6.1.8v perf: Skip intermediate seeks that are too close together.
       // Video seek+decode takes ~30-80ms on 1080p. Sending seeks faster
-      // than 50ms just queues them up, causing cumulative lag. At 50ms
+      // than 30ms just queues them up, causing cumulative lag. At 30ms
       // snap=true (initial click) always seeks immediately.
       if (!snap) {
         updateSeekUI(pct);
         var _now = performance.now();
-        if (_now - (window._lastPerfSeekTime || 0) < 50) return;
+        if (_now - (window._lastPerfSeekTime || 0) < 20) return;
         window._lastPerfSeekTime = _now;
       }
       // Apply to video immediately. Browser will clip to [0, duration].
@@ -14216,9 +14208,17 @@ const videoAnno = {
 };
 
 function videoAnnoGetSelected() {
-  // Returns the currently selected video item (or null)
+  // Returns the currently selected video item (or null).
+  // v6.7.1: if no video is selected but there's exactly one video on board,
+  // auto-select it so the user doesn't have to click the player first.
   const sel = getSelectedImages();
-  return (sel.length === 1 && sel[0].isVideo) ? sel[0] : null;
+  if (sel.length === 1 && sel[0].isVideo) return sel[0];
+  // No video selected — check if there's only one video on the board
+  const allVideos = (state.items || []).filter(function(it) {
+    return it.isVideo && it.video && it.el && it.el.isConnected;
+  });
+  if (allVideos.length === 1) return allVideos[0];
+  return null;
 }
 
 function videoAnnoEnsure(item) {
@@ -15900,8 +15900,15 @@ async function videoAnnoSendToBoard() {
       // starting Y by the header height + gap so the layout stays
       // symmetrical.
       const headerH = (headerItem.h || 0) + 28;
-      colY[0] = startY + headerH;
-      colY[1] = startY + headerH;
+      // v6.7.2 fix: bump colY initial value to push grid below header.
+      // colY is declared as `let` below, so we can reassign its elements
+      // safely here (array contents are mutable even when the array is
+      // declared later in the same function — JS hoists `let` declaration
+      // to function top but enters TDZ until the const line is reached.
+      // To avoid TDZ, we defer to after the const declaration via a
+      // sentinel).
+      if (typeof _pendingColYOffset === 'undefined') window._pendingColYOffset = 0;
+      window._pendingColYOffset = headerH;
     }
   }
   // ── 3) Capture pre-batch state for a single-undo batch ────────
@@ -15915,7 +15922,9 @@ async function videoAnnoSendToBoard() {
   // Per-column running Y. Each column advances its OWN Y as pairs
   // are added, so a 6-line text in row 3 of the left column doesn't
   // push the right column's row 3 down — they stay independent.
-  const colY = [startY, startY];
+  // v6.7.2: apply header offset captured above (see colY TDZ fix).
+  const colY = [startY + (window._pendingColYOffset || 0), startY + (window._pendingColYOffset || 0)];
+  window._pendingColYOffset = 0;
   let actualRowsRendered = 0;  // total row count actually placed (for viewport pan)
   // v6.1.6: capture+place one comment at a time, release dataUrl ref immediately.
   // Old code captured ALL dataUrls into an array first, then placed them —
