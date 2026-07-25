@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.7.14</title>
+<title>Krafted v6.8.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3272,6 +3272,76 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
   #mobile-toolbar-right { display: flex; }
 }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   SCREEN SHARE MODE — 投屏模式（v6.8.0）
+   只在 body.screen-share-mode 時生效
+   ═══════════════════════════════════════════════════════════════ */
+
+body.screen-share-mode .item { will-change: auto; contain: layout style; }
+body.screen-share-mode .item.dragging { will-change: transform; }
+body.screen-share-mode .media-wrap { will-change: auto; transform: none; }
+body.screen-share-mode .mindmap-item { will-change: auto; }
+body.screen-share-mode .item { transition: none !important; }
+body.screen-share-mode #canvas { transition: none !important; }
+body.screen-share-mode #canvas.grid { background-image: none; }
+body.screen-share-mode #paper { box-shadow: 0 2px 10px rgba(0,0,0,0.3) !important; }
+body.screen-share-mode .media-wrap video { filter: none !important; image-rendering: auto; }
+body.screen-share-mode #toolbar { opacity: 0.98 !important; }
+
+/* ── 頂部提示橫幅（最明顯） ── */
+#ss-banner {
+  display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 999999999;
+  height: 28px; background: linear-gradient(135deg, #7c8cf0, #6b5ce7);
+  color: #fff; font-size: 12px; font-weight: 600; letter-spacing: 0.5px;
+  align-items: center; justify-content: center; gap: 6px;
+  box-shadow: 0 2px 8px rgba(108,92,231,0.4);
+}
+body.screen-share-mode #ss-banner { display: flex; }
+
+/* ── 右下角浮水印 ── */
+#ss-watermark {
+  display: none; position: fixed; bottom: 20px; right: 20px; z-index: 999999998;
+  padding: 6px 14px; background: rgba(124,140,240,0.25);
+  border: 1.5px solid rgba(124,140,240,0.6); border-radius: 8px;
+  color: var(--accent); font-size: 11px; font-weight: 600;
+  backdrop-filter: blur(6px); pointer-events: none;
+}
+body.screen-share-mode #ss-watermark { display: block; }
+
+/* ── Canvas 區域紫色邊框 ── */
+body.screen-share-mode #canvas {
+  outline: 2px solid rgba(124,140,240,0.4); outline-offset: -2px;
+}
+
+/* ── 狀態欄指示器（加強版） ── */
+#status-ss-indicator {
+  display: none; margin-left: 8px; padding: 3px 10px;
+  background: rgba(124,140,240,0.25); border: 1.5px solid var(--accent);
+  border-radius: 6px; color: var(--accent); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.5px;
+}
+body.screen-share-mode #status-ss-indicator { display: inline; }
+
+/* ── 工具列按鈕 active 態 ── */
+body.screen-share-mode #btn-screen-share {
+  background: rgba(124,140,240,0.2) !important;
+  border-color: var(--accent) !important; color: var(--accent) !important;
+  box-shadow: 0 0 8px rgba(124,140,240,0.3) !important;
+}
+
+/* ── FPS 計數器 ── */
+#ss-fps {
+  position: fixed; bottom: 60px; right: 20px; z-index: 999999997;
+  padding: 4px 10px; background: rgba(0,0,0,0.7); border-radius: 6px;
+  color: #0f0; font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 12px; font-weight: 700; pointer-events: none;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+body.screen-share-mode #ss-fps {
+  color: #ff9900; border-color: rgba(255,153,0,0.3);
+}
+
 </style>
 
 
@@ -3337,6 +3407,8 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
   <input type="file" id="file-load" accept=".kpak" style="display:none" onchange="loadBoardFile(event)">
   <input type="file" id="file-audio-input" accept="audio/*,.mp3,.wav,.aiff,.aif,.flac,.ogg,.m4a" style="display:none" onchange="handleAudioUpload(event)">
   <button onclick="newBoard()" title="New Board (clear all)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h10M6 5V3h4v2M5 5l1 9h4l1-9"/></svg> <span class="tb-label">Clear</span></button>
+  <div class="sep"></div>
+  <button onclick="toggleScreenShareMode()" id="btn-screen-share" title="Screen Share Mode — 投屏模式 (Ctrl+Shift+P)&#10;降低 GPU 負擔，改善騰訊會議投屏流暢度"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="14" height="9" rx="1.5"/><path d="M5 15l3-3M11 15L8 12"/></svg> <span class="tb-label">Screen</span></button>
 </div>
 
 <!-- PROPERTIES PANEL -->
@@ -3916,7 +3988,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.7.25';
+var KRAFTED_VERSION = '6.8.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6257,6 +6329,8 @@ const DEFAULT_SHORTCUTS = [
   { id: 'media-frame-10-right', category: 'Media', label: 'Jump 10 Frames Right', keys: [{ key: 'ArrowRight', shift: true }] },
   { id: 'media-trim-i',    category: 'Media', label: 'Trim In Point',            keys: [{ key: 'i' }] },
   { id: 'media-trim-o',    category: 'Media', label: 'Trim Out Point',           keys: [{ key: 'o' }] },
+  // === SCREEN SHARE MODE (v6.8.0) ===
+  { id: 'tool-screen-share', category: 'Tools', label: 'Toggle Screen Share Mode', keys: [{ key: 'p', ctrl: true, shift: true }], macKeys: [{ key: 'p', meta: true, shift: true }] },
 ];
 
 // ── Runtime registry ─────────────────────────────────────────
@@ -20597,6 +20671,8 @@ function _dispatchShortcut(e) {
     case 'edit-duplicate':   duplicateSelected(); return true;
     case 'edit-delete':      deleteSelected(); return true;
     case 'edit-select-all':  state.selected.clear(); var all = []; [].push.apply(all, state.items); [].push.apply(all, state.texts); [].push.apply(all, state.todos||[]); [].push.apply(all, state.mindmaps||[]); all.forEach(function(i){ state.selected.add(i.id); }); refreshSelection(); return true;
+    // Screen Share Mode (v6.8.0)
+    case 'tool-screen-share':  toggleScreenShareMode(); return true;
     // File
     case 'file-save':        if (typeof saveBoardV6 === 'function') saveBoardV6(); return true;
     case 'file-save-as':     if (typeof setTool === 'function') setTool('capture'); return true; // Shift+Ctrl+S = screen cap
@@ -31567,6 +31643,228 @@ async function exportAllImagesToFolder() {
   })();
 })();
 
+
+// ═══════════════════════════════════════════════════════════════
+// SCREEN SHARE MODE — 投屏模式（v6.8.0）
+// 安全設計：所有優化只在 body.screen-share-mode 存在時生效
+// 不㩒掣 = 零影響
+// ═══════════════════════════════════════════════════════════════
+
+var isScreenShareMode = false;
+var _ssAnnoCbs = [];
+var _ssRafThrottleId = null;
+var _ssRafLastTime = 0;
+var _ssRafInterval = 33; // ~30fps
+
+function toggleScreenShareMode() {
+  isScreenShareMode = !isScreenShareMode;
+  if (isScreenShareMode) {
+    document.body.classList.add('screen-share-mode');
+    _applyScreenShareOptimizations();
+    try { localStorage.setItem('kraft_screen_share', '1'); } catch(e) {}
+    if (typeof toast === 'function') toast('投屏模式已啟用');
+    _updateSSIndicator(true);
+  } else {
+    document.body.classList.remove('screen-share-mode');
+    _restoreScreenShareOptimizations();
+    try { localStorage.setItem('kraft_screen_share', '0'); } catch(e) {}
+    if (typeof toast === 'function') toast('投屏模式已關閉');
+    _updateSSIndicator(false);
+  }
+}
+
+(function _ssInit() {
+  try {
+    if (localStorage.getItem('kraft_screen_share') === '1') {
+      isScreenShareMode = true;
+      document.body.classList.add('screen-share-mode');
+      _updateSSIndicator(true);
+    }
+  } catch(e) {}
+  _ssEnsureBannerElements();
+  _ssEnsureIndicator();
+  setTimeout(function() {
+    if (isScreenShareMode) _applyScreenShareOptimizations();
+  }, 500);
+})();
+
+function _ssEnsureIndicator() {
+  var st = document.getElementById('status');
+  if (!st) return setTimeout(_ssEnsureIndicator, 100);
+  var el = document.getElementById('status-ss-indicator');
+  if (!el) {
+    el = document.createElement('span');
+    el.id = 'status-ss-indicator';
+    el.textContent = '📡 投屏模式';
+    st.appendChild(el);
+  }
+}
+
+function _ssEnsureBannerElements() {
+  // 頂部橫幅
+  if (!document.getElementById('ss-banner')) {
+    var banner = document.createElement('div');
+    banner.id = 'ss-banner';
+    banner.innerHTML = '📡 <b>投屏模式</b> — GPU 優化已啟用 · 點擊關閉';
+    banner.style.cursor = 'pointer';
+    banner.onclick = toggleScreenShareMode;
+    document.body.appendChild(banner);
+  }
+  // 右下角浮水印
+  if (!document.getElementById('ss-watermark')) {
+    var wm = document.createElement('div');
+    wm.id = 'ss-watermark';
+    wm.textContent = '📡 投屏模式 · GPU 優化中';
+    document.body.appendChild(wm);
+  }
+}
+function _updateSSIndicator(on) {
+  var el = document.getElementById('status-ss-indicator');
+  if (el) el.style.display = on ? 'inline' : 'none';
+}
+
+function _applyScreenShareOptimizations() {
+  try {
+    if (typeof state !== 'undefined' && state && state.items) {
+      state.items.forEach(function(item) {
+        if (item && item.video && item.el && item.el._perfLastRenderKey !== undefined) {
+          item.el._perfLastRenderKey = null;
+          item.el._ssLowDpr = true;
+          var annoCanvas = item.el.querySelector('.media-anno-canvas');
+          if (annoCanvas) {
+            _ssAnnoCbs.push({ canvas: annoCanvas, item: item, el: item.el });
+          }
+        }
+      });
+    }
+  } catch(e) {}
+  _ssAnnoCbs.forEach(function(cb) {
+    try {
+      var dpr = 1;
+      var cw = cb.canvas.clientWidth;
+      var ch = cb.canvas.clientHeight;
+      if (cw > 1 && ch > 1) {
+        cb.canvas.width = Math.round(cw * dpr);
+        cb.canvas.height = Math.round(ch * dpr);
+        if (cb.el._renderAnnoCanvas) cb.el._renderAnnoCanvas();
+      }
+    } catch(e) {}
+  });
+}
+
+function _restoreScreenShareOptimizations() {
+  _ssAnnoCbs = [];
+  try {
+    if (typeof state !== 'undefined' && state && state.items) {
+      state.items.forEach(function(item) {
+        if (item && item.el) {
+          item.el._perfLastRenderKey = null;
+          item.el._ssLowDpr = false;
+        }
+      });
+    }
+  } catch(e) {}
+}
+
+// Monkey-patch devicePixelRatio：投屏模式強制 1x DPR
+var _ssOrigDPR = Object.getOwnPropertyDescriptor(Window.prototype, 'devicePixelRatio');
+if (_ssOrigDPR && _ssOrigDPR.get) {
+  var _ssOrigGetter = _ssOrigDPR.get;
+  Object.defineProperty(window, 'devicePixelRatio', {
+    get: function() {
+      if (isScreenShareMode && document.body.classList.contains('screen-share-mode')) return 1;
+      return _ssOrigGetter.call(this);
+    },
+    configurable: true
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.isScreenShareMode = isScreenShareMode;
+  window.toggleScreenShareMode = toggleScreenShareMode;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// rAF THROTTLE — 投屏模式降到 ~30fps，釋放一半 frame budget
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  var _origRAF = window.requestAnimationFrame;
+  var _origCAF = window.cancelAnimationFrame;
+  var _skipNext = false;
+  var _rafMap = {};     // fakeId → { realId, callback }
+  var _nextFakeId = 1;
+
+  window.requestAnimationFrame = function(callback) {
+    if (!isScreenShareMode || !document.body.classList.contains('screen-share-mode')) {
+      return _origRAF.call(window, callback);
+    }
+    // 投屏模式：每隔一幀先真正 call，skip 嘅幀 defer 到下一幀
+    var fid = _nextFakeId++;
+    if (_skipNext) {
+      _skipNext = false;
+      // Defer: 等下一幀先 call
+      var realId = _origRAF.call(window, function(ts) {
+        var entry = _rafMap[fid];
+        if (entry) { entry.callback(ts); delete _rafMap[fid]; }
+      });
+      _rafMap[fid] = { realId: realId, callback: callback };
+    } else {
+      _skipNext = true;
+      var realId2 = _origRAF.call(window, function(ts) {
+        var entry = _rafMap[fid];
+        if (entry) { entry.callback(ts); delete _rafMap[fid]; }
+      });
+      _rafMap[fid] = { realId: realId2, callback: callback };
+    }
+    return fid;
+  };
+
+  window.cancelAnimationFrame = function(id) {
+    var entry = _rafMap[id];
+    if (entry) {
+      _origCAF.call(window, entry.realId);
+      delete _rafMap[id];
+      return;
+    }
+    return _origCAF.call(window, id);
+  };
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// FPS COUNTER — 即時幀率顯示
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  var _fpsFrames = 0;
+  var _fpsLastTime = performance.now();
+  var _fpsEl = null;
+
+  function _fpsEnsureEl() {
+    if (_fpsEl) return;
+    _fpsEl = document.createElement('div');
+    _fpsEl.id = 'ss-fps';
+    _fpsEl.textContent = 'FPS: --';
+    document.body.appendChild(_fpsEl);
+  }
+
+  function _fpsLoop() {
+    _fpsEnsureEl();
+    _fpsFrames++;
+    var now = performance.now();
+    if (now - _fpsLastTime >= 1000) {
+      var fps = Math.round(_fpsFrames / ((now - _fpsLastTime) / 1000));
+      _fpsEl.textContent = 'FPS: ' + fps + (isScreenShareMode ? ' (投屏)' : '');
+      _fpsFrames = 0;
+      _fpsLastTime = now;
+    }
+    window.requestAnimationFrame(_fpsLoop);
+  }
+
+  // 延遲啟動等 DOM ready
+  setTimeout(function() {
+    _fpsEnsureEl();
+    _fpsLoop();
+  }, 1000);
+})();
 
 </script>
 
