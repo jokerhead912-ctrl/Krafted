@@ -3289,45 +3289,73 @@ body.screen-share-mode #paper { box-shadow: 0 2px 10px rgba(0,0,0,0.3) !importan
 body.screen-share-mode .media-wrap video { filter: none !important; image-rendering: auto; }
 body.screen-share-mode #toolbar { opacity: 0.98 !important; }
 
-/* ── 頂部提示橫幅（最明顯） ── */
+/* ── 頂部提示橫幅（minimalist Apple/Linear 風格） ── */
 #ss-banner {
   display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 999999999;
-  height: 28px; background: linear-gradient(135deg, #7c8cf0, #6b5ce7);
-  color: #fff; font-size: 12px; font-weight: 600; letter-spacing: 0.5px;
-  align-items: center; justify-content: center; gap: 6px;
-  box-shadow: 0 2px 8px rgba(108,92,231,0.4);
+  height: 24px; background: rgba(0,0,0,0.78);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  color: rgba(255,255,255,0.65); font-size: 11px; font-weight: 400;
+  letter-spacing: 0.2px;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  align-items: center; justify-content: center; gap: 8px;
+  border-bottom: 0.5px solid rgba(255,255,255,0.08);
+  transition: opacity 0.2s;
+}
+#ss-banner:hover { background: rgba(0,0,0,0.88); }
+#ss-banner b { color: rgba(255,255,255,0.92); font-weight: 600; }
+#ss-banner::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%;
+  background: #5ac8fa; box-shadow: 0 0 6px rgba(90,200,250,0.7);
+  animation: ssPulse 2s ease-in-out infinite;
+}
+@keyframes ssPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 body.screen-share-mode #ss-banner { display: flex; }
 
-/* ── 右下角浮水印 ── */
+/* ── 右下角浮水印（minimalist） ── */
 #ss-watermark {
-  display: none; position: fixed; bottom: 20px; right: 20px; z-index: 999999998;
-  padding: 6px 14px; background: rgba(124,140,240,0.25);
-  border: 1.5px solid rgba(124,140,240,0.6); border-radius: 8px;
-  color: var(--accent); font-size: 11px; font-weight: 600;
-  backdrop-filter: blur(6px); pointer-events: none;
+  display: none; position: fixed; bottom: 16px; right: 16px; z-index: 999999998;
+  padding: 3px 9px; background: rgba(0,0,0,0.55);
+  border: 0.5px solid rgba(255,255,255,0.1); border-radius: 3px;
+  color: rgba(255,255,255,0.45); font-size: 9.5px; font-weight: 400;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  pointer-events: none;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  letter-spacing: 0.3px;
 }
 body.screen-share-mode #ss-watermark { display: block; }
 
-/* ── Canvas 區域紫色邊框 ── */
+/* ── Canvas 區域邊框（極幼、半透明） ── */
 body.screen-share-mode #canvas {
-  outline: 2px solid rgba(124,140,240,0.4); outline-offset: -2px;
+  outline: 1px solid rgba(255,255,255,0.08); outline-offset: -1px;
 }
 
 /* ── 狀態欄指示器（加強版） ── */
 #status-ss-indicator {
-  display: none; margin-left: 8px; padding: 3px 10px;
-  background: rgba(124,140,240,0.25); border: 1.5px solid var(--accent);
-  border-radius: 6px; color: var(--accent); font-size: 11px; font-weight: 700;
-  letter-spacing: 0.5px;
+  display: none; margin-left: 8px; padding: 2px 8px;
+  background: rgba(255,255,255,0.06); border: 0.5px solid rgba(255,255,255,0.12);
+  border-radius: 3px; color: rgba(255,255,255,0.6); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.4px; text-transform: uppercase;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
 }
-body.screen-share-mode #status-ss-indicator { display: inline; }
+body.screen-share-mode #status-ss-indicator { display: inline-flex; align-items: center; gap: 4px; }
+body.screen-share-mode #status-ss-indicator::before {
+  content: ''; width: 4px; height: 4px; border-radius: 50%;
+  background: #5ac8fa; box-shadow: 0 0 4px rgba(90,200,250,0.6);
+}
 
-/* ── 工具列按鈕 active 態 ── */
+/* ── 工具列按鈕 active 態（minimalist） ── */
 body.screen-share-mode #btn-screen-share {
-  background: rgba(124,140,240,0.2) !important;
-  border-color: var(--accent) !important; color: var(--accent) !important;
-  box-shadow: 0 0 8px rgba(124,140,240,0.3) !important;
+  background: rgba(90,200,250,0.12) !important;
+  border-color: rgba(90,200,250,0.3) !important; color: #5ac8fa !important;
+}
+body.screen-share-mode #btn-screen-share::after {
+  content: ''; position: absolute; right: 4px; top: 4px;
+  width: 4px; height: 4px; border-radius: 50%; background: #5ac8fa;
+  box-shadow: 0 0 4px rgba(90,200,250,0.5);
 }
 
 /* ── FPS 計數器（低調）── */
@@ -31698,26 +31726,26 @@ function _ssEnsureIndicator() {
   if (!el) {
     el = document.createElement('span');
     el.id = 'status-ss-indicator';
-    el.textContent = '📡 投屏模式';
+    el.textContent = 'Screen Share';
     st.appendChild(el);
   }
 }
 
 function _ssEnsureBannerElements() {
-  // 頂部橫幅
+  // 頂部橫幅（minimalist — 無 emoji、字少、單色）
   if (!document.getElementById('ss-banner')) {
     var banner = document.createElement('div');
     banner.id = 'ss-banner';
-    banner.innerHTML = '📡 <b>投屏模式</b> — GPU 優化已啟用 · 點擊關閉';
+    banner.innerHTML = '<b>SCREEN SHARE</b> · GPU optimized · click to exit';
     banner.style.cursor = 'pointer';
     banner.onclick = toggleScreenShareMode;
     document.body.appendChild(banner);
   }
-  // 右下角浮水印
+  // 右下角浮水印（minimalist）
   if (!document.getElementById('ss-watermark')) {
     var wm = document.createElement('div');
     wm.id = 'ss-watermark';
-    wm.textContent = '📡 投屏模式 · GPU 優化中';
+    wm.textContent = 'SCREEN SHARE';
     document.body.appendChild(wm);
   }
 }
