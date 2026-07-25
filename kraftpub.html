@@ -31664,12 +31664,14 @@ function toggleScreenShareMode() {
     try { localStorage.setItem('kraft_screen_share', '1'); } catch(e) {}
     if (typeof toast === 'function') toast('投屏模式已啟用');
     _updateSSIndicator(true);
+    _ssFpsStart();
   } else {
     document.body.classList.remove('screen-share-mode');
     _restoreScreenShareOptimizations();
     try { localStorage.setItem('kraft_screen_share', '0'); } catch(e) {}
     if (typeof toast === 'function') toast('投屏模式已關閉');
     _updateSSIndicator(false);
+    _ssFpsStop();
   }
 }
 
@@ -31679,6 +31681,7 @@ function toggleScreenShareMode() {
       isScreenShareMode = true;
       document.body.classList.add('screen-share-mode');
       _updateSSIndicator(true);
+      setTimeout(function() { _ssFpsStart(); }, 1000);
     }
   } catch(e) {}
   _ssEnsureBannerElements();
@@ -31831,40 +31834,43 @@ if (typeof window !== 'undefined') {
 })();
 
 // ═══════════════════════════════════════════════════════════════
-// FPS COUNTER — 即時幀率顯示
+// FPS COUNTER — 只在投屏模式時才啟動，關閉即停，平時零 overhead
 // ═══════════════════════════════════════════════════════════════
-(function() {
-  var _fpsFrames = 0;
-  var _fpsLastTime = performance.now();
-  var _fpsEl = null;
+var _ssFpsFrames = 0, _ssFpsLastTime = 0, _ssFpsEl = null, _ssFpsRafId = null;
 
-  function _fpsEnsureEl() {
-    if (_fpsEl) return;
-    _fpsEl = document.createElement('div');
-    _fpsEl.id = 'ss-fps';
-    _fpsEl.textContent = 'FPS: --';
-    document.body.appendChild(_fpsEl);
+function _ssFpsEnsureEl() {
+  if (_ssFpsEl) return;
+  _ssFpsEl = document.createElement('div');
+  _ssFpsEl.id = 'ss-fps';
+  _ssFpsEl.textContent = 'FPS: --';
+  document.body.appendChild(_ssFpsEl);
+}
+
+function _ssFpsLoop() {
+  _ssFpsFrames++;
+  var now = performance.now();
+  if (now - _ssFpsLastTime >= 1000) {
+    var fps = Math.round(_ssFpsFrames / ((now - _ssFpsLastTime) / 1000));
+    _ssFpsEl.textContent = 'FPS: ' + fps + ' (投屏)';
+    _ssFpsFrames = 0;
+    _ssFpsLastTime = now;
   }
+  _ssFpsRafId = window.requestAnimationFrame(_ssFpsLoop);
+}
 
-  function _fpsLoop() {
-    _fpsEnsureEl();
-    _fpsFrames++;
-    var now = performance.now();
-    if (now - _fpsLastTime >= 1000) {
-      var fps = Math.round(_fpsFrames / ((now - _fpsLastTime) / 1000));
-      _fpsEl.textContent = 'FPS: ' + fps + (isScreenShareMode ? ' (投屏)' : '');
-      _fpsFrames = 0;
-      _fpsLastTime = now;
-    }
-    window.requestAnimationFrame(_fpsLoop);
-  }
+function _ssFpsStart() {
+  _ssFpsEnsureEl();
+  _ssFpsFrames = 0;
+  _ssFpsLastTime = performance.now();
+  _ssFpsEl.style.display = 'block';
+  if (_ssFpsRafId !== null) { window.cancelAnimationFrame(_ssFpsRafId); }
+  _ssFpsRafId = window.requestAnimationFrame(_ssFpsLoop);
+}
 
-  // 延遲啟動等 DOM ready
-  setTimeout(function() {
-    _fpsEnsureEl();
-    _fpsLoop();
-  }, 1000);
-})();
+function _ssFpsStop() {
+  if (_ssFpsRafId !== null) { window.cancelAnimationFrame(_ssFpsRafId); _ssFpsRafId = null; }
+  if (_ssFpsEl) _ssFpsEl.style.display = 'none';
+}
 
 </script>
 
