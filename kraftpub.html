@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.8</title>
+<title>Krafted v6.8.9</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.8';
+var KRAFTED_VERSION = '6.8.9';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -22654,11 +22654,23 @@ document.addEventListener('mousemove', e => {
     if (dir.includes('w')) { w = Math.max(minSize, d.origW - dx); x = d.origX + (d.origW - w); }
     if (dir.includes('s')) h = Math.max(minSize, d.origH + dy);
     if (dir.includes('n')) { h = Math.max(minSize, d.origH - dy); y = d.origY + (d.origH - h); }
-    // Aspect ratio for images only (not text), unless Shift held
+    // Aspect ratio for images only (not text), unless Shift held.
+    // v6.8.9: after deriving the dependent axis (w->h or h->w), re-anchor
+    // x/y from the ORIGINAL box so the opposite edge/corner stays fixed.
+    // Without this, corner drags (especially NW/NE) can show a subtle
+    // positional drift while resizing because h/w changed but y/x stayed
+    // from the pre-ratio branch.
     if (d.item.img && !e.shiftKey) {
       const ratio = d.origW / d.origH;
       if (dir.length === 2 || dir === 'e' || dir === 'w') h = w / ratio;
       else if (dir === 'n' || dir === 's') w = h * ratio;
+
+      // Re-anchor after aspect correction.
+      if (dir.includes('w')) x = d.origX + (d.origW - w);
+      if (dir.includes('n')) y = d.origY + (d.origH - h);
+      // Edge handles: keep the orthogonal axis centered for a stable feel.
+      if (dir === 'e' || dir === 'w') y = d.origY + (d.origH - h) / 2;
+      if (dir === 'n' || dir === 's') x = d.origX + (d.origW - w) / 2;
     }
     // Round 41 — MULTI-SELECT SCALE: scale all selected items together
     // when 2+ items are selected. Computes a single scaleX/scaleY from
