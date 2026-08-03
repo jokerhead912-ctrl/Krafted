@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.2</title>
+<title>Krafted v6.8.3</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.2';
+var KRAFTED_VERSION = '6.8.3';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30811,6 +30811,54 @@ function restoreBoard(data, append) {
   if (append) {
     G.nextZ = state.items.reduce((m, it) => Math.max(m, (it.z || 0) + 1), G.nextZ);
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  // v6.8.3: ID COLLISION GUARD
+  //
+  // Every restore path used to do `d.id !== undefined ? d.id : (maxId+1)`,
+  // i.e. it blindly trusted the id stored in the file. In APPEND mode
+  // (loading a second board onto an existing one) that id can already
+  // belong to an item on the canvas — and it very often does, because
+  // ids are small sequential integers, so two boards saved from separate
+  // sessions both contain id 1, 2, 3...
+  //
+  // Selection is id-based:
+  //   getSelectedItems() -> [...].filter(i => state.selected.has(i.id))
+  // so two items sharing an id BOTH match a single selection. Clicking
+  // one selected/moved/scaled both — the "stuck together" duplicates
+  // the user reported.
+  //
+  // Fix: track every id already in use (existing canvas items in append
+  // mode, plus everything assigned during this restore) and hand out a
+  // fresh id whenever the file's id is missing OR already taken.
+  //
+  // Non-append (normal full load) keeps the file's ids verbatim, so
+  // nothing changes there — groups/relations/strokes that reference ids
+  // by value stay valid. Collisions are impossible in that path anyway
+  // because the board is cleared first.
+  // ─────────────────────────────────────────────────────────────────
+  const _usedIds = new Set();
+  if (append) {
+    [].concat(
+      state.items || [], state.texts || [],
+      state.todos || [], state.mindmaps || []
+    ).forEach(function(it) { if (it && it.id !== undefined) _usedIds.add(it.id); });
+  }
+  // Maps an id from the file to the id actually used, so downstream
+  // references (groups, relations) can be remapped after the fact.
+  const _idRemap = new Map();
+  function _claimId(rawId) {
+    let id = rawId;
+    if (id === undefined || (append && _usedIds.has(id))) {
+      // Take the next free integer above everything seen so far.
+      do { maxId += 1; } while (_usedIds.has(maxId));
+      id = maxId;
+      if (rawId !== undefined) _idRemap.set(rawId, id);
+    }
+    _usedIds.add(id);
+    if (typeof id === 'number' && id > maxId) maxId = id;
+    return id;
+  }
   data.items.forEach(d => {
     try {
     // Skip video items whose blob: URL was lost on reload
@@ -30845,8 +30893,7 @@ function restoreBoard(data, append) {
       el.className = 'item draw-item';
       el.style.cssText = 'background:transparent;border:none;pointer-events:auto;';
       canvasContent.appendChild(el);
-      const itemId = d.id !== undefined ? d.id : (maxId + 1);
-      maxId = Math.max(maxId, itemId);
+      const itemId = _claimId(d.id);
       const item = {
         id: itemId, el, type: 'draw',
         x: d.x, y: d.y, w: d.w, h: d.h, rot: d.rot || 0, opacity: d.opacity !== undefined ? d.opacity : 1,
@@ -30913,8 +30960,7 @@ function restoreBoard(data, append) {
       const el = document.createElement('div');
       el.className = 'item link-card';
       canvasContent.appendChild(el);
-      const itemId = d.id !== undefined ? d.id : (maxId + 1);
-      maxId = Math.max(maxId, itemId);
+      const itemId = _claimId(d.id);
       const item = { ...d, id: itemId, el, img: null, video: null };
       G.nextZ = Math.max(G.nextZ, item.z + 1);
       state.items.push(item);
@@ -30982,8 +31028,7 @@ function restoreBoard(data, append) {
       el.appendChild(mediaEl);
     }
     canvasContent.appendChild(el);
-    const itemId = d.id !== undefined ? d.id : (maxId + 1);
-    maxId = Math.max(maxId, itemId);
+    const itemId = _claimId(d.id);
     const item = { ...d, id: itemId, el, img: d.isVideo ? null : mediaEl, video: d.isVideo ? mediaEl : null };
     G.nextZ = Math.max(G.nextZ, item.z + 1);
     state.items.push(item);
@@ -31140,8 +31185,7 @@ function restoreBoard(data, append) {
       el.textContent = d.content;
     }
     canvasContent.appendChild(el);
-    const txId = d.id !== undefined ? d.id : (maxId + 1);
-    maxId = Math.max(maxId, txId);
+    const txId = _claimId(d.id);
     const tx = { ...d, id: txId, el };
     delete tx.content;
     delete tx.html;
@@ -31172,8 +31216,7 @@ function restoreBoard(data, append) {
     const el = document.createElement('div');
     el.className = 'todo-item';
     canvasContent.appendChild(el);
-    const todoId = d.id !== undefined ? d.id : (maxId + 1);
-    maxId = Math.max(maxId, todoId);
+    const todoId = _claimId(d.id);
     const todo = {
       ...d, id: todoId, el,
       items: (d.items || []).map(it => ({ text: it.text || '', done: !!it.done })),
@@ -31189,8 +31232,7 @@ function restoreBoard(data, append) {
     const el = document.createElement('div');
     el.className = 'mindmap-item';
     canvasContent.appendChild(el);
-    const mmId = d.id !== undefined ? d.id : (maxId + 1);
-    maxId = Math.max(maxId, mmId);
+    const mmId = _claimId(d.id);
     const mm = {
       ...d, id: mmId, el,
       nodes: (d.nodes || []).map(n => ({ ...n })),
@@ -31203,20 +31245,57 @@ function restoreBoard(data, append) {
   });
   // Restore G.nextId — use saved value or compute from max ID seen
   // Support both flat format (buildManifest) and nested G format (legacy)
-  G.nextId = (data.G && data.G.nextId) || data.nextId || (maxId + 1);
+  // v6.8.3: in append mode the file's saved nextId is meaningless (it
+  // belongs to the OTHER board's numbering), and _claimId may have handed
+  // out ids above it. Always derive from maxId when appending, otherwise
+  // the next new item could collide all over again.
+  if (append) {
+    G.nextId = Math.max(G.nextId || 1, maxId + 1);
+  } else {
+    G.nextId = (data.G && data.G.nextId) || data.nextId || (maxId + 1);
+  }
   G.nextZ = (data.G && data.G.nextZ) || data.nextZ || G.nextZ;
   G.nextStrokeId = (data.G && data.G.nextStrokeId) || data.nextStrokeId || G.nextStrokeId;
   // Restore draw strokes (with backward compat for old drawLayers / strokes formats)
-  if (Array.isArray((data.G && data.G.drawStrokes) || data.drawStrokes)) {
-    G.drawStrokes.length = 0; ((data.G && data.G.drawStrokes) || data.drawStrokes).forEach(s => G.drawStrokes.push(s));
-  } else if (Array.isArray(data.drawLayers)) {
-    // Legacy: flatten all layer strokes into one array
-    G.drawStrokes.length = 0; data.drawLayers.flatMap(l => l.strokes || []).forEach(s => G.drawStrokes.push(s));
-  } else if (Array.isArray(data.strokes)) {
-    // Even older legacy: single flat array
-    G.drawStrokes.length = 0; data.strokes.forEach(s => G.drawStrokes.push(s));
+  // v6.8.3: appending must ADD strokes, not wipe them. Every branch below used
+  // to do `G.drawStrokes.length = 0` first, which deleted all existing drawings
+  // when loading a second board onto the canvas. Stroke ids are renumbered on
+  // append so they can't collide with the strokes already present (draw-items
+  // reference their stroke via item.strokeId).
+  const _loadedStrokes =
+    Array.isArray((data.G && data.G.drawStrokes) || data.drawStrokes)
+      ? ((data.G && data.G.drawStrokes) || data.drawStrokes)
+      : Array.isArray(data.drawLayers)
+        ? data.drawLayers.flatMap(l => l.strokes || [])
+        : Array.isArray(data.strokes)
+          ? data.strokes
+          : [];
+  if (append) {
+    // Renumber incoming stroke ids and point the matching draw-items at them.
+    let _strokeMax = G.drawStrokes.reduce(function(m, s) {
+      const n = (s && typeof s.id === 'number') ? s.id : 0;
+      return Math.max(m, n);
+    }, 0);
+    const _strokeRemap = new Map();
+    _loadedStrokes.forEach(function(s) {
+      if (!s) return;
+      const oldId = s.id;
+      const nid = ++_strokeMax;
+      if (oldId !== undefined) _strokeRemap.set(oldId, nid);
+      s.id = nid;
+      G.drawStrokes.push(s);
+    });
+    // Draw-items created earlier in this restore carry the OLD strokeId.
+    // _idRemap already fixed their item ids; this fixes their stroke link.
+    (state.items || []).forEach(function(it) {
+      if (it && it.type === 'draw' && _strokeRemap.has(it.strokeId)) {
+        it.strokeId = _strokeRemap.get(it.strokeId);
+      }
+    });
+    G.nextStrokeId = Math.max(G.nextStrokeId || 1, _strokeMax + 1);
   } else {
     G.drawStrokes.length = 0;
+    _loadedStrokes.forEach(s => G.drawStrokes.push(s));
   }
   // v6.4.1: in append mode, preserve existing zoom/pan — don't overwrite with loaded file's values
   if (!append) {
@@ -31224,20 +31303,54 @@ function restoreBoard(data, append) {
     state.zoom = data.zoom || 1;
   }
   // Restore relations
-  state.relations = (data.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 6, labelSize: r.labelSize || 16 }; });
+  // v6.8.3: remap fromId/toId through _idRemap — if an item got a fresh id
+  // because of an append-mode collision, its relations must follow it,
+  // otherwise the arrow would point at the OTHER board's item.
+  function _remapId(v) { return _idRemap.has(v) ? _idRemap.get(v) : v; }
+  const _loadedRelations = (data.relations || []).map(function(r) { return { id: r.id, fromId: _remapId(r.fromId), toId: _remapId(r.toId), fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 6, labelSize: r.labelSize || 16 }; });
+  if (append) {
+    // v6.8.3: appending must ADD relations, not replace them. The old code
+    // overwrote state.relations, silently wiping every arrow already on the
+    // canvas. Relation ids are also renumbered to avoid colliding with the
+    // existing ones.
+    let _relMax = (state.relations || []).reduce(function(m, r) {
+      const n = typeof r.id === 'number' ? r.id : 0;
+      return Math.max(m, n);
+    }, 0);
+    _loadedRelations.forEach(function(r) { r.id = ++_relMax; state.relations.push(r); });
+  } else {
+    state.relations = _loadedRelations;
+  }
   state.selectedRelation = null;
   // Restore groups
-  state.groups.forEach(g => g.borderEl.remove());
-  state.groups = [];
+  // v6.8.3: only wipe existing groups on a full load. Appending used to
+  // delete every group already on the canvas.
+  if (!append) {
+    state.groups.forEach(g => g.borderEl.remove());
+    state.groups = [];
+  }
   if (data.groups) {
-    G.nextGroupId = (data.G && data.G.nextGroupId) || data.nextGroupId || (Math.max(...data.groups.map(g => g.id), 0) + 1);
+    if (append) {
+      // Keep counting from whatever the canvas is already using.
+      G.nextGroupId = state.groups.reduce(function(m, g) {
+        const n = typeof g.id === 'number' ? g.id : 0;
+        return Math.max(m, n + 1);
+      }, G.nextGroupId || 1);
+    } else {
+      G.nextGroupId = (data.G && data.G.nextGroupId) || data.nextGroupId || (Math.max(...data.groups.map(g => g.id), 0) + 1);
+    }
     data.groups.forEach(gd => {
       const borderEl = document.createElement('div');
       borderEl.className = 'group-border';
       borderEl.style.borderColor = gd.color;
       canvasContent.appendChild(borderEl);
-      // IDs are preserved through serialize/restore, so memberIds match directly
-      state.groups.push({ id: gd.id, color: gd.color, memberIds: new Set(gd.memberIds), borderEl });
+      // v6.8.3: memberIds must go through _idRemap too (see relations above).
+      // Without this, appending a board whose ids collided would leave the
+      // group pointing at the pre-existing items instead of its own.
+      // Group ids are renumbered when appending so two boards' groups can't
+      // share an id (ungroup / border updates look groups up by id).
+      const _gid = append ? (G.nextGroupId++) : gd.id;
+      state.groups.push({ id: _gid, color: gd.color, memberIds: new Set((gd.memberIds || []).map(_remapId)), borderEl });
     });
     setTimeout(() => updateAllGroupBorders(), 200);
   }
