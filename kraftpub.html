@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.0</title>
+<title>Krafted v6.8.1</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.0';
+var KRAFTED_VERSION = '6.8.1';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -29950,7 +29950,7 @@ async function buildKpakV6(progressCallback, writableStream) {
       if (useStreaming) {
         await writableStream.write(sizeBuf);
       } else {
-        blobParts.push(sizeBuf.buffer);
+        blobParts.push(sizeBuf);
       }
       currentOffset += 4;
 
@@ -29961,7 +29961,7 @@ async function buildKpakV6(progressCallback, writableStream) {
         if (useStreaming) {
           await writableStream.write(m.bytes);
         } else {
-          blobParts.push(m.bytes.buffer);
+          blobParts.push(m.bytes);
         }
         actualSize = m.bytes.length;
       } else if (resp.body && resp.body.getReader) {
@@ -29973,13 +29973,22 @@ async function buildKpakV6(progressCallback, writableStream) {
           if (useStreaming) {
             await writableStream.write(value);
           } else {
-            // For blob mode: combine periodically to release old refs
+            // v6.8.1 FIX (macOS/Safari): push the Uint8Array VIEW, not
+            // `value.buffer`. Safari's fetch reader returns views into a
+            // POOLED shared ArrayBuffer where byteOffset != 0 and
+            // buffer.byteLength >> value.length. Pushing `.buffer` wrote the
+            // whole pooled buffer instead of just this chunk, shifting every
+            // subsequent byte offset — the index then pointed at garbage and
+            // images silently vanished on load. Chrome/Edge on Windows used
+            // the streaming path so they never hit this.
+            // Also: we must COPY the chunk because the reader may reuse the
+            // underlying buffer for the next read.
             if (blobParts.length > 50) {
               const combined = new Blob(blobParts);
               blobParts.length = 0;
               blobParts.push(combined);
             }
-            blobParts.push(value.buffer);
+            blobParts.push(new Uint8Array(value));
           }
           actualSize += value.length;
         }
@@ -30000,7 +30009,7 @@ async function buildKpakV6(progressCallback, writableStream) {
         if (useStreaming) {
           await writableStream.write(new Uint8Array(ab));
         } else {
-          blobParts.push(ab);
+          blobParts.push(new Uint8Array(ab));
         }
         actualSize = ab.byteLength;
       }
@@ -30015,29 +30024,31 @@ async function buildKpakV6(progressCallback, writableStream) {
 
   // Pass 2: build index
   if (progressCallback) progressCallback('Writing index...');
+  // v6.8.1: index parts are pushed as Uint8Array VIEWS (not .buffer) so
+  // byte lengths stay exact — same class of bug as the media chunks above.
   const indexParts = [];
   const countBuf = new Uint8Array(4);
   new DataView(countBuf.buffer).setUint32(0, entries.length, true);
-  indexParts.push(countBuf.buffer);
+  indexParts.push(countBuf);
 
   for (const e of entries) {
     const nameEnc = new TextEncoder().encode(e.name);
     const nameLenBuf = new Uint8Array(2);
     new DataView(nameLenBuf.buffer).setUint16(0, nameEnc.length, true);
-    indexParts.push(nameLenBuf.buffer);
-    indexParts.push(nameEnc.buffer);
+    indexParts.push(nameLenBuf);
+    indexParts.push(nameEnc);
 
     const offsetBuf = new Uint8Array(8);
     new DataView(offsetBuf.buffer).setBigUint64(0, BigInt(e.offset), true);
-    indexParts.push(offsetBuf.buffer);
+    indexParts.push(offsetBuf);
 
     const sizeBuf2 = new Uint8Array(8);
     new DataView(sizeBuf2.buffer).setBigUint64(0, BigInt(e.size), true);
-    indexParts.push(sizeBuf2.buffer);
+    indexParts.push(sizeBuf2);
 
     const typeBuf = new Uint8Array(1);
     typeBuf[0] = e.type;
-    indexParts.push(typeBuf.buffer);
+    indexParts.push(typeBuf);
   }
 
   if (useStreaming) {
@@ -30059,11 +30070,17 @@ async function buildKpakV6(progressCallback, writableStream) {
     // Don't close stream — caller manages lifetime
     return { entries, size: currentOffset + indexParts.reduce((s, p) => s + p.byteLength, 0) + 12, streamed: true };
   } else {
-    blobParts.push(footerBuf.buffer);
-    const totalSize = blobParts.reduce((s, p) => s + p.byteLength, 0);
+    blobParts.push(footerBuf);
+    // v6.8.1: build the Blob FIRST, then read its real .size. The old code
+    // summed `p.byteLength` across blobParts, but some parts are Blobs
+    // (from the periodic combine step) which have `.size`, not
+    // `.byteLength` — so totalSize came out NaN / wrong on the very paths
+    // that hit the combine branch (large boards on macOS).
+    const outBlob = new Blob(blobParts, { type: 'application/octet-stream' });
+    const totalSize = outBlob.size;
     if (progressCallback) progressCallback('Finalized ' + formatBytes(totalSize));
     console.log('[KPAKv6] blob built:', entries.length, 'entries,', formatBytes(totalSize));
-    return { blob: new Blob(blobParts, { type: 'application/octet-stream' }), size: totalSize, entries };
+    return { blob: outBlob, size: totalSize, entries };
   }
 }
 
@@ -30171,6 +30188,31 @@ async function saveBoardV6() {
       // Fallback: build blob (one entry in memory at a time, GC'd between)
       const result = await buildKpakV6(updateProg, null);
       const blob = result.blob;
+
+      // v6.8.1: SELF-VERIFY before download. Re-read the index we just wrote
+      // and confirm every media entry's byte range is actually inside the
+      // blob. Catches the macOS/Safari offset-shift class of bug at SAVE
+      // time instead of silently producing a file whose images vanish on
+      // load. Non-fatal: we warn and still let the user save, but they know.
+      try {
+        updateProg('Verifying...');
+        const chk = await readKpakV6Index(blob);
+        let bad = 0;
+        for (const e of (chk.entries || [])) {
+          if (e.offset < 0 || e.size <= 0 || (e.offset + e.size) > blob.size) bad++;
+        }
+        const expected = (chk.entries || []).length;
+        if (bad > 0) {
+          console.error('[SAVE V6] VERIFY FAILED —', bad, 'of', expected, 'entries out of bounds');
+          toast('⚠ Save verify failed: ' + bad + '/' + expected + ' media entries corrupt. Please report this.');
+        } else {
+          console.log('[SAVE V6] verify OK —', expected, 'entries all in bounds');
+        }
+      } catch (ve) {
+        console.error('[SAVE V6] verify threw:', ve.message);
+        toast('⚠ Save verify error: ' + ve.message);
+      }
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
