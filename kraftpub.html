@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.1</title>
+<title>Krafted v6.8.2</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.1';
+var KRAFTED_VERSION = '6.8.2';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4325,7 +4325,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       manifest.nodes.push(node);
     }
     var texts = state.texts || [];
-    for (var j = 0; j < texts.length; j++) { var t = texts[j]; if (typeof console !== 'undefined') console.log('[SAVE-TEXT] id=' + t.id + ' w=' + t.w + ' h=' + t.h + ' size=' + t.size + ' zoom=' + state.zoom); manifest.texts.push({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, highlightColor: t.highlightColor, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false, _textZoom: 1 }); }
+    for (var j = 0; j < texts.length; j++) { var t = texts[j]; if (typeof console !== 'undefined') console.log('[SAVE-TEXT] id=' + t.id + ' w=' + t.w + ' h=' + t.h + ' size=' + t.size + ' zoom=' + state.zoom); manifest.texts.push({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, highlightColor: t.highlightColor, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: 1 }); }
     manifest.drawStrokes = (window.G && window.G.drawStrokes) || [];
     manifest.todos = (state.todos || []).map(function(td) { return { id: td.id, x: td.x, y: td.y, w: td.w, h: td.h, z: td.z, rot: td.rot || 0, opacity: td.opacity !== undefined ? td.opacity : 1, locked: td.locked || false, title: td.title || '', items: (td.items || []).map(function(it) { return { text: it.text, done: it.done }; }) }; });
     manifest.mindmaps = (state.mindmaps || []).map(function(mm) { return { id: mm.id, x: mm.x, y: mm.y, w: mm.w, h: mm.h, z: mm.z, rot: mm.rot || 0, opacity: mm.opacity !== undefined ? mm.opacity : 1, locked: mm.locked || false, title: mm.title || '', nodes: (mm.nodes || []).map(function(nn) { return { id: nn.id, text: nn.text, x: nn.x, y: nn.y, w: nn.w, h: nn.h, color: nn.color, textColor: nn.textColor, parentId: nn.parentId || null, img: nn.img || null, imgW: nn.imgW || 0, imgH: nn.imgH || 0, audio: nn.audio || null, audioName: nn.audioName || null }; }), connections: (mm.connections || []).map(function(c) { return { id: c.id, from: c.from, to: c.to, color: c.color }; }), nextNodeId: mm.nextNodeId || 1, nextConnId: mm.nextConnId || 1 }; });
@@ -4363,7 +4363,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       data.items.push(item);
     }
     var texts = manifest.texts || [];
-    for (var ti = 0; ti < texts.length; ti++) { var t = texts[ti]; data.texts.push({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, highlightColor: t.highlightColor, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, align: t.align, html: t.html || '', content: t.content || '', userResized: t.userResized || false, _textZoom: t._textZoom }); }
+    for (var ti = 0; ti < texts.length; ti++) { var t = texts[ti]; data.texts.push({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, highlightColor: t.highlightColor, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, align: t.align, html: t.html || '', content: t.content || '', userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: t._textZoom }); }
     var todos = manifest.todos || []; for (var ti2 = 0; ti2 < todos.length; ti2++) { data.todos = data.todos || []; data.todos.push(todos[ti2]); }
     var mindmaps = manifest.mindmaps || []; for (var ti3 = 0; ti3 < mindmaps.length; ti3++) { data.mindmaps = data.mindmaps || []; data.mindmaps.push(mindmaps[ti3]); }
     var groups = manifest.groups || []; for (var j = 0; j < groups.length; j++) { data.groups.push({ id: groups[j].id, color: groups[j].color, memberIds: groups[j].memberIds ? groups[j].memberIds.slice() : [] }); }
@@ -6880,6 +6880,10 @@ function captureSnapshot() {
       content: t.el ? t.el.textContent : '',
       // Remember user-resized state so autoGrow respects the width on reload
       userResized: t.userResized || false,
+      // v6.8.2: _autoGrowLocked must survive undo too. Without it, undo/redo
+      // dropped the flag and the next keystroke could fall through to the
+      // maxW=520 measuring fallback, making the box suddenly jump wider.
+      _autoGrowLocked: t._autoGrowLocked || false,
     })),
     todos: (state.todos||[]).map(t => ({
       id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z,
@@ -7068,24 +7072,11 @@ function restoreSnapshot(snapStr) {
     state.texts.push(tx);
     applyTextProps(tx);
     updateItemStyle(tx);
-  // Auto-grow on input
-  el.addEventListener('input', () => autoGrowTextItem(tx));
-  el.addEventListener('focus', () => { el.classList.add('editing'); showTextQuickBar(true); updateTextQuickBarActive(); });
-  el.addEventListener('blur', () => {
-      el.classList.remove('editing');
-      showTextQuickBar(false);
-      if (!el.textContent.trim()) {
-        el.remove();
-        const hCont = canvas.querySelector('.text-handles[data-owner="' + tx.id + '"]');
-        if (hCont) hCont.remove();
-        state.texts = state.texts.filter(t => t.id !== tx.id);
-        clearSelection();
-      } else {
-        autoGrowTextItem(tx);
-      }
-      if (state.tool === 'text') setTool('select');
-      scheduleAutoSave();
-    });
+    // v6.8.2: use the shared wiring instead of a hand-rolled duplicate.
+    // The old inline copy was missing updateTextColorPalette() and
+    // updateAutoFitPaper(), so colour swatches and paper bounds went stale
+    // after an undo.
+    attachTextListeners(tx);
     // Initial auto-grow after render
     setTimeout(() => autoGrowTextItem(tx), 50);
   });
@@ -8370,6 +8361,50 @@ function rebuildLinkCard(item) {
     window.open(item.linkUrl, '_blank', 'noopener,noreferrer');
   });
 }
+// v6.8.2: single source of truth for text-item event wiring.
+// Previously addText() and the undo-restore path each hand-rolled their own
+// copy of these three listeners, and the two copies had drifted:
+// restore was missing updateTextColorPalette() (stale colour swatches after
+// an undo) and updateAutoFitPaper() (paper bounds not recomputed on blur).
+// Both paths now call this, so they can never diverge again.
+function attachTextListeners(tx) {
+  const el = tx.el;
+  if (!el || el._textListenersAttached) return;
+  el._textListenersAttached = true;
+
+  el.addEventListener('input', () => autoGrowTextItem(tx));
+
+  el.addEventListener('focus', () => {
+    el.classList.add('editing');
+    showTextQuickBar(true);
+    updateTextQuickBarActive();
+    updateTextColorPalette();
+  });
+
+  el.addEventListener('blur', () => {
+    el.classList.remove('editing');
+    showTextQuickBar(false);
+    updateTextColorPalette();
+    if (!el.textContent.trim()) {
+      // No pushUndo() here on purpose. addText() already snapshotted the
+      // state BEFORE this box existed, so undo goes straight back to
+      // "no text box". The old code snapshotted "an empty text box
+      // exists" — and that box deletes itself again the instant it blurs,
+      // which made the undo look like it did nothing.
+      el.remove();
+      const hCont = canvas.querySelector('.text-handles[data-owner="' + tx.id + '"]');
+      if (hCont) hCont.remove();
+      state.texts = state.texts.filter(t => t.id !== tx.id);
+      clearSelection();
+    } else {
+      autoGrowTextItem(tx);
+    }
+    // Auto-switch back to select mode so clicking doesn't keep creating text boxes
+    if (state.tool === 'text') setTool('select');
+    scheduleAutoSave();
+    updateAutoFitPaper();
+  });
+}
 function addText(x, y, initialText, opts) {
   pushUndo();
   const el = document.createElement('div');
@@ -8402,31 +8437,8 @@ function addText(x, y, initialText, opts) {
   state.texts.push(tx);
   applyTextProps(tx);
   updateItemStyle(tx);
-  // Auto-grow on input
-  el.addEventListener('input', () => autoGrowTextItem(tx));
-  el.addEventListener('focus', () => { el.classList.add('editing'); showTextQuickBar(true); updateTextQuickBarActive(); updateTextColorPalette(); });
-  // When done editing
-  el.addEventListener('blur', () => {
-    el.classList.remove('editing');
-    showTextQuickBar(false);
-    updateTextColorPalette();
-    // Remove empty text items
-    if (!el.textContent.trim()) {
-      pushUndo();
-      el.remove();
-      // Remove associated text handle container
-      const hCont = canvas.querySelector('.text-handles[data-owner="' + tx.id + '"]');
-      if (hCont) hCont.remove();
-      state.texts = state.texts.filter(t => t.id !== tx.id);
-      clearSelection();
-    } else {
-      autoGrowTextItem(tx);
-    }
-    // Auto-switch back to select mode so clicking doesn't keep creating text boxes
-    if (state.tool === 'text') setTool('select');
-    scheduleAutoSave();
-    updateAutoFitPaper();
-  });
+  // Auto-grow on input + focus/blur handling (shared with the undo-restore path)
+  attachTextListeners(tx);
   // Defer focus + selection so DOM is fully settled and handles don't interfere
   requestAnimationFrame(() => {
     selectOnly(tx.id);
@@ -22458,19 +22470,40 @@ document.addEventListener('mousemove', e => {
         multiApply.forEach(a => {
           const el = a.item.el;
           if (!el) return;
-          el.style.width = a.w + 'px';
+          // v6.8.2: text-items store w/h as ON-SCREEN (CSS-px at zoom 100%)
+          // values, so the CSS width/height must be divided by zoom — exactly
+          // like updateItemStyle() does. Previously this fast path wrote the
+          // raw value, so at zoom != 100% the box rendered at the wrong size
+          // during the drag and then visibly SNAPPED when any later
+          // updateItemStyle() call corrected it. Non-text items keep _rz = 1
+          // (their on-screen size is intentionally scaled by canvas zoom).
+          const _isText = el.classList.contains('text-item');
+          const _rz = _isText ? Math.max(0.02, Math.min(10, (window.state && window.state.zoom) || 1)) : 1;
+          el.style.width = (a.w / _rz) + 'px';
           // Media items: total height = video height + 54px (info bar + controls)
           const isMedia = el.classList.contains('has-media');
           if (!el.classList.contains('todo-item')) {
-            el.style.height = (isMedia ? a.h + 54 : a.h) + 'px';
+            el.style.height = ((isMedia ? a.h + 54 : a.h) / _rz) + 'px';
           }
           // Direct write to the cached .media-wrap (no querySelector)
           if (a.wrapEl) a.wrapEl.style.height = a.h + 'px';
           el.style.transform = 'translate(' + a.x + 'px, ' + a.y + 'px) rotate(' + (a.item.rot || 0) + 'deg)';
           // Mark resized flags so other systems know this was a user drag
           if (el.classList.contains('todo-item')) a.item._resized = true;
-          if (el.classList.contains('text-item')) {
+          if (_isText) {
             a.item.userResized = true;
+            // v6.8.2: keep the text-handles sibling in sync (see fast path below)
+            if (a._hCont === undefined) {
+              a._hCont = el.parentElement
+                ? el.parentElement.querySelector('.text-handles[data-owner="' + a.item.id + '"]')
+                : null;
+            }
+            if (a._hCont) {
+              a._hCont.style.left = a.x + 'px';
+              a._hCont.style.top = a.y + 'px';
+              a._hCont.style.width = (a.w / _rz) + 'px';
+              a._hCont.style.height = (a.h / _rz) + 'px';
+            }
           }
         });
         // Keep any open annotation popovers parallel to the video as the
@@ -22482,11 +22515,16 @@ document.addEventListener('mousemove', e => {
       }
       // FAST PATH: direct style writes (no full updateItemStyle) for max snappiness
       const el = d.item.el;
-      el.style.width = w + 'px';
+      // v6.8.2: same zoom-division fix as the multi-select path above.
+      // text-items store w/h as on-screen values; everything else uses
+      // world coords and must NOT be divided.
+      const _isTextFast = el.classList.contains('text-item');
+      const _rzFast = _isTextFast ? Math.max(0.02, Math.min(10, (window.state && window.state.zoom) || 1)) : 1;
+      el.style.width = (w / _rzFast) + 'px';
       // Media items: total height = video height + 54px (info bar + controls)
       const isMedia = el.classList.contains('has-media');
       if (!el.classList.contains('todo-item')) {
-        el.style.height = (isMedia ? h + 54 : h) + 'px';
+        el.style.height = ((isMedia ? h + 54 : h) / _rzFast) + 'px';
       }
       // v6.6.0: Live text font scaling during resize — commit size to state
       // every frame so applyTextProps (called by reflows, imports, etc.)
@@ -22500,6 +22538,23 @@ document.addEventListener('mousemove', e => {
       if (d._mediaWrap) d._mediaWrap.style.height = h + 'px';
       // Direct transform write (position + rotation, scale handled by width/height)
       el.style.transform = 'translate(' + x + 'px, ' + y + 'px) rotate(' + (d.item.rot || 0) + 'deg)';
+      // v6.8.2: keep the text-handles sibling container in sync during the
+      // resize. updateItemStyle() does this, but this fast path skipped it —
+      // so the 8 resize handles lagged behind the box until the next full
+      // style pass. Cached on `d` to avoid a querySelector every frame.
+      if (_isTextFast) {
+        if (d._textHCont === undefined) {
+          d._textHCont = el.parentElement
+            ? el.parentElement.querySelector('.text-handles[data-owner="' + d.item.id + '"]')
+            : null;
+        }
+        if (d._textHCont) {
+          d._textHCont.style.left = x + 'px';
+          d._textHCont.style.top = y + 'px';
+          d._textHCont.style.width = (w / _rzFast) + 'px';
+          d._textHCont.style.height = (h / _rzFast) + 'px';
+        }
+      }
       // Scale group members proportionally (also using direct style writes)
       if (d._group && d._members.length) {
         d._members.forEach(member => {
@@ -22513,8 +22568,11 @@ document.addEventListener('mousemove', e => {
           member.h = Math.max(5, mOrigH * scaleY);
           // Fast direct writes
           const mel = member.el;
-          mel.style.width = member.w + 'px';
-          mel.style.height = member.h + 'px';
+          // v6.8.2: text-item group members need the same zoom division.
+          const _mIsText = mel.classList.contains('text-item');
+          const _mrz = _mIsText ? Math.max(0.02, Math.min(10, (window.state && window.state.zoom) || 1)) : 1;
+          mel.style.width = (member.w / _mrz) + 'px';
+          mel.style.height = (member.h / _mrz) + 'px';
           mel.style.transform = 'translate(' + member.x + 'px, ' + member.y + 'px) rotate(' + (member.rot || 0) + 'deg)';
         });
         updateGroupBorder(d._group);
@@ -29656,7 +29714,7 @@ function buildManifest() {
     _schemaNote: 'Krafted v5.5.1 format — backward compatible with v4+',
     _savedAt: new Date().toISOString(),
     items,
-    texts: state.texts.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, highlightColor: t.highlightColor, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false, _textZoom: 1 })),
+    texts: state.texts.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, highlightColor: t.highlightColor, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: 1 })),
     todos: (state.todos||[]).map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, rot: t.rot || 0, opacity: t.opacity !== undefined ? t.opacity : 1, locked: t.locked || false, title: t.title || '', items: (t.items||[]).map(it => ({ text: it.text, done: it.done })) })),
     mindmaps: (state.mindmaps||[]).map(m => ({ id: m.id, x: m.x, y: m.y, w: m.w, h: m.h, z: m.z, rot: m.rot || 0, opacity: m.opacity !== undefined ? m.opacity : 1, locked: m.locked || false, title: m.title || '', nodes: (m.nodes||[]).map(n => ({ id: n.id, text: n.text, x: n.x, y: n.y, w: n.w, h: n.h, color: n.color, textColor: n.textColor, parentId: n.parentId || null, img: n.img || null, imgW: n.imgW || 0, imgH: n.imgH || 0, audio: n.audio || null, audioName: n.audioName || null })), connections: (m.connections||[]).map(c => ({ id: c.id, from: c.from, to: c.to, color: c.color })), nextNodeId: m.nextNodeId || 1, nextConnId: m.nextConnId || 1 })),
     drawStrokes: G.drawStrokes,
@@ -30569,7 +30627,7 @@ function serializeBoard() {
         shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase,
         color: t.color, highlightColor: t.highlightColor, align: t.align,
         html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '',
-        userResized: t.userResized || false, _textZoom: 1
+        userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: 1
       };
     }),
     todos: (state.todos||[]).map(t => ({
@@ -31099,24 +31157,9 @@ function restoreBoard(data, append) {
     applyTextProps(tx);
     updateItemStyle(tx);
     console.log('[LOAD-TEXT] id=' + tx.id + ' w=' + tx.w + ' h=' + tx.h + ' size=' + tx.size + ' zoom=' + state.zoom + ' cssW=["' + el.style.width + '"] cssH=["' + el.style.height + '"] cssFS=["' + el.style.fontSize + '"] userResized=' + tx.userResized);
-  // Auto-grow on input
-  el.addEventListener('input', () => autoGrowTextItem(tx));
-  el.addEventListener('focus', () => { el.classList.add('editing'); showTextQuickBar(true); updateTextQuickBarActive(); });
-  el.addEventListener('blur', () => {
-      el.classList.remove('editing');
-      showTextQuickBar(false);
-      if (!el.textContent.trim()) {
-        el.remove();
-        const hCont = canvas.querySelector('.text-handles[data-owner="' + tx.id + '"]');
-        if (hCont) hCont.remove();
-        state.texts = state.texts.filter(t => t.id !== tx.id);
-        clearSelection();
-      } else {
-        autoGrowTextItem(tx);
-      }
-      if (state.tool === 'text') setTool('select');
-      scheduleAutoSave();
-    });
+    // v6.8.2: shared wiring (was a third hand-rolled copy, also missing
+    // updateTextColorPalette / updateAutoFitPaper)
+    attachTextListeners(tx);
     // v6.7.22: removed setTimeout(autoGrow) on load — it was measuring
     // el.scrollHeight right after restore and overwriting tx.h with a
     // huge value (e.g. 812 for a 5-char word that wraps to many lines
