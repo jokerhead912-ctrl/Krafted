@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.6</title>
+<title>Krafted v6.8.7</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.6';
+var KRAFTED_VERSION = '6.8.7';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -13473,54 +13473,124 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       refreshInPlayerTrimUI();
     });
 
-    // Time update → fill + labels
-    // v5.5.7: throttle to ~15fps (skip if < 60ms since last update)
-    // timeupdate fires at ~4Hz during playback — the fill bar and
-    // time labels don't need to update that often. Rounding the
-    // percentage to 0.5% steps also avoids layout thrash.
+    // Time update -> fill + labels
+    // v6.8.7 P0 perf: keep playback HUD updates lightweight and in sync
+    // with decoded frames when available, without changing interaction logic.
+    var _fcCurEl = frameCodeDisplay ? frameCodeDisplay.querySelector('.fc-cur') : null;
+    var _fcTotalEl = frameCodeDisplay ? frameCodeDisplay.querySelector('.fc-total') : null;
+    var _fcTimeEl = frameCodeDisplay ? frameCodeDisplay.querySelector('.fc-time') : null;
+    var _ibFcurEl = infoBar ? infoBar.querySelector('.ib-fcur') : null;
+    var _ibFtotEl = infoBar ? infoBar.querySelector('.ib-ftot') : null;
+    var _ibTimeEl = infoBar ? infoBar.querySelector('.ib-time') : null;
+    var _ibFpsEl  = infoBar ? infoBar.querySelector('.ib-fps') : null;
+    var _p0LastHudPct = -1;
+    var _p0LastHudTime = '';
+    var _p0LastFrame = -1;
+    var _p0LastFrameTotal = -1;
+    var _p0LastFps = -1;
+    var _p0LastTc = '';
+    var _p0RvfcId = null;
+    var _supportsRvfc = (typeof mediaEl.requestVideoFrameCallback === 'function');
+
+    function _p0FmtTc(t) {
+      var _m = Math.floor(t / 60);
+      var _sec = Math.floor(t % 60);
+      var _cs = Math.floor((t - Math.floor(t)) * 100);
+      return _m + ':' + (_sec < 10 ? '0' : '') + _sec + '.' + (_cs < 10 ? '0' : '') + _cs;
+    }
+
+    function _p0UpdatePlaybackHud(force) {
+      if (!mediaEl.duration) return;
+      if (seeking) return;
+      var _dur = isFinite(mediaEl.duration) ? mediaEl.duration : 0;
+      if (_dur <= 0) return;
+      var _t = mediaEl.currentTime || 0;
+      var _pct = Math.max(0, Math.min(100, (_t / _dur) * 100));
+
+      if (fill && (force || Math.abs(_pct - _p0LastHudPct) >= 0.05)) {
+        fill.style.width = _pct + '%';
+        _p0LastHudPct = _pct;
+      }
+
+      var _label = fmt(_t);
+      if (tCur && (force || _label !== _p0LastHudTime)) {
+        tCur.textContent = _label;
+        _p0LastHudTime = _label;
+      }
+
+      if (trimPlayheadEl) {
+        trimPlayheadEl.style.left = _pct + '%';
+      }
+
+      if (typeof updatePlayheadLabel === 'function') {
+        updatePlayheadLabel(_pct / 100);
+      }
+
+      // Round 57/68: frame/timecode overlay + info bar. Keep DOM writes
+      // minimal by only writing when the value actually changes.
+      if (frameCodeDisplay || infoBar) {
+        var _fps = getFps();
+        var _fIdx = Math.max(0, Math.round(_t * _fps));
+        var _fTotal = Math.max(0, Math.round(_dur * _fps));
+        var _tc = _p0FmtTc(_t);
+
+        if (_fcCurEl && (force || _fIdx !== _p0LastFrame)) _fcCurEl.textContent = 'F ' + _fIdx;
+        if (_fcTotalEl && (force || _fTotal !== _p0LastFrameTotal)) _fcTotalEl.textContent = '/ ' + _fTotal;
+        if (_fcTimeEl && (force || _tc !== _p0LastTc)) _fcTimeEl.textContent = _tc;
+
+        if (_ibFcurEl && (force || _fIdx !== _p0LastFrame)) _ibFcurEl.textContent = 'F ' + _fIdx;
+        if (_ibFtotEl && (force || _fTotal !== _p0LastFrameTotal)) _ibFtotEl.textContent = '/ ' + _fTotal;
+        if (_ibTimeEl && (force || _tc !== _p0LastTc)) _ibTimeEl.textContent = _tc;
+        if (_ibFpsEl && (force || _fps !== _p0LastFps)) _ibFpsEl.textContent = _fps + ' fps';
+
+        _p0LastFrame = _fIdx;
+        _p0LastFrameTotal = _fTotal;
+        _p0LastFps = _fps;
+        _p0LastTc = _tc;
+      }
+    }
+
+    function _p0StopRvfc() {
+      if (_p0RvfcId != null && typeof mediaEl.cancelVideoFrameCallback === 'function') {
+        try { mediaEl.cancelVideoFrameCallback(_p0RvfcId); } catch (e) {}
+      }
+      _p0RvfcId = null;
+    }
+
+    function _p0RvfcTick() {
+      _p0RvfcId = null;
+      if (mediaEl.paused || mediaEl.ended) return;
+      _p0UpdatePlaybackHud(false);
+      _p0RvfcId = mediaEl.requestVideoFrameCallback(_p0RvfcTick);
+    }
+
+    function _p0StartRvfc() {
+      if (!_supportsRvfc) return;
+      _p0StopRvfc();
+      _p0UpdatePlaybackHud(true);
+      _p0RvfcId = mediaEl.requestVideoFrameCallback(_p0RvfcTick);
+    }
+
+    // Fallback + non-RVFC browsers path.
     mediaEl.addEventListener('timeupdate', function() {
       if (!mediaEl.duration) return;
       if (seeking) return;
       var now = performance.now();
       if (mediaEl._lastTimeUpdate && now - mediaEl._lastTimeUpdate < 60) return;
       mediaEl._lastTimeUpdate = now;
-      var pct = Math.round(mediaEl.currentTime / mediaEl.duration * 200) / 2;
-      fill.style.width = pct + '%';
-      tCur.textContent = fmt(mediaEl.currentTime);
-      refreshInPlayerTrimUI();
-      // Round 57: keep the cinema-style frame / timecode overlay in sync.
-      // Format F-number from detected FPS and the timecode as m:ss.cc
-      // (centisecond precision — matches what NLEs use). Always show
-      // both regardless of the per-item time/frame toggle, so the
-      // overlay is the single source of truth for the user.
-      if (frameCodeDisplay) {
-        var _fps = getFps();
-        var _dur = isFinite(mediaEl.duration) ? mediaEl.duration : 0;
-        var _fIdx = Math.max(0, Math.round(mediaEl.currentTime * _fps));
-        var _fTotal = Math.max(0, Math.round(_dur * _fps));
-        var _m = Math.floor(mediaEl.currentTime / 60);
-        var _sec = Math.floor(mediaEl.currentTime % 60);
-        var _cs = Math.floor((mediaEl.currentTime - Math.floor(mediaEl.currentTime)) * 100);
-        var _timeStr = _m + ':' + (_sec < 10 ? '0' : '') + _sec + '.' + (_cs < 10 ? '0' : '') + _cs;
-        var _fcCur = frameCodeDisplay.querySelector('.fc-cur');
-        var _fcTotal = frameCodeDisplay.querySelector('.fc-total');
-        var _fcTime = frameCodeDisplay.querySelector('.fc-time');
-        if (_fcCur)   _fcCur.textContent = 'F ' + _fIdx;
-        if (_fcTotal) _fcTotal.textContent = '/ ' + _fTotal;
-        if (_fcTime)  _fcTime.textContent = _timeStr;
-        // Round 68: also update the info bar above the video
-        if (infoBar) {
-          var _ibFcur = infoBar.querySelector('.ib-fcur');
-          var _ibFtot = infoBar.querySelector('.ib-ftot');
-          var _ibTime = infoBar.querySelector('.ib-time');
-          var _ibFps  = infoBar.querySelector('.ib-fps');
-          if (_ibFcur) _ibFcur.textContent = 'F ' + _fIdx;
-          if (_ibFtot) _ibFtot.textContent = '/ ' + _fTotal;
-          if (_ibTime) _ibTime.textContent = _timeStr;
-          if (_ibFps)  _ibFps.textContent = _fps + ' fps';
-        }
-      }
+      _p0UpdatePlaybackHud(false);
+      if (!_supportsRvfc) refreshInPlayerTrimUI();
     });
+    mediaEl.addEventListener('seeked', function() {
+      _p0UpdatePlaybackHud(true);
+      refreshInPlayerTrimUI();
+    });
+    mediaEl.addEventListener('loadedmetadata', function() {
+      _p0UpdatePlaybackHud(true);
+    });
+    mediaEl.addEventListener('play', _p0StartRvfc);
+    mediaEl.addEventListener('pause', _p0StopRvfc);
+    mediaEl.addEventListener('ended', _p0StopRvfc);
 
     // Play / pause button
     btn.addEventListener('mousedown', function(ev) { ev.stopPropagation(); ev.preventDefault(); });
