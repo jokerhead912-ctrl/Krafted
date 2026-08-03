@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.7</title>
+<title>Krafted v6.8.8</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3955,14 +3955,14 @@ body.screen-share-mode #ss-fps {
 
 <!-- ZOOM STEP CONTROL (Round 32) — small floating widget in the bottom-right
      corner next to the status bar. Lets the user pick the mouse-wheel zoom
-     sensitivity on the fly. Slider range: 1% (very gentle) to 50% per tick
-     (very punchy), default 10% (the same as the old hardcoded step).
+     sensitivity on the fly. Slider range: 1% (very gentle) to 15% per tick
+     (practical cap), default 10% (the same as the old hardcoded step).
      Saves to localStorage so the choice persists across reloads. The wheel
      handler reads `state.zoomStep` directly, so changes apply on the next
      wheel event with no reload needed. -->
 <div id="zoom-step-widget">
-  <span class="zs-label" title="Mouse-wheel zoom step (1%–50% per tick)">🎚 Wheel step</span>
-  <input id="zoom-step-slider" type="range" min="1" max="50" step="1" value="10" />
+  <span class="zs-label" title="Mouse-wheel zoom step (1%–15% per tick)">🎚 Wheel step</span>
+  <input id="zoom-step-slider" type="range" min="1" max="15" step="1" value="10" />
   <span id="zoom-step-value">10%</span>
   <button id="btn-reset-view" type="button" title="Frame selected — center the view on selection and zoom to fit (F). With nothing selected, resets to 100% / (0,0).">🎯 Frame</button>
   <label id="natural-scroll-label" title="Natural scroll: flip wheel-zoom direction (Mac default). Does not affect pinch-zoom.">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.7';
+var KRAFTED_VERSION = '6.8.8';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -5100,12 +5100,12 @@ const state = {
   // Direction is INVERTED from before: scroll-down now zooms OUT and
   // scroll-up zooms IN (matches the "push to zoom out, pull to zoom in"
   // mental model from photo editors).
-  // Range: 1.01 (1% per tick, very gentle) to 1.50 (50% per tick, very
-  // punchy). Default 1.10 — same magnitude as the old ±10% step.
+  // Range: 1.01 (1% per tick, very gentle) to 1.15 (15% per tick, practical
+  // cap). Default 1.10 — same magnitude as the old ±10% step.
   zoomStep: (function() {
     try {
       const saved = parseFloat((window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_zoom_step')) || localStorage.getItem('krafted_zoom_step'));
-      if (isFinite(saved) && saved >= 1.01 && saved <= 1.50) return saved;
+      if (isFinite(saved)) return Math.max(1.01, Math.min(1.15, saved));
     } catch (e) {}
     return 1.10;
   })(),
@@ -5446,7 +5446,7 @@ var I18N = (function() {
     'Zoom: 100% | Items: 0 | Undo: 0': '縮放：100% | 項目：0 | 復原：0',
 
     // ── Zoom widget ──
-    'Mouse-wheel zoom step (1%–50% per tick)': '滑鼠滾輪縮放步長 (1%–50%)',
+    'Mouse-wheel zoom step (1%–15% per tick)': '滑鼠滾輪縮放步長 (1%–15%)',
     '🎚 Wheel step': '🎚 滾輪步長',
     'Frame selected — center the view on selection and zoom to fit (F). With nothing selected, resets to 100% / (0,0).': '框選 — 將視圖置中並縮放至適合 (F)',
     '🎯 Frame': '🎯 框選',
@@ -19997,9 +19997,9 @@ viewport.addEventListener('wheel', e => {
     valEl.textContent = initPct + '%';
     slider.addEventListener('input', function(ev){
       const pct = parseInt(ev.target.value, 10) || 10;
-      // Slider value is a percent (1-50); convert to multiplier (1.01-1.50).
+      // Slider value is a percent (1-15); convert to multiplier (1.01-1.15).
       // Clamp to the safe range so a stray value can't teleport the zoom.
-      const s = Math.max(1.01, Math.min(1.50, 1 + pct / 100));
+      const s = Math.max(1.01, Math.min(1.15, 1 + pct / 100));
       state.zoomStep = s;
       // Derive pinch step from wheel step so the two stay in lock-step.
       // Map: pinch coeff = (s - 1) * 0.026 (gives 0.0026 at 1.10,
