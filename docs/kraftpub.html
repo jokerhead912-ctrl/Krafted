@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.3</title>
+<title>Krafted v6.8.4</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.3';
+var KRAFTED_VERSION = '6.8.4';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -5651,6 +5651,8 @@ var I18N = (function() {
     'Paste Ctrl+V': '貼上 Ctrl+V',
     '✓ Alt+Left Pan (Mac trackpad)': '✓ Alt+左鍵平移 (Mac 觸控板)',
     '○ Alt+Left Pan (Mac trackpad)': '○ Alt+左鍵平移 (Mac 觸控板)',
+    '⚙ Wheel: Mouse (zoom)': '⚙ 滾輪：滑鼠（縮放）',
+    '⚙ Wheel: Trackpad (pan)': '⚙ 滾輪：觸控板（平移）',
     'Same Size Ctrl+Alt+↑': '相同大小 Ctrl+Alt+↑',
     'Distribute H': '水平分佈',
     'Distribute V': '垂直分佈',
@@ -18621,6 +18623,7 @@ function showCtx(x, y) {
     html += `<div class="ctx-item" onclick="triggerPaste();hideCtx()">Paste <kbd>Ctrl+V</kbd></div>`;
     html += `<div class="ctx-sep"></div>`;
     html += `<div class="ctx-item" onclick="toggleAltPan();hideCtx()">${state.altPanEnabled ? '✓' : '○'} Alt+Left Pan (Mac trackpad)</div>`;
+    if (Platform.mac) html += `<div class="ctx-item" onclick="cycleWheelMode();hideCtx()" title="Mac only. Auto figures out whether you are using a real mouse wheel or the trackpad.">⚙ Wheel: ${wheelModeLabel()}</div>`;
     html += `<div class="ctx-group">`;
     html += `<div class="ctx-item" onclick="alignItems('left');hideCtx()" title="Align Left">Left</div>`;
     html += `<div class="ctx-item" onclick="alignItems('hcenter');hideCtx()" title="Align Center H">Center</div>`;
@@ -18670,6 +18673,7 @@ function showCtx(x, y) {
     html += `<div class="ctx-item" onclick="showHelp();hideCtx()">Help & Shortcuts <kbd>H</kbd></div>`;
     html += `<div class="ctx-sep"></div>`;
     html += `<div class="ctx-item" onclick="toggleAltPan();hideCtx()">${state.altPanEnabled ? '✓' : '○'} Alt+Left Pan (Mac trackpad)</div>`;
+    if (Platform.mac) html += `<div class="ctx-item" onclick="cycleWheelMode();hideCtx()" title="Mac only. Auto figures out whether you are using a real mouse wheel or the trackpad.">⚙ Wheel: ${wheelModeLabel()}</div>`;
     html += `<div class="ctx-item" onclick="toggleRelations();hideCtx()">🔗 Toggle Relations</div>`;
   }
   ctxMenu.innerHTML = html;
@@ -19165,6 +19169,44 @@ function sanitizeTextHtml(html) {
   return clean;
 }
 
+// v6.8.4: manual override for the wheel-device heuristic.
+//   'auto'     → trust _WheelKind (default)
+//   'mouse'    → always treat the wheel as a physical mouse (zoom)
+//   'trackpad' → always treat it as a trackpad (pan)
+// Persisted like the other input prefs. Mac-only in the UI, since
+// Windows/Linux already report deltaMode correctly.
+state.wheelMode = (function() {
+  try {
+    const saved = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_wheel_mode')) || localStorage.getItem('krafted_wheel_mode');
+    if (saved === 'auto' || saved === 'mouse' || saved === 'trackpad') return saved;
+  } catch (e) {}
+  return 'auto';
+})();
+function wheelModeLabel() {
+  if (state.wheelMode === 'mouse') return 'Mouse (zoom)';
+  if (state.wheelMode === 'trackpad') return 'Trackpad (pan)';
+  return 'Auto — ' + (window._WheelKind ? window._WheelKind.info : 'detecting');
+}
+function cycleWheelMode() {
+  const order = ['auto', 'mouse', 'trackpad'];
+  const i = order.indexOf(state.wheelMode);
+  state.wheelMode = order[(i + 1) % order.length];
+  try {
+    localStorage.setItem('krafted_wheel_mode', state.wheelMode);
+    if (window.KraftedStorage) window.KraftedStorage.setItem('krafted_wheel_mode', state.wheelMode).catch(function(){});
+  } catch (e) {}
+  const msg = state.wheelMode === 'auto'
+    ? 'Wheel: Auto — detects mouse vs trackpad'
+    : state.wheelMode === 'mouse'
+      ? 'Wheel: Mouse — scroll always zooms (Windows-style)'
+      : 'Wheel: Trackpad — scroll always pans';
+  toast(msg);
+}
+if (typeof window !== 'undefined') {
+  window.cycleWheelMode = cycleWheelMode;
+  window.wheelModeLabel = wheelModeLabel;
+}
+
 // Toggle the Alt+Left-drag canvas-pan shortcut (mainly for MacBook trackpads).
 // Persists the choice in localStorage so the user's preference survives reloads.
 function toggleAltPan() {
@@ -19563,6 +19605,131 @@ viewport.addEventListener('pointercancel', e => {
   _refreshTwoFingerPan();
 }, true);
 
+// ═══════════════════════════════════════════════════════════════════
+// v6.8.4 — MOUSE WHEEL vs TRACKPAD DISCRIMINATION (macOS)
+//
+// Problem: on macOS every wheel event has deltaMode === 0 (pixel-based) —
+// an external mouse wheel and a trackpad two-finger swipe look identical
+// to the old check `Platform.mac ? (_twoFingerPan || e.deltaMode === 0)`.
+// So plugging in a mouse made the wheel PAN the canvas instead of zooming,
+// while the same mouse on Windows (deltaMode === 1, line-based) zoomed
+// correctly. This closes that gap so Mac + mouse behaves like Windows.
+//
+// A real mouse wheel and a trackpad differ in several measurable ways:
+//   • deltaY magnitude — a wheel notch is a large fixed-ish jump
+//     (Chrome/macOS reports ±120, Safari ±10 x lines, Firefox ±57...),
+//     whereas trackpad deltas start tiny (±1..3) and ramp with momentum.
+//   • deltaX — two fingers are never perfectly vertical, so a trackpad
+//     swipe almost always carries some horizontal delta. A wheel is
+//     dead-on 0 (unless it's a tilt wheel, handled below).
+//   • quantisation — wheel deltas are integer multiples of one notch;
+//     trackpad deltas are arbitrary sub-pixel floats during momentum.
+//   • cadence — wheel events are sparse (one per notch); trackpad
+//     events stream at display refresh rate.
+//
+// We score these signals over a short rolling window instead of trusting
+// any single event, because the FIRST event of a trackpad flick can look
+// wheel-like and vice versa. Once we're confident, the verdict sticks
+// (with a decay) so mid-gesture flapping can't happen.
+// ═══════════════════════════════════════════════════════════════════
+const _WheelKind = (function() {
+  let verdict = 'unknown';        // 'mouse' | 'trackpad' | 'unknown'
+  let confidence = 0;             // 0..1, decays over time
+  let lastT = 0;
+  let recent = [];                // last few |deltaY| values
+
+  // A wheel "notch" on macOS Chrome is 120; Safari/Firefox use other
+  // constants. Anything at or above this is almost certainly a real notch,
+  // since trackpad momentum rarely produces a single frame this large.
+  const NOTCH_FLOOR = 40;
+  // Trackpad deltas below this are unmistakably finger-driven.
+  const FINGER_CEIL = 8;
+
+  function classify(e) {
+    const now = (e.timeStamp || performance.now());
+    const gap = lastT ? (now - lastT) : 9999;
+    lastT = now;
+
+    const ady = Math.abs(e.deltaY);
+    const adx = Math.abs(e.deltaX);
+
+    // Decay stale confidence — a long pause means the user may have
+    // switched input device (mouse -> trackpad on a laptop at a desk).
+    if (gap > 600) { confidence = 0; verdict = 'unknown'; recent = []; }
+
+    // Hard signals, checked before the rolling window.
+    // deltaMode != 0 is line/page based, which only real wheels report.
+    if (e.deltaMode !== 0) { verdict = 'mouse'; confidence = 1; return verdict; }
+    // Live pointers on the surface = fingers are physically down.
+    if (_twoFingerPan) { verdict = 'trackpad'; confidence = 1; return verdict; }
+
+    recent.push(ady);
+    if (recent.length > 8) recent.shift();
+
+    let score = 0; // positive = mouse, negative = trackpad
+
+    // 1. Magnitude. Big discrete jumps -> wheel. Tiny -> fingers.
+    if (ady >= NOTCH_FLOOR) score += 2;
+    else if (ady > 0 && ady <= FINGER_CEIL) score -= 2;
+
+    // 2. Horizontal component. Real wheels don't drift sideways.
+    //    (A tilt-wheel gives a pure horizontal event with deltaY === 0,
+    //    which we deliberately do NOT penalise.)
+    if (adx > 0.5 && ady > 0.5) score -= 2;
+
+    // 3. Quantisation. Wheel deltas are whole numbers; trackpad
+    //    momentum produces fractions.
+    if (ady > 0 && Number.isInteger(e.deltaY) && ady >= NOTCH_FLOOR) score += 1;
+    if (ady > 0 && !Number.isInteger(e.deltaY)) score -= 1;
+
+    // 4. Cadence. Streaming at frame rate = fingers; sparse = notches.
+    if (gap < 30) score -= 1;
+    else if (gap > 120) score += 1;
+
+    // 5. Consistency. A mouse repeats the SAME magnitude every notch;
+    //    trackpad magnitudes vary continuously as momentum decays.
+    if (recent.length >= 3) {
+      const uniq = new Set(recent.map(v => Math.round(v)));
+      if (uniq.size === 1 && recent[0] >= NOTCH_FLOOR) score += 2;
+      else if (uniq.size >= recent.length - 1) score -= 1;
+    }
+
+    // Fold the score into the running verdict rather than replacing it,
+    // so oneambiguous event can't flip an established decision.
+    if (score > 0) {
+      if (verdict === 'mouse') confidence = Math.min(1, confidence + 0.34);
+      else { verdict = 'mouse'; confidence = 0.34; }
+    } else if (score < 0) {
+      if (verdict === 'trackpad') confidence = Math.min(1, confidence + 0.34);
+      else { verdict = 'trackpad'; confidence = 0.34; }
+    }
+    return verdict;
+  }
+
+  return {
+    classify: classify,
+    // True only when we actively believe a physical wheel is in use.
+    // 'unknown' deliberately returns false so the historical trackpad
+    // behaviour remains the default until proven otherwise.
+    // state.wheelMode ('auto' | 'mouse' | 'trackpad') overrides the
+    // heuristic entirely when the user has pinned it.
+    get isMouse() {
+      const m = (window.state && window.state.wheelMode) || 'auto';
+      if (m === 'mouse') return true;
+      if (m === 'trackpad') return false;
+      return verdict === 'mouse';
+    },
+    get isTrackpad() {
+      const m = (window.state && window.state.wheelMode) || 'auto';
+      if (m === 'trackpad') return true;
+      if (m === 'mouse') return false;
+      return verdict === 'trackpad';
+    },
+    get info() { return verdict + ' (' + Math.round(confidence * 100) + '%)'; },
+  };
+})();
+if (typeof window !== 'undefined') window._WheelKind = _WheelKind;
+
 // SCROLL ZOOM / PAN
 // Wheel direction note: On Mac the OS often delivers mouse-wheel deltaY with the
 // opposite sign convention vs Windows (rolling up = positive deltaY). To match the
@@ -19634,6 +19801,10 @@ viewport.addEventListener('wheel', e => {
   // trackpad touches while clicking).
   if (state.dragging && state.dragging.type === 'move') return;
 
+  // v6.8.4: classify the input device on EVERY wheel event, before any
+  // branching, so the rolling-window heuristic sees the full stream.
+  _WheelKind.classify(e);
+
   // ── Mac Cmd + wheel: zoom (metaKey on Mac, absent on Windows) ──
   if (Platform.mac && e.metaKey) {
     const s = state.zoomStep;
@@ -19644,9 +19815,12 @@ viewport.addEventListener('wheel', e => {
 
   // ── Ctrl + wheel (Windows zoom) / trackpad pinch (Mac pinch) ──
   if (e.ctrlKey) {
-    // (a) Real mouse wheel (deltaMode 1/2) → use zoomStep
-    // (b) Trackpad pinch (deltaMode 0) → use proportional pinchStep
-    if (e.deltaMode !== 0) {
+    // (a) Real mouse wheel → use zoomStep (discrete notch zoom)
+    // (b) Trackpad pinch → use proportional pinchStep
+    // v6.8.4: was `e.deltaMode !== 0`, which never matched on macOS
+    // (everything is pixel-mode there), so a Ctrl+wheel from a real mouse
+    // got the pinch treatment. Now also accepts a positive mouse verdict.
+    if (e.deltaMode !== 0 || _WheelKind.isMouse) {
       const s = state.zoomStep;
       const rawDY = state.naturalScroll ? -e.deltaY : e.deltaY;
       zoomBy(rawDY < 0 ? s : 1 / s, window.innerWidth / 2, window.innerHeight / 2);
@@ -19662,17 +19836,37 @@ viewport.addEventListener('wheel', e => {
       }
     }
   // ── Two-finger trackpad pan ──
-  // Mac: _twoFingerPan OR deltaMode 0 (Mac trackpad swipes)
-  // Win: require BOTH _twoFingerPan AND deltaMode 0 (else high-res
-  //      mouse wheels misroute to pan)
-  } else if (Platform.mac ? (_twoFingerPan || e.deltaMode === 0) : (_twoFingerPan && e.deltaMode === 0)) {
+  // v6.8.4: THE macOS MOUSE FIX.
+  // Old condition: Platform.mac ? (_twoFingerPan || e.deltaMode === 0) : ...
+  // On macOS EVERY wheel event is deltaMode 0, including an external
+  // mouse wheel — so this branch swallowed mouse scrolls and panned the
+  // canvas instead of zooming. Windows was unaffected because mice there
+  // report deltaMode 1.
+  // Now Mac requires that we are NOT confident it's a physical mouse.
+  // Fingers physically on the surface (_twoFingerPan) still always pan,
+  // and an unknown/ambiguous device keeps the historical pan behaviour,
+  // so laptop-only users see no change.
+  } else if (Platform.mac
+      ? (_twoFingerPan || (e.deltaMode === 0 && !_WheelKind.isMouse))
+      : (_twoFingerPan && e.deltaMode === 0)) {
     state.pan.x -= e.deltaX;
     state.pan.y -= e.deltaY;
     updateCanvas();
     if (typeof scheduleVisibleItemsUpdate === 'function') scheduleVisibleItemsUpdate();
     if (typeof updateStatus === 'function') updateStatus();
   } else {
-    // ── Plain mouse wheel zoom ──
+    //── Plain mouse wheel zoom ──
+    // v6.8.4: Shift + wheel = horizontal pan, matching the Windows /
+    // Figma / Photoshop convention. Only applied for a confirmed physical
+    // wheel (or a line-mode event) so a Shift-held trackpad swipe still
+    // pans in both axes as before.
+    if (e.shiftKey && (e.deltaMode !== 0 || _WheelKind.isMouse)) {
+      state.pan.x -= (e.deltaY || e.deltaX);
+      updateCanvas();
+      if (typeof scheduleVisibleItemsUpdate === 'function') scheduleVisibleItemsUpdate();
+      if (typeof updateStatus === 'function') updateStatus();
+      return;
+    }
     const s = state.zoomStep;
     const rawDY = state.naturalScroll ? -e.deltaY : e.deltaY;
     zoomBy(rawDY < 0 ? s : 1 / s, window.innerWidth / 2, window.innerHeight / 2);
