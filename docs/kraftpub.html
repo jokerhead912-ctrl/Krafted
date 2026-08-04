@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.10</title>
+<title>Krafted v6.8.11</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.10';
+var KRAFTED_VERSION = '6.8.11';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -25310,19 +25310,45 @@ function pasteClipboard() {
       pastedCount++;
     } else {
       const textContent = data.content || (data.el ? data.el.textContent : '');
-      const tx = addText(px, py, textContent);
-      Object.assign(tx, {
-        font: data.font, size: data.size, bold: data.bold, italic: data.italic,
-        underline: data.underline, strike: data.strike, highlight: data.highlight,
-        shadow: data.shadow, bg: data.bg, outline: data.outline, uppercase: data.uppercase,
-        color: data.color, highlightColor: data.highlightColor, align: data.align,
+      // v6.8.11: preserve text-box geometry on paste. addText() defaults
+      // to 160x36 and auto-grow rules, which can deform a copied text box
+      // (different wrapping/height) when the source had custom width/height.
+      // Seed initW and disable focus-on-paste, then restore geometry flags.
+      const tx = addText(px, py, textContent, {
+        noFocus: true,
+        initW: (data.w !== undefined ? data.w : undefined),
       });
+      if (data.w !== undefined) tx.w = data.w;
+      if (data.h !== undefined) tx.h = data.h;
+      if (data.rot !== undefined) tx.rot = data.rot;
+      if (data.opacity !== undefined) tx.opacity = data.opacity;
+      if (data.locked !== undefined) tx.locked = data.locked;
+      if (data.userResized !== undefined) tx.userResized = !!data.userResized;
+      if (data._autoGrowLocked !== undefined) tx._autoGrowLocked = !!data._autoGrowLocked;
+
+      if (data.font !== undefined) tx.font = data.font;
+      if (data.size !== undefined) tx.size = data.size;
+      if (data.bold !== undefined) tx.bold = data.bold;
+      if (data.italic !== undefined) tx.italic = data.italic;
+      if (data.underline !== undefined) tx.underline = data.underline;
+      if (data.strike !== undefined) tx.strike = data.strike;
+      if (data.highlight !== undefined) tx.highlight = data.highlight;
+      if (data.shadow !== undefined) tx.shadow = data.shadow;
+      if (data.bg !== undefined) tx.bg = data.bg;
+      if (data.outline !== undefined) tx.outline = data.outline;
+      if (data.uppercase !== undefined) tx.uppercase = data.uppercase;
+      if (data.color !== undefined) tx.color = data.color;
+      if (data.highlightColor !== undefined) tx.highlightColor = data.highlightColor;
+      if (data.align !== undefined) tx.align = data.align;
+
       // v6.1.2: Restore rich HTML if the copy saved innerHTML (e.g.
       // Send-to-Board comments with inline-styled chip+body). Otherwise
       // fall back to plain textContent. Must happen BEFORE applyTextProps
       // so inline styles inside innerHTML take priority over tx.color.
       if (data._innerHTML) {
-        tx.el.innerHTML = data._innerHTML;
+        tx.el.innerHTML = (typeof sanitizeTextHtml === 'function')
+          ? sanitizeTextHtml(data._innerHTML)
+          : data._innerHTML;
       } else if (textContent) {
         tx.el.textContent = textContent;
       }
