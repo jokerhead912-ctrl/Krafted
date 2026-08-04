@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.12</title>
+<title>Krafted v6.8.13</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.12';
+var KRAFTED_VERSION = '6.8.13';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -20109,11 +20109,35 @@ if (_welcomeEl) {
   _welcomeEl.addEventListener('drop', function(e){
     e.preventDefault();
     e.stopPropagation(); // v5.5.3: prevent bubbling to document-level handlers
-    console.log('[FileDrop] Welcome received drop, files:', e.dataTransfer.files.length);
+    const dropped = _collectDroppedFiles(e.dataTransfer);
+    console.log('[FileDrop] Welcome received drop, files:', dropped.length);
     hideWelcome();
-    const files = e.dataTransfer.files;
-    if (files && files.length) _handleFileDrop(e, [...files]);
+    if (dropped.length) _handleFileDrop(e, dropped);
   });
+}
+
+// Collect dropped files from both dataTransfer.files and dataTransfer.items.
+// Some apps (including PowerPoint on certain browser/OS combos) expose
+// dragged slide images only via items/getAsFile while files[] is empty.
+function _collectDroppedFiles(dt) {
+  const out = [];
+  if (!dt) return out;
+  function pushFile(f) {
+    if (!f) return;
+    if (out.indexOf(f) !== -1) return;
+    out.push(f);
+  }
+  if (dt.files && dt.files.length) {
+    for (let i = 0; i < dt.files.length; i++) pushFile(dt.files[i]);
+  }
+  if (dt.items && dt.items.length) {
+    for (let i = 0; i < dt.items.length; i++) {
+      const it = dt.items[i];
+      if (!it || it.kind !== 'file') continue;
+      try { pushFile(it.getAsFile && it.getAsFile()); } catch (err) {}
+    }
+  }
+  return out;
 }
 
 // DRAG & DROP FILES
@@ -20145,10 +20169,10 @@ window.addEventListener('drop', function(e){
   try { console.log('[FileDrop] window capture-phase drop, files:', e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0, 'types:', e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types).join(',') : ''); } catch (err) {}
   e.preventDefault();
   e.stopPropagation();
-  const files = e.dataTransfer && e.dataTransfer.files;
-  if (files && files.length) {
+  const dropped = _collectDroppedFiles(e.dataTransfer);
+  if (dropped.length) {
     try { hideWelcome(); } catch (err) {}
-    try { _handleFileDrop(e, [...files]); } catch (err) { console.warn('[FileDrop] window handler error:', err); }
+    try { _handleFileDrop(e, dropped); } catch (err) { console.warn('[FileDrop] window handler error:', err); }
     return;
   }
   // ── Cross-origin drag: no files, but dataTransfer may have URL ──
@@ -20171,6 +20195,31 @@ window.addEventListener('drop', function(e){
   }
   if (!url) return;
   try { hideWelcome(); } catch (err) {}
+
+  // PowerPoint/Keynote and some office apps may provide a data URL directly
+  // in text/html for a dragged slide preview. Import it directly.
+  if (/^data:image\//i.test(url)) {
+    const img = new Image();
+    img.onload = () => {
+      const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
+      const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
+      addImage(url, dw, dh,
+        (e.clientX - state.pan.x) / state.zoom,
+        (e.clientY - state.pan.y) / state.zoom);
+      toast('Pasted image');
+    };
+    img.onerror = () => toast('Failed to decode dragged slide image');
+    img.src = url;
+    return;
+  }
+
+  // file:// sources from Office drags are commonly blocked by browsers.
+  // Friendly fallback hint: copy the slide in PowerPoint and paste here.
+  if (/^file:\/\//i.test(url)) {
+    toast('Slide drag blocked by browser — use Copy Slide then Paste');
+    return;
+  }
+
   // Fetch real image bytes via CORS proxy → convert to data URL →
   // addImage directly. Data URL is same-origin, zero CORS forever.
   // This is functionally identical to "Copy Image → Paste" but done
@@ -20497,9 +20546,9 @@ viewport.addEventListener('drop', e => {
       return;
     }
   }
-  // Fallback: regular file drop
-  const files = [...e.dataTransfer.files];
-  if (files.length) _handleFileDrop(e, files);
+  // Fallback: regular file drop (files[] + items/getAsFile merge)
+  const dropped = _collectDroppedFiles(e.dataTransfer);
+  if (dropped.length) _handleFileDrop(e, dropped);
 });
 
 
