@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.11</title>
+<title>Krafted v6.8.12</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.11';
+var KRAFTED_VERSION = '6.8.12';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -20579,25 +20579,28 @@ document.addEventListener('paste', e => {
   // case where the user copied a text-item in Krafted, then copied text
   // from another app (WhatsApp, chat) and pastes — the old logic would
   // incorrectly intercept and duplicate the Krafted text-item instead.
-  // v6.1.1: Internal clipboard intercept — one-shot with time guard.
-  // The clipboard is used ONCE, then cleared AND locked out for 800ms
-  // to prevent the same content from re-pasting if the user holds
-  // Ctrl+V (keyboard repeat).
+  // v6.8.12: Internal clipboard intercept should support MULTI-paste.
+  // v6.8.11 consumed state.clipboard after the first Cmd/Ctrl+V, so the
+  // second paste fell back to the system clipboard (which might contain
+  // unrelated/stale HTML/text) and users saw "weird" pasted content.
+  // Keep internal clipboard alive for a short "recent copy" window, and
+  // only throttle ultra-fast key-repeat bursts.
   if (state.clipboard && state.clipboard.length > 0) {
     const now = Date.now();
-    if (state._lastInternalPaste && (now - state._lastInternalPaste) < 800) {
-      // Too soon — likely a keyboard repeat. Fall through to native.
-    } else {
-      const hasInternalMedia = state.clipboard.some(c => c.src || c.isVideo || c.isAudio);
-      // v6.1.1: detect text by content (Krafted text items have no type property)
-      const hasInternalText = state.clipboard.some(c => (c.content || '').trim().length > 0);
-      if (hasInternalMedia || hasInternalText) {
-        e.preventDefault();
-        pasteClipboard();
-        state._lastInternalPaste = now;
-        state.clipboard = null;
-        state.clipboardTime = 0;
-        return;
+    const recentCopy = state.clipboardTime && (now - state.clipboardTime) < 3000;
+    if (recentCopy) {
+      if (state._lastInternalPaste && (now - state._lastInternalPaste) < 220) {
+        // Too soon — likely key-repeat while the key is held down.
+      } else {
+        const hasInternalMedia = state.clipboard.some(c => c.src || c.isVideo || c.isAudio);
+        // Text items in Krafted may not carry type:'text', so detect by content.
+        const hasInternalText = state.clipboard.some(c => (c.content || '').trim().length > 0);
+        if (hasInternalMedia || hasInternalText) {
+          e.preventDefault();
+          pasteClipboard();
+          state._lastInternalPaste = now;
+          return;
+        }
       }
     }
   }
