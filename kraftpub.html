@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.9</title>
+<title>Krafted v6.8.10</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.9';
+var KRAFTED_VERSION = '6.8.10';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -19732,11 +19732,15 @@ const _WheelKind = (function() {
     if (e.deltaMode !== 0) { verdict = 'mouse'; confidence = 1; return verdict; }
     // Live pointers on the surface = fingers are physically down.
     if (_twoFingerPan) { verdict = 'trackpad'; confidence = 1; return verdict; }
-    // v6.8.6: on MacBook trackpads, pointer-count is often unavailable.
-    // A simultaneous non-trivial deltaX+deltaY in pixel-mode is a very
-    // strong two-finger swipe signal, so lock to trackpad immediately.
-    // (A tilt wheel is usually one-axis only, so it won't match this.)
-    if (adx > 0.35 && ady > 0.35) { verdict = 'trackpad'; confidence = 1; return verdict; }
+    // v6.8.10: on some external mice, macOS can report a tiny non-zero
+    // deltaX together with deltaY during wheel scroll. Requiring only
+    // "both axes > 0.35" was too aggressive and could false-lock to
+    // trackpad, causing zoom events to be routed as pan intermittently.
+    // Keep this as a HARD trackpad signal only when X drift is actually
+    // substantial (absolute) or significant relative to Y.
+    if (adx > 0.35 && ady > 0.35 && (adx >= 1.2 || adx >= ady * 0.18)) {
+      verdict = 'trackpad'; confidence = 1; return verdict;
+    }
 
     recent.push(ady);
     if (recent.length > 8) recent.shift();
@@ -19942,16 +19946,20 @@ viewport.addEventListener('wheel', e => {
   // mouse wheel — so this branch swallowed mouse scrolls and panned the
   // canvas instead of zooming. Windows was unaffected because mice there
   // report deltaMode 1.
-  // Now Mac requires that we are NOT confident it's a physical mouse.
-  // Fingers physically on the surface (_twoFingerPan) still always pan,
-  // and an unknown/ambiguous device keeps the historical pan behaviour,
-  // so laptop-only users see no change.
-  // v6.8.6: also treat pixel-mode + noticeable horizontal drift as
-  // trackpad-pan on Mac, even if the classifier is temporarily stale.
-  // This makes two-finger move reliably pan; pinch (ctrlKey branch above)
-  // is the only zoom path for trackpad gestures.
+  // On Mac, pan path should be explicit trackpad intent. Using
+  // "not-mouse" as a broad condition can let noisy wheel streams
+  // (tiny incidental deltaX) leak into pan and cause visible up/down
+  // jitter during wheel zoom out on some devices.
+  // v6.8.10:
+  // - keep physical two-finger signal as strongest pan trigger
+  // - prefer classifier's positive trackpad verdict
+  // - keep a narrow fallback for unknown+pixel mode only when X drift is
+  //   genuinely non-trivial (not tiny wheel noise)
   } else if (Platform.mac
-      ? (_twoFingerPan || (e.deltaMode === 0 && (!_WheelKind.isMouse || Math.abs(e.deltaX) > 0.35)))
+      ? (_twoFingerPan || (e.deltaMode === 0 && (
+          _WheelKind.isTrackpad ||
+          (!_WheelKind.isMouse && Math.abs(e.deltaX) > 0.35 && (Math.abs(e.deltaX) >= 1.2 || Math.abs(e.deltaX) >= Math.abs(e.deltaY) * 0.18))
+        )))
       : (_twoFingerPan && e.deltaMode === 0)) {
     state.pan.x -= e.deltaX;
     state.pan.y -= e.deltaY;
