@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.13</title>
+<title>Krafted v6.8.14</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.13';
+var KRAFTED_VERSION = '6.8.14';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -20140,6 +20140,90 @@ function _collectDroppedFiles(dt) {
   return out;
 }
 
+function _normalizeDraggedUrl(raw) {
+  let s = String(raw || '').trim();
+  if (!s) return '';
+  s = s.replace(/^['"]+|['"]+$/g, '');
+  s = s.replace(/&amp;/gi, '&');
+  // Some Office payloads provide Windows paths directly (C:\\...)
+  if (/^[A-Za-z]:[\\/]/.test(s)) {
+    s = 'file:///' + s.replace(/\\/g, '/');
+  }
+  // Some payloads provide malformed file URLs with backslashes.
+  if (/^file:\/\//i.test(s) && s.indexOf('\\') !== -1) {
+    s = s.replace(/\\/g, '/');
+  }
+  // Encode spaces in file URLs so Image() can decode more reliably.
+  if (/^file:\/\//i.test(s) && s.indexOf(' ') !== -1) {
+    s = s.replace(/ /g, '%20');
+  }
+  return s;
+}
+
+function _extractDroppedUrl(dt) {
+  if (!dt || !dt.getData) return '';
+  const candidates = [];
+
+  const uriList = dt.getData('text/uri-list');
+  if (uriList) {
+    uriList
+      .split(/\r?\n/)
+      .map(s => s.trim())
+      .filter(s => s && !s.startsWith('#'))
+      .forEach(s => candidates.push(s));
+  }
+
+  const plain = dt.getData('text/plain') || dt.getData('text/x-moz-url');
+  if (plain) {
+    plain
+      .split(/\r?\n/)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .forEach(s => {
+        if (/^(https?:|data:image\/|file:\/\/)/i.test(s) || /^[A-Za-z]:[\\/]/.test(s)) {
+          candidates.push(s);
+        }
+      });
+  }
+
+  const html = dt.getData('text/html');
+  if (html) {
+    const imgRe = /<img[^>]+src\s*=\s*["']([^"']+)["']/ig;
+    let m;
+    while ((m = imgRe.exec(html))) candidates.push(m[1]);
+
+    const cssUrlRe = /url\((['"]?)([^'")]+)\1\)/ig;
+    while ((m = cssUrlRe.exec(html))) candidates.push(m[2]);
+  }
+
+  const rtf = dt.getData('text/rtf');
+  if (rtf) {
+    const mm = rtf.match(/(?:INCLUDEPICTURE|HYPERLINK)\s+"([^"]+)"/i);
+    if (mm && mm[1]) candidates.push(mm[1]);
+  }
+
+  for (let i = 0; i < candidates.length; i++) {
+    const u = _normalizeDraggedUrl(candidates[i]);
+    if (!u) continue;
+    if (/^(https?:|data:image\/|file:\/\/)/i.test(u)) return u;
+  }
+  return '';
+}
+
+function _importDraggedImageUrl(url, e, errorMsg) {
+  const img = new Image();
+  img.onload = () => {
+    const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
+    const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
+    addImage(url, dw, dh,
+      (e.clientX - state.pan.x) / state.zoom,
+      (e.clientY - state.pan.y) / state.zoom);
+    toast('Pasted image');
+  };
+  img.onerror = () => toast(errorMsg || 'Failed to decode dragged slide image');
+  img.src = url;
+}
+
 // DRAG & DROP FILES
 // v5.5.3: GLOBAL capture-phase listeners on window. This is the LAST
 // line of defense — if for any reason the welcome/viewport listeners
@@ -20178,45 +20262,22 @@ window.addEventListener('drop', function(e){
   // ── Cross-origin drag: no files, but dataTransfer may have URL ──
   const dt = e.dataTransfer;
   if (!dt) return;
-  let url = null;
-  if (dt.getData) {
-    const uriList = dt.getData('text/uri-list');
-    if (uriList) {
-      const lines = uriList.split(/\r?\n/).map(s => s.trim()).filter(s => s && !s.startsWith('#'));
-      if (lines.length) url = lines[0];
-    }
-    if (!url) {
-      const html = dt.getData('text/html');
-      if (html) {
-        const m = html.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
-        if (m) url = m[1];
-      }
-    }
-  }
+  const url = _extractDroppedUrl(dt);
   if (!url) return;
   try { hideWelcome(); } catch (err) {}
 
   // PowerPoint/Keynote and some office apps may provide a data URL directly
   // in text/html for a dragged slide preview. Import it directly.
   if (/^data:image\//i.test(url)) {
-    const img = new Image();
-    img.onload = () => {
-      const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
-      const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
-      addImage(url, dw, dh,
-        (e.clientX - state.pan.x) / state.zoom,
-        (e.clientY - state.pan.y) / state.zoom);
-      toast('Pasted image');
-    };
-    img.onerror = () => toast('Failed to decode dragged slide image');
-    img.src = url;
+    _importDraggedImageUrl(url, e);
     return;
   }
 
-  // file:// sources from Office drags are commonly blocked by browsers.
-  // Friendly fallback hint: copy the slide in PowerPoint and paste here.
+  // On Windows, Office slide drags may expose only file:// URLs for the
+  // rendered full-page slide image. Try importing directly first; if browser
+  // policy blocks it, show a clear fallback hint.
   if (/^file:\/\//i.test(url)) {
-    toast('Slide drag blocked by browser — use Copy Slide then Paste');
+    _importDraggedImageUrl(url, e, 'Slide drag blocked by browser — use Copy Slide then Paste');
     return;
   }
 
@@ -20447,9 +20508,12 @@ function _handleFileDrop(e, files) {
   const videoFiles = [];
   const audioFiles = [];
   files.forEach((file, idx) => {
-    const isVideo = file.type.startsWith('video/');
-    const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|aiff|aif|flac|ogg|m4a)$/i.test(file.name);
-    if (!file.type.startsWith('image/') && !isVideo && !isAudio) return;
+    const ft = (file.type || '').toLowerCase();
+    const fn = (file.name || '').toLowerCase();
+    const isImage = ft.startsWith('image/') || (!ft && /\.(png|jpe?g|gif|webp|bmp|svg|tiff|tif|ico|avif|heic)$/i.test(fn));
+    const isVideo = ft.startsWith('video/') || (!ft && /\.(mp4|webm|ogv|mov|avi|mkv|wmv|flv)$/i.test(fn));
+    const isAudio = ft.startsWith('audio/') || /\.(mp3|wav|aiff|aif|flac|ogg|m4a)$/i.test(fn);
+    if (!isImage && !isVideo && !isAudio) return;
     if (isVideo) videoFiles.push({ file, idx });
     else if (isAudio) audioFiles.push({ file, idx });
     else imageFiles.push({ file, idx });
