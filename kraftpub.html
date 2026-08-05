@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.22</title>
+<title>Krafted v6.8.23</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4026,7 +4026,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.22';
+var KRAFTED_VERSION = '6.8.23';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -23216,6 +23216,26 @@ document.addEventListener('mouseup', e => {
       return;
     }
     if (state.dragging.type === 'move') {
+      // v6.8.23: cancel micro-moves (< 3 CSS-px from drag start) as
+      // a no-op. A plain click used to leave a 1-2px drift on the
+      // item's stored x/y, because the mousedown handler arms a move
+      // drag for *every* click on an item, and any mouse jitter
+      // between mousedown and mouseup wrote into item.x/y via the
+      // mousemove handler. The previous cleanup just deleted _orig
+      // and accepted whatever shift mousemove had already applied.
+      // Threshold of 3px matches the standard Figma / Sketch
+      // click-vs-drag separation, and is small enough that any
+      // intentional drag still feels instant.
+      var _startMX = state.dragging.startX;
+      var _startMY = state.dragging.startY;
+      var _drift = Math.max(Math.abs(e.clientX - _startMX), Math.abs(e.clientY - _startMY));
+      if (_drift < 3) {
+        var _restoreItems = state.dragging._toMoveCache || new Set(getSelectedItems());
+        _restoreItems.forEach(function(it) {
+          if (it._origX !== undefined) { it.x = it._origX; }
+          if (it._origY !== undefined) { it.y = it._origY; }
+        });
+      }
       // Restore video after drag: restore poster, resume playback, show anno canvas
       var _movedItems = state.dragging._toMoveCache || new Set(getSelectedItems());
       _movedItems.forEach(function(it) {
@@ -31219,7 +31239,12 @@ function serializeBoard() {
       return d;
     }),
     texts: state.texts.map(t => {
-      if (typeof console !== 'undefined') console.log('[SAVE-TEXT] id=' + t.id + ' w=' + t.w + ' h=' + t.h + ' size=' + t.size + ' zoom=' + state.zoom);
+      // v6.8.23: removed per-item per-save [SAVE-TEXT] log. It fired for
+      // every text on every autosave (e.g. 5 texts × 5 saves = 25 lines
+      // per second of interaction) and drowned the console without ever
+      // catching a real bug — the values are deterministic given the
+      // live state. If you need a one-off dump for debugging, call
+      // window.__kraftedDumpTexts() in the console.
       return {
         id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z,
         font: t.font, size: t.size, bold: t.bold, italic: t.italic,
