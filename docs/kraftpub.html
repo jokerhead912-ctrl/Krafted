@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.25</title>
+<title>Krafted v6.8.26</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4026,7 +4026,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.25';
+var KRAFTED_VERSION = '6.8.26';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4313,6 +4313,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var manifest = K.createEmptyManifest();
     manifest.canvas = { width: 1920, height: 1080, backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim() || '#1a1a1a' };
     manifest.viewport = { zoom: state.zoom || 1.0, panX: (state.pan || { x: 0, y: 0 }).x || 0, panY: (state.pan || { x: 0, y: 0 }).y || 0 };
+    manifest._textWorld = true; // v6.8.26: texts saved in world coords
     if (paperState && paperState.enabled) { manifest.canvas.width = paperState.width || 1920; manifest.canvas.height = paperState.height || 1080; manifest.canvas.backgroundColor = paperState.color || '#1a1a1a'; }
     var items = state.items || [];
     for (var i = 0; i < items.length; i++) {
@@ -4330,7 +4331,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       manifest.nodes.push(node);
     }
     var texts = state.texts || [];
-    for (var j = 0; j < texts.length; j++) { var t = texts[j]; if (typeof console !== 'undefined') console.log('[SAVE-TEXT] id=' + t.id + ' w=' + t.w + ' h=' + t.h + ' size=' + t.size + ' zoom=' + state.zoom); manifest.texts.push({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, highlightColor: t.highlightColor, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: 1 }); }
+    for (var j = 0; j < texts.length; j++) { var t = texts[j]; manifest.texts.push({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, highlightColor: t.highlightColor, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: 1 }); }
     manifest.drawStrokes = (window.G && window.G.drawStrokes) || [];
     manifest.todos = (state.todos || []).map(function(td) { return { id: td.id, x: td.x, y: td.y, w: td.w, h: td.h, z: td.z, rot: td.rot || 0, opacity: td.opacity !== undefined ? td.opacity : 1, locked: td.locked || false, title: td.title || '', items: (td.items || []).map(function(it) { return { text: it.text, done: it.done }; }) }; });
     manifest.mindmaps = (state.mindmaps || []).map(function(mm) { return { id: mm.id, x: mm.x, y: mm.y, w: mm.w, h: mm.h, z: mm.z, rot: mm.rot || 0, opacity: mm.opacity !== undefined ? mm.opacity : 1, locked: mm.locked || false, title: mm.title || '', nodes: (mm.nodes || []).map(function(nn) { return { id: nn.id, text: nn.text, x: nn.x, y: nn.y, w: nn.w, h: nn.h, color: nn.color, textColor: nn.textColor, parentId: nn.parentId || null, img: nn.img || null, imgW: nn.imgW || 0, imgH: nn.imgH || 0, audio: nn.audio || null, audioName: nn.audioName || null }; }), connections: (mm.connections || []).map(function(c) { return { id: c.id, from: c.from, to: c.to, color: c.color }; }), nextNodeId: mm.nextNodeId || 1, nextConnId: mm.nextConnId || 1 }; });
@@ -4355,7 +4356,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   }
 
   function manifestToV4Restore(manifest) {
-    var data = { _kraftedVersion: 4, items: [], texts: [], drawStrokes: manifest.drawStrokes || [], groups: [], nextId: manifest.counter ? manifest.counter.nextId : 1, nextZ: manifest.counter ? manifest.counter.nextZ : 1, nextStrokeId: manifest.counter ? manifest.counter.nextStrokeId : 1, nextGroupId: manifest.counter ? manifest.counter.nextGroupId : 1, pan: { x: (manifest.viewport || {}).panX || 0, y: (manifest.viewport || {}).panY || 0 }, zoom: (manifest.viewport || {}).zoom || 1.0, paper: { enabled: (manifest.paper || {}).enabled || false, autoFit: (manifest.paper || {}).autoFit !== false, width: (manifest.paper || {}).width || (manifest.canvas || {}).width || 1920, height: (manifest.paper || {}).height || (manifest.canvas || {}).height || 1080, color: (manifest.paper || {}).color || (manifest.canvas || {}).backgroundColor || '#1a1a1a' }, canvasBg: manifest.canvasBg || (manifest.canvas || {}).backgroundColor || '#1a1a1a' };
+    var data = { _kraftedVersion: 4, _textWorld: manifest._textWorld || false, items: [], texts: [], drawStrokes: manifest.drawStrokes || [], groups: [], nextId: manifest.counter ? manifest.counter.nextId : 1, nextZ: manifest.counter ? manifest.counter.nextZ : 1, nextStrokeId: manifest.counter ? manifest.counter.nextStrokeId : 1, nextGroupId: manifest.counter ? manifest.counter.nextGroupId : 1, pan: { x: (manifest.viewport || {}).panX || 0, y: (manifest.viewport || {}).panY || 0 }, zoom: (manifest.viewport || {}).zoom || 1.0, paper: { enabled: (manifest.paper || {}).enabled || false, autoFit: (manifest.paper || {}).autoFit !== false, width: (manifest.paper || {}).width || (manifest.canvas || {}).width || 1920, height: (manifest.paper || {}).height || (manifest.canvas || {}).height || 1080, color: (manifest.paper || {}).color || (manifest.canvas || {}).backgroundColor || '#1a1a1a' }, canvasBg: manifest.canvasBg || (manifest.canvas || {}).backgroundColor || '#1a1a1a' };
     var nodes = manifest.nodes || [];
     for (var i = 0; i < nodes.length; i++) {
       var n = nodes[i];
@@ -6504,15 +6505,11 @@ function updateCanvas() {
   // Viewport culling: hide/freeze items outside visible area to keep framerate high.
   // Triggered on every pan/zoom. Cheap: just one rectangle-vs-rect test per item.
   cullOffscreenItems();
-  // v6.8.25: re-render text items when zoom changes. Text W/H/size are
-  // stored as on-screen px (zoom=100%) and their inline CSS width is
-  // (stored / zoom). If we don't re-render after a zoom change, the
-  // inline width is stale and the .text-handles container (re-created
-  // on selection) mismatches the visible text box.
-  if (state.zoom !== _lastAppliedZoom) {
-    _lastAppliedZoom = state.zoom;
-    _syncTextItemsForZoom();
-  }
+  // v6.8.26: text items are world-coord now, so the canvas transform
+  // scales them with everything else — no per-zoom re-render needed.
+  // (The v6.8.25 _syncTextItemsForZoom approach kept text at constant
+  // on-screen size, which was wrong: the user expects text to shrink
+  // when zooming out, exactly like images.)
   // Round 52: keep the floating "draw panel" (.media-anno-toolbar) and the
   // "frame comment panel" (.media-anno-popover.list) glued to the video as
   // the canvas zooms. Both are appended to <body> at position: fixed and
@@ -6522,28 +6519,6 @@ function updateCanvas() {
   // and the iteration is O(items) — fine for typical boards (1-3 vids).
   repositionAllAnnoToolbars();
   repositionAllAnnoPopovers();
-}
-
-// v6.8.25: lightweight text-item style sync for zoom changes.
-// Only updates the zoom-dependent CSS properties (width, height, fontSize,
-// handle container) — no full updateItemStyle/applyTextProps re-render.
-// This keeps the on-screen size of text boxes constant as the user zooms,
-// matching the Round-54 convention (tx.w/tx.h/tx.size are on-screen px).
-let _lastAppliedZoom = (typeof state !== 'undefined' && state.zoom) || 1;
-function _syncTextItemsForZoom() {
-  const _tz = Math.max(0.02, Math.min(10, state.zoom || 1));
-  state.texts.forEach(tx => {
-    const el = tx.el;
-    if (!el || !el.isConnected) return;
-    if (tx.w !== undefined) el.style.width = (tx.w / _tz) + 'px';
-    if (tx.h !== undefined) el.style.height = (tx.h / _tz) + 'px';
-    if (tx.size !== undefined) el.style.fontSize = (tx.size / _tz) + 'px';
-    const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
-    if (hCont) {
-      hCont.style.width = (tx.w / _tz) + 'px';
-      hCont.style.height = (tx.h / _tz) + 'px';
-    }
-  });
 }
 
 // ============================================================
@@ -7439,13 +7414,12 @@ function addTextHandles(tx) {
     hCont.dataset.owner = tx.id;
     tx.el.parentElement.appendChild(hCont);
   }
-  // Round 54: tx.w/tx.h are on-screen. Divide by zoom so the handle
-  // container's visual size (canvas scales by zoom) matches the text box.
-  const _tz = Math.max(0.02, Math.min(10, state.zoom || 1));
+  // v6.8.26: tx.w/tx.h are world px — the handle container lives inside
+  // the canvas (scaled by the same transform), so no zoom division.
   hCont.style.left = tx.x + 'px';
   hCont.style.top = tx.y + 'px';
-  hCont.style.width = (tx.w / _tz) + 'px';
-  hCont.style.height = (tx.h / _tz) + 'px';
+  hCont.style.width = tx.w + 'px';
+  hCont.style.height = tx.h + 'px';
   hCont.style.zIndex = tx.z || 1;
   handles.forEach(h => {
     const el = document.createElement('div');
@@ -7687,14 +7661,14 @@ function tidySelection() {
       // Update connectors and DOM position
       try { mmUpdateConnectors(si.item); } catch (e) {}
     } else if (si.isText) {
-      // Text items: x/y are world coords, w/h are screen pixels (CSS-px)
+      // v6.8.26: text items are world-coord now — x/y/w/h all world px.
       // v6.6.0: Tidy may resize text items. Sync font size proportionally
       // so the visual result matches the new dimensions.
       var _oldW = si.item.w || 160;
       si.item.x = finalX;
       si.item.y = finalY;
-      si.item.w = si._newW * _z;  // convert world-coord width back to screen pixels
-      si.item.h = si._newH * _z;
+      si.item.w = si._newW;
+      si.item.h = si._newH;
       if (_oldW > 0 && si.item.w !== _oldW) {
         si.item.size = (si.item.size || 24) * (si.item.w / _oldW);
       }
@@ -7721,11 +7695,10 @@ function tidySelection() {
       try {
         var hCont = si.item.el.parentElement.querySelector('.text-handles[data-owner="' + si.item.id + '"]');
         if (hCont) {
-          var tz2 = Math.max(0.02, Math.min(10, state.zoom || 1));
           hCont.style.left = si.item.x + 'px';
           hCont.style.top = si.item.y + 'px';
-          hCont.style.width = (si.item.w / tz2) + 'px';
-          hCont.style.height = (si.item.h / tz2) + 'px';
+          hCont.style.width = si.item.w + 'px';
+          hCont.style.height = si.item.h + 'px';
         }
       } catch (e) {}
     }
@@ -8469,12 +8442,10 @@ function addText(x, y, initialText, opts) {
     id: G.nextId++, el,
     x: x !== undefined ? x : (window.innerWidth/2 - 100 - state.pan.x) / state.zoom,
     y: y !== undefined ? y : (window.innerHeight/2 - 24 - state.pan.y) / state.zoom,
-    // Round 54: text box W/H and font size are stored as on-screen
-    // (CSS-pixel) values, NOT world coords. Live rendering divides by
-    // current zoom in applyTextProps/updateItemStyle, so the box and
-    // text always look the same on-screen size regardless of zoom.
-    // Old items in localStorage use the same convention, so no
-    // migration is needed.
+    // v6.8.26: text box W/H and font size are WORLD coords, same as
+    // every other item type. The canvas transform scales them on screen —
+    // zooming out shrinks text (Figma/Miro behavior). Old on-screen-px
+    // files are converted at load time in restoreBoard (_textWorld marker).
     // opts.initW still wins (used by paste/undo paths).
     w: (opts && opts.initW) ? opts.initW : 160, h: 36, z: G.nextZ++,
     font: textTool.font, size: textTool.size || 24,
@@ -8501,20 +8472,19 @@ function addText(x, y, initialText, opts) {
 function autoGrowTextItem(tx) {
   const el = tx.el;
   if (!el || !el.isConnected) return;
-  // Round 54: tx.w/tx.h/tx.size are on-screen (CSS-px at zoom 100%).
-  // The canvas is `transform: scale(zoom)`, so we set the element's
-  // CSS width/height to (on-screen / zoom) for the actual rendering.
-  // scrollHeight/scrollWidth return CSS pixels, so we multiply by zoom
-  // to get back to on-screen units for the stored value.
-  const _tz = Math.max(0.02, Math.min(10, state.zoom || 1));
+  // v6.8.26: tx.w/tx.h/tx.size are WORLD px. The element's inline CSS
+  // width IS tx.w (canvas transform handles zoom scaling), and
+  // scrollHeight/scrollWidth are measured directly in world units —
+  // no zoom conversion anywhere.
 
   const origW = el.style.width;
   const origH = el.style.height;
   const origMinW = el.style.minWidth;
   // v6.8.24: CSS classes (.text-item min-width:80px, .editing min-width:100px)
-  // override the inline width we set during measurement at non-100% zoom,
-  // causing scrollHeight to be read at the wrong computed width. Temporarily
-  // zero out min-width so measurements are taken at the exact intended width.
+  // can override the inline width we set during measurement (e.g. a small
+  // box in editing mode), causing scrollHeight to be read at the wrong
+  // computed width. Temporarily zero out min-width so measurements are
+  // taken at the exact intended width.
   if (origMinW) el.style.minWidth = '0';
   try {
 
@@ -8524,11 +8494,11 @@ function autoGrowTextItem(tx) {
   // starts typing.
   const lockWidth = (tx.userResized || tx._autoGrowLocked) && tx.w;
   if (lockWidth) {
-    el.style.width = (tx.w / _tz) + 'px';
+    el.style.width = tx.w + 'px';
     el.style.height = 'auto';
-    const finalH = el.scrollHeight; // CSS pixels
-    const padH = 12;                // on-screen pixels of padding
-    const newH = Math.max(32, finalH * _tz + padH);
+    const finalH = el.scrollHeight; // world px
+    const padH = 12;                // world px of padding
+    const newH = Math.max(32, finalH + padH);
     if (tx.h === newH) {
       el.style.width = origW;
       el.style.height = origH;
@@ -8537,7 +8507,7 @@ function autoGrowTextItem(tx) {
     tx.h = newH;
     updateItemStyle(tx);
     const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
-    if (hCont) { hCont.style.width = (tx.w / _tz) + 'px'; hCont.style.height = (newH / _tz) + 'px'; }
+    if (hCont) { hCont.style.width = tx.w + 'px'; hCont.style.height = newH + 'px'; }
     updateAutoFitPaper();
     return;
   }
@@ -8547,11 +8517,11 @@ function autoGrowTextItem(tx) {
   // the text wraps. This prevents the box from ballooning wider the
   // moment the user starts typing a long line.
   if (tx.w) {
-    el.style.width = (tx.w / _tz) + 'px';
+    el.style.width = tx.w + 'px';
     el.style.height = 'auto';
-    const finalH = el.scrollHeight; // CSS pixels
-    const padH = 12;                // on-screen pixels of padding
-    const newH = Math.max(32, finalH * _tz + padH);
+    const finalH = el.scrollHeight; // world px
+    const padH = 12;                // world px of padding
+    const newH = Math.max(32, finalH + padH);
     if (tx.h === newH) {
       el.style.width = origW;
       el.style.height = origH;
@@ -8560,7 +8530,7 @@ function autoGrowTextItem(tx) {
     tx.h = newH;
     updateItemStyle(tx);
     const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
-    if (hCont) { hCont.style.width = (tx.w / _tz) + 'px'; hCont.style.height = (newH / _tz) + 'px'; }
+    if (hCont) { hCont.style.width = tx.w + 'px'; hCont.style.height = newH + 'px'; }
     updateAutoFitPaper();
     // Lock future auto-grows to the same width so the box stays small
     // even as the user types more.
@@ -8569,22 +8539,20 @@ function autoGrowTextItem(tx) {
   }
 
   // Fallback: measure at maxW and shrink to fit (original behavior)
-  const maxW = 520; // CSS pixels
-  const minW = 120; // CSS pixels
+  const maxW = 520; // world px
+  const minW = 120; // world px
   el.style.width = maxW + 'px';
   el.style.height = 'auto';
   const naturalH = el.scrollHeight;
-  const contentW = el.scrollWidth; // CSS pixels
-  const padW = 28;                 // on-screen pixels of horizontal padding
-  // Convert content width to on-screen, add padW, then clamp
-  const contentWOS = contentW * _tz;
-  const targetWOS = Math.min(maxW, Math.max(minW, contentWOS + padW));
-  el.style.width = (targetWOS / _tz) + 'px';
+  const contentW = el.scrollWidth; // world px
+  const padW = 28;                 // world px of horizontal padding
+  const targetWOS = Math.min(maxW, Math.max(minW, contentW + padW));
+  el.style.width = targetWOS + 'px';
   el.style.height = 'auto';
   const finalH = el.scrollHeight;
   const padH = 12;
   const newW = targetWOS;
-  const newH = Math.max(32, finalH * _tz + padH);
+  const newH = Math.max(32, finalH + padH);
   if (tx.w === newW && tx.h === newH) {
     el.style.width = origW;
     el.style.height = origH;
@@ -8594,7 +8562,7 @@ function autoGrowTextItem(tx) {
   tx.h = newH;
   updateItemStyle(tx);
   const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
-  if (hCont) { hCont.style.width = (newW / _tz) + 'px'; hCont.style.height = (newH / _tz) + 'px'; }
+  if (hCont) { hCont.style.width = newW + 'px'; hCont.style.height = newH + 'px'; }
   updateAutoFitPaper();
   } finally { el.style.minWidth = origMinW; }
 }
@@ -8615,13 +8583,15 @@ function updateItemStyle(item, lightweight) {
     if (item.isAudio) _applyAudioItemUiScale(item);
     return;
   }
-  // Round 54: text items store W/H as on-screen (CSS-px) values. The
-  // canvas is `transform: scale(zoom)`, so to make the on-screen box
-  // match tx.w/tx.h, we set CSS width/height to (tx.w / zoom). All
-  // other item types still use world coords (their on-screen size
-  // is intentionally scaled by the canvas zoom, like images/videos).
+  // v6.8.26: text items now use WORLD coordinates like every other item
+  // type (tx.w/tx.h/tx.size are world px; the canvas transform scales them
+  // on screen). Previously they were stored as on-screen px and divided by
+  // zoom at render time — but updateCanvas() never re-rendered them on zoom
+  // change, so the stored convention and the rendered result disagreed,
+  // causing handle/textbox mismatch after zooming. World coords make zoom
+  // "just work" via the canvas scale, same as images/videos.
   const isTextItem = el.classList.contains('text-item');
-  const _tz = isTextItem ? Math.max(0.02, Math.min(10, state.zoom || 1)) : 1;
+  const _tz = 1;
   if (item.w !== undefined) el.style.width = (item.w / _tz) + 'px';
   // Video/GIF items (.has-media): total height = video height + 54px
   // (24px info bar + 30px controls bar). Round 68: added info bar height.
@@ -8709,12 +8679,10 @@ function updateItemStyle(item, lightweight) {
 function applyTextProps(tx) {
   const el = tx.el;
   el.style.fontFamily = tx.font;
-  // Round 54: tx.size is on-screen px. Divide by current zoom so the
-  // canvas's transform: scale(zoom) brings it back to the expected
-  // on-screen size. Old items in localStorage use the same on-screen
-  // convention, so no migration is needed.
-  const _tz = Math.max(0.02, Math.min(10, state.zoom || 1));
-  el.style.fontSize = (tx.size / _tz) + 'px';
+  // v6.8.26: tx.size is WORLD px. The canvas transform scales it on
+  // screen, same as images — zooming out shrinks text, zooming in
+  // enlarges it. No zoom division needed.
+  el.style.fontSize = tx.size + 'px';
   el.style.fontWeight = tx.bold ? 'bold' : 'normal';
   el.style.fontStyle = tx.italic ? 'italic' : 'normal';
   el.style.textDecoration = [tx.underline ? 'underline' : '', tx.strike ? 'line-through' : ''].filter(Boolean).join(' ') || 'none';
@@ -15791,8 +15759,8 @@ function autoFitTextItem(tx, opts) {
   opts = opts || {};
   const minW = opts.minW != null ? opts.minW : 80;
   const maxW = opts.maxW != null ? opts.maxW : 400;
-  const padAdj = opts.padAdj != null ? opts.padAdj : 4;   // breathing room in on-screen px
-  const _tz = Math.max(0.02, Math.min(10, state.zoom || 1));
+  const padAdj = opts.padAdj != null ? opts.padAdj : 4;   // breathing room in world px
+  // v6.8.26: world coords — no zoom conversion needed anywhere.
   const el = tx.el;
   if (!el || !el.isConnected) return;
   // Save originals so we can restore on no-op (mirrors autoGrowTextItem)
@@ -15800,19 +15768,19 @@ function autoFitTextItem(tx, opts) {
   const origH = el.style.height;
   // Step 1 — lay out at maxW so the content can use the full allowed
   // column. height:auto lets scrollHeight reflect natural wrap.
-  el.style.width = (maxW / _tz) + 'px';
+  el.style.width = maxW + 'px';
   el.style.height = 'auto';
   void el.offsetWidth;  // force reflow
   // Step 2 — read natural width (longest line). scrollWidth includes
   // padding (4px 10px from .text-item CSS) so add a tiny breathing
   // room to avoid clipping descenders.
-  const naturalWOS = el.scrollWidth * _tz;
+  const naturalWOS = el.scrollWidth;
   const finalWOS = Math.max(minW, Math.min(maxW, Math.ceil(naturalWOS + padAdj)));
   // Step 3 — re-render at the chosen width to measure wrap height
-  el.style.width = (finalWOS / _tz) + 'px';
+  el.style.width = finalWOS + 'px';
   el.style.height = 'auto';
   void el.offsetWidth;
-  const naturalHOS = el.scrollHeight * _tz;
+  const naturalHOS = el.scrollHeight;
   const finalHOS = Math.max(20, Math.ceil(naturalHOS + 4));
   // No-op fast path — avoid touching tx.w/tx.h on micro-changes
   if (tx.w === finalWOS && tx.h === finalHOS) {
@@ -15820,8 +15788,8 @@ function autoFitTextItem(tx, opts) {
     el.style.height = origH;
     return;
   }
-  // Step 4 — write back. tx.w/tx.h are on-screen (zoom-100) values;
-  // updateItemStyle converts to CSS pixels via /zoom.
+  // Step 4 — write back. tx.w/tx.h are world px; updateItemStyle writes
+  // them directly (canvas transform handles zoom).
   tx.w = finalWOS;
   tx.h = finalHOS;
   updateItemStyle(tx);
@@ -15829,8 +15797,8 @@ function autoFitTextItem(tx, opts) {
   // dots) so they hug the new box bounds.
   const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
   if (hCont) {
-    hCont.style.width = (tx.w / _tz) + 'px';
-    hCont.style.height = (tx.h / _tz) + 'px';
+    hCont.style.width = tx.w + 'px';
+    hCont.style.height = tx.h + 'px';
   }
   updateAutoFitPaper();
 }
@@ -23038,15 +23006,10 @@ document.addEventListener('mousemove', e => {
         multiApply.forEach(a => {
           const el = a.item.el;
           if (!el) return;
-          // v6.8.2: text-items store w/h as ON-SCREEN (CSS-px at zoom 100%)
-          // values, so the CSS width/height must be divided by zoom — exactly
-          // like updateItemStyle() does. Previously this fast path wrote the
-          // raw value, so at zoom != 100% the box rendered at the wrong size
-          // during the drag and then visibly SNAPPED when any later
-          // updateItemStyle() call corrected it. Non-text items keep _rz = 1
-          // (their on-screen size is intentionally scaled by canvas zoom).
+          // v6.8.26: text-items now use world coords like everything
+          // else, so no zoom division anywhere in this fast path.
           const _isText = el.classList.contains('text-item');
-          const _rz = _isText ? Math.max(0.02, Math.min(10, (window.state && window.state.zoom) || 1)) : 1;
+          const _rz = 1;
           el.style.width = (a.w / _rz) + 'px';
           // Media items: total height = video height + 54px (info bar + controls)
           const isMedia = el.classList.contains('has-media');
@@ -23084,11 +23047,9 @@ document.addEventListener('mousemove', e => {
       }
       // FAST PATH: direct style writes (no full updateItemStyle) for max snappiness
       const el = d.item.el;
-      // v6.8.2: same zoom-division fix as the multi-select path above.
-      // text-items store w/h as on-screen values; everything else uses
-      // world coords and must NOT be divided.
+      // v6.8.26: text-items now use world coords — no zoom division.
       const _isTextFast = el.classList.contains('text-item');
-      const _rzFast = _isTextFast ? Math.max(0.02, Math.min(10, (window.state && window.state.zoom) || 1)) : 1;
+      const _rzFast = 1;
       el.style.width = (w / _rzFast) + 'px';
       // Media items: total height = video height + 54px (info bar + controls)
       const isMedia = el.classList.contains('has-media');
@@ -23099,9 +23060,8 @@ document.addEventListener('mousemove', e => {
       // every frame so applyTextProps (called by reflows, imports, etc.)
       // always picks up the correct value. No more CSS-only drift.
       if (el.classList.contains('text-item') && d.item.size && Math.abs(scaleX - 1) > 0.001) {
-        const tz = Math.max(0.02, Math.min(10, (window.state && window.state.zoom) || 1));
         d.item.size = Math.round((d._origTextSize || (d._origTextSize = d.item.size)) * scaleX * 10) / 10;
-        el.style.fontSize = (d.item.size / tz) + 'px';
+        el.style.fontSize = d.item.size + 'px';
       }
       // Direct write to cached media-wrap (skip querySelector)
       if (d._mediaWrap) d._mediaWrap.style.height = h + 'px';
@@ -23138,11 +23098,9 @@ document.addEventListener('mousemove', e => {
           member.h = Math.max(5, mOrigH * scaleY);
           // Fast direct writes
           const mel = member.el;
-          // v6.8.2: text-item group members need the same zoom division.
-          const _mIsText = mel.classList.contains('text-item');
-          const _mrz = _mIsText ? Math.max(0.02, Math.min(10, (window.state && window.state.zoom) || 1)) : 1;
-          mel.style.width = (member.w / _mrz) + 'px';
-          mel.style.height = (member.h / _mrz) + 'px';
+          // v6.8.26: text items are world-coord — no zoom division.
+          mel.style.width = member.w + 'px';
+          mel.style.height = member.h + 'px';
           mel.style.transform = 'translate(' + member.x + 'px, ' + member.y + 'px) rotate(' + (member.rot || 0) + 'deg)';
           if (member.isAudio) _applyAudioItemUiScale(member);
         });
@@ -30329,6 +30287,7 @@ function buildManifest() {
     schemaVersion: 5,
     appVersion: '5.5.1',
     _schemaNote: 'Krafted v5.5.1 format — backward compatible with v4+',
+    _textWorld: true,
     _savedAt: new Date().toISOString(),
     items,
     texts: state.texts.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, highlightColor: t.highlightColor, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: 1 })),
@@ -31246,6 +31205,10 @@ async function loadBoardFile(event) {
 // only needs layout metadata; media is reloaded from original files/kpak.
 function serializeBoard() {
   return JSON.stringify({
+    // v6.8.26: marker — texts store w/h/size in WORLD coords. Old files
+    // without this marker stored them as on-screen px and are converted
+    // on load (divided by the file's saved zoom) in restoreBoard().
+    _textWorld: true,
     items: state.items.map(i => {
       const d = {
         id: i.id,
@@ -31461,14 +31424,22 @@ function restoreBoard(data, append) {
   // to the loaded bbox.
   if (!append) {
     // v6.7.18: restore zoom/pan from the saved file BEFORE creating any
-    // items. Text items call applyTextProps which divides by state.zoom,
-    // so zoom must already be correct at creation time. Previously zoom
-    // was reset to 1 first, items were created with zoom=1, then zoom
-    // was set to the saved value — leaving items with stale CSS sizes.
+    // items. v6.8.26: text items are world-coord now, so zoom no longer
+    // affects their inline CSS — but restoring zoom early still ensures
+    // the board appears at the saved view immediately.
     state.zoom = (data.viewport || data).zoom || 1;
     state.pan = data.pan || { x: 0, y: 0 };
     console.log('[RESTORE-ZOOM] data.zoom=' + ((data.viewport && data.viewport.zoom) || data.zoom) + ' -> state.zoom=' + state.zoom);
   }
+  // v6.8.26: text world-coord migration. Files saved BEFORE v6.8.26 store
+  // text w/h/size as ON-SCREEN px (constant regardless of zoom); v6.8.26+
+  // stores them as WORLD px (marked with _textWorld: true). To convert an
+  // old file: world = onScreen / savedZoom (at save time, visual = world *
+  // zoom = onScreen, so world = onScreen / zoom). For files saved at
+  // zoom=1 this is a no-op. Uses the FILE's saved zoom even in append mode,
+  // since that's the zoom the on-screen values were captured at.
+  var _textMigZ = data._textWorld ? 1 : Math.max(0.02, Math.min(10, (data.viewport || data).zoom || 1));
+  if (_textMigZ !== 1) console.log('[TEXT-MIGRATE] old on-screen text coords ÷ savedZoom ' + _textMigZ);
   if (!append) {
     G.nextZ = 1;
   }
@@ -31854,15 +31825,17 @@ function restoreBoard(data, append) {
     const tx = { ...d, id: txId, el };
     delete tx.content;
     delete tx.html;
+    // v6.8.26: convert old on-screen px to world px (no-op for new files)
+    if (_textMigZ !== 1) {
+      if (typeof tx.w === 'number') tx.w = tx.w / _textMigZ;
+      if (typeof tx.h === 'number') tx.h = tx.h / _textMigZ;
+      if (typeof tx.size === 'number') tx.size = Math.round(tx.size / _textMigZ * 10) / 10;
+    }
     G.nextZ = Math.max(G.nextZ, tx.z + 1);
     state.texts.push(tx);
-    // v6.7.20: Direct restore — no _textZoom multiplication, no recalibration.
-    // Save path dumps w/h/size as on-screen px directly (line ~4223), so load
-    // must use them as-is. applyTextProps / updateItemStyle divide by current
-    // state.zoom to set CSS, which brings the on-screen px back correctly.
-    // The old _textZoom block assumed save stored world-coords (wrong) and
-    // the v6.6.0 recalibration only helped very old pre-proportional-scaling
-    // files — for modern saves it causes double-scaling and w/size drift.
+    // v6.8.26: texts are WORLD coords now (converted above for old files).
+    // applyTextProps / updateItemStyle write tx.w/tx.h/tx.size directly as
+    // inline CSS — the canvas transform scales them with everything else.
     applyTextProps(tx);
     updateItemStyle(tx);
     // v6.8.22: a restored box already has its final w/h. Lock the width so
