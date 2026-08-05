@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.20</title>
+<title>Krafted v6.8.21</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.20';
+var KRAFTED_VERSION = '6.8.21';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -19356,6 +19356,22 @@ function sanitizeTextHtml(html) {
 state.wheelMode = (function() {
   try {
     const saved = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_wheel_mode')) || localStorage.getItem('krafted_wheel_mode');
+    // v6.8.21 one-time migration: during earlier debugging some Mac users
+    // ended up with wheelMode pinned to 'mouse', which forces plain wheel
+    // events to zoom and makes two-finger pan look broken even after the
+ // routing fix. Reset that stale pin ONCE so pan works out of the box.
+    // 'trackpad' pins are intentional and preserved.
+    try {
+      const migrated = localStorage.getItem('krafted_wheel_mode_migr_6821');
+      if (!migrated) {
+        localStorage.setItem('krafted_wheel_mode_migr_6821', '1');
+        if (Platform.mac && saved === 'mouse') {
+    localStorage.setItem('krafted_wheel_mode', 'auto');
+     if (window.KraftedStorage) window.KraftedStorage.setItem('krafted_wheel_mode', 'auto').catch(function(){});
+        return 'auto';
+        }
+      }
+    } catch (e2) {}
     if (saved === 'auto' || saved === 'mouse' || saved === 'trackpad') return saved;
   } catch (e) {}
   return 'auto';
@@ -20016,23 +20032,14 @@ viewport.addEventListener('wheel', e => {
   const ady = Math.abs(e.deltaY);
   const wheelMode = ((window.state && window.state.wheelMode) || 'auto');
   const strongTrackpadDrift = (adx > 0.55 && ady > 0.55 && (adx >= 1.4 || adx >= ady * 0.24));
-  const subtleTrackpadPan = (e.deltaMode === 0 && ady > 0.35 && ady <= 18 && (
-    (!Number.isInteger(e.deltaY) && ady <= 12) ||
-    (adx > 0.12 && adx >= ady * 0.06)
-  ));
-  // v6.8.20: MacBook trackpad regression fix.
-  // Two-finger drag was falling through to the zoom branch whenever the
-  // classifier had (incorrectly) settled on 'mouse' — MacBook trackpads
-  // often emit clean integer deltaY with deltaX exactly 0, which looks
-  // wheel-like. On macOS we therefore default pixel-mode wheel events to
-  // PAN again, and only zoom when we have a solid "physical wheel" tell:
-  //   - user pinned wheelMode = 'mouse', or
-  //   - a real notch-sized integer delta with zero horizontal drift.
-  // Users with low-delta external mice on macOS can still force zoom via
-  // the right-click menu: "Wheel: Mouse (zoom)".
-  const macMouseNotch = (adx === 0 && ady >= 40 && Number.isInteger(e.deltaY));
-  const macWheelLikeMouse = (wheelMode === 'mouse')
-    || (wheelMode !== 'trackpad' && macMouseNotch && !strongTrackpadDrift && !subtleTrackpadPan);
+  // v6.8.21: on macOS, plain (unmodified) wheel events now ALWAYS pan.
+  // Chrome emits fast two-finger scroll as large integer deltaY with
+  // deltaX === 0, which is shape-identical to a mouse notch, so any
+  // delta-shape heuristic will eventually turn pan into zoom. The only
+  // way to get predictable behaviour is an explicit contract:
+  //   two-finger move -> pan, pinch -> zoom, Cmd+wheel -> zoom,
+  //   and wheelMode='mouse' (right-click menu) -> wheel zooms.
+  const macWheelLikeMouse = (wheelMode === 'mouse');
 
   // ── Mac Cmd + wheel: zoom (metaKey on Mac, absent on Windows) ──
   if (Platform.mac && e.metaKey) {
