@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.21</title>
+<title>Krafted v6.8.22</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2275,6 +2275,11 @@ body.dragging-file .media-anno-toolbar {
 .text-item.selected { outline:1.5px solid var(--accent); outline-offset:2.5px; }
 .text-item.editing { outline:1.5px solid var(--accent); cursor:text; overflow:visible !important; min-width:100px; user-select:text; -webkit-user-select:text; -moz-user-select:text; -ms-user-select:text; }
 .text-item:empty::before { content:attr(data-placeholder); color:rgba(255,255,255,0.25); pointer-events:none; }
+/* v6.8.22: while Board Pen is active, text boxes must not capture the click.
+   A click used to focus the contentEditable box, which applied .editing
+   (min-width:100px) and then re-ran auto-grow on blur — visibly deforming
+   text boxes that were just restored from a file. */
+#viewport.tool-draw .text-item { pointer-events:none !important; user-select:none !important; -webkit-user-select:none !important; }
 
 /* LINK CARD items */
 .item.link-card { border-radius:6px; overflow:hidden; }
@@ -4021,7 +4026,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.21';
+var KRAFTED_VERSION = '6.8.22';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -8378,6 +8383,12 @@ function attachTextListeners(tx) {
 
   el.addEventListener('focus', () => {
     el.classList.add('editing');
+    // v6.8.22: remember the content at focus time so blur can skip
+    // auto-grow when nothing was typed. Re-measuring an untouched box
+    // (e.g. after a plain click) could shift its height because the
+    // measurement depends on live font metrics / zoom, which visibly
+    // deformed boxes that were just restored from a file.
+    el._focusSnapshot = el.innerHTML;
     showTextQuickBar(true);
     updateTextQuickBarActive();
     updateTextColorPalette();
@@ -8399,8 +8410,13 @@ function attachTextListeners(tx) {
       state.texts = state.texts.filter(t => t.id !== tx.id);
       clearSelection();
     } else {
-      autoGrowTextItem(tx);
+      // v6.8.22: only re-measure when the text actually changed while
+      // focused. A plain click (focus -> blur with identical content)
+      // must leave the stored w/h untouched.
+      const _changed = (el._focusSnapshot === undefined) || (el._focusSnapshot !== el.innerHTML);
+      if (_changed) autoGrowTextItem(tx);
     }
+    el._focusSnapshot = undefined;
     // Auto-switch back to select mode so clicking doesn't keep creating text boxes
     if (state.tool === 'text') setTool('select');
     scheduleAutoSave();
@@ -18631,6 +18647,10 @@ function setTool(tool) {
   viewport.style.cursor = cursors[tool] || 'default';
   // Force items to inherit cursor when not in select mode (prevents move cursor on hover)
   viewport.classList.toggle('tool-active', tool !== 'select');
+  // v6.8.22: mark draw mode explicitly so CSS can disable text-box
+  // pointer/caret capture. Clicking with Board Pen must never focus a
+  // text item (focus + blur re-ran auto-grow and deformed restored boxes).
+  viewport.classList.toggle('tool-draw', tool === 'draw');
 
   // Update mobile toolbar active state
   if (IS_TOUCH_DEVICE) {
@@ -31780,6 +31800,11 @@ function restoreBoard(data, append) {
     // files — for modern saves it causes double-scaling and w/size drift.
     applyTextProps(tx);
     updateItemStyle(tx);
+    // v6.8.22: a restored box already has its final w/h. Lock the width so
+    // a later auto-grow can never fall into the shrink-wrap branch and
+    // rewrite it — that path was what visibly deformed restored text boxes
+    // when the user clicked them (e.g. right after switching to Board Pen).
+    if (tx.w) tx._autoGrowLocked = true;
     console.log('[LOAD-TEXT] id=' + tx.id + ' w=' + tx.w + ' h=' + tx.h + ' size=' + tx.size + ' zoom=' + state.zoom + ' cssW=["' + el.style.width + '"] cssH=["' + el.style.height + '"] cssFS=["' + el.style.fontSize + '"] userResized=' + tx.userResized);
     // v6.8.2: shared wiring (was a third hand-rolled copy, also missing
     // updateTextColorPalette / updateAutoFitPaper)
