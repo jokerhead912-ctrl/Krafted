@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.23</title>
+<title>Krafted v6.8.24</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4026,7 +4026,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.23';
+var KRAFTED_VERSION = '6.8.24';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -8410,10 +8410,11 @@ function attachTextListeners(tx) {
       state.texts = state.texts.filter(t => t.id !== tx.id);
       clearSelection();
     } else {
-      // v6.8.22: only re-measure when the text actually changed while
-      // focused. A plain click (focus -> blur with identical content)
-      // must leave the stored w/h untouched.
-      const _changed = (el._focusSnapshot === undefined) || (el._focusSnapshot !== el.innerHTML);
+      // v6.8.24: only re-measure when we have a valid focus snapshot AND
+      // the content actually changed. When _focusSnapshot is undefined
+      // (element was never properly focused), skip auto-grow entirely —
+      // the stored w/h from creation/load is authoritative.
+      const _changed = (el._focusSnapshot !== undefined && el._focusSnapshot !== el.innerHTML);
       if (_changed) autoGrowTextItem(tx);
     }
     el._focusSnapshot = undefined;
@@ -8478,6 +8479,13 @@ function autoGrowTextItem(tx) {
 
   const origW = el.style.width;
   const origH = el.style.height;
+  const origMinW = el.style.minWidth;
+  // v6.8.24: CSS classes (.text-item min-width:80px, .editing min-width:100px)
+  // override the inline width we set during measurement at non-100% zoom,
+  // causing scrollHeight to be read at the wrong computed width. Temporarily
+  // zero out min-width so measurements are taken at the exact intended width.
+  if (origMinW) el.style.minWidth = '0';
+  try {
 
   // If the user has manually resized the text box, respect their width.
   // Only grow the HEIGHT to fit wrapped content — never force the width back
@@ -8557,6 +8565,7 @@ function autoGrowTextItem(tx) {
   const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
   if (hCont) { hCont.style.width = (newW / _tz) + 'px'; hCont.style.height = (newH / _tz) + 'px'; }
   updateAutoFitPaper();
+  } finally { el.style.minWidth = origMinW; }
 }
 function updateItemStyle(item, lightweight) {
   const el = item.el;
