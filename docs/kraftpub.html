@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.17</title>
+<title>Krafted v6.8.18</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4021,7 +4021,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.17';
+var KRAFTED_VERSION = '6.8.18';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -19846,7 +19846,7 @@ const _WheelKind = (function() {
     // trackpad, causing zoom events to be routed as pan intermittently.
     // Keep this as a HARD trackpad signal only when X drift is actually
     // substantial (absolute) or significant relative to Y.
-    if (adx > 0.35 && ady > 0.35 && (adx >= 1.2 || adx >= ady * 0.18)) {
+    if (adx > 0.55 && ady > 0.55 && (adx >= 1.4 || adx >= ady * 0.24)) {
       verdict = 'trackpad'; confidence = 1; return verdict;
     }
 
@@ -20009,6 +20009,14 @@ viewport.addEventListener('wheel', e => {
   // branching, so the rolling-window heuristic sees the full stream.
   _WheelKind.classify(e);
 
+  // v6.8.18: derive a stricter "strong horizontal drift" hint once and
+  // reuse it in pan/pinch routing. This avoids tiny mouse wheel jitter on
+  // macOS being mistaken as trackpad intent, while still allowing real
+  // two-finger gestures to win even if wheelMode is temporarily pinned.
+  const adx = Math.abs(e.deltaX);
+  const ady = Math.abs(e.deltaY);
+  const strongTrackpadDrift = (adx > 0.55 && ady > 0.55 && (adx >= 1.4 || adx >= ady * 0.24));
+
   // ── Mac Cmd + wheel: zoom (metaKey on Mac, absent on Windows) ──
   if (Platform.mac && e.metaKey) {
     const s = state.zoomStep;
@@ -20024,8 +20032,10 @@ viewport.addEventListener('wheel', e => {
     //   pinch in/out     -> zoom
     // Chrome emits pinch as ctrlKey+pixel wheel. Prioritise that path on
     // macOS unless the user explicitly pinned wheelMode='mouse'.
-    const forceMouseMode = ((window.state && window.state.wheelMode) || 'auto') === 'mouse';
-    const macPinch = Platform.mac && e.deltaMode === 0 && !forceMouseMode;
+    const wheelMode = ((window.state && window.state.wheelMode) || 'auto');
+    const forceMouseMode = wheelMode === 'mouse';
+    const strongTrackpadPinch = _twoFingerPan || _WheelKind.isTrackpad || (e.deltaMode === 0 && (!Number.isInteger(e.deltaY) || ady <= 8 || strongTrackpadDrift));
+    const macPinch = Platform.mac && e.deltaMode === 0 && (strongTrackpadPinch || !forceMouseMode);
     if (macPinch) {
       // Pinch — only if not over a media item (so two-finger
       // video scrubbing doesn't accidentally zoom the canvas).
@@ -20064,10 +20074,7 @@ viewport.addEventListener('wheel', e => {
   // - keep a narrow fallback for unknown+pixel mode only when X drift is
   //   genuinely non-trivial (not tiny wheel noise)
   } else if (Platform.mac
-      ? (_twoFingerPan || (e.deltaMode === 0 && (
-          _WheelKind.isTrackpad ||
-          (!_WheelKind.isMouse && Math.abs(e.deltaX) > 0.35 && (Math.abs(e.deltaX) >= 1.2 || Math.abs(e.deltaX) >= Math.abs(e.deltaY) * 0.18))
-        )))
+      ? (_twoFingerPan || _WheelKind.isTrackpad || (e.deltaMode === 0 && strongTrackpadDrift))
       : (_twoFingerPan && e.deltaMode === 0)) {
     state.pan.x -= e.deltaX;
     state.pan.y -= e.deltaY;
