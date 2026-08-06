@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.26</title>
+<title>Krafted v6.8.27</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3380,6 +3380,29 @@ body.screen-share-mode #ss-fps {
   color: rgba(255,153,0,0.35);
 }
 
+/* ── Save mutex overlay ── */
+.krafted-save-overlay {
+  position: fixed; inset: 0; z-index: 999999999;
+  display: none; align-items: center; justify-content: center;
+  flex-direction: column; gap: 16px;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(3px);
+  pointer-events: auto;
+}
+.krafted-save-spinner {
+  width: 40px; height: 40px;
+  border: 3px solid rgba(255,255,255,0.15);
+  border-top-color: #00e5ff;
+  border-radius: 50%;
+  animation: krafted-spin 1s linear infinite;
+}
+@keyframes krafted-spin { to { transform: rotate(360deg); } }
+.krafted-save-text {
+  color: #fff; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px; font-weight: 500; letter-spacing: 0.3px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
 </style>
 
 
@@ -4026,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.26';
+var KRAFTED_VERSION = '6.8.27';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -5070,6 +5093,15 @@ const state = {
   undoStack: [], redoStack: [],
   clipboard: null,
   autoSaveTimer: null,
+  // v6.8.27: save mutex — blocks destructive user actions while a save is in
+  // flight to prevent partial/corrupted writes when the user interacts mid-save.
+  _saving: false,
+  // v6.8.27: one-time warnings for autosave limits so we don't spam toasts.
+  _autosaveOversizeWarned: false,
+  _autosaveQuotaWarned: false,
+  // v6.8.27: track rough undo-stack byte size so we can drop old history
+  // before it eats all RAM on boards with large media.
+  _undoBytes: 0,
   groups: [],  // [{id, color, memberIds:Set, borderEl}]
   mouse: { x: 0, y: 0 }, // last known mouse position (screen coords)
   reframing: null, // { item, origCropX, origCropY }
@@ -6920,10 +6952,22 @@ function captureSnapshot() {
   return JSON.stringify(snap);
 }
 function pushUndo() {
-  state.undoStack.push(captureSnapshot());
+  // v6.8.27: don't record new undo states while saving — the save itself may
+  // be reading the current state and we don't want to mutate the undo stack
+  // mid-flight (which can corrupt redo history and add memory pressure).
+  if (state._saving) return;
+  const snapStr = captureSnapshot();
+  state.undoStack.push(snapStr);
+  state._undoBytes += snapStr.length;
   // v5.5.1: cap undo history at 100 steps to prevent memory bloat
   // on long sessions with large boards (each snapshot can be 1-5MB+)
-  while (state.undoStack.length > 100) state.undoStack.shift();
+  // v6.8.27: also drop oldest entries if total snapshot bytes exceed ~300MB,
+  // so boards with many images cannot eat all RAM through undo history.
+  while (state.undoStack.length > 100 || state._undoBytes > 300 * 1024 * 1024) {
+    const old = state.undoStack.shift();
+    if (old) state._undoBytes -= old.length;
+    if (state._undoBytes < 0) state._undoBytes = 0;
+  }
   state.redoStack = [];
   updateStatus();
 }
@@ -20698,6 +20742,8 @@ function _handleFileDrop(e, files) {
 
 viewport.addEventListener('drop', e => {
   e.preventDefault();
+  // v6.8.27: block drops while saving to avoid mutating state mid-save.
+  if (state._saving) { toast('Please wait for save to finish'); return; }
   hideWelcome();
   // v5.5.1: detect folder drops via DataTransferItem.webkitGetAsEntry()
   var items = e.dataTransfer.items;
@@ -20725,13 +20771,17 @@ viewport.addEventListener('drop', e => {
 document.addEventListener('paste', e => {
   if (!e.clipboardData) return;
 
+  // v6.8.27: block clipboard imports while saving (images/files), but allow
+  // plain text paste into a focused text-item to finish normally.
+  const ae = document.activeElement;
+  const isOurText = ae && ae.contentEditable === 'true' && ae.classList.contains('text-item');
+  if (state._saving && !isOurText) { toast('Please wait for save to finish'); return; }
+
   // If user is actively typing inside a text-item (cursor inside, editing mode, HAS SELECTION),
   // let the browser handle it. v5.5: only return if there's actually a caret/selection INSIDE the
   // text-item — otherwise the user wants to paste on the canvas, so blur the text-item and fall
   // through to our paste handler. Without this, any external text paste (when a stale text-item
   // still has focus but no selection) is silently swallowed by the text-item's contentEditable.
-  const ae = document.activeElement;
-  const isOurText = ae && ae.contentEditable === 'true' && ae.classList.contains('text-item');
   // v6.6.2: If a Krafted text-item is focused and editing, ALWAYS let the
   // text-item's own paste handler deal with it (strip formatting, insert plain
   // text). The old logic blurred the text-item when there was no selection,
@@ -20853,29 +20903,28 @@ document.addEventListener('paste', e => {
     if (imageFiles.length > 0 || videoFiles.length > 0 || audioFiles.length > 0) {
       e.preventDefault();
       const { x, y } = getPasteXY();
-      // Process images SEQUENTIALLY (one at a time) to avoid memory crash on 20+ images.
-      // Same reason as the drop handler: parallel FileReader+Image decodes + undo bloat.
+      // v6.8.27: Paste images via blob URL + createImageBitmap (same as drag-drop).
+      // readAsDataURL creates a base64 copy (~33% larger) that bloats the undo
+      // snapshot and can push JSON.stringify over the browser's string limit.
       // One undo snapshot at batch start → single undo reverts the whole paste.
       if (imageFiles.length > 0) pushUndo();
       let imgIdx = 0;
-      (function processNextImage() {
+      (async function processNextImage() {
         if (imgIdx >= imageFiles.length) return;
         const f = imageFiles[imgIdx];
         const px = x + imgIdx * 20, py = y + imgIdx * 20;
         const isLast = (imgIdx === imageFiles.length - 1);
-        const reader = new FileReader();
-        reader.onload = ev => {
-          const img = new Image();
-          img.onload = () => {
-            addImage(ev.target.result, img.naturalWidth, img.naturalHeight, px, py, false, isLast);
-            imgIdx++;
-            setTimeout(processNextImage, 30);
-          };
-          img.onerror = () => { imgIdx++; setTimeout(processNextImage, 30); };
-          img.src = ev.target.result;
-        };
-        reader.onerror = () => { imgIdx++; setTimeout(processNextImage, 30); };
-        reader.readAsDataURL(f);
+        imgIdx++;
+        try {
+          const bitmap = await createImageBitmap(f);
+          const w = bitmap.width, h = bitmap.height;
+          bitmap.close();
+          const blobUrl = URL.createObjectURL(f);
+          addImage(blobUrl, w, h, px, py, false, isLast, f.size);
+        } catch (e) {
+          console.warn('[Paste] Image decode failed:', e.message);
+        }
+        setTimeout(processNextImage, 30);
       })();
       // Video: read as base64 data URL so it persists like images (not blob URL).
       if (videoFiles.length > 0) pushUndo();
@@ -30698,7 +30747,7 @@ async function buildKpakV6(progressCallback, writableStream) {
   if (useStreaming) {
     await writableStream.write(footerBuf);
     // Don't close stream — caller manages lifetime
-    return { entries, size: currentOffset + indexParts.reduce((s, p) => s + p.byteLength, 0) + 12, streamed: true };
+    return { entries, size: currentOffset + indexParts.reduce((s, p) => s + p.byteLength, 0) + 12, streamed: true, manifestJson };
   } else {
     blobParts.push(footerBuf);
     // v6.8.1: build the Blob FIRST, then read its real .size. The old code
@@ -30710,7 +30759,7 @@ async function buildKpakV6(progressCallback, writableStream) {
     const totalSize = outBlob.size;
     if (progressCallback) progressCallback('Finalized ' + formatBytes(totalSize));
     console.log('[KPAKv6] blob built:', entries.length, 'entries,', formatBytes(totalSize));
-    return { blob: outBlob, size: totalSize, entries };
+    return { blob: outBlob, size: totalSize, entries, manifestJson };
   }
 }
 
@@ -30784,8 +30833,98 @@ async function extractKpakV6Entry(kpakBlob, entry) {
   const typed = mime ? raw.slice(0, raw.size, mime) : raw;
   return URL.createObjectURL(typed);
 }
+// v6.8.27: save mutex helpers. Show a full-screen overlay and block pointer
+// events while saving so the user cannot drag, resize, delete, or drop items
+// in the middle of a write. This prevents partial/corrupted saves and reduces
+// the chance of OOM crashes caused by concurrent mutations + serialization.
+function _setSaving(isSaving) {
+  state._saving = isSaving;
+  let overlay = document.getElementById('krafted-save-overlay');
+  if (isSaving) {
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'krafted-save-overlay';
+      overlay.className = 'krafted-save-overlay';
+      overlay.innerHTML = '<div class="krafted-save-spinner"></div><div class="krafted-save-text">Saving… please wait</div>';
+      document.body.appendChild(overlay);
+    }
+    overlay.style.display = 'flex';
+  } else if (overlay) {
+    overlay.style.display = 'none';
+  }
+}
+
+// v6.8.27: Emergency backup helpers. After every successful save we stash the
+// serialized board in IndexedDB. If the tab crashes during a later save and the
+// downloaded .kpak is corrupted, the user can recover from this backup via the
+// browser console: window.__kraftedRestoreEmergencyBackup()
+const KRAFTED_DB_NAME = 'KraftedEmergencyDB';
+const KRAFTED_DB_VERSION = 1;
+const KRAFTED_BACKUP_KEY = 'lastSuccessfulBoard';
+function _openKraftedDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(KRAFTED_DB_NAME, KRAFTED_DB_VERSION);
+    req.onerror = () => reject(req.error);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('backups')) db.createObjectStore('backups');
+    };
+    req.onsuccess = () => resolve(req.result);
+  });
+}
+async function _writeEmergencyBackup(jsonStr) {
+  try {
+    if (!jsonStr || jsonStr.length > 100 * 1024 * 1024) return; // don't back up huge boards (>100MB JSON)
+    const db = await _openKraftedDB();
+    const tx = db.transaction('backups', 'readwrite');
+    const store = tx.objectStore('backups');
+    await new Promise((resolve, reject) => {
+      const req = store.put({ json: jsonStr, savedAt: new Date().toISOString() }, KRAFTED_BACKUP_KEY);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    console.log('[EMERGENCY BACKUP] written:', formatBytes(jsonStr.length));
+  } catch (e) {
+    console.warn('[EMERGENCY BACKUP] failed:', e.message);
+  }
+}
+window.__kraftedRestoreEmergencyBackup = async function() {
+  try {
+    const db = await _openKraftedDB();
+    const tx = db.transaction('backups', 'readonly');
+    const store = tx.objectStore('backups');
+    const rec = await new Promise((resolve, reject) => {
+      const req = store.get(KRAFTED_BACKUP_KEY);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    if (!rec || !rec.json) { toast('No emergency backup found'); return; }
+    const proceed = confirm(
+      'Found emergency backup from ' + (rec.savedAt || 'unknown time') + '\nSize: ' + formatBytes(rec.json.length) + '\n\n' +
+      'This will REPLACE the current board. Continue?'
+    );
+    if (!proceed) return;
+    const data = safeJSONParse(rec.json, null);
+    if (!data) { toast('Backup is corrupted'); return; }
+    cleanupAllItems();
+    state.items = []; state.texts = []; state.todos = []; state.mindmaps = [];
+    state.selected.clear(); state.groups = [];
+    restoreBoard(data, false);
+    toast('Emergency backup restored');
+    console.log('[EMERGENCY BACKUP] restored');
+  } catch (e) {
+    console.error('[EMERGENCY BACKUP] restore failed:', e.message);
+    toast('Restore failed: ' + e.message);
+  }
+};
+
 // v6.5.0: Save using custom kpak container — single file, no OOM on load
 async function saveBoardV6() {
+  // v6.8.27: save mutex — one save at a time.
+  if (state._saving) { toast('Save already in progress'); return; }
+  _setSaving(true);
   console.log('[SAVE V6] saveBoardV6() called');
   const counts = countMediaItems();
   console.log('[SAVE V6] media counts:', counts);
@@ -30803,6 +30942,19 @@ async function saveBoardV6() {
   const estMB = Math.round(estTotalBytes / (1024 * 1024));
   const estStr = estMB >= 1024 ? (estMB / 1024).toFixed(1) + ' GB' : estMB + ' MB';
   console.log('[SAVE V6] estimated total:', estStr);
+
+  // v6.8.27: warn before attempting very large saves. Browsers can OOM when
+  // building a huge Blob in memory (fallback path) or when the OS runs low on
+  // swap. Give the user a chance to cancel and split the board.
+  if (estTotalBytes > 1.5 * 1024 * 1024 * 1024) {
+    const proceed = confirm(
+      '⚠ This board is very large: ~' + estStr + '\n\n' +
+      'Saving may run out of memory and crash the tab.\n' +
+      'Tip: delete unused items, split into smaller boards, or use streaming save (Chrome/Edge).\n\n' +
+      'Continue saving?'
+    );
+    if (!proceed) { _setSaving(false); return; }
+  }
 
   // Pause videos during save
   const _pausedVideos = [];
@@ -30824,14 +30976,15 @@ async function saveBoardV6() {
     if (window.showSaveFilePicker) {
       try {
         const h = await requestSaveHandle(fname, 'application/zip', '.kpak');
-        if (h.cancelled) { toast('Save cancelled'); return; }
+        if (h.cancelled) { toast('Save cancelled'); _setSaving(false); return; }
         if (h.handle) {
           const writable = await h.handle.createWritable();
-          await buildKpakV6(updateProg, writable);
+          const result = await buildKpakV6(updateProg, writable);
           await writable.close();
           saved = true;
           console.log('[SAVE V6] streamed to file');
           toast('Saved v6 kpak \u2714 ' + fname + ' (streamed)');
+          if (result.manifestJson) _writeEmergencyBackup(result.manifestJson);
         }
       } catch (e) {
         console.warn('[SAVE V6] stream failed, falling back to blob:', e.name, e.message);
@@ -30876,6 +31029,7 @@ async function saveBoardV6() {
       setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
       console.log('[SAVE V6] blob downloaded, size:', formatBytes(blob.size));
       toast('Saved v6 kpak \u2714 ' + fname + ' (' + formatBytes(blob.size) + ')');
+      if (result.manifestJson) _writeEmergencyBackup(result.manifestJson);
     }
   } catch (err) {
     console.error('[SAVE V6] FAILED:', err.name, err.message);
@@ -30888,6 +31042,7 @@ async function saveBoardV6() {
       try { v.play().catch(function() {}); } catch(e) {}
     });
     try { prog.remove(); } catch (e) {}
+    _setSaving(false);
   }
 }
 
@@ -32077,13 +32232,32 @@ function restoreBoard(data, append) {
 // ============================================================
 function scheduleAutoSave() {
   clearTimeout(state.autoSaveTimer);
+  // v6.8.27: longer debounce (5s) for large boards — serializing a board with
+  // many base64/blob URLs every 2s creates GC pressure and can OOM.
   state.autoSaveTimer = setTimeout(() => {
     try {
       var val = serializeBoard();
+      // v6.8.27: localStorage is capped (~5-10MB). Large boards can exceed it
+      // and throw, or silently corrupt. Skip the write if the payload is huge,
+      // and warn the user once per session to rely on manual Save instead.
+      if (val.length > 4 * 1024 * 1024) {
+        if (!state._autosaveOversizeWarned) {
+          state._autosaveOversizeWarned = true;
+          toast('⚠ Board too large for autosave. Please use File → Save manually.');
+        }
+        console.warn('[AUTOSAVE] skipped — payload', formatBytes(val.length), 'exceeds safe localStorage limit');
+        return;
+      }
       localStorage.setItem('krafted_autosave', val);
       if (window.KraftedStorage) window.KraftedStorage.setItem('krafted_autosave', val).catch(function(){});
-    } catch(e) {}
-  }, 2000);
+    } catch(e) {
+      console.warn('[AUTOSAVE] failed:', e.name, e.message);
+      if (e.name === 'QuotaExceededError' && !state._autosaveQuotaWarned) {
+        state._autosaveQuotaWarned = true;
+        toast('⚠ Autosave storage full. Please use File → Save manually.');
+      }
+    }
+  }, 5000);
 }
 function loadAutoSave() {
   // v6.5.0: Startup autosave restore disabled — always starts clean.
@@ -32149,6 +32323,7 @@ function newBoard() {
   G.nextGroupId = 1;
   state.undoStack = [];
   state.redoStack = [];
+  state._undoBytes = 0;
   G.nextZ = 1; G.nextId = 1;
   G.drawStrokes.length = 0;
   state.pan = { x: 0, y: 0 };
