@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.29</title>
+<title>Krafted v6.8.30</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.29';
+var KRAFTED_VERSION = '6.8.30';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7892,7 +7892,7 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize, isGifFla
     // v6.8.29: retain an in-memory image Blob when available. Screenshot
     // clipboard object URLs can fail later with Chrome ERR_UPLOAD_FILE_CHANGED;
     // KPAK save uses this stable Blob directly instead of refetching src.
-    _sourceBlob: (!isVideo && sourceBlob instanceof Blob) ? sourceBlob : null,
+    _sourceBlob: (sourceBlob instanceof Blob) ? sourceBlob : null,
     // Original file name (for video/image export naming & display). Set by
     // callers (drag-drop, paste) when known. Empty when not available.
     filename: '',
@@ -20693,7 +20693,7 @@ function _handleFileDrop(e, files) {
       // Now create the blob URL for the canvas <img> (long-lived)
       const blobUrl = URL.createObjectURL(file);
       const isGif = file.type === 'image/gif' || /\.gif$/i.test(file.name);
-      addImage(blobUrl, w, h, dropX, dropY, false, isLast, file.size, isGif);
+      addImage(blobUrl, w, h, dropX, dropY, false, isLast, file.size, isGif, file);
     } catch(e) {
       console.warn('[FileDrop] Image decode failed:', file.name, e.message);
     }
@@ -20723,7 +20723,7 @@ function _handleFileDrop(e, files) {
     // Use a generous default size; the real dimensions will be picked up
     // by the main <video> element once metadata loads asynchronously.
     // 720p default covers most common video sources without looking wrong.
-    const newItem = addImage(blobUrl, 1280, 720, dropX, dropY, true, isLast, file.size);
+    const newItem = addImage(blobUrl, 1280, 720, dropX, dropY, true, isLast, file.size, false, file);
     if (newItem && file && file.name) {
       newItem.filename = file.name;
       try { if (newItem.el && newItem.el._setFilenameBadge) newItem.el._setFilenameBadge(file.name); } catch (e) {}
@@ -20949,7 +20949,7 @@ document.addEventListener('paste', e => {
           if (done) return; done = true;
           tmpVid.removeAttribute('src'); tmpVid.load();
           // Capture the original file name so the export can use it
-          const newItem = addImage(blobUrl, w, h, px, py, true, isLast, f.size);
+          const newItem = addImage(blobUrl, w, h, px, py, true, isLast, f.size, false, f);
           if (newItem && f && f.name) {
             newItem.filename = f.name;
             // Round 13: push the file name to the player badge
@@ -30610,7 +30610,10 @@ async function buildKpakV6(progressCallback, writableStream) {
   const manifestJson = JSON.stringify(manifest);
   const manifestBytes = new TextEncoder().encode(manifestJson);
 
-  const blobItems = state.items.filter(it => it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:')));
+  const blobItems = state.items.filter(it =>
+    (it._sourceBlob instanceof Blob && it._sourceBlob.size > 0) ||
+    (it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:')))
+  );
   console.log('[KPAKv6] items to pack:', blobItems.length);
 
   // v6.8.28: remember original media item count so we can warn if any vanish.
@@ -30625,10 +30628,10 @@ async function buildKpakV6(progressCallback, writableStream) {
       size: it._fileSize || (it.isVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024),
       type: it.isVideo ? 1 : it.isAudio ? 2 : 3,
       src: it.src,
-      // v6.8.29: image items may retain their stable source Blob. Prefer it
+      // v6.8.29/30: media items may retain a stable source Blob. Prefer it
       // over fetch(src), which can throw Chrome ERR_UPLOAD_FILE_CHANGED for
-      // screenshot clipboard object URLs.
-      sourceBlob: (!it.isVideo && it._sourceBlob instanceof Blob) ? it._sourceBlob : null,
+      // screenshot clipboard URLs and URLs recreated from a loaded KPAK.
+      sourceBlob: (it._sourceBlob instanceof Blob) ? it._sourceBlob : null,
       itemId: it.id
     });
   }
@@ -30906,11 +30909,21 @@ async function _detectKpakEntryMime(blob, entry) {
   return '';
 }
 
-// v6.5.0: Extract a single entry from kpak Blob as a Blob URL
-async function extractKpakV6Entry(kpakBlob, entry) {
+// v6.8.30: Extract a KPAK entry as a stable Blob. Keeping the Blob on the
+// item is required for repeated saves: refetching a blob URL created from a
+// previously-loaded KPAK file can fail in Chrome with ERR_UPLOAD_FILE_CHANGED.
+async function extractKpakV6EntryBlob(kpakBlob, entry) {
+  if (!kpakBlob || !entry || entry.offset < 0 || entry.size <= 0 || entry.offset + entry.size > kpakBlob.size) {
+    throw new Error('KPAK media range is invalid for ' + ((entry && entry.name) || 'unknown entry'));
+  }
   const raw = kpakBlob.slice(entry.offset, entry.offset + entry.size);
   const mime = await _detectKpakEntryMime(raw, entry);
-  const typed = mime ? raw.slice(0, raw.size, mime) : raw;
+  return mime ? raw.slice(0, raw.size, mime) : raw;
+}
+
+// v6.5.0: Extract a single entry from kpak Blob as a Blob URL
+async function extractKpakV6Entry(kpakBlob, entry) {
+  const typed = await extractKpakV6EntryBlob(kpakBlob, entry);
   return URL.createObjectURL(typed);
 }
 // v6.8.27: save mutex helpers. Show a full-screen overlay and block pointer
@@ -31229,18 +31242,24 @@ async function loadBoardFile(event) {
         }
         dataItem._kpakEntry = entry;
         dataItem._kpakBlob = file;
-        if (!dataItem.isVideo) {
-          try {
-            dataItem.src = await extractKpakV6Entry(file, entry);
-            remappedCount++;
-            if (remappedCount % 10 === 0) await new Promise(r => setTimeout(r, 0));
-          } catch(e) {
-            console.warn('Failed to extract', dataItem.id, e);
-            failedExtractIds.push(dataItem.id);
+        try {
+          // v6.8.30: retain the sliced Blob on the manifest item. On the next
+          // save, buildKpakV6 can stream this stable Blob directly instead of
+          // refetching a blob URL backed by the previously-loaded file.
+          const stableMediaBlob = await extractKpakV6EntryBlob(file, entry);
+          dataItem._sourceBlob = stableMediaBlob;
+          if (!dataItem.isVideo) {
+            dataItem.src = URL.createObjectURL(stableMediaBlob);
+          } else {
+            // Keep video lazy: playback still activates on demand, but the
+            // retained Blob makes repeated saves safe even before activation.
+            dataItem.src = '';
           }
-        } else {
-          dataItem.src = '';
           remappedCount++;
+          if (remappedCount % 10 === 0) await new Promise(r => setTimeout(r, 0));
+        } catch(e) {
+          console.warn('Failed to extract', dataItem.id, e);
+          failedExtractIds.push(dataItem.id);
         }
       }
 
