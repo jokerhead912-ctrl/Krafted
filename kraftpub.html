@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.1</title>
+<title>Krafted v7.0.2</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.1';
+var KRAFTED_VERSION = '7.0.2';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30617,6 +30617,12 @@ async function buildKpakV6(progressCallback, writableStream) {
   const blobItems = state.items.filter(it =>
     (it._sourceBlob instanceof Blob && it._sourceBlob.size > 0) ||
     (it._lazyZip && it._lazyEntry) ||
+    // v7.0.2: never-activated v6 KPAK lazy videos (_kpakEntry/_kpakBlob set,
+    // src still '') were previously excluded here entirely — they vanished
+    // from the save with ZERO warning because they never even entered the
+    // failedItems/expectedMediaCount accounting. Must be included so they
+    // get resolved into a real Blob below instead of silently dropped.
+    (it._kpakEntry && it._kpakBlob) ||
     (it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:')))
   );
   console.log('[KPAKv6] items to pack:', blobItems.length);
@@ -30641,6 +30647,11 @@ async function buildKpakV6(progressCallback, writableStream) {
       // when saving, then retain the Blob so the next save is direct too.
       lazyZip: it._lazyZip || null,
       lazyEntry: it._lazyEntry || null,
+      // v7.0.2: v6 KPAK never-activated lazy videos. Resolve on save from
+      // the ORIGINAL loaded File + entry offset/size (still valid at this
+      // point, before any save/overwrite has touched the destination path).
+      kpakEntry: it._kpakEntry || null,
+      kpakBlob: it._kpakBlob || null,
       item: it,
       itemId: it.id
     });
@@ -30668,6 +30679,18 @@ async function buildKpakV6(progressCallback, writableStream) {
         m.sourceBlob = await lazyFile.async('blob');
         if (m.item) m.item._sourceBlob = m.sourceBlob;
         if (!m.sourceBlob || !m.sourceBlob.size) throw new Error('legacy KPAK media is empty');
+      }
+      // v7.0.2: v6 KPAK never-activated lazy videos. These were previously
+      // excluded from the save entirely (see blobItems filter above) — now
+      // resolve them from the ORIGINAL loaded File + entry offset/size.
+      // saveBoardV6()'s pre-save materialize pass already does this eagerly
+      // BEFORE the destination file handle is created (streaming path), so
+      // this is a defensive fallback for direct buildKpakV6() callers and
+      // the blob-download path.
+      if (!m.isManifest && !m.sourceBlob && m.kpakEntry && m.kpakBlob) {
+        m.sourceBlob = await extractKpakV6EntryBlob(m.kpakBlob, m.kpakEntry);
+        if (m.item) m.item._sourceBlob = m.sourceBlob;
+        if (!m.sourceBlob || !m.sourceBlob.size) throw new Error('v6 KPAK lazy media is empty');
       }
       if (!m.isManifest && m.sourceBlob) {
         if (!m.sourceBlob.size) throw new Error('source Blob is empty');
@@ -30935,13 +30958,23 @@ async function _detectKpakEntryMime(blob, entry) {
 // v6.8.30: Extract a KPAK entry as a stable Blob. Keeping the Blob on the
 // item is required for repeated saves: refetching a blob URL created from a
 // previously-loaded KPAK file can fail in Chrome with ERR_UPLOAD_FILE_CHANGED.
+// v7.0.2: MUST fully materialize the bytes into memory (arrayBuffer → new
+// Blob), not just take a lazy Blob.slice() view. When `kpakBlob` is the
+// on-disk File the user picked to load, .slice() is a lazy reference into
+// that file — if the user then Saves and OVERWRITES that same file path
+// (createWritable() truncates it immediately), every not-yet-actually-read
+// slice becomes invalid mid-save and every read throws a generic
+// "network error". Reading eagerly here guarantees the bytes live in RAM
+// and are completely decoupled from the source file on disk.
 async function extractKpakV6EntryBlob(kpakBlob, entry) {
   if (!kpakBlob || !entry || entry.offset < 0 || entry.size <= 0 || entry.offset + entry.size > kpakBlob.size) {
     throw new Error('KPAK media range is invalid for ' + ((entry && entry.name) || 'unknown entry'));
   }
-  const raw = kpakBlob.slice(entry.offset, entry.offset + entry.size);
-  const mime = await _detectKpakEntryMime(raw, entry);
-  return mime ? raw.slice(0, raw.size, mime) : raw;
+  const rawSlice = kpakBlob.slice(entry.offset, entry.offset + entry.size);
+  // Force the slice to be read NOW, while the source file is still intact.
+  const ab = await rawSlice.arrayBuffer();
+  const mime = await _detectKpakEntryMime(new Blob([ab]), entry);
+  return new Blob([ab], { type: mime || 'application/octet-stream' });
 }
 
 // v6.5.0: Extract a single entry from kpak Blob as a Blob URL
@@ -31078,6 +31111,49 @@ async function saveBoardV6() {
     if (it.video && !it.video.paused) { _pausedVideos.push(it.video); it.video.pause(); }
   });
 
+  // v7.0.2: CRITICAL — materialize every still-lazy media reference into an
+  // independent in-memory Blob BEFORE we ever open a writable handle on the
+  // destination file. `createWritable()` truncates the target file the
+  // instant it is called. If the user is overwriting (Replace) the SAME
+  // .kpak file they just loaded, any item still holding a lazy reference
+  // into that file (never-activated v6 KPAK video via _kpakEntry/_kpakBlob,
+  // or legacy JSZip lazy video via _lazyZip/_lazyEntry) would have its only
+  // byte source destroyed mid-save, producing a generic "network error" for
+  // every one of those items and a cascading MEDIA LOSS DETECTED. Resolving
+  // them here, while the source file is still fully intact, decouples the
+  // save entirely from whatever happens to the destination path.
+  const _lazyItemsToMaterialize = state.items.filter(it =>
+    !(it._sourceBlob instanceof Blob && it._sourceBlob.size > 0) &&
+    ((it._kpakEntry && it._kpakBlob) || (it._lazyZip && it._lazyEntry))
+  );
+  const _lazyMaterializeFailed = [];
+  if (_lazyItemsToMaterialize.length > 0) {
+    const _prepProg = document.createElement('div');
+    _prepProg.className = 'save-progress';
+    document.body.appendChild(_prepProg);
+    let _lazyDone = 0;
+    for (const it of _lazyItemsToMaterialize) {
+      _lazyDone++;
+      _prepProg.innerHTML = '<div class="pct">Preparing media ' + _lazyDone + '/' + _lazyItemsToMaterialize.length + '...</div>';
+      try {
+        if (it._kpakEntry && it._kpakBlob) {
+          it._sourceBlob = await extractKpakV6EntryBlob(it._kpakBlob, it._kpakEntry);
+        } else if (it._lazyZip && it._lazyEntry) {
+          const lazyFile = it._lazyZip.file(it._lazyEntry);
+          if (!lazyFile) throw new Error('legacy KPAK entry not found: ' + it._lazyEntry);
+          it._sourceBlob = await lazyFile.async('blob');
+        }
+      } catch (e) {
+        console.error('[SAVE V6] pre-save materialize failed for item', it.id, e.message);
+        _lazyMaterializeFailed.push(it.id);
+      }
+    }
+    try { _prepProg.remove(); } catch (e) {}
+  }
+  if (_lazyMaterializeFailed.length > 0) {
+    console.error('[SAVE V6] could not materialize lazy media for items:', _lazyMaterializeFailed);
+  }
+
   const dateStr = new Date().toISOString().slice(0, 10);
   const fname = 'krafted_' + dateStr + '.kpak';
   const prog = document.createElement('div');
@@ -31100,9 +31176,10 @@ async function saveBoardV6() {
           await writable.close();
           saved = true;
           console.log('[SAVE V6] streamed to file');
-          if (result.failedItems && result.failedItems.length > 0) {
-            console.error('[SAVE V6] failed media items:', result.failedItems);
-            toast('⚠ Saved but ' + result.failedItems.length + ' media item(s) could not be written. See Console for IDs.');
+          const _allFailed = [...(result.failedItems || []).map(f => f.itemId), ..._lazyMaterializeFailed];
+          if (_allFailed.length > 0) {
+            console.error('[SAVE V6] failed media items:', result.failedItems, 'materialize failed:', _lazyMaterializeFailed);
+            toast('⚠ Saved but ' + _allFailed.length + ' media item(s) could not be written. See Console for IDs.');
           } else {
             toast('Saved v6 kpak \u2714 ' + fname + ' (streamed)');
           }
@@ -31156,11 +31233,14 @@ async function saveBoardV6() {
       a.click();
       setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
       console.log('[SAVE V6] blob downloaded, size:', formatBytes(blob.size));
-      if (result.failedItems && result.failedItems.length > 0) {
-        console.error('[SAVE V6] failed media items:', result.failedItems);
-        toast('⚠ Saved but ' + result.failedItems.length + ' media item(s) could not be written. See Console for IDs.');
-      } else {
-        toast('Saved v6 kpak \u2714 ' + fname + ' (' + formatBytes(blob.size) + ')');
+      {
+        const _allFailed = [...(result.failedItems || []).map(f => f.itemId), ..._lazyMaterializeFailed];
+        if (_allFailed.length > 0) {
+          console.error('[SAVE V6] failed media items:', result.failedItems, 'materialize failed:', _lazyMaterializeFailed);
+          toast('⚠ Saved but ' + _allFailed.length + ' media item(s) could not be written. See Console for IDs.');
+        } else {
+          toast('Saved v6 kpak \u2714 ' + fname + ' (' + formatBytes(blob.size) + ')');
+        }
       }
       if (result.manifestJson) _writeEmergencyBackup(result.manifestJson);
     }
@@ -31272,19 +31352,27 @@ async function loadBoardFile(event) {
         }
         dataItem._kpakEntry = entry;
         dataItem._kpakBlob = file;
+        // v7.0.2: videos stay LAZY at load time — do NOT eagerly materialize
+        // their bytes here. extractKpakV6EntryBlob now reads the full entry
+        // into memory (needed to survive a same-file overwrite on save), so
+        // calling it unconditionally for every item would force-read every
+        // video into RAM during LOAD, defeating the whole "no OOM on load"
+        // design for large boards. Videos are safely materialized later,
+        // either on first playback activation or by saveBoardV6's pre-save
+        // materialize pass (both already handle _kpakEntry/_kpakBlob).
+        if (dataItem.isVideo) {
+          dataItem.src = '';
+          remappedCount++;
+          continue;
+        }
         try {
-          // v6.8.30: retain the sliced Blob on the manifest item. On the next
-          // save, buildKpakV6 can stream this stable Blob directly instead of
-          // refetching a blob URL backed by the previously-loaded file.
+          // v6.8.30: retain the extracted Blob on the manifest item. On the
+          // next save, buildKpakV6 can stream this stable Blob directly
+          // instead of refetching a blob URL backed by the previously-loaded
+          // file.
           const stableMediaBlob = await extractKpakV6EntryBlob(file, entry);
           dataItem._sourceBlob = stableMediaBlob;
-          if (!dataItem.isVideo) {
-            dataItem.src = URL.createObjectURL(stableMediaBlob);
-          } else {
-            // Keep video lazy: playback still activates on demand, but the
-            // retained Blob makes repeated saves safe even before activation.
-            dataItem.src = '';
-          }
+          dataItem.src = URL.createObjectURL(stableMediaBlob);
           remappedCount++;
           if (remappedCount % 10 === 0) await new Promise(r => setTimeout(r, 0));
         } catch(e) {
@@ -31313,14 +31401,20 @@ async function loadBoardFile(event) {
       window._activateLazyVideoV6 = async function(item) {
         if (!item._kpakEntry || !item._kpakBlob || !item.video) return;
         try {
-          const blobUrl = await extractKpakV6Entry(item._kpakBlob, item._kpakEntry);
+          // v7.0.2: retain the materialized Blob directly (not just a blob:
+          // URL) so a later save can stream it without refetching — same
+          // pattern as the image/audio path above.
+          const stableBlob = await extractKpakV6EntryBlob(item._kpakBlob, item._kpakEntry);
+          item._sourceBlob = stableBlob;
+          const blobUrl = URL.createObjectURL(stableBlob);
           item.video.src = blobUrl;
           item.src = blobUrl;
           item.video.preload = 'auto';
           item.video.load();
+          const _activatedSize = item._kpakEntry.size;
           delete item._kpakEntry;
           delete item._kpakBlob;
-          console.log('[V6 Lazy] Activated video:', item.id, formatBytes(item._kpakEntry ? item._kpakEntry.size : 0));
+          console.log('[V6 Lazy] Activated video:', item.id, formatBytes(_activatedSize));
         } catch(e) {
           console.warn('[V6 Lazy] Failed:', item.id, e.message);
         }
