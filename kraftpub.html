@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.30</title>
+<title>Krafted v6.8.31</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.30';
+var KRAFTED_VERSION = '6.8.31';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7023,7 +7023,7 @@ function restoreSnapshot(snapStr) {
         try { toast('Audio source expired — re-add the file to undo this'); } catch (e) {}
         return;
       }
-      const audioItem = addAudioItem(data.src, data.audioName || 'Audio', data.x, data.y);
+      const audioItem = addAudioItem(data.src, data.audioName || 'Audio', data.x, data.y, data._fileSize, data._sourceBlob);
       Object.assign(audioItem, {
         w: data.w, h: data.h, rot: data.rot, opacity: data.opacity,
         flipH: data.flipH, flipV: data.flipV, locked: data.locked,
@@ -17877,7 +17877,7 @@ function _applyAudioItemUiScale(item) {
   }
 }
 
-function addAudioItem(src, fileName, x, y, fileSize) {
+function addAudioItem(src, fileName, x, y, fileSize, sourceBlob) {
   pushUndo();
   const w = 280, h = 64;
   const el = document.createElement('div');
@@ -18024,6 +18024,10 @@ function addAudioItem(src, fileName, x, y, fileSize) {
     w, h, rot: 0, opacity: 1, flipH: false, flipV: false, locked: false,
     z: G.nextZ++,
     src, isAudio: true, audioName: fileName || 'Audio',
+    // v6.8.31: retain stable audio bytes for repeated save/load cycles.
+    // Re-fetching a blob URL created from a previous KPAK can fail in Chrome
+    // with ERR_UPLOAD_FILE_CHANGED, just like screenshot media.
+    _sourceBlob: (sourceBlob instanceof Blob) ? sourceBlob : null,
     natW: w, natH: h,
     cropX: 0, cropY: 0, cropW: w, cropH: h,
     brightness: 100, contrast: 100, saturate: 100, hueRotate: 0, blur: 0, sepia: 0, grayscale: 0,
@@ -18050,7 +18054,7 @@ function handleAudioUpload(event) {
   files.forEach((file, idx) => {
     // v6.2.1: use blob URL to avoid OOM on large WAVs
     const blobUrl = URL.createObjectURL(file);
-    addAudioItem(blobUrl, file.name, pasteX + idx * 20, pasteY + idx * 20, file.size);
+    addAudioItem(blobUrl, file.name, pasteX + idx * 20, pasteY + idx * 20, file.size, file);
   });
   event.target.value = ''; // Reset for re-upload
 }
@@ -20740,7 +20744,7 @@ function _handleFileDrop(e, files) {
     // and readAsDataURL allocates a base64 string (~33% bigger) that OOMs the tab
     // and crashes JSON.stringify during pushUndo/captureSnapshot.
     const blobUrl = URL.createObjectURL(file);
-    addAudioItem(blobUrl, file.name, dropX, dropY, file.size);
+    addAudioItem(blobUrl, file.name, dropX, dropY, file.size, file);
   });
 }
 
@@ -20967,7 +20971,7 @@ document.addEventListener('paste', e => {
         const px = x + curOffset * 20, py = y + curOffset * 20;
         // v6.2.1: use blob URL to avoid OOM on large WAVs
         const blobUrl = URL.createObjectURL(f);
-        addAudioItem(blobUrl, f.name, px, py, f.size);
+        addAudioItem(blobUrl, f.name, px, py, f.size, f);
       });
       toast('Pasted ' + (imageFiles.length + videoFiles.length + audioFiles.length) + ' files');
       return;
@@ -25565,7 +25569,7 @@ function pasteClipboard() {
         try { toast('Audio source expired — re-add the file to paste it again'); } catch (e) {}
         return;
       }
-      const audioItem = addAudioItem(data.src, data.audioName || 'Audio', px, py);
+      const audioItem = addAudioItem(data.src, data.audioName || 'Audio', px, py, data._fileSize, data._sourceBlob);
       Object.assign(audioItem, {
         w: data.w, h: data.h, rot: data.rot, opacity: data.opacity,
         flipH: data.flipH, flipV: data.flipV, locked: data.locked,
@@ -31849,7 +31853,7 @@ function restoreBoard(data, append) {
       }
       if (!_audioName) _audioName = 'Audio';
       console.log('[AUDIO RESTORE] final _audioName="' + _audioName + '" for id=' + d.id);
-      const item = addAudioItem(d.src, _audioName, d.x, d.y);
+      const item = addAudioItem(d.src, _audioName, d.x, d.y, d._fileSize, d._sourceBlob);
       item.filename = _audioName;
       item.audioName = _audioName;
       item.id = d.id !== undefined ? d.id : item.id;
