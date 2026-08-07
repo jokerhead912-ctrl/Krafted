@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.4</title>
+<title>Krafted v7.0.5</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.4';
+var KRAFTED_VERSION = '7.0.5';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30966,15 +30966,65 @@ async function _detectKpakEntryMime(blob, entry) {
 // slice becomes invalid mid-save and every read throws a generic
 // "network error". Reading eagerly here guarantees the bytes live in RAM
 // and are completely decoupled from the source file on disk.
+// v7.0.5: concurrency limiter + retry for KPAK media extraction.
+// Reading many large `Blob.slice().arrayBuffer()` ranges from the SAME
+// on-disk File concurrently — e.g. the mouse sweeping/selecting across
+// many never-activated lazy videos right after opening a large (multi-GB,
+// many-entry) .kpak — can make Chrome throw a transient
+// `NotReadableError: The requested file could not be read...` for SOME
+// of the concurrent reads, even though the file is completely healthy
+// and unrelated reads succeed at the same time. This is resource
+// contention, not corruption: it consistently hits whichever items
+// happen to be read while several others are mid-read. Serializing
+// large reads (max N concurrent) and retrying on this specific
+// transient error class fixes it without touching byte-correctness.
+let _kpakExtractActive = 0;
+const _kpakExtractQueue = [];
+const KPAK_EXTRACT_CONCURRENCY = 2;
+function _kpakExtractAcquire() {
+  return new Promise(resolve => {
+    if (_kpakExtractActive < KPAK_EXTRACT_CONCURRENCY) {
+      _kpakExtractActive++;
+      resolve();
+    } else {
+      _kpakExtractQueue.push(resolve);
+    }
+  });
+}
+function _kpakExtractRelease() {
+  _kpakExtractActive--;
+  const next = _kpakExtractQueue.shift();
+  if (next) { _kpakExtractActive++; next(); }
+}
+
 async function extractKpakV6EntryBlob(kpakBlob, entry) {
   if (!kpakBlob || !entry || entry.offset < 0 || entry.size <= 0 || entry.offset + entry.size > kpakBlob.size) {
     throw new Error('KPAK media range is invalid for ' + ((entry && entry.name) || 'unknown entry'));
   }
-  const rawSlice = kpakBlob.slice(entry.offset, entry.offset + entry.size);
-  // Force the slice to be read NOW, while the source file is still intact.
-  const ab = await rawSlice.arrayBuffer();
-  const mime = await _detectKpakEntryMime(new Blob([ab]), entry);
-  return new Blob([ab], { type: mime || 'application/octet-stream' });
+  await _kpakExtractAcquire();
+  try {
+    const MAX_ATTEMPTS = 3;
+    let lastErr;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const rawSlice = kpakBlob.slice(entry.offset, entry.offset + entry.size);
+        // Force the slice to be read NOW, while the source file is still intact.
+        const ab = await rawSlice.arrayBuffer();
+        const mime = await _detectKpakEntryMime(new Blob([ab]), entry);
+        return new Blob([ab], { type: mime || 'application/octet-stream' });
+      } catch (e) {
+        lastErr = e;
+        // Only retry the transient contention error class. Anything else
+        // (e.g. a genuinely invalid byte range) should fail immediately.
+        if (e.name !== 'NotReadableError' || attempt === MAX_ATTEMPTS) throw e;
+        console.warn('[KPAKv6] extract retry ' + attempt + '/' + MAX_ATTEMPTS + ' for ' + (entry.name || 'entry') + ' after ' + e.name);
+        await new Promise(r => setTimeout(r, 300 * attempt));
+      }
+    }
+    throw lastErr;
+  } finally {
+    _kpakExtractRelease();
+  }
 }
 
 // v6.5.0: Extract a single entry from kpak Blob as a Blob URL
@@ -31577,7 +31627,15 @@ async function loadBoardFile(event) {
           // v7.0.3: prefer an already-materialized _sourceBlob (e.g. from
           // saveBoardV6's pre-save pass) over re-reading the JSZip entry —
           // same fix as _activateLazyVideoV6 above.
-          var blob = (item._sourceBlob instanceof Blob) ? item._sourceBlob : await zip.file(entryPath).async('blob');
+          // v7.0.5: reuse the same concurrency limiter as the v6 KPAK path —
+          // reading many large JSZip entries concurrently from the same
+          // in-memory zip can hit the same transient contention as slicing
+          // a giant File, especially right after loading a large legacy kpak.
+          var blob = item._sourceBlob instanceof Blob ? item._sourceBlob : await (async function() {
+            await _kpakExtractAcquire();
+            try { return await zip.file(entryPath).async('blob'); }
+            finally { _kpakExtractRelease(); }
+          })();
           if (blob && blob.size > 0) {
             var blobUrl = URL.createObjectURL(blob);
             item._sourceBlob = blob;
