@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.28</title>
+<title>Krafted v6.8.29</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.28';
+var KRAFTED_VERSION = '6.8.29';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7825,7 +7825,7 @@ function frameTidiedSelection(selItems) {
 
 
 // ============================================================
-function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize, isGifFlag) {
+function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize, isGifFlag, sourceBlob) {
   // BATCH MODE (isLast defined): caller manages the batch undo (push it ONCE at start),
   // so we skip pushUndo here. We only call selectOnly on the last item so the final dropped
   // image is the active selection. This prevents memory crash from N parallel FileReader/
@@ -7889,6 +7889,10 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize, isGifFla
     w, h, rot: 0, opacity: 1, flipH: false, flipV: false, locked: false,
     z: G.nextZ++,
     src, natW, natH, isVideo: isVideo, isGif: isAnimatedGifSrc,
+    // v6.8.29: retain an in-memory image Blob when available. Screenshot
+    // clipboard object URLs can fail later with Chrome ERR_UPLOAD_FILE_CHANGED;
+    // KPAK save uses this stable Blob directly instead of refetching src.
+    _sourceBlob: (!isVideo && sourceBlob instanceof Blob) ? sourceBlob : null,
     // Original file name (for video/image export naming & display). Set by
     // callers (drag-drop, paste) when known. Empty when not available.
     filename: '',
@@ -20920,7 +20924,7 @@ document.addEventListener('paste', e => {
           const w = bitmap.width, h = bitmap.height;
           bitmap.close();
           const blobUrl = URL.createObjectURL(f);
-          addImage(blobUrl, w, h, px, py, false, isLast, f.size);
+          addImage(blobUrl, w, h, px, py, false, isLast, f.size, false, f);
         } catch (e) {
           console.warn('[Paste] Image decode failed:', e.message);
         }
@@ -21121,15 +21125,17 @@ document.addEventListener('paste', e => {
       const isLast = (imgIdx === imageItems.length - 1);
       imgIdx++;
       try {
-        // Copy the clipboard blob into a persistent File so the backing
-        // bytes stay alive even if the clipboard item is garbage collected.
-        const ext = (blob.type && mimeToExt(blob.type, 'png')) || 'png';
-        const persistentFile = new File([blob], 'screenshot_' + Date.now() + '_' + imgIdx + '.' + ext, { type: blob.type || 'image/png' });
-        const bitmap = await createImageBitmap(persistentFile);
+        // v6.8.29: snapshot the clipboard bytes into a fresh in-memory Blob.
+        // A File wrapper alone can still be treated by Chrome as an upload
+        // backing store and later fail with ERR_UPLOAD_FILE_CHANGED. A copied
+        // ArrayBuffer-backed Blob is stable for the entire board lifetime.
+        const bytes = await blob.arrayBuffer();
+        const stableBlob = new Blob([new Uint8Array(bytes)], { type: blob.type || 'image/png' });
+        const bitmap = await createImageBitmap(stableBlob);
         const w = bitmap.width, h = bitmap.height;
         bitmap.close();
-        const blobUrl = URL.createObjectURL(persistentFile);
-        addImage(blobUrl, w, h, px, py, false, isLast, persistentFile.size);
+        const blobUrl = URL.createObjectURL(stableBlob);
+        addImage(blobUrl, w, h, px, py, false, isLast, stableBlob.size, false, stableBlob);
       } catch (e) {
         console.warn('[Paste] Screenshot decode failed:', e.message);
       }
@@ -30619,6 +30625,10 @@ async function buildKpakV6(progressCallback, writableStream) {
       size: it._fileSize || (it.isVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024),
       type: it.isVideo ? 1 : it.isAudio ? 2 : 3,
       src: it.src,
+      // v6.8.29: image items may retain their stable source Blob. Prefer it
+      // over fetch(src), which can throw Chrome ERR_UPLOAD_FILE_CHANGED for
+      // screenshot clipboard object URLs.
+      sourceBlob: (!it.isVideo && it._sourceBlob instanceof Blob) ? it._sourceBlob : null,
       itemId: it.id
     });
   }
@@ -30635,16 +30645,21 @@ async function buildKpakV6(progressCallback, writableStream) {
     if (progressCallback) progressCallback('Pack ' + (i + 1) + '/' + entryMetas.length + ' (' + formatBytes(m.size) + ')...');
 
     try {
-      // v6.8.28: preflight the blob URL with a lightweight fetch that only reads
-      // headers. This catches revoked / stale blob URLs early instead of silently
-      // writing a missing media entry.
-      if (!m.isManifest) {
+      // v6.8.29: stable source Blobs bypass fetch entirely. Chrome can report
+      // ERR_UPLOAD_FILE_CHANGED when fetch() re-opens a clipboard-derived blob
+      // URL, even though the image still renders on the canvas.
+      if (!m.isManifest && m.sourceBlob) {
+        if (!m.sourceBlob.size) throw new Error('source Blob is empty');
+        m.size = m.sourceBlob.size;
+      } else if (!m.isManifest) {
+        // v6.8.28: preflight the blob URL with a lightweight fetch that only reads
+        // headers. This catches revoked / stale blob URLs early instead of silently
+        // writing a missing media entry.
         try {
           const probe = await fetch(m.src);
           if (!probe.ok) throw new Error('preflight status ' + probe.status);
           const cl = parseInt(probe.headers.get('content-length') || '0', 10);
           if (cl === 0 && probe.body && probe.body.cancel) probe.body.cancel();
-          // If Content-Length is reliable, prefer it over the stored estimate.
           if (cl > 0) m.size = cl;
         } catch (pe) {
           console.error('[KPAKv6] preflight failed for', m.name, m.src, pe.message);
@@ -30653,17 +30668,17 @@ async function buildKpakV6(progressCallback, writableStream) {
         }
       }
 
-      // Stream entry bytes via fetch + getReader, writing chunks as we read
+      // Stream entry bytes via Blob/Response + getReader, writing chunks as we read
       // This keeps memory usage at ~chunk-size (typically 64KB) instead of full entry
-      const resp = m.isManifest ? null : await fetch(m.src);
-      if (!m.isManifest && !resp.ok) { console.warn('[KPAKv6] fetch failed', m.name); failedItems.push({ name: m.name, itemId: m.itemId, reason: 'fetch ' + resp.status }); continue; }
+      const resp = (m.isManifest || m.sourceBlob) ? null : await fetch(m.src);
+      if (!m.isManifest && !m.sourceBlob && !resp.ok) { console.warn('[KPAKv6] fetch failed', m.name); failedItems.push({ name: m.name, itemId: m.itemId, reason: 'fetch ' + resp.status }); continue; }
 
       // Write 4-byte size placeholder (we know size at end, fix it via finalization)
       // For true streaming without seek, we write SIZE = 0xFFFFFFFF (4GB marker) as sentinel.
       // The index stores the real offset/size, so the in-band size header is redundant.
       // Wait, our readKpakV6Index DOES need this for media entry size to do blob.slice().
       // We need real size. So we MUST use Content-Length or pre-count.
-      const contentLength = m.isManifest ? m.bytes.length : parseInt(resp.headers.get('content-length') || '0', 10);
+      const contentLength = m.isManifest ? m.bytes.length : m.sourceBlob ? m.sourceBlob.size : parseInt(resp.headers.get('content-length') || '0', 10);
 
       let sizeBuf;
       if (contentLength > 0) {
@@ -30692,9 +30707,9 @@ async function buildKpakV6(progressCallback, writableStream) {
           blobParts.push(m.bytes);
         }
         actualSize = m.bytes.length;
-      } else if (resp.body && resp.body.getReader) {
+      } else if ((m.sourceBlob && m.sourceBlob.stream) || (resp.body && resp.body.getReader)) {
         // True streaming — read chunks and write immediately
-        const reader = resp.body.getReader();
+        const reader = m.sourceBlob ? m.sourceBlob.stream().getReader() : resp.body.getReader();
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -30738,7 +30753,7 @@ async function buildKpakV6(progressCallback, writableStream) {
         }
       } else {
         // No getReader — fallback to arrayBuffer
-        const ab = await resp.arrayBuffer();
+        const ab = m.sourceBlob ? await m.sourceBlob.arrayBuffer() : await resp.arrayBuffer();
         if (useStreaming) {
           await writableStream.write(new Uint8Array(ab));
         } else {
