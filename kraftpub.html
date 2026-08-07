@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v6.8.27</title>
+<title>Krafted v6.8.28</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '6.8.27';
+var KRAFTED_VERSION = '6.8.28';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -21074,11 +21074,16 @@ document.addEventListener('paste', e => {
   // either they copied externally (screenshot, browser copy-image) or
   // the 3s window has expired. So we can trust e.clipboardData and
   // read the image from the system clipboard normally.
+  const imageItems = [];
   for (const item of items) {
-    if (!item.type.startsWith('image/')) continue;
+    if (item.type.startsWith('image/')) {
+      const blob = item.getAsFile();
+      if (blob) imageItems.push({ blob, type: item.type });
+    }
+  }
+  if (imageItems.length > 0) {
     e.preventDefault();
-    const blob = item.getAsFile();
-    const target = attachToMindmap(blob);
+    const target = attachToMindmap(imageItems[0].blob);
     if (target) {
       const reader = new FileReader();
       reader.onload = ev => {
@@ -21097,23 +21102,40 @@ document.addEventListener('paste', e => {
         };
         tmpImg.src = ev.target.result;
       };
-      reader.readAsDataURL(blob);
+      reader.readAsDataURL(imageItems[0].blob);
       return;
     }
-    // Place on canvas at cursor
+    // Place on canvas at cursor — unified with file-paste path.
+    // v6.8.28: screenshot paste used to create a one-shot blob URL and
+    // hope it stayed alive until save. For large boards with many screenshots
+    // in a row, some blob URLs could become invalid before save on Chrome.
+    // We now copy the clipboard blob into a persistent File object and use
+    // the same createImageBitmap + URL.createObjectURL path as file drops.
     const { x, y } = getPasteXY();
-    // v5.5: Use blob URL instead of base64 data URL to avoid memory bloat
-    const blobUrl = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
-      addImage(blobUrl, img.naturalWidth, img.naturalHeight, x, y, false, undefined, blob.size);
-      toast('Pasted image ' + img.naturalWidth + 'x' + img.naturalHeight);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(blobUrl);
-      toast('Failed to paste image');
-    };
-    img.src = blobUrl;
+    if (imageItems.length > 0) pushUndo();
+    let imgIdx = 0;
+    (async function processNextScreenshot() {
+      if (imgIdx >= imageItems.length) return;
+      const { blob } = imageItems[imgIdx];
+      const px = x + imgIdx * 20, py = y + imgIdx * 20;
+      const isLast = (imgIdx === imageItems.length - 1);
+      imgIdx++;
+      try {
+        // Copy the clipboard blob into a persistent File so the backing
+        // bytes stay alive even if the clipboard item is garbage collected.
+        const ext = (blob.type && mimeToExt(blob.type, 'png')) || 'png';
+        const persistentFile = new File([blob], 'screenshot_' + Date.now() + '_' + imgIdx + '.' + ext, { type: blob.type || 'image/png' });
+        const bitmap = await createImageBitmap(persistentFile);
+        const w = bitmap.width, h = bitmap.height;
+        bitmap.close();
+        const blobUrl = URL.createObjectURL(persistentFile);
+        addImage(blobUrl, w, h, px, py, false, isLast, persistentFile.size);
+      } catch (e) {
+        console.warn('[Paste] Screenshot decode failed:', e.message);
+      }
+      setTimeout(processNextScreenshot, 30);
+    })();
+    toast('Pasted ' + imageItems.length + ' screenshot(s)');
     return;
   }
 
@@ -30585,6 +30607,9 @@ async function buildKpakV6(progressCallback, writableStream) {
   const blobItems = state.items.filter(it => it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:')));
   console.log('[KPAKv6] items to pack:', blobItems.length);
 
+  // v6.8.28: remember original media item count so we can warn if any vanish.
+  const expectedMediaCount = blobItems.length;
+
   // Build entries list with metadata only — bytes are fetched on demand
   const entryMetas = [];
   entryMetas.push({ name: 'manifest.json', size: manifestBytes.length, type: 0, bytes: manifestBytes, isManifest: true });
@@ -30593,13 +30618,15 @@ async function buildKpakV6(progressCallback, writableStream) {
       name: 'media/' + it.id + (it.isVideo ? '.mp4' : it.isAudio ? '.mp3' : '.png'),
       size: it._fileSize || (it.isVideo ? 80 * 1024 * 1024 : 5 * 1024 * 1024),
       type: it.isVideo ? 1 : it.isAudio ? 2 : 3,
-      src: it.src
+      src: it.src,
+      itemId: it.id
     });
   }
 
   if (progressCallback) progressCallback('Writing ' + entryMetas.length + ' entries...');
 
   const entries = [];
+  const failedItems = [];
   let currentOffset = 0;
   const blobParts = [];
 
@@ -30608,10 +30635,28 @@ async function buildKpakV6(progressCallback, writableStream) {
     if (progressCallback) progressCallback('Pack ' + (i + 1) + '/' + entryMetas.length + ' (' + formatBytes(m.size) + ')...');
 
     try {
+      // v6.8.28: preflight the blob URL with a lightweight fetch that only reads
+      // headers. This catches revoked / stale blob URLs early instead of silently
+      // writing a missing media entry.
+      if (!m.isManifest) {
+        try {
+          const probe = await fetch(m.src);
+          if (!probe.ok) throw new Error('preflight status ' + probe.status);
+          const cl = parseInt(probe.headers.get('content-length') || '0', 10);
+          if (cl === 0 && probe.body && probe.body.cancel) probe.body.cancel();
+          // If Content-Length is reliable, prefer it over the stored estimate.
+          if (cl > 0) m.size = cl;
+        } catch (pe) {
+          console.error('[KPAKv6] preflight failed for', m.name, m.src, pe.message);
+          failedItems.push({ name: m.name, itemId: m.itemId, reason: 'preflight: ' + pe.message });
+          continue;
+        }
+      }
+
       // Stream entry bytes via fetch + getReader, writing chunks as we read
       // This keeps memory usage at ~chunk-size (typically 64KB) instead of full entry
       const resp = m.isManifest ? null : await fetch(m.src);
-      if (!m.isManifest && !resp.ok) { console.warn('[KPAKv6] fetch failed', m.name); continue; }
+      if (!m.isManifest && !resp.ok) { console.warn('[KPAKv6] fetch failed', m.name); failedItems.push({ name: m.name, itemId: m.itemId, reason: 'fetch ' + resp.status }); continue; }
 
       // Write 4-byte size placeholder (we know size at end, fix it via finalization)
       // For true streaming without seek, we write SIZE = 0xFFFFFFFF (4GB marker) as sentinel.
@@ -30675,11 +30720,20 @@ async function buildKpakV6(progressCallback, writableStream) {
         if (contentLength === 0 || contentLength !== actualSize) {
           const fixBuf = new Uint8Array(4);
           new DataView(fixBuf.buffer).setUint32(0, actualSize, true);
-          // For streaming mode, we can't seek back to fix. Log warning.
-          if (useStreaming) {
+          // v6.8.28: blob-fallback path can still seek in memory to fix the
+          // size header. For streaming we cannot; rely on the index instead.
+          if (!useStreaming) {
+            const headerPos = dataOffset - 4;
+            blobParts.forEach(function(part, idx) {
+              // Only ArrayBuffer-backed parts matter; Blobs from the combine step
+              // are too late to patch. In practice size mismatches for blob URLs
+              // are rare, and the index remains authoritative.
+              if (part instanceof Uint8Array && headerPos >= currentOffset && headerPos < currentOffset + part.length) {
+                part.set(fixBuf, headerPos - currentOffset);
+              }
+            });
+          } else {
             console.warn('[KPAKv6] size mismatch for', m.name, 'contentLength:', contentLength, 'actual:', actualSize);
-            // Reader has already read past; size header is wrong but index has correct size
-            // So load will still work as long as we trust the index
           }
         }
       } else {
@@ -30698,7 +30752,14 @@ async function buildKpakV6(progressCallback, writableStream) {
       if (i % 2 === 0) await new Promise(r => setTimeout(r, 0));
     } catch (e) {
       console.warn('[KPAKv6] failed to pack', m.name, e.message);
+      failedItems.push({ name: m.name, itemId: m.itemId, reason: e.message });
     }
+  }
+
+  // v6.8.28: surface missing media at save time. A silent mismatch here is
+  // exactly what produces "saved ok but images missing on load".
+  if (failedItems.length > 0 || entries.filter(e => e.name.startsWith('media/')).length !== expectedMediaCount) {
+    console.error('[KPAKv6] MEDIA LOSS DETECTED during save:', failedItems);
   }
 
   // Pass 2: build index
@@ -30747,7 +30808,7 @@ async function buildKpakV6(progressCallback, writableStream) {
   if (useStreaming) {
     await writableStream.write(footerBuf);
     // Don't close stream — caller manages lifetime
-    return { entries, size: currentOffset + indexParts.reduce((s, p) => s + p.byteLength, 0) + 12, streamed: true, manifestJson };
+    return { entries, size: currentOffset + indexParts.reduce((s, p) => s + p.byteLength, 0) + 12, streamed: true, manifestJson, failedItems };
   } else {
     blobParts.push(footerBuf);
     // v6.8.1: build the Blob FIRST, then read its real .size. The old code
@@ -30759,7 +30820,7 @@ async function buildKpakV6(progressCallback, writableStream) {
     const totalSize = outBlob.size;
     if (progressCallback) progressCallback('Finalized ' + formatBytes(totalSize));
     console.log('[KPAKv6] blob built:', entries.length, 'entries,', formatBytes(totalSize));
-    return { blob: outBlob, size: totalSize, entries, manifestJson };
+    return { blob: outBlob, size: totalSize, entries, manifestJson, failedItems };
   }
 }
 
@@ -30778,15 +30839,19 @@ async function readKpakV6Index(blob) {
   const indexHeadBuf = await blob.slice(indexOffset, indexOffset + 4).arrayBuffer();
   const entryCount = new DataView(indexHeadBuf).getUint32(0, true);
 
-  // Read full index (we don't know exact size, but estimate: entryCount * 50 bytes)
-  const estimatedIndexSize = 4 + entryCount * 60;
-  const indexBuf = await blob.slice(indexOffset, indexOffset + estimatedIndexSize).arrayBuffer();
+  // v6.8.28: read the entire index region up to the footer. The old estimate
+  // (entryCount * 60) could truncate long file names or future index fields,
+  // silently cutting off the last entries and making their media vanish on load.
+  const indexEnd = Math.max(indexOffset + 4, blob.size - 12);
+  const indexBuf = await blob.slice(indexOffset, indexEnd).arrayBuffer();
   const indexView = new DataView(indexBuf);
   let pos = 4; // skip entry_count
   const entries = [];
 
   for (let i = 0; i < entryCount; i++) {
+    if (pos + 2 > indexBuf.byteLength) throw new Error('KPAK index truncated at nameLen (entry ' + i + ')');
     const nameLen = indexView.getUint16(pos, true); pos += 2;
+    if (pos + nameLen + 8 + 8 + 1 > indexBuf.byteLength) throw new Error('KPAK index truncated at entry ' + i + ' (nameLen=' + nameLen + ')');
     const name = new TextDecoder().decode(new Uint8Array(indexBuf, pos, nameLen)); pos += nameLen;
     const offset = Number(indexView.getBigUint64(pos, true)); pos += 8;
     const size = Number(indexView.getBigUint64(pos, true)); pos += 8;
@@ -30983,7 +31048,12 @@ async function saveBoardV6() {
           await writable.close();
           saved = true;
           console.log('[SAVE V6] streamed to file');
-          toast('Saved v6 kpak \u2714 ' + fname + ' (streamed)');
+          if (result.failedItems && result.failedItems.length > 0) {
+            console.error('[SAVE V6] failed media items:', result.failedItems);
+            toast('⚠ Saved but ' + result.failedItems.length + ' media item(s) could not be written. See Console for IDs.');
+          } else {
+            toast('Saved v6 kpak \u2714 ' + fname + ' (streamed)');
+          }
           if (result.manifestJson) _writeEmergencyBackup(result.manifestJson);
         }
       } catch (e) {
@@ -31028,7 +31098,12 @@ async function saveBoardV6() {
       a.click();
       setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
       console.log('[SAVE V6] blob downloaded, size:', formatBytes(blob.size));
-      toast('Saved v6 kpak \u2714 ' + fname + ' (' + formatBytes(blob.size) + ')');
+      if (result.failedItems && result.failedItems.length > 0) {
+        console.error('[SAVE V6] failed media items:', result.failedItems);
+        toast('⚠ Saved but ' + result.failedItems.length + ' media item(s) could not be written. See Console for IDs.');
+      } else {
+        toast('Saved v6 kpak \u2714 ' + fname + ' (' + formatBytes(blob.size) + ')');
+      }
       if (result.manifestJson) _writeEmergencyBackup(result.manifestJson);
     }
   } catch (err) {
@@ -31124,10 +31199,19 @@ async function loadBoardFile(event) {
       // Map entries to items — set _kpakEntry + _kpakBlob for on-demand extraction
       const mediaEntries = entries.filter(e => e.name.startsWith('media/'));
       let remappedCount = 0;
+      const missingMediaIds = [];
+      const failedExtractIds = [];
       for (const dataItem of data.items || []) {
         const mediPrefix = 'media/' + dataItem.id + '.';
         const entry = mediaEntries.find(e => e.name.startsWith(mediPrefix));
-        if (!entry) continue;
+        if (!entry) {
+          // v6.8.28: an item expects media but no entry was written for it.
+          // Usually means the blob URL was dead at save time.
+          if (dataItem.src && (dataItem.src.startsWith('blob:') || dataItem.src.startsWith('data:'))) {
+            missingMediaIds.push(dataItem.id);
+          }
+          continue;
+        }
         dataItem._kpakEntry = entry;
         dataItem._kpakBlob = file;
         if (!dataItem.isVideo) {
@@ -31135,11 +31219,22 @@ async function loadBoardFile(event) {
             dataItem.src = await extractKpakV6Entry(file, entry);
             remappedCount++;
             if (remappedCount % 10 === 0) await new Promise(r => setTimeout(r, 0));
-          } catch(e) { console.warn('Failed to extract', dataItem.id, e); }
+          } catch(e) {
+            console.warn('Failed to extract', dataItem.id, e);
+            failedExtractIds.push(dataItem.id);
+          }
         } else {
           dataItem.src = '';
           remappedCount++;
         }
+      }
+
+      // v6.8.28: surface media problems immediately so the user knows what happened.
+      if (missingMediaIds.length > 0) {
+        console.error('[V6 LOAD] media entries missing for items:', missingMediaIds);
+      }
+      if (failedExtractIds.length > 0) {
+        console.error('[V6 LOAD] media extraction failed for items:', failedExtractIds);
       }
 
       let doAppend = false;
@@ -31168,7 +31263,13 @@ async function loadBoardFile(event) {
       };
 
       if (prog) { try { prog.remove(); } catch(e) {} }
-      toast('Loaded ' + formatBytes(file.size) + ' (v6 format, ' + data.items.length + ' items, ' + remappedCount + ' media)');
+      const problems = missingMediaIds.length + failedExtractIds.length;
+      let msg = 'Loaded ' + formatBytes(file.size) + ' (v6 format, ' + data.items.length + ' items, ' + remappedCount + ' media)';
+      if (problems > 0) {
+        msg = 'Loaded ' + formatBytes(file.size) + ' ⚠ ' + problems + ' media missing/failed (see Console). Check DevTools for item IDs.';
+        console.error('[V6 LOAD] summary — missing:', missingMediaIds.length, 'failed:', failedExtractIds.length);
+      }
+      toast(msg);
       event.target.value = '';
       return;
       } catch (err) {
@@ -32287,6 +32388,25 @@ window.addEventListener('load', async () => {
   // Autosave restore DISABLED — user loads kpak via Load button when ready
   // Show alt-pan status badge if enabled (MacBook trackpad mode)
   updateAltPanBadge();
+
+  // v6.8.28: warn before closing/reloading while saving or if board is dirty.
+  // This reduces the chance of losing the .kpak file if the tab closes during
+  // a large save, or if the user accidentally refreshes before saving.
+  window.addEventListener('beforeunload', function(e) {
+    if (state._saving) {
+      e.preventDefault();
+      e.returnValue = 'A save is still in progress. Closing now may corrupt the file.';
+      return e.returnValue;
+    }
+    // Heuristic: if there are items and the last autosave was recent, consider dirty.
+    // We don't track a global dirty flag, so use item count as a coarse guard.
+    if ((state.items.length > 0 || state.texts.length > 0) && !state._kraftedClosingConfirmed) {
+      // Modern browsers only show a generic message, but setting returnValue still triggers it.
+      e.preventDefault();
+      e.returnValue = 'You have an unsaved board. Close without saving?';
+      return e.returnValue;
+    }
+  });
 });
 window.addEventListener('resize', () => { updateCanvas(); if (cutState) updateCutTargetHighlight(); });
 
