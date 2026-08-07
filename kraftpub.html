@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.7</title>
+<title>Krafted v7.0.8</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.7';
+var KRAFTED_VERSION = '7.0.8';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -31023,6 +31023,49 @@ function _lazyActivationShouldSkip(id) {
   return until !== undefined && Date.now() < until;
 }
 
+// v7.0.8: read a Blob/File range in fixed-size chunks instead of one giant
+// `.slice(offset, offset+size).arrayBuffer()` call. A single-shot read of a
+// multi-hundred-MB / multi-GB range is itself a fragile operation in Chrome
+// — independent of concurrency contention or post-write settling delays
+// (both already handled by the caller's retry loop), one huge read can
+// throw `NotReadableError` even against a file that `readKpakV6Index()` and
+// a save-time verify pass both just confirmed is completely intact. Chunking
+// keeps each individual read small (64MB) so any transient hiccup only
+// costs one chunk-retry instead of restarting the whole multi-GB read from
+// byte zero, and in practice chunked reads of this size are dramatically
+// less likely to hit the error at all.
+const KPAK_CHUNK_READ_SIZE = 64 * 1024 * 1024; // 64MB
+async function _readBlobRangeChunked(blob, offset, size) {
+  if (size <= KPAK_CHUNK_READ_SIZE) {
+    // Small entry — a single read is already safe and avoids chunking overhead.
+    return new Uint8Array(await blob.slice(offset, offset + size).arrayBuffer());
+  }
+  const out = new Uint8Array(size);
+  let pos = 0;
+  while (pos < size) {
+    const thisSize = Math.min(KPAK_CHUNK_READ_SIZE, size - pos);
+    const chunkSlice = blob.slice(offset + pos, offset + pos + thisSize);
+    const MAX_CHUNK_ATTEMPTS = 5;
+    let lastErr;
+    let ab = null;
+    for (let attempt = 1; attempt <= MAX_CHUNK_ATTEMPTS; attempt++) {
+      try {
+        ab = await chunkSlice.arrayBuffer();
+        break;
+      } catch (e) {
+        lastErr = e;
+        if (e.name !== 'NotReadableError' || attempt === MAX_CHUNK_ATTEMPTS) throw e;
+        console.warn('[KPAKv6] chunk retry ' + attempt + '/' + MAX_CHUNK_ATTEMPTS + ' at offset ' + (offset + pos) + ' after ' + e.name);
+        await new Promise(r => setTimeout(r, 500 * attempt));
+      }
+    }
+    if (!ab) throw lastErr || new Error('chunk read failed');
+    out.set(new Uint8Array(ab), pos);
+    pos += thisSize;
+  }
+  return out;
+}
+
 async function extractKpakV6EntryBlob(kpakBlob, entry) {
   if (!kpakBlob || !entry || entry.offset < 0 || entry.size <= 0 || entry.offset + entry.size > kpakBlob.size) {
     throw new Error('KPAK media range is invalid for ' + ((entry && entry.name) || 'unknown entry'));
@@ -31037,18 +31080,22 @@ async function extractKpakV6EntryBlob(kpakBlob, entry) {
     // largest video, since entries are appended in order. The old 3
     // attempts / ~1.8s total backoff was tuned for pure read-contention
     // (mouse hover spam) and was too short for this OS-level settling
-    // delay. 5 attempts with a longer ramp (500ms..4500ms, ~7.5s total)
-    // covers both cases without materially slowing down the common case
-    // (first attempt almost always succeeds).
+    // delay. 5 attempts with a longer ramp (500ms..2500ms per whole-entry
+    // attempt) covers both cases without materially slowing down the
+    // common case (first attempt almost always succeeds).
+    // v7.0.8: the actual byte read now goes through _readBlobRangeChunked,
+    // which reads in 64MB pieces (see above) instead of one giant read —
+    // this is the fix for large (near-GB) single-entry files where even a
+    // fully-verified, non-contended file can throw NotReadableError on one
+    // huge slice().arrayBuffer() call. This outer loop remains as a final
+    // safety net for whole-entry-level transient failures.
     const MAX_ATTEMPTS = 5;
     let lastErr;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const rawSlice = kpakBlob.slice(entry.offset, entry.offset + entry.size);
-        // Force the slice to be read NOW, while the source file is still intact.
-        const ab = await rawSlice.arrayBuffer();
-        const mime = await _detectKpakEntryMime(new Blob([ab]), entry);
-        return new Blob([ab], { type: mime || 'application/octet-stream' });
+        const bytes = await _readBlobRangeChunked(kpakBlob, entry.offset, entry.size);
+        const mime = await _detectKpakEntryMime(new Blob([bytes]), entry);
+        return new Blob([bytes], { type: mime || 'application/octet-stream' });
       } catch (e) {
         lastErr = e;
         // Only retry the transient contention/settling error class. Anything
