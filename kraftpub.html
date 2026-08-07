@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.2</title>
+<title>Krafted v7.0.3</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.2';
+var KRAFTED_VERSION = '7.0.3';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -31399,19 +31399,27 @@ async function loadBoardFile(event) {
       restoreBoard(data, doAppend);
 
       window._activateLazyVideoV6 = async function(item) {
-        if (!item._kpakEntry || !item._kpakBlob || !item.video) return;
+        if (!item.video) return;
+        if (!(item._sourceBlob instanceof Blob) && (!item._kpakEntry || !item._kpakBlob)) return;
         try {
-          // v7.0.2: retain the materialized Blob directly (not just a blob:
-          // URL) so a later save can stream it without refetching — same
-          // pattern as the image/audio path above.
-          const stableBlob = await extractKpakV6EntryBlob(item._kpakBlob, item._kpakEntry);
+          // v7.0.3: PREFER an already-materialized _sourceBlob. saveBoardV6's
+          // pre-save pass (and repeated saves) can populate _sourceBlob while
+          // leaving _kpakEntry/_kpakBlob set for bookkeeping — if this function
+          // ignores that and re-reads from _kpakBlob (the ORIGINAL loaded File
+          // handle), it can throw "NotReadableError: The requested file could
+          // not be read" the moment that file has since been overwritten by a
+          // save (e.g. Replace-save the same path). Only fall back to
+          // extracting from _kpakBlob when no materialized Blob exists yet.
+          const stableBlob = (item._sourceBlob instanceof Blob)
+            ? item._sourceBlob
+            : await extractKpakV6EntryBlob(item._kpakBlob, item._kpakEntry);
           item._sourceBlob = stableBlob;
           const blobUrl = URL.createObjectURL(stableBlob);
           item.video.src = blobUrl;
           item.src = blobUrl;
           item.video.preload = 'auto';
           item.video.load();
-          const _activatedSize = item._kpakEntry.size;
+          const _activatedSize = stableBlob.size;
           delete item._kpakEntry;
           delete item._kpakBlob;
           console.log('[V6 Lazy] Activated video:', item.id, formatBytes(_activatedSize));
@@ -31540,11 +31548,15 @@ async function loadBoardFile(event) {
       // v6.3.6: after restoreBoard, attach lazy video activator to items that have _lazyEntry.
       // The zip reference is kept alive on each item so _activateLazyVideo can extract blobs on demand.
       window._activateLazyVideo = async function(item) {
-        if (!item._lazyEntry || !item._lazyZip || !item.video) return;
+        if (!item.video) return;
+        if (!(item._sourceBlob instanceof Blob) && (!item._lazyEntry || !item._lazyZip)) return;
         var entryPath = item._lazyEntry;
         var zip = item._lazyZip;
         try {
-          var blob = await zip.file(entryPath).async('blob');
+          // v7.0.3: prefer an already-materialized _sourceBlob (e.g. from
+          // saveBoardV6's pre-save pass) over re-reading the JSZip entry —
+          // same fix as _activateLazyVideoV6 above.
+          var blob = (item._sourceBlob instanceof Blob) ? item._sourceBlob : await zip.file(entryPath).async('blob');
           if (blob && blob.size > 0) {
             var blobUrl = URL.createObjectURL(blob);
             item._sourceBlob = blob;
