@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.0</title>
+<title>Krafted v7.0.1</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.0';
+var KRAFTED_VERSION = '7.0.1';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30616,6 +30616,7 @@ async function buildKpakV6(progressCallback, writableStream) {
 
   const blobItems = state.items.filter(it =>
     (it._sourceBlob instanceof Blob && it._sourceBlob.size > 0) ||
+    (it._lazyZip && it._lazyEntry) ||
     (it.src && (it.src.startsWith('blob:') || it.src.startsWith('data:')))
   );
   console.log('[KPAKv6] items to pack:', blobItems.length);
@@ -30636,6 +30637,11 @@ async function buildKpakV6(progressCallback, writableStream) {
       // over fetch(src), which can throw Chrome ERR_UPLOAD_FILE_CHANGED for
       // screenshot clipboard URLs and URLs recreated from a loaded KPAK.
       sourceBlob: (it._sourceBlob instanceof Blob) ? it._sourceBlob : null,
+      // Legacy JSZip loads keep large videos lazy. Resolve that entry only
+      // when saving, then retain the Blob so the next save is direct too.
+      lazyZip: it._lazyZip || null,
+      lazyEntry: it._lazyEntry || null,
+      item: it,
       itemId: it.id
     });
   }
@@ -30652,9 +30658,17 @@ async function buildKpakV6(progressCallback, writableStream) {
     if (progressCallback) progressCallback('Pack ' + (i + 1) + '/' + entryMetas.length + ' (' + formatBytes(m.size) + ')...');
 
     try {
-      // v6.8.29: stable source Blobs bypass fetch entirely. Chrome can report
-      // ERR_UPLOAD_FILE_CHANGED when fetch() re-opens a clipboard-derived blob
-      // URL, even though the image still renders on the canvas.
+      // v6.8.29/30: stable source Blobs bypass fetch entirely. Chrome can
+      // report ERR_UPLOAD_FILE_CHANGED when fetch() re-opens a clipboard or
+      // previously-loaded blob URL, even though the media still renders.
+      // Legacy JSZip video entries are resolved once here and then retained.
+      if (!m.isManifest && !m.sourceBlob && m.lazyZip && m.lazyEntry) {
+        const lazyFile = m.lazyZip.file(m.lazyEntry);
+        if (!lazyFile) throw new Error('legacy KPAK entry not found: ' + m.lazyEntry);
+        m.sourceBlob = await lazyFile.async('blob');
+        if (m.item) m.item._sourceBlob = m.sourceBlob;
+        if (!m.sourceBlob || !m.sourceBlob.size) throw new Error('legacy KPAK media is empty');
+      }
       if (!m.isManifest && m.sourceBlob) {
         if (!m.sourceBlob.size) throw new Error('source Blob is empty');
         m.size = m.sourceBlob.size;
@@ -30775,6 +30789,11 @@ async function buildKpakV6(progressCallback, writableStream) {
     } catch (e) {
       console.warn('[KPAKv6] failed to pack', m.name, e.message);
       failedItems.push({ name: m.name, itemId: m.itemId, reason: e.message });
+      // A writable-stream error is fatal to the selected file. Do not keep
+      // writing subsequent entries into a broken stream and then close it as
+      // if the package were valid; abort and let saveBoardV6 use the verified
+      // Blob fallback instead.
+      if (useStreaming) throw e;
     }
   }
 
@@ -31071,11 +31090,12 @@ async function saveBoardV6() {
     // Try streaming first (Chrome/Edge with File System Access API) — only one entry in memory at a time
     let saved = false;
     if (window.showSaveFilePicker) {
+      let writable = null;
       try {
         const h = await requestSaveHandle(fname, 'application/zip', '.kpak');
         if (h.cancelled) { toast('Save cancelled'); _setSaving(false); return; }
         if (h.handle) {
-          const writable = await h.handle.createWritable();
+          writable = await h.handle.createWritable();
           const result = await buildKpakV6(updateProg, writable);
           await writable.close();
           saved = true;
@@ -31089,6 +31109,12 @@ async function saveBoardV6() {
           if (result.manifestJson) _writeEmergencyBackup(result.manifestJson);
         }
       } catch (e) {
+        // A failed writable stream may have truncated the selected file. Abort
+        // it and do not mark the partial file as a successful save. The caller
+        // falls back to a verified download built from stable source Blobs.
+        try { if (writable && writable.abort) await writable.abort(e); } catch (abortErr) {
+          console.warn('[SAVE V6] could not abort failed stream:', abortErr.name, abortErr.message);
+        }
         console.warn('[SAVE V6] stream failed, falling back to blob:', e.name, e.message);
       }
     }
@@ -31376,6 +31402,10 @@ async function loadBoardFile(event) {
         try {
           const blob = await zip.file(entryPath).async('blob');
           if (blob && blob.size > 0) {
+            // v7.0.1: retain the decoded legacy-KPAK Blob. Re-fetching the
+            // recreated object URL on a later save can produce network error /
+            // ERR_UPLOAD_FILE_CHANGED in Chrome.
+            dataItem._sourceBlob = blob;
             dataItem.src = URL.createObjectURL(blob);
             remappedIds.add(dataItem.id);
             restoredCount++;
@@ -31423,6 +31453,7 @@ async function loadBoardFile(event) {
           var blob = await zip.file(entryPath).async('blob');
           if (blob && blob.size > 0) {
             var blobUrl = URL.createObjectURL(blob);
+            item._sourceBlob = blob;
             item.video.src = blobUrl;
             item.src = blobUrl;
             item.video.preload = 'auto';
