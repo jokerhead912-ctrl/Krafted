@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.8</title>
+<title>Krafted v7.0.9</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.8';
+var KRAFTED_VERSION = '7.0.9';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -31034,13 +31034,24 @@ function _lazyActivationShouldSkip(id) {
 // costs one chunk-retry instead of restarting the whole multi-GB read from
 // byte zero, and in practice chunked reads of this size are dramatically
 // less likely to hit the error at all.
+// v7.0.9: return an ARRAY of chunk Uint8Arrays instead of concatenating them
+// into one giant pre-allocated buffer. The very first version of this
+// function did `new Uint8Array(size)` up front for a near-GB `size` — that
+// single large contiguous allocation is exactly the kind of operation this
+// function exists to avoid, and it can throw `RangeError: Array buffer
+// allocation failed` under memory pressure (undo stack, emergency backup
+// JSON, browser overhead, etc. all compete for the same heap). `new
+// Blob(arrayOfChunks)` accepts a list of parts and does NOT require any of
+// them to be copied into one pre-sized buffer, so returning the chunks
+// as-is and handing them straight to `new Blob(...)` avoids the large
+// allocation entirely while still producing a single logical byte range.
 const KPAK_CHUNK_READ_SIZE = 64 * 1024 * 1024; // 64MB
 async function _readBlobRangeChunked(blob, offset, size) {
   if (size <= KPAK_CHUNK_READ_SIZE) {
     // Small entry — a single read is already safe and avoids chunking overhead.
-    return new Uint8Array(await blob.slice(offset, offset + size).arrayBuffer());
+    return [new Uint8Array(await blob.slice(offset, offset + size).arrayBuffer())];
   }
-  const out = new Uint8Array(size);
+  const chunks = [];
   let pos = 0;
   while (pos < size) {
     const thisSize = Math.min(KPAK_CHUNK_READ_SIZE, size - pos);
@@ -31060,10 +31071,10 @@ async function _readBlobRangeChunked(blob, offset, size) {
       }
     }
     if (!ab) throw lastErr || new Error('chunk read failed');
-    out.set(new Uint8Array(ab), pos);
+    chunks.push(new Uint8Array(ab));
     pos += thisSize;
   }
-  return out;
+  return chunks;
 }
 
 async function extractKpakV6EntryBlob(kpakBlob, entry) {
@@ -31089,13 +31100,19 @@ async function extractKpakV6EntryBlob(kpakBlob, entry) {
     // fully-verified, non-contended file can throw NotReadableError on one
     // huge slice().arrayBuffer() call. This outer loop remains as a final
     // safety net for whole-entry-level transient failures.
+    // v7.0.9: _readBlobRangeChunked returns an ARRAY of chunk Uint8Arrays
+    // (not one concatenated buffer) — pass it directly as `new Blob(chunks)`
+    // parts. Never spread it as `new Blob([chunks])`, which would wrap the
+    // whole array as a single part instead of many, and never manually
+    // concatenate into one big Uint8Array first — that reintroduces the
+    // exact large-allocation problem this fix is meant to avoid.
     const MAX_ATTEMPTS = 5;
     let lastErr;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const bytes = await _readBlobRangeChunked(kpakBlob, entry.offset, entry.size);
-        const mime = await _detectKpakEntryMime(new Blob([bytes]), entry);
-        return new Blob([bytes], { type: mime || 'application/octet-stream' });
+        const chunks = await _readBlobRangeChunked(kpakBlob, entry.offset, entry.size);
+        const mime = await _detectKpakEntryMime(new Blob(chunks), entry);
+        return new Blob(chunks, { type: mime || 'application/octet-stream' });
       } catch (e) {
         lastErr = e;
         // Only retry the transient contention/settling error class. Anything
