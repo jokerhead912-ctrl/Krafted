@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.6</title>
+<title>Krafted v7.0.7</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.6';
+var KRAFTED_VERSION = '7.0.7';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -31029,7 +31029,18 @@ async function extractKpakV6EntryBlob(kpakBlob, entry) {
   }
   await _kpakExtractAcquire();
   try {
-    const MAX_ATTEMPTS = 3;
+    // v7.0.7: widen the retry window. `NotReadableError` can also happen
+    // when the file was JUST written (Save streamed it, then the user
+    // immediately re-opened it to Load) and the OS / antivirus / cloud
+    // sync (OneDrive, iCloud Drive, etc.) is still settling the freshest
+    // bytes at the END of the file — typically the most-recently-added,
+    // largest video, since entries are appended in order. The old 3
+    // attempts / ~1.8s total backoff was tuned for pure read-contention
+    // (mouse hover spam) and was too short for this OS-level settling
+    // delay. 5 attempts with a longer ramp (500ms..4500ms, ~7.5s total)
+    // covers both cases without materially slowing down the common case
+    // (first attempt almost always succeeds).
+    const MAX_ATTEMPTS = 5;
     let lastErr;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
@@ -31040,11 +31051,11 @@ async function extractKpakV6EntryBlob(kpakBlob, entry) {
         return new Blob([ab], { type: mime || 'application/octet-stream' });
       } catch (e) {
         lastErr = e;
-        // Only retry the transient contention error class. Anything else
-        // (e.g. a genuinely invalid byte range) should fail immediately.
+        // Only retry the transient contention/settling error class. Anything
+        // else (e.g. a genuinely invalid byte range) should fail immediately.
         if (e.name !== 'NotReadableError' || attempt === MAX_ATTEMPTS) throw e;
         console.warn('[KPAKv6] extract retry ' + attempt + '/' + MAX_ATTEMPTS + ' for ' + (entry.name || 'entry') + ' after ' + e.name);
-        await new Promise(r => setTimeout(r, 300 * attempt));
+        await new Promise(r => setTimeout(r, 500 * attempt));
       }
     }
     throw lastErr;
@@ -31274,6 +31285,35 @@ async function saveBoardV6() {
         await writable.close();
         saved = true;
         console.log('[SAVE V6] streamed to file');
+        // v7.0.7: SELF-VERIFY after a streaming save too. Previously only the
+        // blob-download fallback path (below) re-read its own index to check
+        // every media entry's byte range — the streaming path (File System
+        // Access API, the default on Chrome/Edge when the user picks a
+        // location) had NO post-write verification at all. Re-open the file
+        // we just wrote and confirm the index parses and every entry's
+        // range fits inside the actual on-disk size. This mirrors the fix
+        // below and catches a truncated/incomplete write immediately,
+        // instead of only surfacing as a `NotReadableError` on the NEXT
+        // load — which is confusing because the save itself reported
+        // success.
+        try {
+          updateProg('Verifying...');
+          const writtenFile = await saveHandle.getFile();
+          const chk = await readKpakV6Index(writtenFile);
+          let bad = 0;
+          for (const e of (chk.entries || [])) {
+            if (e.offset < 0 || e.size <= 0 || (e.offset + e.size) > writtenFile.size) bad++;
+          }
+          const expected = (chk.entries || []).length;
+          if (bad > 0) {
+            console.error('[SAVE V6] STREAM VERIFY FAILED —', bad, 'of', expected, 'entries out of bounds');
+            toast('⚠ Save verify failed: ' + bad + '/' + expected + ' media entries corrupt. Please report this.');
+          } else {
+            console.log('[SAVE V6] stream verify OK —', expected, 'entries all in bounds,', formatBytes(writtenFile.size));
+          }
+        } catch (ve) {
+          console.error('[SAVE V6] stream verify threw:', ve.message);
+        }
         const _allFailed = [...(result.failedItems || []).map(f => f.itemId), ..._lazyMaterializeFailed];
         if (_allFailed.length > 0) {
           console.error('[SAVE V6] failed media items:', result.failedItems, 'materialize failed:', _lazyMaterializeFailed);
