@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.5</title>
+<title>Krafted v7.0.6</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.5';
+var KRAFTED_VERSION = '7.0.6';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -30997,6 +30997,32 @@ function _kpakExtractRelease() {
   if (next) { _kpakExtractActive++; next(); }
 }
 
+// v7.0.6: per-item re-entrancy guard + failure cooldown for lazy-video
+// activation. `_activateLazyVideoV6`/`_activateLazyVideo` are called on
+// EVERY mousemove-hover tick and on every select for the same item. A
+// large video's `arrayBuffer()` read can take multiple seconds — during
+// that window the mouse keeps moving over the same item and fires MANY
+// more calls for the SAME item.id. Without a guard those calls all pile
+// into the small concurrency semaphore fighting each other, and once one
+// fails, the very next mousemove tick immediately retries — producing an
+// endless "retry 1/3 → 2/3 → fail → retry 1/3..." storm that never
+// settles, even though the underlying byte range may be completely fine.
+// Fix: (1) if activation for this item.id is already in flight, skip —
+// the in-flight call will finish on its own; (2) after a failure,
+// remember the item.id with a short cooldown so rapid re-triggering
+// (mousemove) doesn't hammer the same read again immediately. Both maps
+// are read/written directly by each activation function's own try/catch
+// so failures never produce an unhandled promise rejection at the
+// (un-awaited) call sites in refreshSelection()/hover.
+const _lazyActivationInFlight = new Set(); // item.id currently being activated
+const _lazyActivationCooldownUntil = new Map(); // item.id -> timestamp (ms)
+const LAZY_ACTIVATION_COOLDOWN_MS = 4000;
+function _lazyActivationShouldSkip(id) {
+  if (_lazyActivationInFlight.has(id)) return true;
+  const until = _lazyActivationCooldownUntil.get(id);
+  return until !== undefined && Date.now() < until;
+}
+
 async function extractKpakV6EntryBlob(kpakBlob, entry) {
   if (!kpakBlob || !entry || entry.offset < 0 || entry.size <= 0 || entry.offset + entry.size > kpakBlob.size) {
     throw new Error('KPAK media range is invalid for ' + ((entry && entry.name) || 'unknown entry'));
@@ -31472,6 +31498,12 @@ async function loadBoardFile(event) {
       window._activateLazyVideoV6 = async function(item) {
         if (!item.video) return;
         if (!(item._sourceBlob instanceof Blob) && (!item._kpakEntry || !item._kpakBlob)) return;
+        // v7.0.6: skip if this exact item is already being activated, or
+        // just failed and is in its cooldown window. Without this, rapid
+        // mousemove-hover re-triggers for the SAME item pile up and retry
+        // forever the instant one attempt fails.
+        if (_lazyActivationShouldSkip(item.id)) return;
+        _lazyActivationInFlight.add(item.id);
         try {
           // v7.0.3: PREFER an already-materialized _sourceBlob. saveBoardV6's
           // pre-save pass (and repeated saves) can populate _sourceBlob while
@@ -31496,6 +31528,9 @@ async function loadBoardFile(event) {
           console.log('[V6 Lazy] Activated video:', item.id, formatBytes(_activatedSize));
         } catch(e) {
           console.warn('[V6 Lazy] Failed:', item.id, e.message);
+          _lazyActivationCooldownUntil.set(item.id, Date.now() + LAZY_ACTIVATION_COOLDOWN_MS);
+        } finally {
+          _lazyActivationInFlight.delete(item.id);
         }
       };
 
@@ -31621,6 +31656,9 @@ async function loadBoardFile(event) {
       window._activateLazyVideo = async function(item) {
         if (!item.video) return;
         if (!(item._sourceBlob instanceof Blob) && (!item._lazyEntry || !item._lazyZip)) return;
+        // v7.0.6: same re-entrancy guard as _activateLazyVideoV6.
+        if (_lazyActivationShouldSkip(item.id)) return;
+        _lazyActivationInFlight.add(item.id);
         var entryPath = item._lazyEntry;
         var zip = item._lazyZip;
         try {
@@ -31649,6 +31687,9 @@ async function loadBoardFile(event) {
           }
         } catch(e) {
           console.warn('[LazyVideo] Failed to activate:', item.id, e.message);
+          _lazyActivationCooldownUntil.set(item.id, Date.now() + LAZY_ACTIVATION_COOLDOWN_MS);
+        } finally {
+          _lazyActivationInFlight.delete(item.id);
         }
       };
       toast('Loaded ' + formatBytes(file.size) + ' (' + restoredCount + ' media restored)');
