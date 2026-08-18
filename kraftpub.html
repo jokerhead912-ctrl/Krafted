@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.10</title>
+<title>Krafted v7.0.11</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.10';
+var KRAFTED_VERSION = '7.0.11';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -8770,6 +8770,15 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   wrap.className = 'media-wrap';
   if (isVideo) {
     mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;';
+    // v7.0.11: solid black wrap background for videos. At zoom=1 the video
+    // element fills the wrap so this is invisible; but when Alt+middle-drag
+    // zooms/pans the video (CSS transform shrinks the whole element,
+    // including its own black background), the exposed wrap area used to be
+    // transparent and the BOARD showed through. User wants a solid black
+    // "paper" around the zoomed-out frame — like a Premiere program
+    // monitor — so composition strokes can extend past the frame edge.
+    // GIF wraps are intentionally left transparent (alpha GIFs/stickers).
+    if (!isGif) wrap.style.background = '#000';
   } else {
     mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;object-fit:contain;';
   }
@@ -9781,6 +9790,31 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         return _result2;
       }
     }
+    // v7.0.11: compute the video content rect in WRAP coordinates AFTER
+    // the Alt+middle-drag zoom/pan transform. The video element fills the
+    // wrap and gets `transform: scale(z) translate(px,py)` with origin
+    // 'center center', i.e. wrap-local point p maps to:
+    //   p' = wrapCenter + z * (p - wrapCenter + pan)
+    // Applied to the untransformed content rect. Returns
+    // {left, top, width, height} in wrap-local CSS px, or null when the
+    // zoom is inactive (zoom === 1 / undefined).
+    function _getZoomedContentRect() {
+      const item = el._item;
+      if (!item || item._videoZoom === undefined || item._videoZoom === 1) return null;
+      const z = item._videoZoom;
+      const px = item._videoPanX || 0;
+      const py = item._videoPanY || 0;
+      const base = _getVideoContentRect();
+      const wrapW = wrap.clientWidth || 1;
+      const wrapH = wrap.clientHeight || 1;
+      const cx0 = wrapW / 2, cy0 = wrapH / 2;
+      return {
+        left: cx0 + z * (base.left - cx0 + px),
+        top: cy0 + z * (base.top - cy0 + py),
+        width: z * base.width,
+        height: z * base.height,
+      };
+    }
     function _renderAnnoCanvas() {
       if (!annoCanvas) return;
       // Skip render if nothing changed (same frame + same rect). Saves ~4ms per timeupdate tick.
@@ -9789,6 +9823,44 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       try { var _r = mediaEl.getBoundingClientRect(); _pfRectKey = _r.left+','+_r.top+','+_r.width+','+_r.height; } catch(e){}
       if (el._perfLastRenderKey === _pfFrame + '|' + _pfRectKey) return;
       el._perfLastRenderKey = _pfFrame + '|' + _pfRectKey;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const s = el._annoDrawState;
+
+      // v7.0.11: PAPER MODE — while the video zoom/pan is active, the
+      // canvas covers the WHOLE wrap (the black "paper" around the
+      // zoomed-out frame) instead of just the video content rect, and
+      // strokes are drawn offset by the transformed content rect. This
+      // lets the user draw composition guides that extend past the frame
+      // edge onto the black area. Stroke data stays in content-normalized
+      // coords (values may go <0 or >1 for the margin), so nothing about
+      // save/load or frame-scrubbing changes.
+      const R = _getZoomedContentRect();
+      if (R) {
+        const wrapW = wrap.clientWidth || 1;
+        const wrapH = wrap.clientHeight || 1;
+        annoCanvas.style.transform = '';
+        annoCanvas.style.transformOrigin = '';
+        annoCanvas.style.left = '0px';
+        annoCanvas.style.top = '0px';
+        annoCanvas.style.width = wrapW + 'px';
+        annoCanvas.style.height = wrapH + 'px';
+        const targetW = Math.max(1, Math.round(wrapW * dpr));
+        const targetH = Math.max(1, Math.round(wrapH * dpr));
+        if (annoCanvas.width !== targetW || annoCanvas.height !== targetH) {
+          annoCanvas.width = targetW;
+          annoCanvas.height = targetH;
+        }
+        const ctx = annoCanvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, wrapW, wrapH);
+        ctx.save();
+        ctx.translate(R.left, R.top);
+        s.strokes.forEach(stk => _drawAnnoStroke(ctx, stk, R.width, R.height));
+        if (s.drawing) _drawAnnoStroke(ctx, s.drawing, R.width, R.height);
+        ctx.restore();
+        return;
+      }
+
       // Position the canvas over the video's visible content rect (no
       // letterbox area). This way strokes land on the video content
       // and stay aligned when the user zooms/pans the canvas.
@@ -9801,7 +9873,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       const cw = r.width;
       const ch = r.height;
       // Set internal resolution (retina-friendly: 2x of CSS pixels)
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
       const targetW = Math.max(1, Math.round(cw * dpr));
       const targetH = Math.max(1, Math.round(ch * dpr));
       if (annoCanvas.width !== targetW || annoCanvas.height !== targetH) {
@@ -9814,7 +9885,6 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // Re-apply DPR scale
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       // Render committed strokes
-      const s = el._annoDrawState;
       s.strokes.forEach(stk => _drawAnnoStroke(ctx, stk, cw, ch));
       if (s.drawing) _drawAnnoStroke(ctx, s.drawing, cw, ch);
     }
@@ -9997,6 +10067,24 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // Use clientWidth/Height of the CSS-sized canvas (matches displayed pixels)
       const w = rect.width || 1;
       const h = rect.height || 1;
+      // v7.0.11: paper mode (video zoom active) — the canvas covers the
+      // whole wrap, so map the pointer through the zoomed content rect
+      // instead, and DON'T clamp to [0,1]: strokes drawn on the black
+      // margin around the zoomed-out frame get normalized coords outside
+      // [0,1], which is exactly how the paper-mode renderer expects them.
+      const R = _getZoomedContentRect();
+      if (R) {
+        // rect = full wrap on screen; convert to wrap-local CSS px first,
+        // then into content-normalized coords via R.
+        const wrapW = wrap.clientWidth || 1;
+        const wrapH = wrap.clientHeight || 1;
+        const localX = (ev.clientX - rect.left) * (wrapW / w);
+        const localY = (ev.clientY - rect.top) * (wrapH / h);
+        return [
+          (localX - R.left) / (R.width || 1),
+          (localY - R.top) / (R.height || 1),
+        ];
+      }
       return [
         Math.max(0, Math.min(1, (ev.clientX - rect.left) / w)),
         Math.max(0, Math.min(1, (ev.clientY - rect.top) / h)),
@@ -10444,13 +10532,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // Ensure draw state is active before spawning
       if (el._annoDrawState.mode !== 'text') el._annoDrawState.mode = 'text';
       _applyDrawMode();
-      // Use the video wrap's centre for the canvas point
-      var cr = annoCanvas.getBoundingClientRect();
-      var pt = [
-        Math.max(0, Math.min(1, (fakeEv.clientX - cr.left) / (cr.width || 1))),
-        Math.max(0, Math.min(1, (fakeEv.clientY - cr.top) / (cr.height || 1)))
-      ];
-      _spawnTextEditor(fakeEv, pt);
+      // v7.0.11: route through _canvasPoint so paper mode (video zoom
+      // active) maps the committed text to the right content-normalized
+      // position — the old clamped canvas-rect math only works at zoom=1.
+      _spawnTextEditor(fakeEv, _canvasPoint(fakeEv));
     };
     annoCanvas.addEventListener('pointermove', function(ev) {
       const s = el._annoDrawState;
@@ -10864,7 +10949,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       const fps = (typeof getCurrentFps === 'function') ? getCurrentFps() : (itm.video._kraftedFps || 30);
       const frame = Math.max(0, Math.floor((itm.video.currentTime || 0) * fps));
       var snapshot = '';
-      try { snapshot = videoAnnoCaptureSnapshot(itm.video, 0, []); } catch(e) {}
+      try { snapshot = videoAnnoCaptureSnapshot(itm.video, 0, [], itm); } catch(e) {}
       const anno = videoAnnoEnsure(itm);
       pushUndo();
       anno.comments.push({
@@ -10911,7 +10996,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       });
       var strokes2 = drawState.strokesByFrame[frame2] || [];
       var snapshot2 = '';
-      try { snapshot2 = videoAnnoCaptureSnapshot(mediaEl, SNAP_W, strokes2); } catch(e){}
+      try { snapshot2 = videoAnnoCaptureSnapshot(mediaEl, SNAP_W, strokes2, itm); } catch(e){}
       anno2.comments.push({
         id: 'c-' + Date.now() + '-' + Math.floor(Math.random() * 1000) + '-' + i,
         frame: frame2, time: targetTime, text: '',
@@ -11001,9 +11086,15 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           mediaEl.style.transformOrigin = '';
         }
         // v5.5.7: reset annoCanvas transform too
+        // v7.0.11: also force an immediate re-render so the canvas leaves
+        // paper mode (full-wrap) and returns to the content-rect layout —
+        // otherwise the stale paper-mode paint lingers until the next
+        // frame change.
         if (annoCanvas) {
           annoCanvas.style.transform = '';
           annoCanvas.style.transformOrigin = '';
+          el._perfLastRenderKey = '';
+          try { _renderAnnoCanvas(); } catch (e) {}
         }
         return;
       }
@@ -11999,7 +12090,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       });
       var strokes = drawState.strokesByFrame[frame] || [];
       var snapshot = '';
-      try { snapshot = videoAnnoCaptureSnapshot(mediaEl, SNAP_W, strokes); } catch(e){}
+      try { snapshot = videoAnnoCaptureSnapshot(mediaEl, SNAP_W, strokes, itm); } catch(e){}
       anno.comments.push({
         id: 'c-' + Date.now() + '-' + Math.floor(Math.random() * 1000) + '-' + i,
         frame: frame, time: targetTime, text: '',
@@ -14638,7 +14729,7 @@ function videoAnnoAddComment(text, targetItem) {
   console.log('[addComment] strokes count:', strokes.length, 'types:', strokes.map(function(s){ return s.type + (s.text ? ':"'+s.text.substring(0,20)+'"' : ''); }));
   let snapshot = '';
   try {
-    snapshot = videoAnnoCaptureSnapshot(item.video, SNAPPY_SNAP_MAX_W, strokes);
+    snapshot = videoAnnoCaptureSnapshot(item.video, SNAPPY_SNAP_MAX_W, strokes, item);
   } catch (e) {
     console.warn('Snapshot capture failed:', e);
   }
@@ -14717,10 +14808,84 @@ function videoAnnoAddComment(text, targetItem) {
 // as a single self-contained image (no overlay needed at view time).
 // `strokes` is an array of {type, color, size, points} where points
 // are normalized to [0,1] (relative to the captured frame).
-function videoAnnoCaptureSnapshot(videoEl, maxW, strokes) {
+function videoAnnoCaptureSnapshot(videoEl, maxW, strokes, optItem) {
   if (!videoEl || !videoEl.videoWidth || !videoEl.videoHeight) return '';
   // Don't try to capture before the video has data
   if (videoEl.readyState < 2) return '';
+
+  // v7.0.11: ZOOMED "PAPER" CAPTURE — when the video's internal zoom/pan
+  // is active (Alt+middle-drag), the comment snapshot should capture what
+  // the user actually sees: the zoomed frame on the black paper, WITH any
+  // margin strokes that extend past the frame edge. The live anno canvas
+  // (paper mode) already renders exactly that composite, so we blit it on
+  // top of the zoomed video image instead of re-compositing strokes.
+  // Resolution: scale so the visible content maps ~1:1 to the video's
+  // native pixels (capped at 4096px on the long side to bound memory).
+  if (optItem && optItem._videoZoom !== undefined && optItem._videoZoom !== 1) {
+    try {
+      const wrap = videoEl.closest('.media-wrap');
+      if (wrap) {
+        const wrapW = wrap.clientWidth || 1;
+        const wrapH = wrap.clientHeight || 1;
+        const vw = videoEl.videoWidth;
+        const vh = videoEl.videoHeight;
+        const wrapAspect = wrapW / wrapH;
+        const vidAspect = vw / vh;
+        let base;
+        if (wrapAspect > vidAspect) {
+          const bw = wrapH * vidAspect;
+          base = { left: (wrapW - bw) / 2, top: 0, width: bw, height: wrapH };
+        } else {
+          const bh = wrapW / vidAspect;
+          base = { left: 0, top: (wrapH - bh) / 2, width: wrapW, height: bh };
+        }
+        const z = optItem._videoZoom;
+        const zpx = optItem._videoPanX || 0;
+        const zpy = optItem._videoPanY || 0;
+        const cx0 = wrapW / 2, cy0 = wrapH / 2;
+        const R = {
+          left: cx0 + z * (base.left - cx0 + zpx),
+          top: cy0 + z * (base.top - cy0 + zpy),
+          width: z * base.width,
+          height: z * base.height,
+        };
+        let scale = vw / Math.max(1, R.width);
+        let pw = Math.round(wrapW * scale);
+        let ph = Math.round(wrapH * scale);
+        const MAX_DIM = 4096;
+        if (pw > MAX_DIM || ph > MAX_DIM) {
+          const k = MAX_DIM / Math.max(pw, ph);
+          scale *= k;
+          pw = Math.round(wrapW * scale);
+          ph = Math.round(wrapH * scale);
+        }
+        const pc = document.createElement('canvas');
+        pc.width = Math.max(2, pw); pc.height = Math.max(2, ph);
+        const pctx = pc.getContext('2d');
+        if (pctx) {
+          pctx.fillStyle = '#000';
+          pctx.fillRect(0, 0, pc.width, pc.height);
+          pctx.drawImage(videoEl, R.left * scale, R.top * scale, R.width * scale, R.height * scale);
+          // Blit the live paper-mode anno canvas (strokes incl. margin),
+          // forcing a fresh render first so nothing stale is captured.
+          const ownerEl = wrap.closest('.item');
+          const annoCvs = wrap.querySelector('.media-anno-canvas');
+          if (ownerEl && annoCvs && annoCvs.width > 0 && annoCvs.height > 0) {
+            try {
+              ownerEl._perfLastRenderKey = '';
+              if (ownerEl._renderAnnoCanvas) ownerEl._renderAnnoCanvas();
+              pctx.drawImage(annoCvs, 0, 0, annoCvs.width, annoCvs.height, 0, 0, pc.width, pc.height);
+            } catch (e2) { /* canvas blit failed — keep the plain frame */ }
+          }
+          return pc.toDataURL('image/jpeg', 0.82);
+        }
+      }
+    } catch (e) {
+      // Fall through to the normal (unzoomed) capture path on any error.
+      console.warn('[Snapshot] zoomed paper capture failed, falling back:', e);
+    }
+  }
+
   const w = videoEl.videoWidth;
   const h = videoEl.videoHeight;
   // Use the video's native resolution as the floor — never downscale
@@ -22743,16 +22908,29 @@ document.addEventListener('mousemove', e => {
     // Apply transform to the <video> element
     const videoEl = d.item.video;
     if (videoEl) {
+      // Persist the zoom state BEFORE rendering so _getZoomedContentRect()
+      // (used by the paper-mode anno renderer) reads the new values.
+      d.item._videoZoom = zoom;
+      d.item._videoPanX = panX;
+      d.item._videoPanY = panY;
       videoEl.style.transform = 'scale(' + zoom + ') translate(' + panX + 'px, ' + panY + 'px)';
       videoEl.style.transformOrigin = 'center center';
-      // v5.5.7: sync annoCanvas transform so draw strokes follow video zoom/pan.
-      // Cache the canvas ref on the item to avoid querySelector on every mousemove.
+      // v7.0.11: paper mode — the anno canvas no longer gets the video's
+      // transform. Instead it covers the whole wrap (the black "paper")
+      // and re-renders strokes against the zoomed content rect, so the
+      // user can draw on the margin too. The mediaEl BCR is part of the
+      // render perf-key, and it changes with every zoom tick, so this
+      // re-render fires continuously during the drag.
       if (!d.item._annoCanvas) {
         d.item._annoCanvas = d.item.el && d.item.el.querySelector('.media-anno-canvas');
       }
       if (d.item._annoCanvas) {
-        d.item._annoCanvas.style.transform = videoEl.style.transform;
-        d.item._annoCanvas.style.transformOrigin = 'center center';
+        d.item._annoCanvas.style.transform = '';
+        d.item._annoCanvas.style.transformOrigin = '';
+      }
+      if (d.item.el && d.item.el._renderAnnoCanvas) {
+        d.item.el._perfLastRenderKey = '';
+        d.item.el._renderAnnoCanvas();
       }
     }
     return;
