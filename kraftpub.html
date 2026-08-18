@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.14</title>
+<title>Krafted v7.0.15</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.14';
+var KRAFTED_VERSION = '7.0.15';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -9915,9 +9915,14 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         ctx.moveTo(x0, y0);
         ctx.lineTo(x1, y1);
         ctx.stroke();
-        // Arrowhead
+        // Arrowhead — v7.0.15: scale the head by the video zoom too.
+        // Previously only ctx.lineWidth was zoom-scaled; the head stayed
+        // at a fixed pixel size, so at zoom < 1 arrows looked bloated
+        // (huge head, thin shaft) and at zoom > 1 they looked pin-headed.
+        // Multiplying the whole clamped expression by zoom keeps z=1
+        // behavior identical while following the content at any zoom.
         const angle = Math.atan2(y1 - y0, x1 - x0);
-        const headLen = Math.max(10, stk.size * 3.2);
+        const headLen = Math.max(2, Math.max(10, stk.size * 3.2) * zoom);
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.lineTo(x1 - headLen * Math.cos(angle - Math.PI / 6), y1 - headLen * Math.sin(angle - Math.PI / 6));
@@ -9961,18 +9966,23 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         // Font size scales with the stroke's `size` field (the
         // S/M/L picker value, 2-7px). Translate that to a readable
         // pixel size for the text.
-        const fontSize = Math.max(14, (stk.size || 4) * 5);
+        // v7.0.15: also scale by video zoom (like ctx.lineWidth) — text
+        // annotations previously stayed at a fixed pixel size while the
+        // video content zoomed/panned underneath, so they visually
+        // "didn't follow" the frame. The pill padding and radius scale
+        // by the same factor. z=1 behavior is identical to before.
+        const fontSize = Math.max(5, Math.max(14, (stk.size || 4) * 5) * zoom);
         ctx.font = '600 ' + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
         ctx.textBaseline = 'top';
         // Measure to build a background pill
         const metrics = ctx.measureText(text);
-        const padX = 6, padY = 4;
+        const padX = 6 * zoom, padY = 4 * zoom;
         const bgW = metrics.width + padX * 2;
         const bgH = fontSize * 1.15 + padY * 2;
         // Translucent background for readability on any frame
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-        const radius = 5;
+        const radius = 5 * zoom;
         const bx2 = x, by2 = y, bw2 = bgW, bh2 = bgH;
         ctx.beginPath();
         ctx.moveTo(bx2 + radius, by2);
