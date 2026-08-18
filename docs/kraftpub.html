@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.15</title>
+<title>Krafted v7.0.16</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.15';
+var KRAFTED_VERSION = '7.0.16';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -9797,13 +9797,20 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     //   p' = wrapCenter + z * (p - wrapCenter + pan)
     // Applied to the untransformed content rect. Returns
     // {left, top, width, height} in wrap-local CSS px, or null when the
-    // zoom is inactive (zoom === 1 / undefined).
+    // transform is inactive.
+    // v7.0.16: paper mode must ALSO engage when only a PAN is active
+    // (zoom === 1 but panX/panY ≠ 0) — Alt+middle-drag pans the video at
+    // any zoom level, including 1. Previously the condition was zoom ≠ 1
+    // only, so panning an unzoomed video moved the <video> element while
+    // the strokes stayed glued to the untransformed content rect (they
+    // only "caught up" after a frame change forced a fresh render).
     function _getZoomedContentRect() {
       const item = el._item;
-      if (!item || item._videoZoom === undefined || item._videoZoom === 1) return null;
+      if (!item || item._videoZoom === undefined) return null;
       const z = item._videoZoom;
       const px = item._videoPanX || 0;
       const py = item._videoPanY || 0;
+      if (z === 1 && px === 0 && py === 0) return null;
       const base = _getVideoContentRect();
       const wrapW = wrap.clientWidth || 1;
       const wrapH = wrap.clientHeight || 1;
@@ -9821,8 +9828,15 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       var _pfFrame = _currentFrame();
       var _pfRectKey = '';
       try { var _r = mediaEl.getBoundingClientRect(); _pfRectKey = _r.left+','+_r.top+','+_r.width+','+_r.height; } catch(e){}
-      if (el._perfLastRenderKey === _pfFrame + '|' + _pfRectKey) return;
-      el._perfLastRenderKey = _pfFrame + '|' + _pfRectKey;
+      var _pfZoomKey = '';
+      try {
+        var _it = el._item;
+        if (_it && _it._videoZoom !== undefined) {
+          _pfZoomKey = (_it._videoZoom || 1) + ',' + (_it._videoPanX || 0) + ',' + (_it._videoPanY || 0);
+        }
+      } catch(e){}
+      if (el._perfLastRenderKey === _pfFrame + '|' + _pfRectKey + '|' + _pfZoomKey) return;
+      el._perfLastRenderKey = _pfFrame + '|' + _pfRectKey + '|' + _pfZoomKey;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const s = el._annoDrawState;
 
@@ -10103,6 +10117,15 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     annoCanvas.addEventListener('pointerdown', function(ev) {
       const s = el._annoDrawState;
       if (s.mode === 'off') return;
+      // v7.0.16: ONLY the left/primary button (or a pen contact) may start
+      // a stroke. Middle-click must pass through untouched so the
+      // viewport's Ctrl+middle = video zoom / Alt+middle = video pan
+      // intercept can fire — previously this handler called
+      // ev.preventDefault() for EVERY button, and a prevented pointerdown
+      // suppresses the mousedown entirely, silently killing the zoom
+      // gesture whenever draw mode was on. Right-click now also falls
+      // through (to the board context menu) instead of starting a stroke.
+      if (ev.button !== 0) return;
       // v6.0: Alt + pen/stylus → pan/zoom canvas instead of drawing.
       // Wacom/XPPen users need a way to navigate the board while in
       // draw mode without switching to the select tool. Alt is the
@@ -10112,6 +10135,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       if (ev.altKey) {
         try { annoCanvas.releasePointerCapture(ev.pointerId); } catch (e) {}
         return; // let the event bubble to viewport mousedown for pan
+      }
+      // v7.0.16: Ctrl + primary click also passes through (parity with
+      // the Alt branch above) so a pen mapped to left-click can drive
+      // the video-zoom intercept when combined with Ctrl.
+      if (ev.ctrlKey || ev.metaKey) {
+        try { annoCanvas.releasePointerCapture(ev.pointerId); } catch (e) {}
+        return;
       }
       ev.preventDefault();
       ev.stopPropagation();
@@ -11086,8 +11116,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       ev.stopPropagation();
       ev.preventDefault();
       // v5.5.6: if zoomed, reset zoom first
+      // v7.0.16: "zoomed" now means zoom ≠ 1 OR any pan — panning alone
+      // (zoom stays 1) also needs a reset path.
       var item = el._item;
-      if (item && item._videoZoom !== undefined && item._videoZoom !== 1) {
+      if (item && item._videoZoom !== undefined && (item._videoZoom !== 1 || item._videoPanX || item._videoPanY)) {
         item._videoZoom = 1;
         item._videoPanX = 0;
         item._videoPanY = 0;
@@ -14831,7 +14863,8 @@ function videoAnnoCaptureSnapshot(videoEl, maxW, strokes, optItem) {
   // top of the zoomed video image instead of re-compositing strokes.
   // Resolution: scale so the visible content maps ~1:1 to the video's
   // native pixels (capped at 4096px on the long side to bound memory).
-  if (optItem && optItem._videoZoom !== undefined && optItem._videoZoom !== 1) {
+  // v7.0.16: "active" now includes pan-only (zoom === 1, pan ≠ 0).
+  if (optItem && optItem._videoZoom !== undefined && (optItem._videoZoom !== 1 || optItem._videoPanX || optItem._videoPanY)) {
     try {
       const wrap = videoEl.closest('.media-wrap');
       if (wrap) {
@@ -21443,7 +21476,9 @@ function _tryResetVideoZoomAtCursor() {
   for (var i = 0; i < state.items.length; i++) {
     var it = state.items[i];
     if (!it || !it.video || !it.el) continue;
-    if (it._videoZoom === undefined || it._videoZoom === 1) continue;
+    // v7.0.16: also resettable when only panned (zoom === 1, pan ≠ 0).
+    if (it._videoZoom === undefined) continue;
+    if (it._videoZoom === 1 && !it._videoPanX && !it._videoPanY) continue;
     var mw = it.el.querySelector('.media-wrap');
     if (!mw) continue;
     var r = mw.getBoundingClientRect();
@@ -22392,6 +22427,49 @@ document.addEventListener('mousedown', e => {
 //  MOUSE EVENTS (desktop — unchanged)
 // ============================================================
 
+function _tryBeginVideoZoomGesture(e) {
+  // v7.0.16: handle Ctrl/Cmd+middle = zoom and Alt+middle = pan on the
+  // VIDEO FRAME itself (the .media-wrap / anno canvas), not the controls.
+  // We run this from a capture-phase pointerdown listener because the
+  // anno canvas and some tablet/browser paths can consume or suppress the
+  // later bubble-phase mousedown, which made the gesture feel randomly
+  // dead while draw mode was active.
+  if (!e || e.button !== 1 || !(e.ctrlKey || e.metaKey || e.altKey)) return false;
+  const tgt = e.target;
+  if (!tgt || !tgt.closest) return false;
+  const mediaWrap = tgt.closest('.media-wrap');
+  if (!mediaWrap) return false;
+  const mediaItem = mediaWrap.closest('.item.has-media');
+  if (!mediaItem) return false;
+  const item = state.items.find(i => i.el === mediaItem);
+  if (!item || !item.video) return false;
+  if (e.cancelable) e.preventDefault();
+  if (item._videoZoom === undefined) {
+    item._videoZoom = 1;
+    item._videoPanX = 0;
+    item._videoPanY = 0;
+  }
+  state.dragging = {
+    type: 'videoZoom',
+    mode: (e.ctrlKey || e.metaKey) ? 'zoom' : 'pan',
+    item: item,
+    startX: e.clientX,
+    startY: e.clientY,
+    origZoom: item._videoZoom,
+    origPanX: item._videoPanX,
+    origPanY: item._videoPanY
+  };
+  viewport.style.cursor = (e.ctrlKey || e.metaKey) ? 'ns-resize' : 'move';
+  return true;
+}
+
+viewport.addEventListener('pointerdown', e => {
+  if (_tryBeginVideoZoomGesture(e)) {
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    else e.stopPropagation();
+  }
+}, true);
+
 viewport.addEventListener('mousedown', e => {
   // Belt-and-suspenders: on touch devices, real interaction is handled
   // entirely by the touchstart/touchmove/touchend listeners above (which
@@ -22411,36 +22489,15 @@ viewport.addEventListener('mousedown', e => {
   // which felt unpredictable because diagonal mouse movement mixed both at
   // once. Only activates when:
   //   - (Ctrl or Alt) is held AND middle button (e.button===1)
-  //   - The target is inside a .has-media item that is currently selected
+  //   - The target is inside a .has-media item
   //   - That item has a <video> element
+  // v7.0.16: no longer requires the item to be SELECTED — draw mode is
+  // entered via hover+D without selecting, and the user's zoom/pan-then-
+  // draw workflow means the gesture must work on the hovered video too.
   // This intercepts BEFORE isPanTrigger (middle button alone would pan the
   // canvas) and BEFORE item drag (click on video area would move the item).
-  if ((e.ctrlKey || e.metaKey || e.altKey) && e.button === 1) {
-    const mediaItem = e.target.closest('.item.has-media');
-    if (mediaItem) {
-      const item = state.items.find(i => i.el === mediaItem);
-      if (item && item.video && state.selected.has(item.id)) {
-        if (e.cancelable) e.preventDefault();
-        // Initialize video zoom state if not present
-        if (item._videoZoom === undefined) {
-          item._videoZoom = 1;
-          item._videoPanX = 0;
-          item._videoPanY = 0;
-        }
-        state.dragging = {
-          type: 'videoZoom',
-          mode: (e.ctrlKey || e.metaKey) ? 'zoom' : 'pan',
-          item: item,
-          startX: e.clientX,
-          startY: e.clientY,
-          origZoom: item._videoZoom,
-          origPanX: item._videoPanX,
-          origPanY: item._videoPanY
-        };
-        viewport.style.cursor = (e.ctrlKey || e.metaKey) ? 'ns-resize' : 'move';
-        return;
-      }
-    }
+  if (_tryBeginVideoZoomGesture(e)) {
+    return;
   }
 
   // Relation mode: intercept clicks to pick two items
@@ -22643,6 +22700,9 @@ viewport.addEventListener('mousedown', e => {
 
   // DRAW TOOL
   if (state.tool === 'draw') {
+    // v7.0.16: only the primary/left button may start a board stroke.
+    // Middle stays reserved for pan and right keeps the context menu.
+    if (e.button !== 0) return;
     // v6.0: Alt key is reserved for pan/zoom — do NOT start a stroke.
     // Wacom/XPPen users hold Alt + drag to pan the canvas while in
     // draw mode (industry standard: Photoshop, Blender, Premiere).
