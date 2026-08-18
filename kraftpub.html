@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.11</title>
+<title>Krafted v7.0.12</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.11';
+var KRAFTED_VERSION = '7.0.12';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -22253,6 +22253,35 @@ document.addEventListener('keydown', e => {
     // F = center/frame selection (restored to original behavior)
     // Shift+F = app-level fullscreen toggle
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // v7.0.12: plain F while hovering a video that has an active
+    // Ctrl/Alt+middle-drag zoom/pan resets it back to 1x/centered —
+    // the same "go back to normal" gesture as double-click, but without
+    // needing to first re-select the item. Falls through to the normal
+    // F behavior (frame selection) when the hovered video has no active
+    // zoom/pan, so this never steals the hotkey when it's not needed.
+    if (!e.shiftKey) {
+      var _fHoverItem = videoAnnoGetItemUnderCursor(e);
+      if (_fHoverItem && _fHoverItem._videoZoom !== undefined && _fHoverItem._videoZoom !== 1) {
+        e.preventDefault();
+        _fHoverItem._videoZoom = 1;
+        _fHoverItem._videoPanX = 0;
+        _fHoverItem._videoPanY = 0;
+        if (_fHoverItem.video) {
+          _fHoverItem.video.style.transform = '';
+          _fHoverItem.video.style.transformOrigin = '';
+        }
+        var _fAnnoCanvas = _fHoverItem.el && _fHoverItem.el.querySelector('.media-anno-canvas');
+        if (_fAnnoCanvas) {
+          _fAnnoCanvas.style.transform = '';
+          _fAnnoCanvas.style.transformOrigin = '';
+        }
+        if (_fHoverItem.el && _fHoverItem.el._renderAnnoCanvas) {
+          _fHoverItem.el._perfLastRenderKey = '';
+          try { _fHoverItem.el._renderAnnoCanvas(); } catch (_eF) {}
+        }
+        return;
+      }
+    }
     e.preventDefault();
     if (e.shiftKey) {
       toggleAppFullscreen();
@@ -22316,14 +22345,17 @@ viewport.addEventListener('mousedown', e => {
   hideCtx();
   if (e.target.closest('#toolbar') || e.target.closest('#props') || e.target.closest('#text-toolbar') || e.target.closest('#draw-toolbar') || e.target.closest('#ctx-menu') || e.target.closest('#export-modal') || e.target.closest('#gif-modal') || e.target.closest('#cut-panel') || e.target.closest('#lasso-panel') || e.target.closest('#text-quick-bar')) return;
 
-  // v5.5.6: Alt + Middle-button drag on selected video → internal zoom/pan
-  // (Premiere-style Program Monitor zoom). Only activates when:
-  //   - Alt is held AND middle button (e.button===1)
+  // v7.0.12: Ctrl+Middle-button drag = ZOOM ONLY, Alt+Middle-button drag =
+  // PAN ONLY on a selected video (Premiere-style Program Monitor). Split
+  // from the old single combined "Alt+middle drags zoom AND pan" gesture,
+  // which felt unpredictable because diagonal mouse movement mixed both at
+  // once. Only activates when:
+  //   - (Ctrl or Alt) is held AND middle button (e.button===1)
   //   - The target is inside a .has-media item that is currently selected
   //   - That item has a <video> element
   // This intercepts BEFORE isPanTrigger (middle button alone would pan the
   // canvas) and BEFORE item drag (click on video area would move the item).
-  if (e.altKey && e.button === 1) {
+  if ((e.ctrlKey || e.metaKey || e.altKey) && e.button === 1) {
     const mediaItem = e.target.closest('.item.has-media');
     if (mediaItem) {
       const item = state.items.find(i => i.el === mediaItem);
@@ -22337,6 +22369,7 @@ viewport.addEventListener('mousedown', e => {
         }
         state.dragging = {
           type: 'videoZoom',
+          mode: (e.ctrlKey || e.metaKey) ? 'zoom' : 'pan',
           item: item,
           startX: e.clientX,
           startY: e.clientY,
@@ -22344,7 +22377,7 @@ viewport.addEventListener('mousedown', e => {
           origPanX: item._videoPanX,
           origPanY: item._videoPanY
         };
-        viewport.style.cursor = 'move';
+        viewport.style.cursor = (e.ctrlKey || e.metaKey) ? 'ns-resize' : 'move';
         return;
       }
     }
@@ -22889,22 +22922,38 @@ document.addEventListener('mousemove', e => {
     return;
   }
 
-  // v5.5.6: VIDEO INTERNAL ZOOM/PAN (Alt + Middle-button drag)
-  // Premiere-style Program Monitor zoom. Dragging vertically zooms the
-  // video content in/out; dragging horizontally pans. The .item container
-  // size and controls are completely unaffected — only the <video> element
-  // inside .media-wrap gets a CSS transform.
+  // v7.0.12: VIDEO INTERNAL ZOOM/PAN (Ctrl+Middle-drag = zoom, Alt+Middle-
+  // drag = pan). Split from the old single combined gesture — vertical
+  // drag zoomed AND horizontal drag panned in one gesture, which made any
+  // diagonal mouse movement mix zoom and pan unpredictably. Now `d.mode`
+  // ('zoom' or 'pan', set on mousedown) picks exactly one axis of change
+  // per drag, and each has an independently-tuned sensitivity. The .item
+  // container size and controls are completely unaffected — only the
+  // <video> element inside .media-wrap gets a CSS transform.
   if (state.dragging && state.dragging.type === 'videoZoom') {
     const d = state.dragging;
     const dy = e.clientY - d.startY;
     const dx = e.clientX - d.startX;
-    // Vertical drag → zoom (1px = 0.005 zoom factor, feels responsive)
-    // Pull DOWN (positive dy) = zoom IN. Pull UP (negative dy) = zoom OUT.
-    const zoom = Math.max(0.25, Math.min(8, d.origZoom + dy * 0.008));
-    // Horizontal drag → pan (pixels in video-local space, adjusted for zoom)
-    const panSensitivity = 0.5;
-    const panX = d.origPanX + dx * panSensitivity;
-    const panY = d.origPanY; // vertical pan not used (zoom handles Y)
+    let zoom = d.origZoom;
+    let panX = d.origPanX;
+    let panY = d.origPanY;
+    if (d.mode === 'zoom') {
+      // Zoom-only: total drag distance (both axes) drives zoom so the
+      // gesture works regardless of drag direction. Sensitivity lowered
+      // from the old 0.008/px (combined gesture felt too twitchy for a
+      // small move) to 0.003/px for finer control.
+      const dist = Math.abs(dy) > Math.abs(dx) ? dy : dx;
+      zoom = Math.max(0.25, Math.min(8, d.origZoom + dist * 0.003));
+    } else {
+      // Pan-only: both axes move the video freely. Sensitivity raised
+      // from 0.5 to 1/zoom so mouse movement maps ~1:1 to screen pixels
+      // regardless of current zoom level (translate happens INSIDE the
+      // scale() in the CSS transform, so the same raw delta would look
+      // slower at low zoom and faster at high zoom without this).
+      const panSensitivity = 1 / Math.max(0.25, d.origZoom || 1);
+      panX = d.origPanX + dx * panSensitivity;
+      panY = d.origPanY + dy * panSensitivity;
+    }
     // Apply transform to the <video> element
     const videoEl = d.item.video;
     if (videoEl) {
