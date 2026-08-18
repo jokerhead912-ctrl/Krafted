@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.9</title>
+<title>Krafted v7.0.10</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.9';
+var KRAFTED_VERSION = '7.0.10';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6969,6 +6969,10 @@ function pushUndo() {
     if (state._undoBytes < 0) state._undoBytes = 0;
   }
   state.redoStack = [];
+  // v7.0.10: bump the global action sequence so the Ctrl+Z handler can tell
+  // whether the most recent action was a board op (covered by this stack) or
+  // a video-annotation stroke commit (covered by G._annoUndoStack).
+  G._actionSeq = (G._actionSeq || 0) + 1;
   updateStatus();
 }
 function restoreSnapshot(snapStr) {
@@ -9310,6 +9314,16 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     undoBtn.addEventListener('click', function(){
       const s = el._annoDrawState;
       s.strokes.pop();
+      // v7.0.10: invalidate the render perf-cache before re-rendering.
+      // _renderAnnoCanvas() skips painting when (frame + rect) is
+      // unchanged — which is exactly the case right after clicking Undo
+      // on a paused video. The stroke WAS popped from the data (the
+      // flat alias IS the same array reference as
+      // strokesByFrame[frame]), but the canvas kept showing the stale
+      // paint until the user scrubbed to another frame and back.
+      // _endStroke / the text-commit path already clear this key for
+      // the same reason (v6.1.24 / v6.1.26); the Undo button was missed.
+      el._perfLastRenderKey = '';
       _renderAnnoCanvas();
       _refreshDrawBtnBadge();
       // Round 10: refresh drawing markers (may need to remove the
@@ -9317,6 +9331,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       if (el._refreshDrawSeekMarkers) {
         try { el._refreshAllSeekMarkers(); } catch (e) {}
       }
+      try { scheduleAutoSave(); } catch (e) {}
     });
     actionRow.appendChild(undoBtn);
     // R79: lock-to-player button — when on, the draw mode stays
@@ -9367,6 +9382,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       const frame = _currentFrame();
       if (s.strokesByFrame[frame]) s.strokesByFrame[frame].length = 0;
       if (s.strokes) s.strokes.length = 0;
+      // v7.0.10: same perf-cache invalidation as the Undo button above —
+      // without it the cleared strokes stay visible until the frame changes.
+      el._perfLastRenderKey = '';
       _renderAnnoCanvas();
       _refreshDrawBtnBadge();
       if (el._refreshAllSeekMarkers) {
@@ -10369,6 +10387,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           text: text,
           points: [ed._annoPt || [0.5, 0.5]],
         });
+        // v7.0.10: same annotation-undo registration as pen strokes.
+        try {
+          G._actionSeq = (G._actionSeq || 0) + 1;
+          G._annoUndoStack = G._annoUndoStack || [];
+          G._annoUndoStack.push({ el: el, frame: targetFrame, seq: G._actionSeq });
+          if (G._annoUndoStack.length > 100) G._annoUndoStack.shift();
+        } catch (e) {}
         // Re-bind the live alias to the target frame so the canvas
         // re-render shows the new text (the alias may have moved
         // to a different frame during the typing interval).
@@ -10486,6 +10511,15 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           size: s.drawing.size,
           points: s.drawing.points,
         });
+        // v7.0.10: record this commit on the lightweight annotation-undo
+        // stack so Ctrl+Z can undo the stroke without a full board
+        // snapshot (board snapshots are far too heavy per stroke).
+        try {
+          G._actionSeq = (G._actionSeq || 0) + 1;
+          G._annoUndoStack = G._annoUndoStack || [];
+          G._annoUndoStack.push({ el: el, frame: spawnFrame, seq: G._actionSeq });
+          if (G._annoUndoStack.length > 100) G._annoUndoStack.shift();
+        } catch (e) {}
         // Re-sync the flat alias so the canvas re-renders correctly.
         // If we're still on the spawn frame, this re-points to the
         // same array we just pushed to. If we've drifted, the alias
@@ -21615,7 +21649,44 @@ document.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown') { e.preventDefault(); tetrisAlign('down'); return; }
     if (e.key === 'ArrowLeft') { e.preventDefault(); tetrisAlign('left'); return; }
     if (e.key === 'ArrowRight') { e.preventDefault(); tetrisAlign('right'); return; }
-    if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+    if (e.key === 'z' || e.key === 'Z') {
+      e.preventDefault();
+      // v7.0.10: Ctrl+Z (no shift) first undoes a video-annotation stroke
+      // commit if that was the most recent action. Stroke commits never
+      // push board snapshots (a full captureSnapshot per stroke would be
+      // far too heavy), so the global undo() alone could never revert a
+      // frame draw — the user had to use the toolbar ↰ button. We keep a
+      // lightweight per-commit stack (G._annoUndoStack) sequenced against
+      // the same G._actionSeq that pushUndo() bumps, so board ops and
+      // annotation strokes interleave correctly: Ctrl+Z always undoes
+      // whichever happened LAST.
+      if (!e.shiftKey && G._annoUndoStack && G._annoUndoStack.length > 0) {
+        const _top = G._annoUndoStack[G._annoUndoStack.length - 1];
+        if (_top && _top.seq === (G._actionSeq || 0)) {
+          G._annoUndoStack.pop();
+          G._actionSeq = (G._actionSeq || 1) - 1;
+          const _tel = _top.el;
+          const _tds = _tel && _tel.isConnected && _tel._annoDrawState;
+          const _tArr = _tds && _tds.strokesByFrame && _tds.strokesByFrame[_top.frame];
+          if (_tArr && _tArr.length > 0) {
+            _tArr.pop();
+            // Re-sync the flat alias if the playhead is currently on this
+            // frame so the canvas paints the removal immediately.
+            try { if (_tel._syncStrokesForFrame) _tel._syncStrokesForFrame(); } catch (e2) {}
+            _tel._perfLastRenderKey = '';
+            try { if (_tel._renderAnnoCanvas) _tel._renderAnnoCanvas(); } catch (e2) {}
+            try { if (_tel._refreshDrawBtnBadge) _tel._refreshDrawBtnBadge(); } catch (e2) {}
+            try { if (_tel._refreshAllSeekMarkers) _tel._refreshAllSeekMarkers(); } catch (e2) {}
+            try { scheduleAutoSave(); } catch (e2) {}
+            return;
+          }
+          // Stale entry (item deleted or frame already empty) — fall
+          // through to the global board undo.
+        }
+      }
+      if (e.shiftKey) redo(); else undo();
+      return;
+    }
     if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); redo(); return; }
     if (e.key === 'c' || e.key === 'C') { e.preventDefault(); copySelected(); return; }
     if (e.key === 'v' || e.key === 'V') {
@@ -32069,6 +32140,9 @@ function restoreBoard(data, append) {
     pushUndo();
     cleanupAllItems();
     state.items = []; state.texts = []; state.todos = []; state.mindmaps = []; state.selected.clear();
+    // v7.0.10: drop annotation-stroke undo entries from the previous board —
+    // they reference DOM elements that cleanupAllItems() just removed.
+    G._annoUndoStack = [];
   }
   // Reset viewport transform so the loaded board renders at 100% zoom,
   // centered. Without this, a previously-zoomed-in session would leave
@@ -32843,6 +32917,9 @@ function newBoard() {
   state.undoStack = [];
   state.redoStack = [];
   state._undoBytes = 0;
+  // v7.0.10: also clear the annotation-stroke undo stack — its entries
+  // reference DOM elements from the wiped board.
+  G._annoUndoStack = [];
   G.nextZ = 1; G.nextId = 1;
   G.drawStrokes.length = 0;
   state.pan = { x: 0, y: 0 };
