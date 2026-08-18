@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.16</title>
+<title>Krafted v7.0.17</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.16';
+var KRAFTED_VERSION = '7.0.17';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -22427,13 +22427,10 @@ document.addEventListener('mousedown', e => {
 //  MOUSE EVENTS (desktop — unchanged)
 // ============================================================
 
-function _tryBeginVideoZoomGesture(e) {
-  // v7.0.16: handle Ctrl/Cmd+middle = zoom and Alt+middle = pan on the
-  // VIDEO FRAME itself (the .media-wrap / anno canvas), not the controls.
-  // We run this from a capture-phase pointerdown listener because the
-  // anno canvas and some tablet/browser paths can consume or suppress the
-  // later bubble-phase mousedown, which made the gesture feel randomly
-  // dead while draw mode was active.
+function _shouldInterceptVideoZoomGesture(e) {
+  // Pure predicate — no side effects. True when this event is a
+  // Ctrl/Cmd+middle (zoom) or Alt+middle (pan) press landing on the VIDEO
+  // FRAME (.media-wrap) of an item that actually has a <video>.
   if (!e || e.button !== 1 || !(e.ctrlKey || e.metaKey || e.altKey)) return false;
   const tgt = e.target;
   if (!tgt || !tgt.closest) return false;
@@ -22441,6 +22438,17 @@ function _tryBeginVideoZoomGesture(e) {
   if (!mediaWrap) return false;
   const mediaItem = mediaWrap.closest('.item.has-media');
   if (!mediaItem) return false;
+  const item = state.items.find(i => i.el === mediaItem);
+  if (!item || !item.video) return false;
+  return true;
+}
+
+function _tryBeginVideoZoomGesture(e) {
+  // v7.0.16: Ctrl/Cmd+middle = zoom, Alt+middle = pan on the video frame.
+  // v7.0.17: this now runs ONLY from the bubble-phase mousedown handler.
+  // See the capture-phase pointerdown listener below for why.
+  if (!_shouldInterceptVideoZoomGesture(e)) return false;
+  const mediaItem = e.target.closest('.media-wrap').closest('.item.has-media');
   const item = state.items.find(i => i.el === mediaItem);
   if (!item || !item.video) return false;
   if (e.cancelable) e.preventDefault();
@@ -22460,15 +22468,47 @@ function _tryBeginVideoZoomGesture(e) {
     origPanY: item._videoPanY
   };
   viewport.style.cursor = (e.ctrlKey || e.metaKey) ? 'ns-resize' : 'move';
+  // v7.0.17: the middle-button pan interceptor (registered earlier in the
+  // file, so it runs first) already added .grabbing and armed a 'pan' drag
+  // before we overwrote state.dragging. Drop the class or the grab cursor
+  // sticks around for the rest of the session.
+  viewport.classList.remove('grabbing');
   return true;
 }
 
+// v7.0.17 — CRITICAL: this capture-phase listener must NOT call
+// preventDefault(). Per the Pointer Events spec, cancelling `pointerdown`
+// suppresses ALL compatibility mouse events for that pointer — mousedown,
+// mousemove, mouseup AND click. v7.0.16 started the gesture here and called
+// preventDefault(), which meant the drag could never be driven (no
+// mousemove) and never released (no mouseup): a single click left the
+// gesture stuck "always on" until another gesture reset state.dragging.
+//
+// Its ONLY job is to stop the annotation canvas from seeing this
+// pointerdown, because annoCanvas's own handler calls preventDefault() and
+// would kill the compatibility mousedown the same way. stopImmediatePropagation
+// on pointerdown does NOT affect the separate mousedown event, so the
+// bubble-phase mousedown handler below still starts the gesture normally
+// and the standard mousemove/mouseup drag lifecycle applies.
 viewport.addEventListener('pointerdown', e => {
-  if (_tryBeginVideoZoomGesture(e)) {
+  if (_shouldInterceptVideoZoomGesture(e)) {
     if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
     else e.stopPropagation();
   }
 }, true);
+
+// v7.0.17 — safety net: end a video zoom/pan drag on pointerup/pointercancel
+// and on window blur, in case any future code path suppresses the mouseup
+// that normally finalizes it. Idempotent: only acts on a live videoZoom drag.
+function _endVideoZoomGestureIfActive() {
+  if (!state.dragging || state.dragging.type !== 'videoZoom') return;
+  state.dragging = null;
+  viewport.style.cursor = '';
+  viewport.classList.remove('grabbing');
+}
+window.addEventListener('pointerup', _endVideoZoomGestureIfActive, true);
+window.addEventListener('pointercancel', _endVideoZoomGestureIfActive, true);
+window.addEventListener('blur', _endVideoZoomGestureIfActive);
 
 viewport.addEventListener('mousedown', e => {
   // Belt-and-suspenders: on touch devices, real interaction is handled
@@ -23698,6 +23738,7 @@ document.addEventListener('mouseup', e => {
       }
       state.dragging = null;
       viewport.style.cursor = '';
+      viewport.classList.remove('grabbing');
       return;
     }
     // Reframe drag end — keep mode active, just end the drag
