@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.20</title>
+<title>Krafted v7.0.21</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.20';
+var KRAFTED_VERSION = '7.0.21';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -20683,6 +20683,14 @@ window.addEventListener('drop', function(e){
         const srcM = tag.match(/\ssrc\s*=\s*["']([^"']+)["']/i);
         if (srcM) _pushCandidate(srcM[1]);
       }
+      // v7.0.21: dragging from a Pinterest CLOSEUP (the opened big-image
+      // view) can carry a DIV with background-image instead of an <img>
+      // tag — scan the whole html payload for url(...) references too.
+      const urlRe = /url\(\s*["']?([^"')]+)["']?\s*\)/g;
+      let um;
+      while ((um = urlRe.exec(html)) !== null) {
+        if (/^https?:\/\//i.test(um[1])) _pushCandidate(um[1]);
+      }
     }
     const uriList = dt.getData('text/uri-list');
     if (uriList) {
@@ -20747,29 +20755,45 @@ window.addEventListener('drop', function(e){
     reader.onload = ev => {
       const img = new Image();
       img.onload = () => {
-        // v7.0.19: cap the STORED image at 1600px on the long edge.
-        // Previously the full original was kept (Pinterest 'originals'
-        // can be 10+ MB; as a data URL that's another +33%, plus the
-        // decoded bitmap in GPU memory) — ~3 such drags created enough
-        // memory pressure for Chrome's OOM killer to crash the heavy
-        // SOURCE tab (Pinterest). 1600px matches the "drag = screenshot"
-        // intent: you keep what you saw, at sane resolution. The canvas
-        // is not tainted here because the img src is a data URL built
-        // from our own fetched blob.
+        // v7.0.19: cap the STORED image resolution before saving it into
+        // the board. The full original (Pinterest 'originals' can be
+        // 10+ MB; as a data URL that's another +33%, plus the decoded
+        // bitmap in GPU memory) created enough memory pressure for
+        // Chrome's OOM killer to crash the heavy SOURCE tab (Pinterest).
+        // v7.0.21: cap lowered 1600 → 1280 (the source tab still OOMed
+        // after ~7 drags at 1600), and large PNGs are re-encoded even
+        // when small enough — a 1200px photo stored as PNG is ~3MB of
+        // string vs ~250KB as JPEG. Opacity is checked on a cheap 32px
+        // sample so real alpha channels survive as PNG.
+        // The canvas is not tainted here because the img src is a data
+        // URL built from our own fetched blob.
         let finalUrl = ev.target.result;
         let effW = img.naturalWidth, effH = img.naturalHeight;
-        const MAX_EDGE = 1600;
-        if (Math.max(effW, effH) > MAX_EDGE) {
+        const MAX_EDGE = 1280;
+        const needsResize = Math.max(effW, effH) > MAX_EDGE;
+        const needsReencode = (blob.type === 'image/png' && blob.size > 600 * 1024);
+        if (needsResize || needsReencode) {
           try {
-            const scale = MAX_EDGE / Math.max(effW, effH);
+            const scale = Math.min(1, MAX_EDGE / Math.max(effW, effH));
             const c = document.createElement('canvas');
             c.width = Math.max(1, Math.round(effW * scale));
             c.height = Math.max(1, Math.round(effH * scale));
-            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-            // PNG keeps its alpha channel; everything else → JPEG.
-            const capped = (blob.type === 'image/png')
-              ? c.toDataURL('image/png')
-              : c.toDataURL('image/jpeg', 0.88);
+            const cctx = c.getContext('2d');
+            cctx.drawImage(img, 0, 0, c.width, c.height);
+            let opaque = true;
+            if (blob.type === 'image/png') {
+              const sv = document.createElement('canvas');
+              sv.width = 32; sv.height = 32;
+              const sctx = sv.getContext('2d');
+              sctx.drawImage(c, 0, 0, 32, 32);
+              const px = sctx.getImageData(0, 0, 32, 32).data;
+              for (let pi = 3; pi < px.length; pi += 4) {
+                if (px[pi] < 250) { opaque = false; break; }
+              }
+            }
+            const capped = opaque
+              ? c.toDataURL('image/jpeg', 0.87)
+              : c.toDataURL('image/png');
             if (capped && capped.length > 22) {
               finalUrl = capped;
               effW = c.width;
@@ -20817,9 +20841,33 @@ window.addEventListener('drop', function(e){
   function _isKnownNoCorsHost(u) {
     return /^https?:\/\/[^/]*pinimg\.com\//i.test(u);
   }
-  function _tryAcquire(ci) {
-    if (ci >= _candidates.length) return Promise.reject(new Error('all candidates exhausted'));
-    const u = _candidates[ci];
+  // v7.0.21: a candidate that is a PAGE url (e.g. pinterest.com/pin/…,
+  // which is what you get when dragging from the closeup view) can be
+  // resolved to its main image via og:image / twitter:image. The page
+  // fetch goes through allorigins because weserv only proxies images
+  // (it 4xx-es HTML pages).
+  function _looksLikeImageUrl(u) {
+    return /\.(png|jpe?g|webp|gif|avif)(\?|#|$)/i.test(u) || _isKnownNoCorsHost(u);
+  }
+  function _resolvePageImage(u) {
+    if (!/^https?:\/\//i.test(u) || _looksLikeImageUrl(u)) return Promise.resolve(null);
+    return _fetchWithTimeout('https://api.allorigins.win/raw?url=' + encodeURIComponent(u), 15000)
+      .then(function(res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.text();
+      })
+      .then(function(text) {
+        const m = text.match(/<meta[^>]+(?:property|name)\s*=\s*["'](?:og:image|twitter:image)["'][^>]*>/i);
+        if (!m) return null;
+        const cM = m[0].match(/content\s*=\s*["']([^"']+)["']/i);
+        if (!cM) return null;
+        const resolved = cM[1].replace(/&amp;/g, '&');
+        console.log('[FileDrop] resolved page url to image:', resolved);
+        return resolved;
+      })
+      .catch(function(e2) { console.log('[FileDrop] page resolve failed for', u, '-', e2 && e2.message); return null; });
+  }
+  function _acquireUrl(u) {
     const direct = _isKnownNoCorsHost(u)
       ? Promise.reject(new Error('known no-CORS host, skipping direct'))
       : _fetchWithTimeout(u, 12000).then(_acceptImageResponse);
@@ -20831,13 +20879,24 @@ window.addEventListener('drop', function(e){
             console.log('[FileDrop] weserv proxy failed for', u, '-', proxyErr && proxyErr.message);
             // v7.0.20: second proxy as a real last resort before hotlink.
             return _fetchWithTimeout('https://api.allorigins.win/raw?url=' + encodeURIComponent(u), 15000)
-              .then(_acceptImageResponse)
-              .catch(function(proxy2Err) {
-                console.log('[FileDrop] allorigins proxy failed for', u, '-', proxy2Err && proxy2Err.message);
-                return _tryAcquire(ci + 1);
-              });
+              .then(_acceptImageResponse);
           });
       });
+  }
+  function _tryAcquire(ci) {
+    if (ci >= _candidates.length) return Promise.reject(new Error('all candidates exhausted'));
+    const u = _candidates[ci];
+    return _acquireUrl(u).catch(function(acquireErr) {
+      // v7.0.21: candidate may be a PAGE url (closeup drag) — resolve its
+      // og:image and try that before moving to the next candidate.
+      return _resolvePageImage(u).then(function(resolved) {
+        if (resolved && resolved !== u) return _acquireUrl(resolved);
+        throw acquireErr;
+      });
+    }).catch(function(finalErr) {
+      console.log('[FileDrop] candidate exhausted:', u, '-', finalErr && finalErr.message);
+      return _tryAcquire(ci + 1);
+    });
   }
   console.log('[FileDrop] cross-site drag candidates:', _candidates);
   toast('Fetching image…');
