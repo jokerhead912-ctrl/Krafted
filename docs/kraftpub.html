@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.23</title>
+<title>Krafted v7.0.24</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.23';
+var KRAFTED_VERSION = '7.0.24';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -23013,18 +23013,12 @@ viewport.addEventListener('mousedown', e => {
     if (e.altKey) return;
     const wx = (e.clientX - state.pan.x) / state.zoom;
     const wy = (e.clientY - state.pan.y) / state.zoom;
-    // Check if hovering on an existing stroke — start move
-    if (G.hoveredStroke && drawTool.mode !== 'eraser') {
-      G.drawMoveState = {
-        stroke: G.hoveredStroke,
-        startWx: wx,
-        startWy: wy,
-        origPoints: G.hoveredStroke.points.map(p => [p[0], p[1]])
-      };
-      viewport.style.cursor = 'grabbing';
-      return;
-    }
-    // Otherwise start a new stroke
+    // v7.0.24: stroke move-on-drag REMOVED. Hovering an existing stroke
+    // used to hijack the next mousedown into a move drag, which kept
+    // interrupting continued drawing (user: "放上佢會移動呢條線，好影響
+    // 我繼續畫"). Clicks in draw mode now ALWAYS start a new stroke.
+    // The drawMoveState handlers below stay dormant (never armed).
+    // Start a new stroke
     G.currentStroke = { strokeId: G.nextStrokeId++, color: drawTool.color, size: drawTool.size, opacity: drawTool.opacity, mode: drawTool.mode, arrowHead: drawTool.arrowHead, points: [[wx, wy, (drawTool.pressure ? (window.__kraftedPressure || 0.5) : 1)]] };
     G.drawStrokes.push(G.currentStroke);
     redrawDrawLayer();
@@ -23549,8 +23543,12 @@ document.addEventListener('mousemove', e => {
     return;
   }
 
-  // DRAW TOOL — hover detection for stroke move
-  if (state.tool === 'draw' && !G.currentStroke && !state.dragging) {
+  // DRAW TOOL — hover detection.
+  // v7.0.24: only in ERASER mode now (as a targeting aid). For pen/arrow/
+  // box the hover state fed the removed move-on-drag feature and flipped
+  // the cursor to 'grab' over existing strokes, which read as "this drag
+  // will move the line" and got in the way of continued drawing.
+  if (state.tool === 'draw' && drawTool.mode === 'eraser' && !G.currentStroke && !state.dragging) {
     const wx = (e.clientX - state.pan.x) / state.zoom;
     const wy = (e.clientY - state.pan.y) / state.zoom;
     const hit = hitTestStrokes(wx, wy);
@@ -23559,6 +23557,11 @@ document.addEventListener('mousemove', e => {
       redrawDrawLayer();
       viewport.style.cursor = hit ? 'grab' : 'crosshair';
     }
+  } else if (state.tool === 'draw' && drawTool.mode !== 'eraser' && G.hoveredStroke) {
+    // Clear any stale hover state left over from before the mode switch
+    G.hoveredStroke = null;
+    redrawDrawLayer();
+    viewport.style.cursor = 'crosshair';
   }
 
   // SELECT TOOL — show pointer cursor when hovering a draw item
