@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.17</title>
+<title>Krafted v7.0.18</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.17';
+var KRAFTED_VERSION = '7.0.18';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -20638,91 +20638,149 @@ window.addEventListener('drop', function(e){
   // ── Cross-origin drag: no files, but dataTransfer may have URL ──
   const dt = e.dataTransfer;
   if (!dt) return;
-  let url = null;
+  // v7.0.18: collect ALL image-URL candidates, best-first.
+  // Priority: the <img> inside text/html (the ACTUAL image bytes URL,
+  // srcset largest variant preferred) — NOT text/uri-list, which sites
+  // like Pinterest fill with the pin PAGE url. Feeding an HTML page to
+  // the image importer was the main reason Pinterest drags never worked.
+  const _candidates = [];
+  function _pushCandidate(u) {
+    if (!u || typeof u !== 'string') return;
+    u = u.trim().replace(/&amp;/g, '&');
+    if (!u) return;
+    if (_candidates.indexOf(u) === -1) _candidates.push(u);
+  }
   if (dt.getData) {
+    const html = dt.getData('text/html');
+    if (html) {
+      const tagM = html.match(/<img[^>]*>/i);
+      if (tagM) {
+        const tag = tagM[0];
+        // srcset: pick the largest width candidate (e.g. Pinterest drags
+        // carry "…236x.jpg 236w, …736x.jpg 736w, …originals….jpg 1200w")
+        const ssM = tag.match(/srcset\s*=\s*["']([^"']+)["']/i);
+        if (ssM) {
+          let bestW = -1, bestU = null;
+          ssM[1].split(',').forEach(function(part) {
+            const bits = part.trim().split(/\s+/);
+            if (!bits[0]) return;
+            const w = (bits[1] && /w$/i.test(bits[1])) ? parseInt(bits[1], 10) : 0;
+            if (w >= bestW) { bestW = w; bestU = bits[0]; }
+          });
+          if (bestU) _pushCandidate(bestU);
+        }
+        const srcM = tag.match(/\ssrc\s*=\s*["']([^"']+)["']/i);
+        if (srcM) _pushCandidate(srcM[1]);
+      }
+    }
     const uriList = dt.getData('text/uri-list');
     if (uriList) {
       const lines = uriList.split(/\r?\n/).map(s => s.trim()).filter(s => s && !s.startsWith('#'));
-      if (lines.length) url = lines[0];
+      if (lines.length) _pushCandidate(lines[0]);
     }
-    if (!url) {
-      const html = dt.getData('text/html');
-      if (html) {
-        const m = html.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
-        if (m) url = m[1];
-      }
+    if (!_candidates.length) {
+      const plain = dt.getData('text/plain');
+      if (plain && /^https?:\/\//i.test(plain.trim())) _pushCandidate(plain.trim());
     }
   }
-  if (!url) return;
+  if (!_candidates.length) return;
   try { hideWelcome(); } catch (err) {}
 
   // PowerPoint/Keynote and some office apps may provide a data URL directly
   // in text/html for a dragged slide preview. Import it directly.
-  if (/^data:image\//i.test(url)) {
+  if (/^data:image\//i.test(_candidates[0])) {
     const img = new Image();
     img.onload = () => {
       const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
       const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
-      addImage(url, dw, dh,
+      addImage(_candidates[0], dw, dh,
         (e.clientX - state.pan.x) / state.zoom,
         (e.clientY - state.pan.y) / state.zoom);
       toast('Pasted image');
     };
     img.onerror = () => toast('Failed to decode dragged slide image');
-    img.src = url;
+    img.src = _candidates[0];
     return;
   }
 
   // file:// sources from Office drags are commonly blocked by browsers.
   // Friendly fallback hint: copy the slide in PowerPoint and paste here.
-  if (/^file:\/\//i.test(url)) {
+  if (/^file:\/\//i.test(_candidates[0])) {
     toast('Slide drag blocked by browser — use Copy Slide then Paste');
     return;
   }
 
-  // Fetch real image bytes via CORS proxy → convert to data URL →
-  // addImage directly. Data URL is same-origin, zero CORS forever.
-  // This is functionally identical to "Copy Image → Paste" but done
-  // in one drag gesture.
-  toast('Fetching image…');
-  safeFetch('https://images.weserv.nl/?url=' + encodeURIComponent(url))
-    .then(res => {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res.blob();
-    })
-    .then(blob => {
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const img = new Image();
-        img.onload = () => {
-          // Max 360px wide for comfortable drag-drop viewing
-          const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
-          const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
-          addImage(ev.target.result, dw, dh,
-            (e.clientX - state.pan.x) / state.zoom,
-            (e.clientY - state.pan.y) / state.zoom);
-          toast('Pasted image');
-        };
-        img.onerror = () => toast('Failed to decode image');
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(blob);
-    })
-    .catch(err => {
-      console.log('[FileDrop] proxy fetch failed:', err.message);
-      // Last resort: hotlink with no CORS check
+  // v7.0.18: "drag = screenshot" acquisition chain. Whatever the source,
+  // the goal is to turn the remote image into LOCAL in-memory bytes
+  // (data URL) immediately — exactly like a screenshot paste. After the
+  // drop, the board no longer depends on the source website at all, so
+  // save/load stability is identical to a pasted screenshot.
+  //
+  // Per candidate URL, try in order:
+  //   1. DIRECT fetch — zero dependencies, works whenever the CDN sends
+  //      CORS headers (many do; Pinterest's i.pinimg.com does NOT, which
+  //      is why step 2 exists).
+  //   2. images.weserv.nl proxy — verified working for pinimg.
+  // If every candidate fails on both paths: hotlink as a visual placeholder
+  // and tell the user the guaranteed path (screenshot → Cmd+V) explicitly.
+  const _dropX = (e.clientX - state.pan.x) / state.zoom;
+  const _dropY = (e.clientY - state.pan.y) / state.zoom;
+  function _importImageBlob(blob) {
+    const reader = new FileReader();
+    reader.onload = ev => {
       const img = new Image();
       img.onload = () => {
-        if (typeof maskImageCache !== 'undefined') maskImageCache[url] = { img: null };
         const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
         const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
-        addImage(url, dw, dh,
-          (e.clientX - state.pan.x) / state.zoom,
-          (e.clientY - state.pan.y) / state.zoom);
-        toast('Pasted image (hotlinked)');
+        addImage(ev.target.result, dw, dh, _dropX, _dropY);
+        toast('Pasted image');
       };
-      img.onerror = () => toast('Image could not be loaded');
-      img.src = url;
+      img.onerror = () => toast('Failed to decode image');
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(blob);
+  }
+  function _acceptImageResponse(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    // Reject HTML pages / error payloads masquerading as a 200 — e.g. a
+    // Pinterest PAGE url fetched through a proxy returns text/html.
+    if (ct && ct.indexOf('image/') !== 0) throw new Error('not an image (' + ct + ')');
+    return res.blob();
+  }
+  function _tryAcquire(ci) {
+    if (ci >= _candidates.length) return Promise.reject(new Error('all candidates exhausted'));
+    const u = _candidates[ci];
+    return safeFetch(u)
+      .then(_acceptImageResponse)
+      .catch(function(directErr) {
+        console.log('[FileDrop] direct fetch failed for', u, '-', directErr && directErr.message);
+        return safeFetch('https://images.weserv.nl/?url=' + encodeURIComponent(u))
+          .then(_acceptImageResponse)
+          .catch(function(proxyErr) {
+            console.log('[FileDrop] proxy fetch failed for', u, '-', proxyErr && proxyErr.message);
+            return _tryAcquire(ci + 1);
+          });
+      });
+  }
+  toast('Fetching image…');
+  _tryAcquire(0)
+    .then(_importImageBlob)
+    .catch(err => {
+      console.log('[FileDrop] all fetch paths failed:', err && err.message);
+      // Last resort: hotlink the best candidate so the user at least sees
+      // something, but be explicit that this will NOT survive a save, and
+      // that screenshot+paste is the guaranteed-stable equivalent.
+      const img = new Image();
+      img.onload = () => {
+        if (typeof maskImageCache !== 'undefined') maskImageCache[_candidates[0]] = { img: null };
+        const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
+        const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
+        addImage(_candidates[0], dw, dh, _dropX, _dropY);
+        toast('Linked image added — will NOT save. Screenshot + paste is the stable path.');
+      };
+      img.onerror = () => toast('Site blocked the image — screenshot it, then Cmd+V to paste');
+      img.src = _candidates[0];
     });
 }, true);
 
