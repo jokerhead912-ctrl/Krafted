@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.22</title>
+<title>Krafted v7.0.23</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.22';
+var KRAFTED_VERSION = '7.0.23';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -20692,6 +20692,21 @@ window.addEventListener('drop', function(e){
   // ── Cross-origin drag: no files, but dataTransfer may have URL ──
   const dt = e.dataTransfer;
   if (!dt) return;
+  // v7.0.23: read EVERYTHING needed from the event SYNCHRONOUSLY, then
+  // defer all processing via setTimeout(0). Web-image drops from
+  // Pinterest into us were wedging Chrome's browser-level DnD state
+  // machine — after ~3 drops, no NEW drag could be started anywhere in
+  // Chrome until a full browser restart. dataTransfer payloads are only
+  // readable during the event itself, so we copy them out here and let
+  // the drag session complete with a near-instant drop handler.
+  const _sx = e.clientX, _sy = e.clientY;
+  let _rawHtml = '', _rawUri = '', _rawPlain = '';
+  if (dt.getData) {
+    try { _rawHtml = dt.getData('text/html') || ''; } catch (e2) {}
+    try { _rawUri = dt.getData('text/uri-list') || ''; } catch (e2) {}
+    try { _rawPlain = dt.getData('text/plain') || ''; } catch (e2) {}
+  }
+  setTimeout(function() {
   // v7.0.18: collect ALL image-URL candidates, best-first.
   // Priority: the <img> inside text/html (the ACTUAL image bytes URL,
   // srcset largest variant preferred) — NOT text/uri-list, which sites
@@ -20704,8 +20719,8 @@ window.addEventListener('drop', function(e){
     if (!u) return;
     if (_candidates.indexOf(u) === -1) _candidates.push(u);
   }
-  if (dt.getData) {
-    const html = dt.getData('text/html');
+  {
+    const html = _rawHtml;
     if (html) {
       const tagM = html.match(/<img[^>]*>/i);
       if (tagM) {
@@ -20746,13 +20761,13 @@ window.addEventListener('drop', function(e){
         if (/^https?:\/\//i.test(um[1])) _pushCandidate(um[1]);
       }
     }
-    const uriList = dt.getData('text/uri-list');
+    const uriList = _rawUri;
     if (uriList) {
       const lines = uriList.split(/\r?\n/).map(s => s.trim()).filter(s => s && !s.startsWith('#'));
       if (lines.length) _pushCandidate(lines[0]);
     }
     if (!_candidates.length) {
-      const plain = dt.getData('text/plain');
+      const plain = _rawPlain;
       if (plain && /^https?:\/\//i.test(plain.trim())) _pushCandidate(plain.trim());
     }
   }
@@ -20760,7 +20775,7 @@ window.addEventListener('drop', function(e){
     // v7.0.20: never fail SILENTLY — if a drop reaches us but we can find
     // no URL at all, say so in the console so a console screenshot tells
     // us exactly which branch the drag died in.
-    try { console.warn('[FileDrop] drop received but no URL candidates found. types:', dt.types ? Array.from(dt.types).join(',') : '(none)'); } catch (e) {}
+    try { console.warn('[FileDrop] drop received but no URL candidates found. html:', _rawHtml.length, 'uri:', _rawUri.length, 'plain:', _rawPlain.length); } catch (e) {}
     return;
   }
   try { hideWelcome(); } catch (err) {}
@@ -20773,8 +20788,8 @@ window.addEventListener('drop', function(e){
       const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
       const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
       addImage(_candidates[0], dw, dh,
-        (e.clientX - state.pan.x) / state.zoom,
-        (e.clientY - state.pan.y) / state.zoom);
+        (_sx - state.pan.x) / state.zoom,
+        (_sy - state.pan.y) / state.zoom);
       toast('Pasted image');
     };
     img.onerror = () => toast('Failed to decode dragged slide image');
@@ -20802,8 +20817,8 @@ window.addEventListener('drop', function(e){
   //   2. images.weserv.nl proxy — verified working for pinimg.
   // If every candidate fails on both paths: hotlink as a visual placeholder
   // and tell the user the guaranteed path (screenshot → Cmd+V) explicitly.
-  const _dropX = (e.clientX - state.pan.x) / state.zoom;
-  const _dropY = (e.clientY - state.pan.y) / state.zoom;
+  const _dropX = (_sx - state.pan.x) / state.zoom;
+  const _dropY = (_sy - state.pan.y) / state.zoom;
   function _importImageBlob(blob) {
     // v7.0.22: DISK-BACKED import — same end state as a screenshot paste
     // (item.src = blob: URL + item._sourceBlob = stable Blob), but the
@@ -20972,6 +20987,7 @@ window.addEventListener('drop', function(e){
       img.onerror = () => toast('Site blocked the image — screenshot it, then Cmd+V to paste');
       img.src = _candidates[0];
     });
+  }, 0);
 }, true);
 
 viewport.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
