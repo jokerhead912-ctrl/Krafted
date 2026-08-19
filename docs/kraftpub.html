@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.18</title>
+<title>Krafted v7.0.19</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.18';
+var KRAFTED_VERSION = '7.0.19';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -20656,18 +20656,29 @@ window.addEventListener('drop', function(e){
       const tagM = html.match(/<img[^>]*>/i);
       if (tagM) {
         const tag = tagM[0];
-        // srcset: pick the largest width candidate (e.g. Pinterest drags
-        // carry "…236x.jpg 236w, …736x.jpg 736w, …originals….jpg 1200w")
+        // srcset: pick the best candidate AT OR BELOW ~1600w (e.g.
+        // Pinterest drags carry "…236x.jpg 236w, …736x.jpg 736w,
+        // …originals….jpg 1200w"). v7.0.19: previously we took the
+        // LARGEST variant — 'originals' can be several MB, and ~3 such
+        // drags created enough memory pressure for Chrome's OOM killer
+        // to crash the heavy SOURCE tab (Pinterest). If every variant is
+        // above 1600w, take the closest one above; if there are no width
+        // descriptors, keep the last (largest) entry.
         const ssM = tag.match(/srcset\s*=\s*["']([^"']+)["']/i);
         if (ssM) {
-          let bestW = -1, bestU = null;
+          let bestLe = null, bestLeW = -1;
+          let bestGt = null, bestGtW = Infinity;
+          let largest = null, largestW = -1;
           ssM[1].split(',').forEach(function(part) {
             const bits = part.trim().split(/\s+/);
             if (!bits[0]) return;
             const w = (bits[1] && /w$/i.test(bits[1])) ? parseInt(bits[1], 10) : 0;
-            if (w >= bestW) { bestW = w; bestU = bits[0]; }
+            if (w > largestW) { largestW = w; largest = bits[0]; }
+            if (w > 0 && w <= 1600 && w > bestLeW) { bestLeW = w; bestLe = bits[0]; }
+            if (w > 1600 && w < bestGtW) { bestGtW = w; bestGt = bits[0]; }
           });
-          if (bestU) _pushCandidate(bestU);
+          const pick = bestLe || bestGt || largest;
+          if (pick) _pushCandidate(pick);
         }
         const srcM = tag.match(/\ssrc\s*=\s*["']([^"']+)["']/i);
         if (srcM) _pushCandidate(srcM[1]);
@@ -20730,9 +20741,39 @@ window.addEventListener('drop', function(e){
     reader.onload = ev => {
       const img = new Image();
       img.onload = () => {
-        const dw = Math.round(Math.min(img.naturalWidth / 2, 360));
-        const dh = Math.round(img.naturalHeight * (dw / img.naturalWidth));
-        addImage(ev.target.result, dw, dh, _dropX, _dropY);
+        // v7.0.19: cap the STORED image at 1600px on the long edge.
+        // Previously the full original was kept (Pinterest 'originals'
+        // can be 10+ MB; as a data URL that's another +33%, plus the
+        // decoded bitmap in GPU memory) — ~3 such drags created enough
+        // memory pressure for Chrome's OOM killer to crash the heavy
+        // SOURCE tab (Pinterest). 1600px matches the "drag = screenshot"
+        // intent: you keep what you saw, at sane resolution. The canvas
+        // is not tainted here because the img src is a data URL built
+        // from our own fetched blob.
+        let finalUrl = ev.target.result;
+        let effW = img.naturalWidth, effH = img.naturalHeight;
+        const MAX_EDGE = 1600;
+        if (Math.max(effW, effH) > MAX_EDGE) {
+          try {
+            const scale = MAX_EDGE / Math.max(effW, effH);
+            const c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(effW * scale));
+            c.height = Math.max(1, Math.round(effH * scale));
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            // PNG keeps its alpha channel; everything else → JPEG.
+            const capped = (blob.type === 'image/png')
+              ? c.toDataURL('image/png')
+              : c.toDataURL('image/jpeg', 0.88);
+            if (capped && capped.length > 22) {
+              finalUrl = capped;
+              effW = c.width;
+              effH = c.height;
+            }
+          } catch (e2) { /* canvas failed — keep the original bytes */ }
+        }
+        const dw = Math.round(Math.min(effW / 2, 360));
+        const dh = Math.round(effH * (dw / effW));
+        addImage(finalUrl, dw, dh, _dropX, _dropY);
         toast('Pasted image');
       };
       img.onerror = () => toast('Failed to decode image');
