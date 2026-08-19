@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.19</title>
+<title>Krafted v7.0.20</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.19';
+var KRAFTED_VERSION = '7.0.20';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -20694,7 +20694,13 @@ window.addEventListener('drop', function(e){
       if (plain && /^https?:\/\//i.test(plain.trim())) _pushCandidate(plain.trim());
     }
   }
-  if (!_candidates.length) return;
+  if (!_candidates.length) {
+    // v7.0.20: never fail SILENTLY — if a drop reaches us but we can find
+    // no URL at all, say so in the console so a console screenshot tells
+    // us exactly which branch the drag died in.
+    try { console.warn('[FileDrop] drop received but no URL candidates found. types:', dt.types ? Array.from(dt.types).join(',') : '(none)'); } catch (e) {}
+    return;
+  }
   try { hideWelcome(); } catch (err) {}
 
   // PowerPoint/Keynote and some office apps may provide a data URL directly
@@ -20789,21 +20795,51 @@ window.addEventListener('drop', function(e){
     if (ct && ct.indexOf('image/') !== 0) throw new Error('not an image (' + ct + ')');
     return res.blob();
   }
+  // v7.0.20: fetch with a hard timeout. safeFetch has NO timeout, and a
+  // rate-limited proxy typically HANGS the connection instead of erroring
+  // — the chain then sat at "Fetching image…" forever, which reads as
+  // "drag does nothing". 12s per attempt, then move on.
+  function _fetchWithTimeout(u, ms) {
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    let timer = null;
+    if (ctrl) timer = setTimeout(function() { try { ctrl.abort(); } catch (e) {} }, ms || 12000);
+    return safeFetch(u, ctrl ? { signal: ctrl.signal } : undefined).then(function(res) {
+      if (timer) clearTimeout(timer);
+      return res;
+    }, function(err) {
+      if (timer) clearTimeout(timer);
+      throw err;
+    });
+  }
+  // v7.0.20: known no-CORS image hosts — direct fetch is GUARANTEED to
+  // fail (verified: i.pinimg.com sends no Access-Control-Allow-Origin),
+  // so skip that round trip and go straight to the proxy.
+  function _isKnownNoCorsHost(u) {
+    return /^https?:\/\/[^/]*pinimg\.com\//i.test(u);
+  }
   function _tryAcquire(ci) {
     if (ci >= _candidates.length) return Promise.reject(new Error('all candidates exhausted'));
     const u = _candidates[ci];
-    return safeFetch(u)
-      .then(_acceptImageResponse)
-      .catch(function(directErr) {
+    const direct = _isKnownNoCorsHost(u)
+      ? Promise.reject(new Error('known no-CORS host, skipping direct'))
+      : _fetchWithTimeout(u, 12000).then(_acceptImageResponse);
+    return direct.catch(function(directErr) {
         console.log('[FileDrop] direct fetch failed for', u, '-', directErr && directErr.message);
-        return safeFetch('https://images.weserv.nl/?url=' + encodeURIComponent(u))
+        return _fetchWithTimeout('https://images.weserv.nl/?url=' + encodeURIComponent(u), 15000)
           .then(_acceptImageResponse)
           .catch(function(proxyErr) {
-            console.log('[FileDrop] proxy fetch failed for', u, '-', proxyErr && proxyErr.message);
-            return _tryAcquire(ci + 1);
+            console.log('[FileDrop] weserv proxy failed for', u, '-', proxyErr && proxyErr.message);
+            // v7.0.20: second proxy as a real last resort before hotlink.
+            return _fetchWithTimeout('https://api.allorigins.win/raw?url=' + encodeURIComponent(u), 15000)
+              .then(_acceptImageResponse)
+              .catch(function(proxy2Err) {
+                console.log('[FileDrop] allorigins proxy failed for', u, '-', proxy2Err && proxy2Err.message);
+                return _tryAcquire(ci + 1);
+              });
           });
       });
   }
+  console.log('[FileDrop] cross-site drag candidates:', _candidates);
   toast('Fetching image…');
   _tryAcquire(0)
     .then(_importImageBlob)
