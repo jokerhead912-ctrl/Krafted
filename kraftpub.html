@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.26</title>
+<title>Krafted v7.0.27</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2934,6 +2934,29 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+/* v7.0.27: determinate progress bar + sub line (bytes / ETA) */
+.save-progress .bar {
+  height: 6px;
+  background: rgba(128,128,128,.25);
+  border-radius: 3px;
+  margin: 8px 0 6px;
+  overflow: hidden;
+}
+.save-progress .bar > i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width .15s linear;
+}
+.save-progress .sub {
+  color: var(--text);
+  opacity: .75;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-height: 13px;
+}
 
 /* SELECTION BOX */
 #sel-box { position:fixed; border:1px dashed var(--accent); background:rgba(200,200,200,0.04); display:none; z-index:999999; pointer-events:none; }
@@ -4049,7 +4072,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.26';
+var KRAFTED_VERSION = '7.0.27';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4136,6 +4159,7 @@ function cleanupTrackedListeners() {
           <tr><td style="padding:4px 0;color:#888;">Ctrl+Z</td><td style="padding:4px 0;">Undo</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Ctrl+Y</td><td style="padding:4px 0;">Redo</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Ctrl+S</td><td style="padding:4px 0;">Save Board (.kpak)</td></tr>
+          <tr><td style="padding:4px 0;color:#888;">Ctrl+Shift+S</td><td style="padding:4px 0;">Save Board As... (pick new file)</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Ctrl+O</td><td style="padding:4px 0;">Open Board</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Ctrl+G</td><td style="padding:4px 0;">Group Selected</td></tr>
           <tr><td style="padding:4px 0;color:#888;">Ctrl+Shift+G</td><td style="padding:4px 0;">Ungroup</td></tr>
@@ -5532,6 +5556,7 @@ var I18N = (function() {
     'Add Link': '加入连结',
     'Actions': '操作',
     'Save Board (.kpak)': '保存面板 (.kpak)',
+    'Save Board As... (pick new file)': '另存为…（选择新文件）',
     'Open Board': '开启面板',
     'Group Selected': '群组选取',
     'Duplicate': '复制',
@@ -21229,6 +21254,18 @@ function _handleEntryDrop(e, entries) {
 
 function _finishFolderImport(e, allFiles) {
   if (allFiles.length === 0) return;
+  // v7.0.27: Chrome routes plain file drops on the canvas through the
+  // webkitGetAsEntry path, so a dropped .kpak lands HERE, not in
+  // _handleFileDrop's media filter — intercept it and open the package.
+  const _kpakIdx = allFiles.findIndex(f => /\.(kpak|zip)$/i.test((f && f.name) || ''));
+  if (_kpakIdx >= 0) {
+    const _kpakFile = allFiles.splice(_kpakIdx, 1)[0];
+    loadBoardFromFile(_kpakFile).catch(err => {
+      console.warn('[FileDrop] kpak open failed:', err);
+      toast((_isZhUI() ? '读取失败：' : 'Load failed: ') + (err.message || 'unknown'));
+    });
+    if (allFiles.length === 0) return;
+  }
   // Sort: images first, then videos, then audio
   var images = [], videos = [], audios = [];
   allFiles.forEach(function(f) {
@@ -21246,6 +21283,18 @@ function _finishFolderImport(e, allFiles) {
 
 function _handleFileDrop(e, files) {
   console.log('[FileDrop] _handleFileDrop called with', files.length, 'files');
+  // v7.0.27: .kpak/.zip drop = OPEN the board package (was silently
+  // swallowed by the media-only filter below). Remaining media files in
+  // the same drop still import normally after the load starts.
+  const _kpakDrop = files.find(f => /\.(kpak|zip)$/i.test((f && f.name) || ''));
+  if (_kpakDrop) {
+    loadBoardFromFile(_kpakDrop).catch(err => {
+      console.warn('[FileDrop] kpak open failed:', err);
+      toast((_isZhUI() ? '读取失败：' : 'Load failed: ') + (err.message || 'unknown'));
+    });
+    files = files.filter(f => f !== _kpakDrop);
+    if (!files.length) return;
+  }
   // Separate images, videos, and audio files
   const imageFiles = [];
   const videoFiles = [];
@@ -22034,13 +22083,15 @@ function _dispatchShortcut(e) {
 // Without capture, browser default "Save Page As" (or "Save Image" in
 // some browsers) intercepts the key combo before Krafted sees it.
 document.addEventListener('keydown', e => {
-  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 's' || e.key === 'S')) {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 's' || e.key === 'S')) {
     // Don't steal from text inputs
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
     e.preventDefault();
     e.stopPropagation();
-    if (typeof saveBoardV6 === 'function') saveBoardV6();
+    // v7.0.27: Ctrl/Cmd+Shift+S = Save As (force a new file picker);
+    // plain Ctrl/Cmd+S quick-saves back to the last picked file.
+    if (typeof saveBoardV6 === 'function') saveBoardV6(e.shiftKey ? { forceNew: true } : undefined);
     return;
   }
 }, true); // capture phase — fires before browser default
@@ -31273,6 +31324,70 @@ function mimeToExt(mime, fallback) {
   return fallback || 'bin';
 }
 
+// v7.0.27: UI-language helper for save/load progress strings
+function _isZhUI() { return (typeof I18N !== 'undefined' && I18N.getLang && I18N.getLang() === 'zh'); }
+// v7.0.27: human ETA / duration strings, language-aware
+function _fmtEtaSec(sec) {
+  if (!isFinite(sec) || sec < 0) return '';
+  const zh = _isZhUI();
+  if (sec < 60) return zh ? ('剩约 ' + Math.ceil(sec) + ' 秒') : ('~' + Math.ceil(sec) + 's left');
+  const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+  return zh ? ('剩约 ' + m + ' 分 ' + s + ' 秒') : ('~' + m + 'm ' + s + 's left');
+}
+function _fmtDurSec(sec) {
+  const zh = _isZhUI();
+  if (sec < 60) return zh ? (Math.max(1, Math.round(sec)) + ' 秒') : (Math.max(1, Math.round(sec)) + 's');
+  const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+  return zh ? (m + ' 分 ' + s + ' 秒') : (m + 'm ' + s + 's');
+}
+// v7.0.27: determinate progress UI — bar + % + bytes written + rolling-rate ETA.
+// Replaces the text-only .save-progress div. update(text, {doneBytes,
+// totalBytes, doneItems, totalItems, extra}); pass text=null to keep the label.
+function makeProgressUI() {
+  const el = document.createElement('div');
+  el.className = 'save-progress';
+  el.innerHTML = '<div class="pct"></div><div class="bar"><i></i></div><div class="sub"></div>';
+  document.body.appendChild(el);
+  const pctEl = el.querySelector('.pct');
+  const barEl = el.querySelector('.bar > i');
+  const subEl = el.querySelector('.sub');
+  const t0 = performance.now();
+  const samples = [];
+  let lastBarT = 0;
+  return {
+    el: el,
+    update: function(text, o) {
+      o = o || {};
+      if (text != null) pctEl.textContent = text;
+      let pct = -1;
+      if (o.totalBytes > 0 && o.doneBytes != null) pct = Math.min(99, o.doneBytes / o.totalBytes * 100);
+      else if (o.totalItems > 0 && o.doneItems != null) pct = Math.min(99, o.doneItems / o.totalItems * 100);
+      const nowT = performance.now();
+      if (pct >= 0 && (nowT - lastBarT > 100)) { barEl.style.width = pct.toFixed(1) + '%'; lastBarT = nowT; }
+      let sub = '';
+      if (o.doneBytes != null) {
+        sub = formatBytes(o.doneBytes) + (o.totalBytes > 0 ? ' / ~' + formatBytes(o.totalBytes) : '');
+        samples.push({ t: nowT, b: o.doneBytes });
+        while (samples.length > 2 && nowT - samples[0].t > 4000) samples.shift();
+        if (o.totalBytes > 0 && o.doneBytes < o.totalBytes) {
+          if (samples.length >= 2) {
+            const dt = (nowT - samples[0].t) / 1000;
+            const rate = dt > 0.2 ? (o.doneBytes - samples[0].b) / dt : 0;
+            if (rate > 1024) { const eta = _fmtEtaSec((o.totalBytes - o.doneBytes) / rate); if (eta) sub += ' · ' + eta; }
+            else sub += ' · ' + (_isZhUI() ? '估算中…' : 'estimating…');
+          } else if (o.doneBytes > 0) {
+            sub += ' · ' + (_isZhUI() ? '估算中…' : 'estimating…');
+          }
+        }
+      }
+      if (o.extra) sub = sub ? sub + ' · ' + o.extra : o.extra;
+      subEl.textContent = sub;
+    },
+    elapsedSec: function() { return (performance.now() - t0) / 1000; },
+    done: function() { try { el.remove(); } catch (e) {} }
+  };
+}
+
 // Build the .kpak zip file (manifest.json + all media blobs as raw files)
 // v6.3.0: Streaming kpak builder — writes directly to a WritableStream.
 // Replaces buildKpakBlob which held the entire zip in memory via JSZip.
@@ -31473,7 +31588,7 @@ function _kpakWriteStr(w, s) {
 // Uses the custom container format. Two modes:
 //   1) With FileSystemWritableFileStream (Chrome/Edge): stream each entry directly to disk
 //   2) Fallback: build Blob from array of ArrayBuffers (1 entry in memory at a time)
-async function buildKpakV6(progressCallback, writableStream) {
+async function buildKpakV6(progressCallback, writableStream, estTotalBytes) {
   console.log('[KPAKv6] buildKpakV6 starting...', writableStream ? 'STREAMING' : 'BLOB');
   const useStreaming = !!writableStream;
 
@@ -31530,10 +31645,15 @@ async function buildKpakV6(progressCallback, writableStream) {
   const failedItems = [];
   let currentOffset = 0;
   const blobParts = [];
+  // v7.0.27: byte-accurate progress. estTotalBytes comes from saveBoardV6's
+  // upfront estimate; as each entry resolves its REAL size we fold it in, so
+  // the bar self-corrects instead of jumping when the estimate was off.
+  let doneBytes = 0;
+  let knownTotal = Math.max(0, estTotalBytes || 0);
 
   for (let i = 0; i < entryMetas.length; i++) {
     const m = entryMetas[i];
-    if (progressCallback) progressCallback('Pack ' + (i + 1) + '/' + entryMetas.length + ' (' + formatBytes(m.size) + ')...');
+    if (progressCallback) progressCallback('Pack ' + (i + 1) + '/' + entryMetas.length + ' (' + formatBytes(m.size) + ')...', { doneBytes: doneBytes, totalBytes: Math.max(knownTotal, doneBytes), doneItems: i, totalItems: entryMetas.length });
 
     try {
       // v6.8.29/30: stable source Blobs bypass fetch entirely. Chrome can
@@ -31621,6 +31741,7 @@ async function buildKpakV6(progressCallback, writableStream) {
       } else if ((m.sourceBlob && m.sourceBlob.stream) || (resp.body && resp.body.getReader)) {
         // True streaming — read chunks and write immediately
         const reader = m.sourceBlob ? m.sourceBlob.stream().getReader() : resp.body.getReader();
+        let _lastChunkReport = 0;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -31641,6 +31762,13 @@ async function buildKpakV6(progressCallback, writableStream) {
             blobParts.push(chunk);
           }
           actualSize += chunk.length;
+          // v7.0.27: intra-entry progress for very large single media (e.g.
+          // a 500 MB video) — report every ~16 MB so the bar keeps moving
+          // instead of sitting on one entry for minutes.
+          if (progressCallback && actualSize - _lastChunkReport >= 16 * 1024 * 1024) {
+            _lastChunkReport = actualSize;
+            progressCallback(null, { doneBytes: doneBytes + actualSize, totalBytes: Math.max(knownTotal, doneBytes + actualSize), doneItems: i, totalItems: entryMetas.length });
+          }
         }
         // Update size header if Content-Length was wrong/missing
         if (contentLength === 0 || contentLength !== actualSize) {
@@ -31675,6 +31803,11 @@ async function buildKpakV6(progressCallback, writableStream) {
 
       entries.push({ name: m.name, offset: dataOffset, size: actualSize, type: m.type });
       currentOffset += actualSize;
+      // v7.0.27: fold this entry's REAL size into the running total so the
+      // percentage self-corrects (upfront estimate used 80MB/5MB guesses for
+      // unknown blob sizes).
+      if (!m.isManifest && estTotalBytes) knownTotal = Math.max(0, knownTotal - (m.size || 0) + actualSize);
+      doneBytes += actualSize;
       if (i % 2 === 0) await new Promise(r => setTimeout(r, 0));
     } catch (e) {
       console.warn('[KPAKv6] failed to pack', m.name, e.message);
@@ -31694,7 +31827,7 @@ async function buildKpakV6(progressCallback, writableStream) {
   }
 
   // Pass 2: build index
-  if (progressCallback) progressCallback('Writing index...');
+  if (progressCallback) progressCallback(_isZhUI() ? '写入索引…' : 'Writing index...', { doneBytes: doneBytes, totalBytes: Math.max(knownTotal, doneBytes) || 1 });
   // v6.8.1: index parts are pushed as Uint8Array VIEWS (not .buffer) so
   // byte lengths stay exact — same class of bug as the media chunks above.
   const indexParts = [];
@@ -32088,11 +32221,13 @@ window.__kraftedRestoreEmergencyBackup = async function() {
 };
 
 // v6.5.0: Save using custom kpak container — single file, no OOM on load
-async function saveBoardV6() {
+async function saveBoardV6(opts) {
+  opts = opts || {};
+  const forceNew = !!opts.forceNew; // Ctrl+Shift+S = Save As (pick a new file)
   // v6.8.27: save mutex — one save at a time.
   if (state._saving) { toast('Save already in progress'); return; }
   _setSaving(true);
-  console.log('[SAVE V6] saveBoardV6() called');
+  console.log('[SAVE V6] saveBoardV6() called', forceNew ? '(force new location)' : '');
 
   // v7.0.4: CRITICAL — request the save file handle FIRST, before any other
   // async work. showSaveFilePicker() requires a recent, unconsumed user
@@ -32108,13 +32243,35 @@ async function saveBoardV6() {
   // Grabbing the handle up front, while the activation is still fresh,
   // fixes this regardless of how long the rest of the save takes.
   const dateStr = new Date().toISOString().slice(0, 10);
-  const fname = 'krafted_' + dateStr + '.kpak';
+  let fname = 'krafted_' + dateStr + '.kpak';
   let saveHandle = null;
-  if (window.showSaveFilePicker) {
+  // v7.0.27: quick-save — reuse the handle from the last successful pick so
+  // Ctrl+S overwrites the same file WITHOUT re-opening the picker every time.
+  // Permission is re-checked (still inside the fresh user-activation window,
+  // same as the picker path below). If the file was moved/renamed or the
+  // permission expired, we transparently fall back to the picker.
+  if (!forceNew && state._saveHandle && window.showSaveFilePicker) {
+    try {
+      const _q = await state._saveHandle.queryPermission({ mode: 'readwrite' });
+      if (_q === 'granted') {
+        saveHandle = state._saveHandle;
+      } else {
+        const _r = await state._saveHandle.requestPermission({ mode: 'readwrite' });
+        if (_r === 'granted') saveHandle = state._saveHandle;
+      }
+    } catch (e) {
+      console.warn('[SAVE V6] saved handle unusable, falling back to picker:', e.message);
+      saveHandle = null;
+    }
+    if (!saveHandle) state._saveHandle = null;
+  }
+  if (!saveHandle && window.showSaveFilePicker) {
     const _h = await requestSaveHandle(fname, 'application/zip', '.kpak');
     if (_h.cancelled) { toast('Save cancelled'); _setSaving(false); return; }
     saveHandle = _h.handle; // null if the API failed/was denied even though it exists
+    if (saveHandle) state._saveHandle = saveHandle;
   }
+  if (saveHandle && saveHandle.name) fname = saveHandle.name;
 
   const counts = countMediaItems();
   console.log('[SAVE V6] media counts:', counts);
@@ -32169,13 +32326,14 @@ async function saveBoardV6() {
   );
   const _lazyMaterializeFailed = [];
   if (_lazyItemsToMaterialize.length > 0) {
-    const _prepProg = document.createElement('div');
-    _prepProg.className = 'save-progress';
-    document.body.appendChild(_prepProg);
+    const _prepUI = makeProgressUI();
     let _lazyDone = 0;
     for (const it of _lazyItemsToMaterialize) {
       _lazyDone++;
-      _prepProg.innerHTML = '<div class="pct">Preparing media ' + _lazyDone + '/' + _lazyItemsToMaterialize.length + '...</div>';
+      _prepUI.update(
+        (_isZhUI() ? '准备媒体 ' : 'Preparing media ') + _lazyDone + '/' + _lazyItemsToMaterialize.length + '...',
+        { doneItems: _lazyDone - 1, totalItems: _lazyItemsToMaterialize.length }
+      );
       try {
         if (it._kpakEntry && it._kpakBlob) {
           it._sourceBlob = await extractKpakV6EntryBlob(it._kpakBlob, it._kpakEntry);
@@ -32189,17 +32347,15 @@ async function saveBoardV6() {
         _lazyMaterializeFailed.push(it.id);
       }
     }
-    try { _prepProg.remove(); } catch (e) {}
+    _prepUI.done();
   }
   if (_lazyMaterializeFailed.length > 0) {
     console.error('[SAVE V6] could not materialize lazy media for items:', _lazyMaterializeFailed);
   }
 
-  const prog = document.createElement('div');
-  prog.className = 'save-progress';
-  prog.innerHTML = '<div class="pct">Building v6 kpak...</div>';
-  document.body.appendChild(prog);
-  const updateProg = (t) => { prog.innerHTML = '<div class="pct">' + t + '</div>'; };
+  const progUI = makeProgressUI();
+  progUI.update(_isZhUI() ? '构建 v6 kpak…' : 'Building v6 kpak...');
+  const updateProg = (t, o) => progUI.update(t, o);
 
   try {
     // Try streaming first (Chrome/Edge with File System Access API) — only one entry in memory at a time
@@ -32212,7 +32368,7 @@ async function saveBoardV6() {
       let writable = null;
       try {
         writable = await saveHandle.createWritable();
-        const result = await buildKpakV6(updateProg, writable);
+        const result = await buildKpakV6(updateProg, writable, estTotalBytes);
         await writable.close();
         saved = true;
         console.log('[SAVE V6] streamed to file');
@@ -32228,7 +32384,7 @@ async function saveBoardV6() {
         // load — which is confusing because the save itself reported
         // success.
         try {
-          updateProg('Verifying...');
+          updateProg(_isZhUI() ? '校验文件…' : 'Verifying...', { doneItems: 1, totalItems: 1 });
           const writtenFile = await saveHandle.getFile();
           const chk = await readKpakV6Index(writtenFile);
           let bad = 0;
@@ -32250,7 +32406,8 @@ async function saveBoardV6() {
           console.error('[SAVE V6] failed media items:', result.failedItems, 'materialize failed:', _lazyMaterializeFailed);
           toast('⚠ Saved but ' + _allFailed.length + ' media item(s) could not be written. See Console for IDs.');
         } else {
-          toast('Saved v6 kpak \u2714 ' + fname + ' (streamed)');
+          // v7.0.27: report real size + elapsed time so big saves feel accounted for
+          toast((_isZhUI() ? '已保存 ✔ ' : 'Saved ✔ ') + fname + ' (' + formatBytes(result.size || 0) + ' · ' + _fmtDurSec(progUI.elapsedSec()) + ')');
         }
         if (result.manifestJson) _writeEmergencyBackup(result.manifestJson);
       } catch (e) {
@@ -32266,7 +32423,7 @@ async function saveBoardV6() {
 
     if (!saved) {
       // Fallback: build blob (one entry in memory at a time, GC'd between)
-      const result = await buildKpakV6(updateProg, null);
+      const result = await buildKpakV6(updateProg, null, estTotalBytes);
       const blob = result.blob;
 
       // v6.8.1: SELF-VERIFY before download. Re-read the index we just wrote
@@ -32275,7 +32432,7 @@ async function saveBoardV6() {
       // time instead of silently producing a file whose images vanish on
       // load. Non-fatal: we warn and still let the user save, but they know.
       try {
-        updateProg('Verifying...');
+        updateProg(_isZhUI() ? '校验文件…' : 'Verifying...', { doneItems: 1, totalItems: 1 });
         const chk = await readKpakV6Index(blob);
         let bad = 0;
         for (const e of (chk.entries || [])) {
@@ -32307,7 +32464,7 @@ async function saveBoardV6() {
           console.error('[SAVE V6] failed media items:', result.failedItems, 'materialize failed:', _lazyMaterializeFailed);
           toast('⚠ Saved but ' + _allFailed.length + ' media item(s) could not be written. See Console for IDs.');
         } else {
-          toast('Saved v6 kpak \u2714 ' + fname + ' (' + formatBytes(blob.size) + ')');
+          toast((_isZhUI() ? '已保存 ✔ ' : 'Saved ✔ ') + fname + ' (' + formatBytes(blob.size) + ' · ' + _fmtDurSec(progUI.elapsedSec()) + ')');
         }
       }
       if (result.manifestJson) _writeEmergencyBackup(result.manifestJson);
@@ -32322,9 +32479,22 @@ async function saveBoardV6() {
     _pausedVideos.forEach(function(v) {
       try { v.play().catch(function() {}); } catch(e) {}
     });
-    try { prog.remove(); } catch (e) {}
+    try { progUI.done(); } catch (e) {}
     _setSaving(false);
   }
+}
+
+// v7.0.27: open a .kpak/.zip dropped onto the board (drag-to-open).
+// Shims an event-like object so the existing loader body runs unchanged —
+// its event.target.value assignments just set a harmless property on our
+// plain object. Guards against concurrent loads / loads mid-save.
+async function loadBoardFromFile(file) {
+  if (!file) return;
+  if (state._saving) { toast(_isZhUI() ? '保存进行中，请稍候' : 'Please wait for save to finish'); return; }
+  if (state._loading) { toast(_isZhUI() ? '正在读取，请稍候' : 'Load already in progress'); return; }
+  state._loading = true;
+  try { await loadBoardFile({ target: { files: [file], value: '' } }); }
+  finally { state._loading = false; }
 }
 
 // Load board from file — detects .kpak (zip) vs .json format
@@ -32344,10 +32514,8 @@ async function loadBoardFile(event) {
   // Progress toast for large files
   let prog = null;
   if (isLarge) {
-    prog = document.createElement('div');
-    prog.className = 'save-progress';
-    prog.innerHTML = '<div class="pct">Loading ' + formatBytes(file.size) + '...</div>';
-    document.body.appendChild(prog);
+    prog = makeProgressUI();
+    prog.update((_isZhUI() ? '读取中 ' : 'Loading ') + formatBytes(file.size) + '...');
   }
 
   // v6.3.4: warn for very large files — JSZip async('blob') holds all media
@@ -32394,7 +32562,7 @@ async function loadBoardFile(event) {
     if (isV6Kpak) {
       // === KPAK v6 format — streaming load, no OOM ===
       try {
-      if (prog) prog.innerHTML = '<div class="pct">Reading index...</div>';
+      if (prog) prog.update(_isZhUI() ? '读取索引…' : 'Reading index...');
       console.log('[V6 LOAD] reading index from', formatBytes(file.size), 'file');
       const { entries, manifest } = await readKpakV6Index(file);
       console.log('[V6 LOAD] index read:', entries.length, 'entries');
@@ -32405,6 +32573,7 @@ async function loadBoardFile(event) {
       // Map entries to items — set _kpakEntry + _kpakBlob for on-demand extraction
       const mediaEntries = entries.filter(e => e.name.startsWith('media/'));
       let remappedCount = 0;
+      let loadedBytes = 0; // v7.0.27: real bytes restored, for the progress bar
       const missingMediaIds = [];
       const failedExtractIds = [];
       for (const dataItem of data.items || []) {
@@ -32431,6 +32600,7 @@ async function loadBoardFile(event) {
         if (dataItem.isVideo) {
           dataItem.src = '';
           remappedCount++;
+          if (prog) prog.update((_isZhUI() ? '还原媒体 ' : 'Restoring media ') + remappedCount + '/' + mediaEntries.length + '...', { doneBytes: loadedBytes, totalBytes: file.size, doneItems: remappedCount, totalItems: mediaEntries.length });
           continue;
         }
         try {
@@ -32442,6 +32612,8 @@ async function loadBoardFile(event) {
           dataItem._sourceBlob = stableMediaBlob;
           dataItem.src = URL.createObjectURL(stableMediaBlob);
           remappedCount++;
+          loadedBytes += entry.size || 0;
+          if (prog) prog.update((_isZhUI() ? '还原媒体 ' : 'Restoring media ') + remappedCount + '/' + mediaEntries.length + '...', { doneBytes: loadedBytes, totalBytes: file.size, doneItems: remappedCount, totalItems: mediaEntries.length });
           if (remappedCount % 10 === 0) await new Promise(r => setTimeout(r, 0));
         } catch(e) {
           console.warn('Failed to extract', dataItem.id, e);
@@ -32505,9 +32677,9 @@ async function loadBoardFile(event) {
         }
       };
 
-      if (prog) { try { prog.remove(); } catch(e) {} }
+      if (prog) { try { prog.done(); } catch(e) {} }
       const problems = missingMediaIds.length + failedExtractIds.length;
-      let msg = 'Loaded ' + formatBytes(file.size) + ' (v6 format, ' + data.items.length + ' items, ' + remappedCount + ' media)';
+      let msg = 'Loaded ' + formatBytes(file.size) + ' (v6 format, ' + data.items.length + ' items, ' + remappedCount + ' media · ' + _fmtDurSec(prog ? prog.elapsedSec() : 0) + ')';
       if (problems > 0) {
         msg = 'Loaded ' + formatBytes(file.size) + ' ⚠ ' + problems + ' media missing/failed (see Console). Check DevTools for item IDs.';
         console.error('[V6 LOAD] summary — missing:', missingMediaIds.length, 'failed:', failedExtractIds.length);
@@ -32517,7 +32689,7 @@ async function loadBoardFile(event) {
       return;
       } catch (err) {
         console.error('[V6 LOAD] FAILED:', err.name, err.message, err.stack);
-        if (prog) { try { prog.remove(); } catch(e) {} }
+        if (prog) { try { prog.done(); } catch(e) {} }
         toast('V6 load failed: ' + (err.message || 'unknown error') + ' — check console');
         event.target.value = '';
         return;
@@ -32538,7 +32710,7 @@ async function loadBoardFile(event) {
       } else {
       // === REGULAR KPAK (binary zip) ===
       // === REGULAR KPAK (binary zip) ===
-      if (prog) prog.innerHTML = '<div class="pct">Unpacking ' + formatBytes(file.size) + '...</div>';
+      if (prog) prog.update((_isZhUI() ? '解包 ' : 'Unpacking ') + formatBytes(file.size) + '...');
       const zipBytes = await file.arrayBuffer();
       if (!zipBytes || zipBytes.byteLength === 0) throw new Error('Selected file is empty (0 bytes)');
       const zip = await JSZip.loadAsync(zipBytes);
@@ -32551,7 +32723,7 @@ async function loadBoardFile(event) {
 
 
       // Remap media/ entries to blob URLs.
-      if (prog) prog.innerHTML = '<div class="pct">Restoring media...</div>';
+      if (prog) prog.update(_isZhUI() ? '还原媒体…' : 'Restoring media...');
       const mediaEntries = Object.keys(zip.files).filter(p => p.startsWith('media/') && !p.endsWith('/'));
       let restoredCount = 0;
       const remappedIds = new Set();
@@ -32588,6 +32760,7 @@ async function loadBoardFile(event) {
             dataItem.src = URL.createObjectURL(blob);
             remappedIds.add(dataItem.id);
             restoredCount++;
+            if (prog) prog.update((_isZhUI() ? '还原媒体 ' : 'Restoring media ') + restoredCount + '/' + mediaEntries.length + '...', { doneItems: restoredCount, totalItems: mediaEntries.length });
           }
           // v6.3.4: yield to GC every 10 items to avoid peak memory buildup
           if (restoredCount % 10 === 0) await new Promise(r => setTimeout(r, 0));
@@ -32715,7 +32888,7 @@ async function loadBoardFile(event) {
     console.error('loadBoardFile failed:', err);
     toast('Error loading: ' + (err.message || 'unknown error'));
   } finally {
-    try { prog && prog.remove(); } catch (e) {}
+    try { prog && prog.done(); } catch (e) {}
     event.target.value = '';
   }
 }
