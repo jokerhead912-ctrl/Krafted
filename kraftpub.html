@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.24</title>
+<title>Krafted v7.0.25</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3280,14 +3280,14 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
 
 /* ═══════════════════════════════════════════════════════════════
    SCREEN SHARE MODE — 投屏模式（v6.8.0）
-   只在 body.screen-share-mode 時生效
+   只在 body.screen-share-mode 时生效
    ═══════════════════════════════════════════════════════════════ */
 
 body.screen-share-mode .item { will-change: auto; }
 body.screen-share-mode .item.dragging { will-change: transform; }
 body.screen-share-mode .media-wrap { will-change: auto; transform: none; }
 body.screen-share-mode .mindmap-item { will-change: auto; }
-/* 只停 item 自身嘅 transition，唔影響 media-seek-fill（進度條） */
+/* 只停 item 自身嘅 transition，唔影响 media-seek-fill（进度条） */
 body.screen-share-mode .item:not(.has-media) { transition: none !important; }
 body.screen-share-mode .item.has-media { transition: none !important; }
 body.screen-share-mode .item.has-media .media-seek-fill,
@@ -3299,7 +3299,7 @@ body.screen-share-mode #paper { box-shadow: 0 2px 10px rgba(0,0,0,0.3) !importan
 body.screen-share-mode .media-wrap video { filter: none !important; image-rendering: auto; }
 body.screen-share-mode #toolbar { opacity: 0.98 !important; }
 
-/* ── 頂部提示橫幅（minimalist Apple/Linear 風格） ── */
+/* ── 顶部提示横幅（minimalist Apple/Linear 风格） ── */
 #ss-banner {
   display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 999999999;
   height: 24px; background: rgba(0,0,0,0.78);
@@ -3338,12 +3338,12 @@ body.screen-share-mode #ss-banner { display: flex; }
 }
 body.screen-share-mode #ss-watermark { display: block; }
 
-/* ── Canvas 區域邊框（極幼、半透明） ── */
+/* ── Canvas 区域边框（极幼、半透明） ── */
 body.screen-share-mode #canvas {
   outline: 1px solid rgba(255,255,255,0.08); outline-offset: -1px;
 }
 
-/* ── 狀態欄指示器（加強版） ── */
+/* ── 状态栏指示器（加强版） ── */
 #status-ss-indicator {
   display: none; margin-left: 8px; padding: 2px 8px;
   background: rgba(255,255,255,0.06); border: 0.5px solid rgba(255,255,255,0.12);
@@ -3357,7 +3357,7 @@ body.screen-share-mode #status-ss-indicator::before {
   background: #5ac8fa; box-shadow: 0 0 4px rgba(90,200,250,0.6);
 }
 
-/* ── 工具列按鈕 active 態（minimalist） ── */
+/* ── 工具列按钮 active 态（minimalist） ── */
 body.screen-share-mode #btn-screen-share {
   background: rgba(90,200,250,0.12) !important;
   border-color: rgba(90,200,250,0.3) !important; color: #5ac8fa !important;
@@ -3368,7 +3368,7 @@ body.screen-share-mode #btn-screen-share::after {
   box-shadow: 0 0 4px rgba(90,200,250,0.5);
 }
 
-/* ── FPS 計數器（低調）── */
+/* ── FPS 计数器（低调）── */
 #ss-fps {
   position: fixed; bottom: 8px; right: 12px; z-index: 999999997;
   padding: 1px 5px; background: transparent; border-radius: 3px;
@@ -3469,7 +3469,7 @@ body.screen-share-mode #ss-fps {
   <input type="file" id="file-audio-input" accept="audio/*,.mp3,.wav,.aiff,.aif,.flac,.ogg,.m4a" style="display:none" onchange="handleAudioUpload(event)">
   <button onclick="newBoard()" title="New Board (clear all)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h10M6 5V3h4v2M5 5l1 9h4l1-9"/></svg> <span class="tb-label">Clear</span></button>
   <div class="sep"></div>
-  <button onclick="toggleScreenShareMode()" id="btn-screen-share" title="Screen Share Mode — 投屏模式 (Ctrl+Shift+P)&#10;降低 GPU 負擔，改善騰訊會議投屏流暢度"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="14" height="9" rx="1.5"/><path d="M5 15l3-3M11 15L8 12"/></svg> <span class="tb-label">Screen</span></button>
+  <button onclick="toggleScreenShareMode()" id="btn-screen-share" title="Screen Share Mode — 投屏模式 (Ctrl+Shift+P)&#10;降低 GPU 负担，改善腾讯会议投屏流畅度"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="14" height="9" rx="1.5"/><path d="M5 15l3-3M11 15L8 12"/></svg> <span class="tb-label">Screen</span></button>
 </div>
 
 <!-- PROPERTIES PANEL -->
@@ -4049,7 +4049,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.24';
+var KRAFTED_VERSION = '7.0.25';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4505,9 +4505,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 //  KraftedStorage — IndexedDB 主存 + localStorage fallback
 //  Krafted v5.5.1
 // ============================================================
-//  解決 localStorage 5MB quota 限制，async 讀寫唔 freeze UI。
-//  向下兼容：首次啟動自動 migrate 舊 localStorage data。
-//  每次 save 自動 mirror 一份 JSON backup（keep 最近 5 個）。
+//  解决 localStorage 5MB quota 限制，async 读写唔 freeze UI。
+//  向下兼容：首次启动自动 migrate 旧 localStorage data。
+//  每次 save 自动 mirror 一份 JSON backup（keep 最近 5 个）。
 // ============================================================
 
 (function() {
@@ -4883,7 +4883,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             (est.usage / 1024 / 1024).toFixed(1) + 'MB / ' +
             (est.quota / 1024 / 1024).toFixed(1) + 'MB)');
           if (typeof window.toast === 'function') {
-            window.toast('⚠️ 儲存空間使用 ' + pct.toFixed(0) + '% — 建議清理舊備份');
+            window.toast('⚠️ 保存空间使用 ' + pct.toFixed(0) + '% — 建议清理旧备份');
           }
         }
       }
@@ -5358,688 +5358,688 @@ var I18N = (function() {
   // ── Translation map: exact English string → 中文 ──────────
   var MAP = {
     // ── Toolbar buttons ──
-    'Select & Move (V)': '選擇移動 (V)',
-    'Select': '選擇',
+    'Select & Move (V)': '选择移动 (V)',
+    'Select': '选择',
     'Add Text (T)': '加入文字 (T)',
     'Text': '文字',
-    'Draw (Ctrl+D)': '繪圖 (Ctrl+D)',
-    'Draw': '繪圖',
-    'Export PNG (E)': '導出PNG (E)',
-    'Export': '導出',
-    'Capture Area (C) | Screen Capture (Shift+C)': '截圖區域 (C) | 螢幕截圖 (Shift+C)',
-    'Capture': '截圖',
-    'Free Shape Cut (X)': '自由剪裁 (X)',
-    'Cut': '剪裁',
-    'Lasso Polygon Cut (L)': '多邊形套索 (L)',
+    'Draw (Ctrl+D)': '绘图 (Ctrl+D)',
+    'Draw': '绘图',
+    'Export PNG (E)': '导出PNG (E)',
+    'Export': '导出',
+    'Capture Area (C) | Screen Capture (Shift+C)': '截图区域 (C) | 屏幕截图 (Shift+C)',
+    'Capture': '截图',
+    'Free Shape Cut (X)': '自由裁剪 (X)',
+    'Cut': '裁剪',
+    'Lasso Polygon Cut (L)': '多边形套索 (L)',
     'Lasso': '套索',
-    'Mind Map Brainstorm (M)': '心智圖 (M)',
-    'Mind': '心智',
-    'Relation Line — connect two items (R)': '關係線 — 連接兩個項目 (R)',
-    'Relation': '關係',
-    'Undo (Ctrl+Z)': '復原 (Ctrl+Z)',
-    'Undo': '復原',
+    'Mind Map Brainstorm (M)': '思维导图 (M)',
+    'Mind': '脑图',
+    'Relation Line — connect two items (R)': '关系线 — 连接两个项目 (R)',
+    'Relation': '关系',
+    'Undo (Ctrl+Z)': '撤销 (Ctrl+Z)',
+    'Undo': '撤销',
     'Redo (Ctrl+Y)': '重做 (Ctrl+Y)',
     'Redo': '重做',
-    'Add Link Card (Ctrl+L)': '加入連結 (Ctrl+L)',
-    'Link': '連結',
-    'Add To-Do List': '加入待辦清單',
-    'Todo': '待辦',
-    'Tidy Selected (Ctrl+Shift+U)': '整理選取 (Ctrl+Shift+U)',
+    'Add Link Card (Ctrl+L)': '加入连结 (Ctrl+L)',
+    'Link': '连结',
+    'Add To-Do List': '加入待办清单',
+    'Todo': '待办',
+    'Tidy Selected (Ctrl+Shift+U)': '整理选取 (Ctrl+Shift+U)',
     'Tidy': '整理',
-    'Toggle Grid (G)': '切換網格 (G)',
-    'Grid': '網格',
-    'Group Selected (Ctrl+G)': '群組 (Ctrl+G)',
-    'Group': '群組',
-    'Ungroup (Ctrl+Shift+G)': '取消群組 (Ctrl+Shift+G)',
-    'Ungroup': '解散',
-    'Save Board (Ctrl+S)': '儲存 (Ctrl+S)',
-    'Save': '儲存',
-    'Fullscreen (Shift+F)': '全螢幕 (Shift+F)',
-    'Full': '全螢幕',
-    'Load Board': '載入面板',
-    'Load': '載入',
+    'Toggle Grid (G)': '切换网格 (G)',
+    'Grid': '网格',
+    'Group Selected (Ctrl+G)': '群组 (Ctrl+G)',
+    'Group': '群组',
+    'Ungroup (Ctrl+Shift+G)': '取消群组 (Ctrl+Shift+G)',
+    'Ungroup': '取消分组',
+    'Save Board (Ctrl+S)': '保存 (Ctrl+S)',
+    'Save': '保存',
+    'Fullscreen (Shift+F)': '全屏幕 (Shift+F)',
+    'Full': '全屏幕',
+    'Load Board': '载入面板',
+    'Load': '载入',
     'New Board (clear all)': '新面板 (清除全部)',
     'Clear': '清除',
-    'Pan (Hand tool)': '平移 (手掌工具)',
+    'Pan (Hand tool)': '平移 (抓手工具)',
     'Pan': '平移',
-    'Add Image': '加入圖片',
-    'Add Video': '加入影片',
-    'Fit': '適應',
+    'Add Image': '加入图片',
+    'Add Video': '加入视频',
+    'Fit': '适应',
 
     // ── Text toolbar ──
     'Font size (px on screen)': '字型大小 (px)',
-    'Bold': '粗體',
-    'Italic': '斜體',
-    'Underline': '底線',
-    'Strikethrough': '刪除線',
-    'Uppercase': '大寫',
-    'Highlight': '螢光筆',
-    'Shadow': '陰影',
+    'Bold': '粗体',
+    'Italic': '斜体',
+    'Underline': '底线',
+    'Strikethrough': '删除线',
+    'Uppercase': '大写',
+    'Highlight': '萤光笔',
+    'Shadow': '阴影',
     'Outline': '外框',
     'Background': '背景',
-    'Text Color': '文字顏色',
-    'Highlight Color': '螢光筆顏色',
+    'Text Color': '文字颜色',
+    'Highlight Color': '萤光笔颜色',
     'Align Left': '靠左',
     'Align Center': '置中',
     'Align Right': '靠右',
-    'Translate EN -> 中文 (Ctrl+Shift+T)': '翻譯 EN→中文 (Ctrl+Shift+T)',
+    'Translate EN -> 中文 (Ctrl+Shift+T)': '翻译 EN→中文 (Ctrl+Shift+T)',
 
     // ── Draw toolbar ──
     'Tool': '工具',
-    'Pen': '筆',
-    'Arrow': '箭頭',
+    'Pen': '笔',
+    'Arrow': '箭头',
     'Box': '方框',
     'Eraser': '橡皮擦',
-    'Color': '顏色',
+    'Color': '颜色',
     'Size:': '大小：',
     'Opacity:': '透明度：',
-    'Pressure (Pen Tablet)': '壓力感應 (繪圖板)',
-    'Arrow Head Size': '箭頭大小',
-    'Undo Last Stroke': '復原上一筆',
-    'Clear All Draws': '清除所有繪圖',
+    'Pressure (Pen Tablet)': '压力感应 (绘图板)',
+    'Arrow Head Size': '箭头大小',
+    'Undo Last Stroke': '撤销上一笔',
+    'Clear All Draws': '清除所有绘图',
     'Clear All': '清除全部',
-    'Tip: switch to Select (V), click any drawing to select it, then press Del to remove.': '提示：切換到選擇 (V)，點擊繪圖選取後按 Del 刪除。',
+    'Tip: switch to Select (V), click any drawing to select it, then press Del to remove.': '提示：切换到选择 (V)，点击绘图选取后按 Del 删除。',
 
     // ── Free Cut ──
-    'Free Cut': '自由剪裁',
-    'Draw on image to cut': '在圖片上繪製剪裁範圍',
+    'Free Cut': '自由裁剪',
+    'Draw on image to cut': '在图片上绘制裁剪范围',
     'Extract': '提取',
-    'Redraw': '重畫',
+    'Redraw': '重画',
     'Done': '完成',
 
     // ── Lasso ──
-    'Click points on image to cut': '在圖片上點擊建立剪裁點',
-    'Border': '邊框',
-    'Border color': '邊框顏色',
-    'Close Shape': '閉合形狀',
-    'Undo Point': '復原點',
+    'Click points on image to cut': '在图片上点击建立裁剪点',
+    'Border': '边框',
+    'Border color': '边框颜色',
+    'Close Shape': '闭合形状',
+    'Undo Point': '撤销点',
     'Cancel': '取消',
 
     // ── Export modal ──
     'BG:': '背景：',
-    'Pick any background color': '選擇背景顏色',
+    'Pick any background color': '选择背景颜色',
     'White': '白色',
-    'Canvas': '畫布',
+    'Canvas': '画布',
     'Dark': '深色',
     'Transparent': '透明',
-    'Save to a local folder (Chrome/Edge on Win/Mac)': '儲存到本機資料夾 (Chrome/Edge Win/Mac)',
-    'Save to Folder...': '儲存到資料夾...',
-    'Save PNG': '儲存 PNG',
-    'Close': '關閉',
+    'Save to a local folder (Chrome/Edge on Win/Mac)': '保存到本机文件夹 (Chrome/Edge Win/Mac)',
+    'Save to Folder...': '保存到文件夹...',
+    'Save PNG': '保存 PNG',
+    'Close': '关闭',
 
     // ── Capture ──
-    'Drag to select capture area': '拖曳選取截圖範圍',
-    'Paste to Board': '貼到面板',
-    'Drop the captured image directly onto the board at the cursor position (avoids the clipboard round-trip, which can fail on some browsers)': '直接將截圖放到面板遊標位置',
-    'Discard': '放棄',
+    'Drag to select capture area': '拖动选取截图范围',
+    'Paste to Board': '贴到面板',
+    'Drop the captured image directly onto the board at the cursor position (avoids the clipboard round-trip, which can fail on some browsers)': '直接将截图放到面板光标位置',
+    'Discard': '放弃',
 
     // ── Media bar ──
-    'Media': '媒體',
-    'Play all GIF & Video': '播放所有 GIF 和影片',
+    'Media': '媒体',
+    'Play all GIF & Video': '播放所有 GIF 和视频',
     '▶️ Play All': '▶️ 全部播放',
-    'Pause all GIF & Video to save memory': '暫停全部以節省記憶體',
-    '⏸ Pause All': '⏸ 全部暫停',
+    'Pause all GIF & Video to save memory': '暂停全部以节省内存',
+    '⏸ Pause All': '⏸ 全部暂停',
 
     // ── Status bar ──
-    'Zoom: 100% | Items: 0 | Undo: 0': '縮放：100% | 項目：0 | 復原：0',
+    'Zoom: 100% | Items: 0 | Undo: 0': '缩放：100% | 项目：0 | 撤销：0',
 
     // ── Zoom widget ──
-    'Mouse-wheel zoom step (1%–15% per tick)': '滑鼠滾輪縮放步長 (1%–15%)',
-    '🎚 Wheel step': '🎚 滾輪步長',
-    'Frame selected — center the view on selection and zoom to fit (F). With nothing selected, resets to 100% / (0,0).': '框選 — 將視圖置中並縮放至適合 (F)',
-    '🎯 Frame': '🎯 框選',
-    'Natural scroll: flip wheel-zoom direction (Mac default). Does not affect pinch-zoom.': '自然滾輪：反轉縮放方向 (Mac 預設)',
-    '🔄 Natural scroll': '🔄 自然滾輪',
+    'Mouse-wheel zoom step (1%–15% per tick)': '鼠标滚轮缩放步长 (1%–15%)',
+    '🎚 Wheel step': '🎚 滚轮步长',
+    'Frame selected — center the view on selection and zoom to fit (F). With nothing selected, resets to 100% / (0,0).': '适配 — 将视图置中并缩放至适合 (F)',
+    '🎯 Frame': '🎯 适配',
+    'Natural scroll: flip wheel-zoom direction (Mac default). Does not affect pinch-zoom.': '自然滚轮：反转缩放方向 (Mac 预设)',
+    '🔄 Natural scroll': '🔄 自然滚轮',
 
     // ── Welcome screen ──
-    'For every creative soul.': '獻給每個創意靈魂。',
-    'Professional reference board — images, video, audio, mind maps & more.': '專業創意參考板 — 圖片、影片、音訊、心智圖等。',
-    'GET STARTED': '開始使用',
-    'CREATED BY KINCHEUNG': '由 KINCHEUNG 製作',
+    'For every creative soul.': '献给每个创意灵魂。',
+    'Professional reference board — images, video, audio, mind maps & more.': '专业创意参考板 — 图片、视频、音讯、思维导图等。',
+    'GET STARTED': '开始使用',
+    'CREATED BY KINCHEUNG': '由 KINCHEUNG 制作',
     'V 5 . 5': 'V 5 . 5',
 
     // ── Save modals ──
-    'Save Board': '儲存面板',
-    'Full Package (.kpak) — ZIP archive with all images/videos/audio embedded. No size limits. Share with your team.': '完整套件 (.kpak) — 包含所有圖片/影片/音訊的 ZIP 封存。無大小限制。',
-    'Lock & Save (.kpak) — Same as above, but encrypted with a password for extra security.': '加密儲存 (.kpak) — 同上，但以密碼加密增加安全性。',
-    'Chrome/Edge: you\'ll choose where to save. Other browsers: file downloads automatically.': 'Chrome/Edge：可選擇儲存位置。其他瀏覽器：自動下載。',
-    '🔒 Lock & Save': '🔒 加密儲存',
+    'Save Board': '保存面板',
+    'Full Package (.kpak) — ZIP archive with all images/videos/audio embedded. No size limits. Share with your team.': '完整套件 (.kpak) — 包含所有图片/视频/音讯的 ZIP 封存。无大小限制。',
+    'Lock & Save (.kpak) — Same as above, but encrypted with a password for extra security.': '加密保存 (.kpak) — 同上，但以密码加密增加安全性。',
+    'Chrome/Edge: you\'ll choose where to save. Other browsers: file downloads automatically.': 'Chrome/Edge：可选择保存位置。其他浏览器：自动下载。',
+    '🔒 Lock & Save': '🔒 加密保存',
     'Full Package (.kpak)': '完整套件 (.kpak)',
-    'Save with Password': '密碼儲存',
-    'Your file is locked. Save this password somewhere safe — it cannot be recovered.': '檔案已加密。請妥善保存此密碼 — 無法復原。',
-    'Copy': '複製',
-    'Copied': '已複製',
-    'Tip: The master password can also open this file as a backup.': '提示：主備份密碼也可開啟此檔案。',
-    'OK, Download': '確定，下載',
-    '🔒 Locked Board': '🔒 已鎖定面板',
-    'This board was saved with a password. Enter the password to open it.': '此面板已密碼保護，請輸入密碼開啟。',
-    'Enter password': '輸入密碼',
-    'Unlock': '解鎖',
+    'Save with Password': '密码保存',
+    'Your file is locked. Save this password somewhere safe — it cannot be recovered.': '文件已加密。请妥善保存此密码 — 无法恢复。',
+    'Copy': '复制',
+    'Copied': '已复制',
+    'Tip: The master password can also open this file as a backup.': '提示：主备份密码也可开启此文件。',
+    'OK, Download': '确定，下载',
+    '🔒 Locked Board': '🔒 已锁定面板',
+    'This board was saved with a password. Enter the password to open it.': '此面板已密码保护，请输入密码开启。',
+    'Enter password': '输入密码',
+    'Unlock': '解锁',
 
     // ── Help overlay ──
-    'KRAFTED — Hotkeys & Guide': 'KRAFTED — 快捷鍵與指南',
+    'KRAFTED — Hotkeys & Guide': 'KRAFTED — 快捷键与指南',
     'Tools': '工具',
-    'Select & Move': '選擇移動',
-    'Board Text': '畫板文字',
-    'Draw (pen/arrow/box)': '繪圖 (筆/箭頭/方框)',
-    'Export Area (drag select)': '導出區域 (拖曳選取)',
-    'Capture Area': '截圖區域',
-    'Screen Capture': '螢幕截圖',
-    'Free Shape Cut': '自由剪裁',
-    'Lasso Cut': '套索剪裁',
-    'Mind Map': '心智圖',
-    'Relation Line': '關係線',
-    'Add Link': '加入連結',
+    'Select & Move': '选择移动',
+    'Board Text': '画板文字',
+    'Draw (pen/arrow/box)': '绘图 (笔/箭头/方框)',
+    'Export Area (drag select)': '导出区域 (拖动选取)',
+    'Capture Area': '截图区域',
+    'Screen Capture': '屏幕截图',
+    'Free Shape Cut': '自由裁剪',
+    'Lasso Cut': '套索裁剪',
+    'Mind Map': '思维导图',
+    'Relation Line': '关系线',
+    'Add Link': '加入连结',
     'Actions': '操作',
-    'Save Board (.kpak)': '儲存面板 (.kpak)',
-    'Open Board': '開啟面板',
-    'Group Selected': '群組選取',
-    'Duplicate': '複製',
-    'Tidy Selected': '整理選取',
-    'Translate EN->中文': '翻譯 EN→中文',
-    'Toggle Grid': '切換網格',
-    'Fullscreen': '全螢幕',
-    'Frame Selection': '框選',
-    'Delete Selected': '刪除選取',
-    'Pan Canvas': '平移畫布',
-    'Alt-Pan (text editing)': 'Alt+平移 (文字編輯)',
-    'Mouse / Touch': '滑鼠 / 觸控',
-    'Zoom in/out': '縮放',
-    'Pan canvas': '平移畫布',
-    'Context menu': '右鍵選單',
-    'Zoom (natural)': '縮放 (自然)',
-    'Pan (trackpad)': '平移 (觸控板)',
+    'Save Board (.kpak)': '保存面板 (.kpak)',
+    'Open Board': '开启面板',
+    'Group Selected': '群组选取',
+    'Duplicate': '复制',
+    'Tidy Selected': '整理选取',
+    'Translate EN->中文': '翻译 EN→中文',
+    'Toggle Grid': '切换网格',
+    'Fullscreen': '全屏幕',
+    'Frame Selection': '适配',
+    'Delete Selected': '删除选取',
+    'Pan Canvas': '平移画布',
+    'Alt-Pan (text editing)': 'Alt+平移 (文字编辑)',
+    'Mouse / Touch': '鼠标 / 触控',
+    'Zoom in/out': '缩放',
+    'Pan canvas': '平移画布',
+    'Context menu': '右键选单',
+    'Zoom (natural)': '缩放 (自然)',
+    'Pan (trackpad)': '平移 (触控板)',
     'Krafted v5.5 — by Joker Head Studios': 'Krafted v5.5 — Joker Head Studios',
 
     // ── Link modal ──
-    'Add Reference Link': '加入參考連結',
-    'Paste URL (e.g. https://youtube.com/watch?v=...)': '貼上網址 (如 https://youtube.com/watch?v=...)',
-    'Fetching preview...': '擷取預覽中...',
-    'Add Link': '加入連結',
+    'Add Reference Link': '加入参考连结',
+    'Paste URL (e.g. https://youtube.com/watch?v=...)': '贴上网址 (如 https://youtube.com/watch?v=...)',
+    'Fetching preview...': '撷取预览中...',
+    'Add Link': '加入连结',
 
     // ── Properties panel ──
-    'Toggle Panel': '切換面板',
-    'Select an item to see properties': '選取項目以查看屬性',
-    'Transform': '變形',
+    'Toggle Panel': '切换面板',
+    'Select an item to see properties': '选取项目以查看属性',
+    'Transform': '变形',
     'Opacity': '透明度',
-    'Rotate': '旋轉',
-    'Flip Horizontal': '水平翻轉',
-    'Flip H': '水平翻轉',
-    'Flip Vertical': '垂直翻轉',
-    'Flip V': '垂直翻轉',
-    'Quick Translate': '快速翻譯',
+    'Rotate': '旋转',
+    'Flip Horizontal': '水平翻转',
+    'Flip H': '水平翻转',
+    'Flip Vertical': '垂直翻转',
+    'Flip V': '垂直翻转',
+    'Quick Translate': '快速翻译',
     'EN -> 中文': 'EN → 中文',
     '中 -> EN': '中 → EN',
-    'Open in Google Translate (new tab) — always works': '在 Google 翻譯中開啟 (新分頁)',
-    'Photo Adjust': '圖片調整',
+    'Open in Google Translate (new tab) — always works': '在 Google 翻译中开启 (新分页)',
+    'Photo Adjust': '图片调整',
     'Bright': '亮度',
-    'Contrast': '對比',
-    'Saturate': '飽和',
+    'Contrast': '对比',
+    'Saturate': '饱和',
     'Hue': '色相',
     'Blur': '模糊',
-    'Sepia': '復古',
-    'Grayscale': '灰階',
-    'Reset All': '全部重設',
-    'CGI Director': 'CGI 導演',
-    'Temp': '色溫',
+    'Sepia': '复古',
+    'Grayscale': '灰阶',
+    'Reset All': '全部重设',
+    'CGI Director': 'CGI 导演',
+    'Temp': '色温',
     'Vignette': '暗角',
     'Highlight': '高光',
-    'Grain': '顆粒',
-    'Reset CGI': '重設 CGI',
-    'Mask Layers': '遮罩圖層',
-    'Color Mask': '顏色遮罩',
-    'Brush Mask': '筆刷遮罩',
-    'No mask layers. Add one above.': '尚無遮罩圖層，請在上方新增。',
+    'Grain': '颗粒',
+    'Reset CGI': '重设 CGI',
+    'Mask Layers': '遮罩图层',
+    'Color Mask': '颜色遮罩',
+    'Brush Mask': '笔刷遮罩',
+    'No mask layers. Add one above.': '尚无遮罩图层，请在上方新增。',
     'GIF': 'GIF',
-    'Trim GIF Frames': '裁剪 GIF 影格',
-    'Video': '影片',
+    'Trim GIF Frames': '裁剪 GIF 帧',
+    'Video': '视频',
     '▶️ Play': '▶️ 播放',
     '⏮ Restart': '⏮ 重播',
     'Volume': '音量',
     'Speed': '速度',
     'Trim': '裁剪',
-    'Click to re-detect frame rate': '點擊重新偵測幀率',
-    'Click to toggle 0:00 ↔ f 1234': '點擊切換 0:00 ↔ f 1234',
-    'Duration:': '長度：',
-    'Reset Trim': '重設裁剪',
-    'Previous frame (←)': '上一幀 (←)',
-    '◀ Frame': '◀ 影格',
-    'Play / Pause (Space when annotating)': '播放 / 暫停 (註解時按空白鍵)',
+    'Click to re-detect frame rate': '点击重新侦测帧率',
+    'Click to toggle 0:00 ↔ f 1234': '点击切换 0:00 ↔ f 1234',
+    'Duration:': '长度：',
+    'Reset Trim': '重设裁剪',
+    'Previous frame (←)': '上一帧 (←)',
+    '◀ Frame': '◀ 帧',
+    'Play / Pause (Space when annotating)': '播放 / 暂停 (注解时按空白键)',
     '▶ Play': '▶ 播放',
-    'Next frame (→)': '下一幀 (→)',
-    'Frame ▶': '影格 ▶',
+    'Next frame (→)': '下一帧 (→)',
+    'Frame ▶': '帧 ▶',
     'Comments': '留言',
-    'Save comments as .json so you can re-open and continue': '儲存留言為 .json 以便日後繼續編輯',
-    '💾 Save': '💾 儲存',
-    'Layer & Layout': '圖層與佈局',
-    'Order': '順序',
+    'Save comments as .json so you can re-open and continue': '保存留言为 .json 以便日后继续编辑',
+    '💾 Save': '💾 保存',
+    'Layer & Layout': '图层与布局',
+    'Order': '顺序',
     'Bring to Front': '移至最前',
     'Top': '最前',
     'Move Up': '上移',
     'Up': '上',
     'Move Down': '下移',
     'Down': '下',
-    'Send to Back': '移至最後',
-    'Bottom': '最後',
-    'Lock/unlock': '鎖定/解鎖',
-    'Lock': '鎖定',
-    'Unlock': '解鎖',
-    'Duplicate (Ctrl+Shift+D)': '複製 (Ctrl+Shift+D)',
-    'Align': '對齊',
+    'Send to Back': '移至最后',
+    'Bottom': '最后',
+    'Lock/unlock': '锁定/解锁',
+    'Lock': '锁定',
+    'Unlock': '解锁',
+    'Duplicate (Ctrl+Shift+D)': '复制 (Ctrl+Shift+D)',
+    'Align': '对齐',
     'Align Center H': '水平置中',
     'Center': '置中',
     'Right': '靠右',
     'Left': '靠左',
     'Align Top': '靠上',
     'Align Center V': '垂直置中',
-    'Middle': '中間',
+    'Middle': '中间',
     'Align Bottom': '靠下',
-    'Smart Layout': '智能佈局',
-    'Column Layout': '直列佈局',
+    'Smart Layout': '智能布局',
+    'Column Layout': '直列布局',
     'Column': '直列',
-    'Row Layout': '橫列佈局',
-    'Row': '橫列',
-    'Grid Layout': '網格佈局',
-    '▦ Grid': '▦ 網格',
-    'Distribute & Size': '分佈與大小',
-    'Distribute Horizontal': '水平分佈',
+    'Row Layout': '横列布局',
+    'Row': '横列',
+    'Grid Layout': '网格布局',
+    '▦ Grid': '▦ 网格',
+    'Distribute & Size': '分布与大小',
+    'Distribute Horizontal': '水平分布',
     '━━ H': '━━ 水平',
-    'Distribute Vertical': '垂直分佈',
+    'Distribute Vertical': '垂直分布',
     '┃┃ V': '┃┃ 垂直',
     'Same Size': '相同大小',
     'CGSize': '同大小',
-    'Same Width': '相同寬度',
-    '= W': '= 寬',
+    'Same Width': '相同宽度',
+    '= W': '= 宽',
     'Same Height': '相同高度',
     '= H': '= 高',
-    'Stack': '堆疊',
-    'Border Color': '邊框顏色',
-    'Open Link': '開啟連結',
-    'Background Color': '背景顏色',
+    'Stack': '堆叠',
+    'Border Color': '边框颜色',
+    'Open Link': '开启连结',
+    'Background Color': '背景颜色',
     'Dark Grey': '深灰',
-    'Dark Blue': '深藍',
+    'Dark Blue': '深蓝',
     'Near Black': '近黑',
     'Charcoal': '炭灰',
-    'Light': '淺色',
-    'Warm paper': '暖紙色',
-    'Paper / Artboard': '紙張 / 畫板',
-    'Show Paper': '顯示紙張',
-    'Hide Paper': '隱藏紙張',
-    'Auto-fit: ON': '自動適應：開',
-    'Auto-fit: OFF': '自動適應：關',
-    'Paper Color': '紙張顏色',
-    'W': '寬',
+    'Light': '浅色',
+    'Warm paper': '暖纸色',
+    'Paper / Artboard': '纸张 / 画板',
+    'Show Paper': '显示纸张',
+    'Hide Paper': '隐藏纸张',
+    'Auto-fit: ON': '自动适应：开',
+    'Auto-fit: OFF': '自动适应：关',
+    'Paper Color': '纸张颜色',
+    'W': '宽',
     'H': '高',
     '4K': '4K',
 
     // ── GIF Editor ──
-    'GIF Trim Editor': 'GIF 裁剪編輯器',
-    'Preview': '預覽',
-    'Total Frames:': '總幀數：',
-    'Duration:': '時長：',
+    'GIF Trim Editor': 'GIF 裁剪编辑器',
+    'Preview': '预览',
+    'Total Frames:': '总帧数：',
+    'Duration:': '时长：',
     'Trim:': '裁剪：',
     'Speed:': '速度：',
     'Apply Trim': '套用裁剪',
-    'Export GIF': '導出 GIF',
-    'Frame Strip (click to set In point)': '影格條 (點擊設定起始點)',
+    'Export GIF': '导出 GIF',
+    'Frame Strip (click to set In point)': '帧条 (点击设定起始点)',
 
     // ── Context menu ──
-    'Duplicate Ctrl+Shift+D': '複製 Ctrl+Shift+D',
-    'Copy Ctrl+C': '複製 Ctrl+C',
-    'Paste Ctrl+V': '貼上 Ctrl+V',
-    '✓ Alt+Left Pan (Mac trackpad)': '✓ Alt+左鍵平移 (Mac 觸控板)',
-    '○ Alt+Left Pan (Mac trackpad)': '○ Alt+左鍵平移 (Mac 觸控板)',
-    '⚙ Wheel: Mouse (zoom)': '⚙ 滾輪：滑鼠（縮放）',
-    '⚙ Wheel: Trackpad (pan)': '⚙ 滾輪：觸控板（平移）',
+    'Duplicate Ctrl+Shift+D': '复制 Ctrl+Shift+D',
+    'Copy Ctrl+C': '复制 Ctrl+C',
+    'Paste Ctrl+V': '贴上 Ctrl+V',
+    '✓ Alt+Left Pan (Mac trackpad)': '✓ Alt+左键平移 (Mac 触控板)',
+    '○ Alt+Left Pan (Mac trackpad)': '○ Alt+左键平移 (Mac 触控板)',
+    '⚙ Wheel: Mouse (zoom)': '⚙ 滚轮：鼠标（缩放）',
+    '⚙ Wheel: Trackpad (pan)': '⚙ 滚轮：触控板（平移）',
     'Same Size Ctrl+Alt+↑': '相同大小 Ctrl+Alt+↑',
-    'Distribute H': '水平分佈',
-    'Distribute V': '垂直分佈',
-    '🧹 Tidy Selected': '🧹 整理選取',
+    'Distribute H': '水平分布',
+    'Distribute V': '垂直分布',
+    '🧹 Tidy Selected': '🧹 整理选取',
     'Trim GIF': '裁剪 GIF',
-    'Download Source File': '下載原始檔',
-    'Crop Image C': '裁剪圖片 C',
-    'Reframe Image Enter': '重構圖片 Enter',
-    'Lock/Unlock': '鎖定/解鎖',
-    'Translate EN->中': '翻譯 EN→中',
-    'Group Ctrl+G': '群組 Ctrl+G',
-    'Ungroup Ctrl+Shift+G': '解散 Ctrl+Shift+G',
+    'Download Source File': '下载原始档',
+    'Crop Image C': '裁剪图片 C',
+    'Reframe Image Enter': '重构图片 Enter',
+    'Lock/Unlock': '锁定/解锁',
+    'Translate EN->中': '翻译 EN→中',
+    'Group Ctrl+G': '群组 Ctrl+G',
+    'Ungroup Ctrl+Shift+G': '取消分组 Ctrl+Shift+G',
     'Bring to Front': '移至最前',
-    'Send to Back': '移至最後',
-    'Delete Del': '刪除 Del',
-    'Import Audio': '匯入音訊',
-    'Save Images to Folder...': '儲存圖片到資料夾...',
+    'Send to Back': '移至最后',
+    'Delete Del': '删除 Del',
+    'Import Audio': '汇入音讯',
+    'Save Images to Folder...': '保存图片到文件夹...',
     '🧹 Tidy All': '🧹 全部整理',
-    'Help & Shortcuts H': '幫助與快捷鍵 H',
-    '🔗 Toggle Relations': '🔗 切換關係線',
+    'Help & Shortcuts H': '帮助与快捷键 H',
+    '🔗 Toggle Relations': '🔗 切换关系线',
 
     // ── Player controls ──
-    'Player Fullscreen': '播放器全螢幕',
-    'Exit Player Fullscreen (Esc)': '退出全螢幕 (Esc)',
-    'Open frame comments  (shortcut: M)': '開啟影格留言 (快捷鍵: M)',
-    'Draw on the frame (D) — arrows / freehand annotations saved with the next comment': '在影格上繪圖 (D) — 箭頭/手繪註解隨下次留言儲存',
-    'Clean mode (H) — hide all controls for distraction-free viewing': '簡潔模式 (H) — 隱藏所有控制項',
-    'Snap all annotated frames — batch-capture every frame that has draw/text strokes as a frame comment': '擷取所有註解影格',
-    'Snap': '擷取',
-    'Press H or click to exit clean mode': '按 H 或點擊退出簡潔模式',
+    'Player Fullscreen': '播放器全屏幕',
+    'Exit Player Fullscreen (Esc)': '退出全屏幕 (Esc)',
+    'Open frame comments  (shortcut: M)': '开启帧留言 (快捷键: M)',
+    'Draw on the frame (D) — arrows / freehand annotations saved with the next comment': '在帧上绘图 (D) — 箭头/手绘注解随下次留言保存',
+    'Clean mode (H) — hide all controls for distraction-free viewing': '简洁模式 (H) — 隐藏所有控制项',
+    'Snap all annotated frames — batch-capture every frame that has draw/text strokes as a frame comment': '撷取所有注解帧',
+    'Snap': '撷取',
+    'Press H or click to exit clean mode': '按 H 或点击退出简洁模式',
 
     // ── Video annotation toolbar ──
-    'Arrow mode — click and drag to draw an arrow': '箭頭模式 — 拖曳繪製箭頭',
-    'Freehand pen mode — click and drag to draw': '手繪筆模式 — 拖曳繪製',
-    'Box / rectangle mode — click and drag to draw a box': '方框模式 — 拖曳繪製方框',
-    'Circle / ellipse mode — click and drag to draw a circle': '圓形模式 — 拖曳繪製圓形',
-    'Text mode — click on the video to place a text annotation': '文字模式 — 點擊影片放置文字註解',
-    'Click to pick saturation & brightness': '點擊選擇飽和度與亮度',
-    'Drag to pick hue': '拖曳選擇色相',
-    'Lock to player — stay in draw mode between strokes (off -> keep current tool, on -> continuous draw)': '鎖定播放器 — 保持繪圖模式',
-    'Clear all strokes on this frame': '清除此影格所有筆劃',
-    'Done drawing (Esc)': '完成繪圖 (Esc)',
-    'Exit draw mode (press the draw button again to come back)': '退出繪圖模式',
-    'Snap the draw panel back to the video (re-enable follow)': '將繪圖面板對齊影片',
-    'Drag to move the toolbar': '拖曳移動工具列',
+    'Arrow mode — click and drag to draw an arrow': '箭头模式 — 拖动绘制箭头',
+    'Freehand pen mode — click and drag to draw': '手绘笔模式 — 拖动绘制',
+    'Box / rectangle mode — click and drag to draw a box': '方框模式 — 拖动绘制方框',
+    'Circle / ellipse mode — click and drag to draw a circle': '圆形模式 — 拖动绘制圆形',
+    'Text mode — click on the video to place a text annotation': '文字模式 — 点击视频放置文字注解',
+    'Click to pick saturation & brightness': '点击选择饱和度与亮度',
+    'Drag to pick hue': '拖动选择色相',
+    'Lock to player — stay in draw mode between strokes (off -> keep current tool, on -> continuous draw)': '锁定播放器 — 保持绘图模式',
+    'Clear all strokes on this frame': '清除此帧所有笔划',
+    'Done drawing (Esc)': '完成绘图 (Esc)',
+    'Exit draw mode (press the draw button again to come back)': '退出绘图模式',
+    'Snap the draw panel back to the video (re-enable follow)': '将绘图面板对齐视频',
+    'Drag to move the toolbar': '拖动移动工具列',
 
     // ── Frame comments popover ──
-    'Translate the typed text — auto-detects source language (uses MyMemory/Google translate API; offline / network failure shows a hint)': '翻譯文字 — 自動偵測語言',
+    'Translate the typed text — auto-detects source language (uses MyMemory/Google translate API; offline / network failure shows a hint)': '翻译文字 — 自动侦测语言',
     '🌐 → 中': '🌐 → 中',
     '⏳': '⏳',
-    'no change': '無變更',
-    '✗ offline': '✗ 離線',
+    'no change': '无变更',
+    '✗ offline': '✗ 离线',
     'Add': '新增',
-    '📝 (overall comment)': '📝 (整體留言)',
-    'Drag to resize': '拖曳調整大小',
-    'Click to view full-size snapshot with annotations': '點擊查看完整截圖與註解',
-    'Click to jump to this frame': '點擊跳到此影格',
-    'Jump to this frame (...)': '跳到此影格 (...)',
-    'Translate': '翻譯',
-    'Delete': '刪除',
-    'Click to type...': '點擊輸入...',
-    'Export frame comments + snapshots + over comment to HTML (uses original file name)': '導出影格留言+截圖為 HTML',
-    '⤓ Export': '⤓ 導出',
-    'Send every snap+text comment to the canvas as a 2-column storyboard...': '將所有截圖+留言發送到畫布',
+    '📝 (overall comment)': '📝 (整体留言)',
+    'Drag to resize': '拖动调整大小',
+    'Click to view full-size snapshot with annotations': '点击查看完整截图与注解',
+    'Click to jump to this frame': '点击跳到此帧',
+    'Jump to this frame (...)': '跳到此帧 (...)',
+    'Translate': '翻译',
+    'Delete': '删除',
+    'Click to type...': '点击输入...',
+    'Export frame comments + snapshots + over comment to HTML (uses original file name)': '导出帧留言+截图为 HTML',
+    '⤓ Export': '⤓ 导出',
+    'Send every snap+text comment to the canvas as a 2-column storyboard...': '将所有截图+留言发送到画布',
     '📋 Board': '📋 面板',
-    'Export the video with per-frame drawings baked in (.mp4)': '導出含影格繪圖的影片 (.mp4)',
-    '🎬 Video': '🎬 影片',
-    'Close  (Esc)': '關閉 (Esc)',
-    'Delete ALL comments for this video (cannot be undone — confirmation asked)': '刪除此影片所有留言 (無法復原)',
+    'Export the video with per-frame drawings baked in (.mp4)': '导出含帧绘图的视频 (.mp4)',
+    '🎬 Video': '🎬 视频',
+    'Close  (Esc)': '关闭 (Esc)',
+    'Delete ALL comments for this video (cannot be undone — confirmation asked)': '删除此视频所有留言 (无法撤销)',
     '🗑 Clear': '🗑 清除',
-    'Hide / show snapshot thumbnails on every comment card': '隱藏/顯示留言卡縮圖',
-    '📌 Follow': '📌 跟隨',
-    'Snap the popover back to the video (re-enable follow)': '將彈窗對齊影片',
-    'Show the draw toolbar and start drawing (or press Ctrl+D / the draw button)': '顯示繪圖工具列',
-    'Translate every comment to the other language at once (sequential, ~1s per comment)': '一次翻譯所有留言',
+    'Hide / show snapshot thumbnails on every comment card': '隐藏/显示留言卡缩图',
+    '📌 Follow': '📌 跟随',
+    'Snap the popover back to the video (re-enable follow)': '将弹窗对齐视频',
+    'Show the draw toolbar and start drawing (or press Ctrl+D / the draw button)': '显示绘图工具列',
+    'Translate every comment to the other language at once (sequential, ~1s per comment)': '一次翻译所有留言',
     '🌐->中 All': '🌐→中 全部',
 
     // ── Toast messages (frequent ones) ──
     'Board cleared!': '面板已清除！',
-    'Board loaded!': '面板已載入！',
-    'Select an item first': '請先選取項目',
-    'Select a video first': '請先選取影片',
-    'Select items to tidy first': '請先選取要整理的項目',
-    'Select 2+ items to group': '請選取 2 個以上項目進行群組',
-    'Select items to ungroup': '請選取要解散的群組',
-    'Select a text item first': '請先選取文字項目',
-    'Select a node first': '請先選取節點',
-    'Select a static image to crop': '請選取靜態圖片進行裁剪',
-    'Select 1 GIF image': '請選取 1 個 GIF 圖片',
-    'Image not loaded': '圖片未載入',
-    'Video not ready': '影片尚未就緒',
-    'Video not ready yet': '影片尚未就緒',
-    'Video not ready yet — wait for it to load': '影片尚未就緒 — 請等待載入',
-    'Pasted from clipboard': '已從剪貼簿貼上',
-    'Failed to paste image': '貼上圖片失敗',
-    'Use Ctrl+V to paste from clipboard': '使用 Ctrl+V 從剪貼簿貼上',
-    'Pasted text': '已貼上文字',
-    'Pasted link': '已貼上連結',
-    'Failed to paste text': '貼上文字失敗',
-    'Pasted image': '已貼上圖片',
-    'Paste failed': '貼上失敗',
-    'Copied ... item(s)': '已複製 ... 個項目',
-    'Pasted ... item(s)': '已貼上 ... 個項目',
-    'Pasted ... files': '已貼上 ... 個檔案',
-    'Grouped ... items': '已群組 ... 個項目',
-    'Ungrouped': '已解散群組',
-    'Tidied ... items': '已整理 ... 個項目',
-    'Comment added at frame': '已在影格新增留言',
-    'Comment removed': '留言已刪除',
-    'Comment cannot be empty': '留言不可為空',
+    'Board loaded!': '面板已载入！',
+    'Select an item first': '请先选取项目',
+    'Select a video first': '请先选取视频',
+    'Select items to tidy first': '请先选取要整理的项目',
+    'Select 2+ items to group': '请选取 2 个以上项目进行群组',
+    'Select items to ungroup': '请选取要解散的群组',
+    'Select a text item first': '请先选取文字项目',
+    'Select a node first': '请先选取节点',
+    'Select a static image to crop': '请选取静态图片进行裁剪',
+    'Select 1 GIF image': '请选取 1 个 GIF 图片',
+    'Image not loaded': '图片未载入',
+    'Video not ready': '视频尚未就绪',
+    'Video not ready yet': '视频尚未就绪',
+    'Video not ready yet — wait for it to load': '视频尚未就绪 — 请等待载入',
+    'Pasted from clipboard': '已从剪贴簿贴上',
+    'Failed to paste image': '贴上图片失败',
+    'Use Ctrl+V to paste from clipboard': '使用 Ctrl+V 从剪贴簿贴上',
+    'Pasted text': '已贴上文字',
+    'Pasted link': '已贴上连结',
+    'Failed to paste text': '贴上文字失败',
+    'Pasted image': '已贴上图片',
+    'Paste failed': '贴上失败',
+    'Copied ... item(s)': '已复制 ... 个项目',
+    'Pasted ... item(s)': '已贴上 ... 个项目',
+    'Pasted ... files': '已贴上 ... 个文件',
+    'Grouped ... items': '已群组 ... 个项目',
+    'Ungrouped': '已取消分组',
+    'Tidied ... items': '已整理 ... 个项目',
+    'Comment added at frame': '已在帧新增留言',
+    'Comment removed': '留言已删除',
+    'Comment cannot be empty': '留言不可为空',
     'Comment updated': '留言已更新',
-    'No comments to export — add at least one frame comment first': '沒有留言可導出 — 請先新增至少一則影格留言',
-    'Comments saved — load it later to continue editing': '留言已儲存 — 稍後載入可繼續編輯',
-    'No comments to translate': '沒有留言可翻譯',
-    'All comments already have a translation': '所有留言已有翻譯',
-    'No comments to clear': '沒有留言可清除',
-    'Cleared all ... comments': '已清除全部 ... 則留言',
-    'No comments to send — add at least one frame comment first': '沒有留言可發送',
-    'Sent ... comment(s) to board': '已發送 ... 則留言到面板',
-    'No strokes on any frame': '任何影格皆無筆劃',
-    'No drawings to export — draw on at least one frame first': '沒有繪圖可導出',
-    'Draw mode off — press the draw button to start again': '繪圖模式已關閉 — 再按繪圖按鈕開始',
-    'Draw mode on — click ✕ or the draw button to hide': '繪圖模式已開啟',
-    'Following video': '已跟隨影片',
-    'Frame rate:': '幀率：',
-    'fps (manual)': 'fps (手動)',
-    'fps (auto)': 'fps (自動)',
-    'Saved as PNG': '已儲存為 PNG',
-    'Capture discarded': '截圖已放棄',
-    'Captured': '已截圖',
-    'copied to clipboard': '已複製到剪貼簿',
-    'Area too small': '區域太小',
-    'Nothing to capture': '沒有可截圖的內容',
-    'Screen captured:': '螢幕截圖：',
-    'Screen capture cancelled': '螢幕截圖已取消',
-    'Screen capture failed:': '螢幕截圖失敗：',
-    'Cut shape extracted': '剪裁形狀已提取',
+    'No comments to export — add at least one frame comment first': '没有留言可导出 — 请先新增至少一则帧留言',
+    'Comments saved — load it later to continue editing': '留言已保存 — 稍后载入可继续编辑',
+    'No comments to translate': '没有留言可翻译',
+    'All comments already have a translation': '所有留言已有翻译',
+    'No comments to clear': '没有留言可清除',
+    'Cleared all ... comments': '已清除全部 ... 则留言',
+    'No comments to send — add at least one frame comment first': '没有留言可发送',
+    'Sent ... comment(s) to board': '已发送 ... 则留言到面板',
+    'No strokes on any frame': '任何帧皆无笔划',
+    'No drawings to export — draw on at least one frame first': '没有绘图可导出',
+    'Draw mode off — press the draw button to start again': '绘图模式已关闭 — 再按绘图按钮开始',
+    'Draw mode on — click ✕ or the draw button to hide': '绘图模式已开启',
+    'Following video': '已跟随视频',
+    'Frame rate:': '帧率：',
+    'fps (manual)': 'fps (手动)',
+    'fps (auto)': 'fps (自动)',
+    'Saved as PNG': '已保存为 PNG',
+    'Capture discarded': '截图已放弃',
+    'Captured': '已截图',
+    'copied to clipboard': '已复制到剪贴簿',
+    'Area too small': '区域太小',
+    'Nothing to capture': '没有可截图的内容',
+    'Screen captured:': '屏幕截图：',
+    'Screen capture cancelled': '屏幕截图已取消',
+    'Screen capture failed:': '屏幕截图失败：',
+    'Cut shape extracted': '裁剪形状已提取',
     'Lasso extracted': '套索已提取',
-    'Lasso extracted with border': '套索已提取 (含邊框)',
-    'Align': '對齊',
-    'Column layout': '直列佈局',
-    'Row layout': '橫列佈局',
-    'Grid layout': '網格佈局',
+    'Lasso extracted with border': '套索已提取 (含边框)',
+    'Align': '对齐',
+    'Column layout': '直列布局',
+    'Row layout': '横列布局',
+    'Grid layout': '网格布局',
     'cols)': '列)',
     'Crop cancelled': '裁剪已取消',
-    'Crop area too small': '裁剪區域太小',
+    'Crop area too small': '裁剪区域太小',
     'Cropping...': '裁剪中...',
-    'Image cropped to': '圖片已裁剪至',
-    'Crop failed': '裁剪失敗',
-    'Could not load image for cropping': '無法載入圖片進行裁剪',
-    'Relation created — double-click line to add label': '關係線已建立 — 雙擊線條新增標籤',
-    'Relation deleted': '關係線已刪除',
-    'Relations shown': '關係線已顯示',
-    'Relations hidden': '關係線已隱藏',
-    'Click first item, then second item to connect': '點擊第一個項目，再點擊第二個以連接',
-    'Now click the target item': '現在點擊目標項目',
-    'Translated to': '已翻譯為',
-    'Translation returned no change': '翻譯結果無變更',
-    'Translation failed': '翻譯失敗',
-    'Translation failed — try again or use 🌐 in Text panel': '翻譯失敗 — 請重試或使用文字面板的 🌐',
-    'Text is empty — nothing to translate': '文字為空 — 無內容可翻譯',
-    'Opened Google Translate in a new tab — copy result back': '已在 Google 翻譯新分頁開啟 — 請複製結果',
-    'Opened Google Translate — copy result back': '已開啟 Google 翻譯 — 請複製結果',
-    'Save cancelled': '已取消儲存',
-    'Save failed:': '儲存失敗：',
-    'Load cancelled': '已取消載入',
-    'Auto-saved board restored': '已還原自動儲存的面板',
-    'Preparing save...': '準備儲存中...',
-    'Choose where to save...': '選擇儲存位置...',
-    'Building package...': '建立封裝中...',
+    'Image cropped to': '图片已裁剪至',
+    'Crop failed': '裁剪失败',
+    'Could not load image for cropping': '无法载入图片进行裁剪',
+    'Relation created — double-click line to add label': '关系线已建立 — 双击线条新增标签',
+    'Relation deleted': '关系线已删除',
+    'Relations shown': '关系线已显示',
+    'Relations hidden': '关系线已隐藏',
+    'Click first item, then second item to connect': '点击第一个项目，再点击第二个以连接',
+    'Now click the target item': '现在点击目标项目',
+    'Translated to': '已翻译为',
+    'Translation returned no change': '翻译结果无变更',
+    'Translation failed': '翻译失败',
+    'Translation failed — try again or use 🌐 in Text panel': '翻译失败 — 请重试或使用文字面板的 🌐',
+    'Text is empty — nothing to translate': '文字为空 — 无内容可翻译',
+    'Opened Google Translate in a new tab — copy result back': '已在 Google 翻译新分页开启 — 请复制结果',
+    'Opened Google Translate — copy result back': '已开启 Google 翻译 — 请复制结果',
+    'Save cancelled': '已取消保存',
+    'Save failed:': '保存失败：',
+    'Load cancelled': '已取消载入',
+    'Auto-saved board restored': '已还原自动保存的面板',
+    'Preparing save...': '准备保存中...',
+    'Choose where to save...': '选择保存位置...',
+    'Building package...': '建立封装中...',
     'Generating zip...': '生成 ZIP 中...',
-    'Writing': '寫入中',
-    'Saved': '已儲存',
-    'Downloaded': '已下載',
-    'Loading': '載入中',
-    'Unlocking': '解鎖中',
-    'Unpacking': '解壓中',
-    'Restoring media...': '還原媒體中...',
-    'Invalid .kpak file (not valid JSON)': '無效的 .kpak 檔案 (非有效 JSON)',
-    'Invalid locked kpak: missing lock data': '無效的加密 kpak：缺少鎖定資料',
-    'Corrupted locked kpak: no manifest': '損壞的加密 kpak：無清單',
-    'Corrupted locked kpak': '損壞的加密 kpak',
-    'Error loading: file is empty': '載入錯誤：檔案為空',
-    'Error loading: Invalid JSON:': '載入錯誤：無效 JSON：',
-    'Error loading:': '載入錯誤：',
-    'Please enter a password': '請輸入密碼',
-    'Wrong password. Try again.': '密碼錯誤，請重試。',
-    'Save failed: JSZip library not loaded. Please refresh the page.': '儲存失敗：JSZip 未載入，請重整頁面。',
-    'Folder picker not supported — downloaded instead': '不支援資料夾選擇器 — 改為下載',
-    'Folder picker not supported — downloading': '不支援資料夾選擇器 — 下載中',
-    'Saved to': '已儲存至',
-    'Cannot save: image is cross-origin': '無法儲存：圖片為跨來源',
-    'Permission denied': '權限被拒',
-    'No images to export': '沒有圖片可導出',
-    'Downloaded ... image(s)': '已下載 ... 張圖片',
-    'Saved ... image(s) to': '已儲存 ... 張圖片至',
-    'Saved ..., failed': '已儲存 ...，失敗',
-    'Opened': '已開啟',
-    'media)': '媒體)',
-    'Failed to open:': '開啟失敗：',
-    'Link card added:': '連結卡片已新增：',
-    'Link added (no preview available)': '連結已新增 (無預覽)',
-    '⏸ All media paused — memory saved': '⏸ 所有媒體已暫停 — 已節省記憶體',
-    'No capture to paste': '沒有截圖可貼上',
-    'Cannot paste: canvas tainted by cross-origin image': '無法貼上：畫布被跨來源圖片污染',
-    'Pasted capture to board': '已將截圖貼到面板',
-    'Failed to decode capture image': '解碼截圖失敗',
-    'Importing ... images...': '匯入 ... 張圖片中...',
-    'Failed to load video:': '載入影片失敗：',
-    'Image attached to idea:': '圖片已附加到想法：',
-    'Audio attached to idea:': '音訊已附加到想法：',
-    'Audio attached:': '音訊已附加：',
-    'Audio attached to:': '音訊已附加到：',
-    'Image attached to:': '圖片已附加到：',
-    'Select a mind map node first to attach audio': '請先選取心智圖節點以附加音訊',
-    'Cannot delete the last node': '無法刪除最後一個節點',
-    'Node is empty — nothing to translate': '節點為空 — 無內容可翻譯',
-    'Translating...': '翻譯中...',
-    'Cannot play this audio format in browser': '瀏覽器不支援此音訊格式',
-    'Exporting GIF... please wait': '導出 GIF 中... 請稍候',
+    'Writing': '写入中',
+    'Saved': '已保存',
+    'Downloaded': '已下载',
+    'Loading': '载入中',
+    'Unlocking': '解锁中',
+    'Unpacking': '解压中',
+    'Restoring media...': '还原媒体中...',
+    'Invalid .kpak file (not valid JSON)': '无效的 .kpak 文件 (非有效 JSON)',
+    'Invalid locked kpak: missing lock data': '无效的加密 kpak：缺少锁定资料',
+    'Corrupted locked kpak: no manifest': '损坏的加密 kpak：无清单',
+    'Corrupted locked kpak': '损坏的加密 kpak',
+    'Error loading: file is empty': '载入错误：文件为空',
+    'Error loading: Invalid JSON:': '载入错误：无效 JSON：',
+    'Error loading:': '载入错误：',
+    'Please enter a password': '请输入密码',
+    'Wrong password. Try again.': '密码错误，请重试。',
+    'Save failed: JSZip library not loaded. Please refresh the page.': '保存失败：JSZip 未载入，请重整页面。',
+    'Folder picker not supported — downloaded instead': '不支援文件夹选择器 — 改为下载',
+    'Folder picker not supported — downloading': '不支援文件夹选择器 — 下载中',
+    'Saved to': '已保存至',
+    'Cannot save: image is cross-origin': '无法保存：图片为跨来源',
+    'Permission denied': '权限被拒',
+    'No images to export': '没有图片可导出',
+    'Downloaded ... image(s)': '已下载 ... 张图片',
+    'Saved ... image(s) to': '已保存 ... 张图片至',
+    'Saved ..., failed': '已保存 ...，失败',
+    'Opened': '已开启',
+    'media)': '媒体)',
+    'Failed to open:': '开启失败：',
+    'Link card added:': '连结卡片已新增：',
+    'Link added (no preview available)': '连结已新增 (无预览)',
+    '⏸ All media paused — memory saved': '⏸ 所有媒体已暂停 — 已节省内存',
+    'No capture to paste': '没有截图可贴上',
+    'Cannot paste: canvas tainted by cross-origin image': '无法贴上：画布被跨来源图片污染',
+    'Pasted capture to board': '已将截图贴到面板',
+    'Failed to decode capture image': '解码截图失败',
+    'Importing ... images...': '汇入 ... 张图片中...',
+    'Failed to load video:': '载入视频失败：',
+    'Image attached to idea:': '图片已附加到想法：',
+    'Audio attached to idea:': '音讯已附加到想法：',
+    'Audio attached:': '音讯已附加：',
+    'Audio attached to:': '音讯已附加到：',
+    'Image attached to:': '图片已附加到：',
+    'Select a mind map node first to attach audio': '请先选取思维导图节点以附加音讯',
+    'Cannot delete the last node': '无法删除最后一个节点',
+    'Node is empty — nothing to translate': '节点为空 — 无内容可翻译',
+    'Translating...': '翻译中...',
+    'Cannot play this audio format in browser': '浏览器不支援此音讯格式',
+    'Exporting GIF... please wait': '导出 GIF 中... 请稍候',
     'GIF trimmed!': 'GIF 已裁剪！',
-    'GIF exported!': 'GIF 已導出！',
-    'GIF library not loaded. Check internet connection.': 'GIF 函式庫未載入，請檢查網路連線。',
-    'This GIF has only 1 frame (not animated)': '此 GIF 只有 1 幀 (非動畫)',
-    'Error loading GIF:': '載入 GIF 錯誤：',
-    'Failed to load GIF image': '載入 GIF 圖片失敗',
-    'GIF encoder not loaded. Check internet connection.': 'GIF 編碼器未載入，請檢查網路連線。',
-    'GIF not loaded': 'GIF 未載入',
-    'Need at least 2 frames': '需要至少 2 幀',
-    'Encoding GIF... please wait': '編碼 GIF 中... 請稍候',
-    'GIF encoding is taking long... try fewer frames or lower quality': 'GIF 編碼耗時較長... 試試減少幀數或降低品質',
-    'GIF encoding failed. Try Export instead.': 'GIF 編碼失敗，請改用導出。',
-    'GIF trim failed:': 'GIF 裁剪失敗：',
-    'GIF export failed:': 'GIF 導出失敗：',
-    'Drag to reframe — Enter to apply, Esc to cancel': '拖曳重構 — Enter 套用，Esc 取消',
-    'Crop: drag to move, drag handles to resize. Enter to apply, Esc to cancel': '裁剪：拖曳移動，拖曳控點調整大小。Enter 套用，Esc 取消',
-    'Masks only work on images': '遮罩僅適用於圖片',
-    'Click on the image to pick a color': '點擊圖片選取顏色',
-    'Paint on the image to create mask': '在圖片上繪製建立遮罩',
-    'Brush mask cleared': '筆刷遮罩已清除',
-    'Color picked:': '已選取顏色：',
-    'Select or edit a text item first': '請先選取或編輯文字項目',
-    'Audio source expired — re-add the file to paste it again': '音訊來源已過期 — 請重新加入檔案',
-    'Media source expired — re-add the file to paste it again': '媒體來源已過期 — 請重新加入檔案',
-    'Downloading ... file(s)': '下載 ... 個檔案中',
-    'No image to download': '沒有圖片可下載',
-    'Download failed': '下載失敗',
-    'Nothing to clear (draw removed)': '沒有可清除的內容 (繪圖已移除)',
-    'Nothing to undo (draw removed)': '沒有可復原的內容 (繪圖已移除)',
-    'Jumped to frame': '已跳到影格',
+    'GIF exported!': 'GIF 已导出！',
+    'GIF library not loaded. Check internet connection.': 'GIF 函式库未载入，请检查网路连接。',
+    'This GIF has only 1 frame (not animated)': '此 GIF 只有 1 帧 (非动画)',
+    'Error loading GIF:': '载入 GIF 错误：',
+    'Failed to load GIF image': '载入 GIF 图片失败',
+    'GIF encoder not loaded. Check internet connection.': 'GIF 编码器未载入，请检查网路连接。',
+    'GIF not loaded': 'GIF 未载入',
+    'Need at least 2 frames': '需要至少 2 帧',
+    'Encoding GIF... please wait': '编码 GIF 中... 请稍候',
+    'GIF encoding is taking long... try fewer frames or lower quality': 'GIF 编码耗时较长... 试试减少帧数或降低品质',
+    'GIF encoding failed. Try Export instead.': 'GIF 编码失败，请改用导出。',
+    'GIF trim failed:': 'GIF 裁剪失败：',
+    'GIF export failed:': 'GIF 导出失败：',
+    'Drag to reframe — Enter to apply, Esc to cancel': '拖动重构 — Enter 套用，Esc 取消',
+    'Crop: drag to move, drag handles to resize. Enter to apply, Esc to cancel': '裁剪：拖动移动，拖动控点调整大小。Enter 套用，Esc 取消',
+    'Masks only work on images': '遮罩仅适用于图片',
+    'Click on the image to pick a color': '点击图片选取颜色',
+    'Paint on the image to create mask': '在图片上绘制建立遮罩',
+    'Brush mask cleared': '笔刷遮罩已清除',
+    'Color picked:': '已选取颜色：',
+    'Select or edit a text item first': '请先选取或编辑文字项目',
+    'Audio source expired — re-add the file to paste it again': '音讯来源已过期 — 请重新加入文件',
+    'Media source expired — re-add the file to paste it again': '媒体来源已过期 — 请重新加入文件',
+    'Downloading ... file(s)': '下载 ... 个文件中',
+    'No image to download': '没有图片可下载',
+    'Download failed': '下载失败',
+    'Nothing to clear (draw removed)': '没有可清除的内容 (绘图已移除)',
+    'Nothing to undo (draw removed)': '没有可撤销的内容 (绘图已移除)',
+    'Jumped to frame': '已跳到帧',
     'comment:': '留言：',
     'Comment': '留言',
-    'Frame': '影格',
-    'Capturing': '擷取中',
-    'frame snapshot(s)': '影格截圖',
-    'Export failed:': '導出失敗：',
-    'Video export not supported in this browser': '此瀏覽器不支援影片導出',
-    'Video duration unknown — wait for it to load': '影片時長未知 — 請等待載入',
-    'Your browser does not support MP4 video export — try the latest Chrome': '你的瀏覽器不支援 MP4 影片導出 — 請用最新版 Chrome',
-    'Could not start video export:': '無法開始影片導出：',
-    'Video saved as': '影片已儲存為',
-    'Video downloaded as': '影片已下載為',
-    'Video export cancelled': '影片導出已取消',
-    'Capturing ... snapshot(s)': '擷取 ... 張截圖中',
-    'Snapped f': '已擷取影格',
-    'No strokes to snap — draw or type on the video first': '沒有筆劃可擷取 — 請先在影片上繪圖或打字',
-    'All ... stroked frames already have comments': '所有 ... 個有筆劃的影格已有留言',
-    'Snapped .../... frames': '已擷取 .../... 影格',
-    'Snapped ... frame(s)': '已擷取 ... 影格',
-    'skipped': '已跳過',
-    'Translated ... / ...': '已翻譯 ... / ...',
-    'failed': '失敗',
-    'Send-to-board not ready yet': '發送到面板尚未就緒',
-    'Video export not ready yet': '影片導出尚未就緒',
-    'Export not ready yet': '導出尚未就緒',
-    'View reset': '視圖已重設',
-    'Framed': '已框選',
-    'failed:': '失敗：',
-    'Failed to load snapshot': '載入截圖失敗',
-    'No snapshot for this comment': '此留言沒有截圖',
-    'annotation(s) drawn on this frame': '個註解繪於此影格',
-    'Jump to frame': '跳到影格',
-    'Download image': '下載圖片',
-    'No translation available': '沒有可用的翻譯',
-    'Translation failed — try again': '翻譯失敗 — 請重試',
-    'Select a video to add frame-by-frame comments.': '選取影片以新增逐幀留言。',
-    'No comments yet. Pause the video, type above, and press Enter.': '尚無留言。暫停影片，在上方輸入後按 Enter。',
-    'No comments yet. Pause the video, then use 💬 Add to mark this frame.': '尚無留言。暫停影片，使用 💬 新增標記此影格。',
-    'Preparing export...': '準備導出中...',
-    'Exporting video...': '導出影片中...',
+    'Frame': '帧',
+    'Capturing': '撷取中',
+    'frame snapshot(s)': '帧截图',
+    'Export failed:': '导出失败：',
+    'Video export not supported in this browser': '此浏览器不支援视频导出',
+    'Video duration unknown — wait for it to load': '视频时长未知 — 请等待载入',
+    'Your browser does not support MP4 video export — try the latest Chrome': '你的浏览器不支援 MP4 视频导出 — 请用最新版 Chrome',
+    'Could not start video export:': '无法开始视频导出：',
+    'Video saved as': '视频已保存为',
+    'Video downloaded as': '视频已下载为',
+    'Video export cancelled': '视频导出已取消',
+    'Capturing ... snapshot(s)': '撷取 ... 张截图中',
+    'Snapped f': '已撷取帧',
+    'No strokes to snap — draw or type on the video first': '没有笔划可撷取 — 请先在视频上绘图或打字',
+    'All ... stroked frames already have comments': '所有 ... 个有笔划的帧已有留言',
+    'Snapped .../... frames': '已撷取 .../... 帧',
+    'Snapped ... frame(s)': '已撷取 ... 帧',
+    'skipped': '已跳过',
+    'Translated ... / ...': '已翻译 ... / ...',
+    'failed': '失败',
+    'Send-to-board not ready yet': '发送到面板尚未就绪',
+    'Video export not ready yet': '视频导出尚未就绪',
+    'Export not ready yet': '导出尚未就绪',
+    'View reset': '视图已重设',
+    'Framed': '已适配',
+    'failed:': '失败：',
+    'Failed to load snapshot': '载入截图失败',
+    'No snapshot for this comment': '此留言没有截图',
+    'annotation(s) drawn on this frame': '个注解绘于此帧',
+    'Jump to frame': '跳到帧',
+    'Download image': '下载图片',
+    'No translation available': '没有可用的翻译',
+    'Translation failed — try again': '翻译失败 — 请重试',
+    'Select a video to add frame-by-frame comments.': '选取视频以新增逐帧留言。',
+    'No comments yet. Pause the video, type above, and press Enter.': '尚无留言。暂停视频，在上方输入后按 Enter。',
+    'No comments yet. Pause the video, then use 💬 Add to mark this frame.': '尚无留言。暂停视频，使用 💬 新增标记此帧。',
+    'Preparing export...': '准备导出中...',
+    'Exporting video...': '导出视频中...',
     'Bundling…': '打包中…',
-    'No snapshots to bundle': '沒有截圖可打包',
-    'Download all snapshots (.zip)': '下載所有截圖 (.zip)',
-    'Download again': '再次下載',
-    'Downloaded ... snapshot(s)': '已下載 ... 張截圖',
-    'ZIP build failed:': 'ZIP 建立失敗：',
-    '⏹ Stop export': '⏹ 停止導出',
-    'Review Mode: hover over a video first': '檢閱模式：請先將滑鼠移到影片上',
-    'Review Mode: no comments on this video': '檢閱模式：此影片沒有留言',
+    'No snapshots to bundle': '没有截图可打包',
+    'Download all snapshots (.zip)': '下载所有截图 (.zip)',
+    'Download again': '再次下载',
+    'Downloaded ... snapshot(s)': '已下载 ... 张截图',
+    'ZIP build failed:': 'ZIP 建立失败：',
+    '⏹ Stop export': '⏹ 停止导出',
+    'Review Mode: hover over a video first': '审阅模式：请先将鼠标移到视频上',
+    'Review Mode: no comments on this video': '审阅模式：此视频没有留言',
     '▶ Play': '▶ 播放',
-    'Select': '選擇',
-    'Loading shortcuts…': '載入快捷鍵中…',
-    'Click a shortcut to rebind — press the new key combo, then Enter to save or Esc to cancel.': '點擊快捷鍵重新綁定 — 按下新組合鍵，Enter 儲存或 Esc 取消。',
-    'Reset All': '全部重設',
-    'Press keys…': '按下按鍵…',
-    'Click to rebind': '點擊重新綁定',
-    'Reset to default': '重設為預設',
-    'KRAFTED — Help': 'KRAFTED — 幫助',
+    'Select': '选择',
+    'Loading shortcuts…': '载入快捷键中…',
+    'Click a shortcut to rebind — press the new key combo, then Enter to save or Esc to cancel.': '点击快捷键重新绑定 — 按下新组合键，Enter 保存或 Esc 取消。',
+    'Reset All': '全部重设',
+    'Press keys…': '按下按键…',
+    'Click to rebind': '点击重新绑定',
+    'Reset to default': '重设为预设',
+    'KRAFTED — Help': 'KRAFTED — 帮助',
     '📖 Guide': '📖 指南',
-    '⌨️ Shortcuts': '⌨️ 快捷鍵',
+    '⌨️ Shortcuts': '⌨️ 快捷键',
     'Krafted v5.5 — by Joker Head Studios': 'Krafted v5.5 — Joker Head Studios',
-    'Help / Shortcuts': '幫助 / 快捷鍵',
-    'Board Pen': '畫板畫筆',
-    'Export Area': '導出區域',
-    'Add Link Card': '加入連結卡片',
-    'Redo (Shift+Undo)': '重做 (Shift+復原)',
-    'Save Board': '儲存面板',
-    'Save As…': '另存新檔…',
-    'Tidy Selection': '整理選取',
-    'Tetris Align Up': '俄羅斯方塊向上對齊',
-    'Tetris Align Down': '俄羅斯方塊向下對齊',
-    'Tetris Align Left': '俄羅斯方塊向左對齊',
-    'Tetris Align Right': '俄羅斯方塊向右對齊',
-    'Normalize Size': '標準化大小',
-    'Normalize Scale': '標準化縮放',
-    'Normalize Height': '標準化高度',
-    'Normalize Width': '標準化寬度',
-    'Stack Items': '堆疊項目',
-    'Pan Canvas (hold)': '平移畫布 (按住)',
-    'Show Help / Shortcuts': '顯示幫助 / 快捷鍵',
-    'Cancel / Deselect': '取消 / 取消選取',
-    'Translate EN->中文': '翻譯 EN→中文',
-    'Frame Step Left': '逐幀向左',
-    'Frame Step Right': '逐幀向右',
-    'Jump 10 Frames Left': '跳 10 幀向左',
-    'Jump 10 Frames Right': '跳 10 幀向右',
-    'Trim In Point': '裁剪入點',
-    'Trim Out Point': '裁剪出點',
-    'Edit': '編輯',
-    'File': '檔案',
+    'Help / Shortcuts': '帮助 / 快捷键',
+    'Board Pen': '画板画笔',
+    'Export Area': '导出区域',
+    'Add Link Card': '加入连结卡片',
+    'Redo (Shift+Undo)': '重做 (Shift+撤销)',
+    'Save Board': '保存面板',
+    'Save As…': '另存新档…',
+    'Tidy Selection': '整理选取',
+    'Tetris Align Up': '俄罗斯方块向上对齐',
+    'Tetris Align Down': '俄罗斯方块向下对齐',
+    'Tetris Align Left': '俄罗斯方块向左对齐',
+    'Tetris Align Right': '俄罗斯方块向右对齐',
+    'Normalize Size': '标准化大小',
+    'Normalize Scale': '标准化缩放',
+    'Normalize Height': '标准化高度',
+    'Normalize Width': '标准化宽度',
+    'Stack Items': '堆叠项目',
+    'Pan Canvas (hold)': '平移画布 (按住)',
+    'Show Help / Shortcuts': '显示帮助 / 快捷键',
+    'Cancel / Deselect': '取消 / 取消选取',
+    'Translate EN->中文': '翻译 EN→中文',
+    'Frame Step Left': '逐帧向左',
+    'Frame Step Right': '逐帧向右',
+    'Jump 10 Frames Left': '跳 10 帧向左',
+    'Jump 10 Frames Right': '跳 10 帧向右',
+    'Trim In Point': '裁剪入点',
+    'Trim Out Point': '裁剪出点',
+    'Edit': '编辑',
+    'File': '文件',
     'Arrange': '排列',
-    'Navigation': '導覽',
-    'Media': '媒體',
-    'Translate': '翻譯',
+    'Navigation': '导览',
+    'Media': '媒体',
+    'Translate': '翻译',
 
     // ── Misc ──
     'MP4': 'MP4',
-    'Video': '影片',
-    'Image': '圖片',
+    'Video': '视频',
+    'Image': '图片',
     'F 0': 'F 0',
     '0:00.00': '0:00.00',
     '30 fps': '30 fps',
@@ -6047,32 +6047,32 @@ var I18N = (function() {
     '0:00': '0:00',
     'f —': 'f —',
     '—': '—',
-    'Type here...': '在此輸入...',
-    'Krafted Package': 'Krafted 封裝',
-    'JSON File': 'JSON 檔案',
-    'Checklist': '待辦清單',
-    'Mind Map': '心智圖',
-    'Original video file name': '原始影片檔名',
+    'Type here...': '在此输入...',
+    'Krafted Package': 'Krafted 封装',
+    'JSON File': 'JSON 文件',
+    'Checklist': '待办清单',
+    'Mind Map': '思维导图',
+    'Original video file name': '原始视频文件名',
     'Comment text size:': '留言文字大小：',
-    'Hide / show snapshot thumbnails on every comment card': '隱藏/顯示留言卡縮圖',
-    'Snap the popover back to the video (re-enable follow)': '將彈窗對齊影片',
-    'Show the draw toolbar and start drawing (or press Ctrl+D / the draw button)': '顯示繪圖工具列',
-    'Translate every comment to the other language at once (sequential, ~1s per comment)': '一次翻譯所有留言',
-    'Delete ALL comments for this video (cannot be undone — confirmation asked)': '刪除此影片所有留言',
-    'Export frame comments + snapshots + over comment to HTML (uses original file name)': '導出影格留言+截圖為 HTML',
-    'Send every snap+text comment to the canvas as a 2-column storyboard...': '發送所有截圖+留言到畫布',
-    'Export the video with per-frame drawings baked in (.mp4)': '導出含影格繪圖的影片 (.mp4)',
-    'Trim start': '裁剪起點',
-    'Trim end': '裁剪終點',
-    'Reset trim': '重設裁剪',
-    'Drag to move': '拖曳移動',
-    'Frame rate. Click to cycle 24->25->30->50->60->auto. Right-click to reset to auto-detect.': '幀率。點擊循環 24→25→30→50→60→自動。右鍵重設為自動偵測。',
-    'Drag to set trim start': '拖曳設定裁剪起點',
-    'Drag to set trim end': '拖曳設定裁剪終點',
-    'Snap all annotated frames — batch-capture every frame that has draw/text strokes as a frame comment': '擷取所有註解影格',
-    'Save images to a local folder (Chrome / Edge on Win + Mac)': '儲存圖片到本機資料夾 (Chrome/Edge Win+Mac)',
-    'Folder picker unavailable — will download each image instead': '不支援資料夾選擇器 — 改為逐張下載',
-    'Exporting video...': '導出影片中...',
+    'Hide / show snapshot thumbnails on every comment card': '隐藏/显示留言卡缩图',
+    'Snap the popover back to the video (re-enable follow)': '将弹窗对齐视频',
+    'Show the draw toolbar and start drawing (or press Ctrl+D / the draw button)': '显示绘图工具列',
+    'Translate every comment to the other language at once (sequential, ~1s per comment)': '一次翻译所有留言',
+    'Delete ALL comments for this video (cannot be undone — confirmation asked)': '删除此视频所有留言',
+    'Export frame comments + snapshots + over comment to HTML (uses original file name)': '导出帧留言+截图为 HTML',
+    'Send every snap+text comment to the canvas as a 2-column storyboard...': '发送所有截图+留言到画布',
+    'Export the video with per-frame drawings baked in (.mp4)': '导出含帧绘图的视频 (.mp4)',
+    'Trim start': '裁剪起点',
+    'Trim end': '裁剪终点',
+    'Reset trim': '重设裁剪',
+    'Drag to move': '拖动移动',
+    'Frame rate. Click to cycle 24->25->30->50->60->auto. Right-click to reset to auto-detect.': '帧率。点击循环 24→25→30→50→60→自动。右键重设为自动侦测。',
+    'Drag to set trim start': '拖动设定裁剪起点',
+    'Drag to set trim end': '拖动设定裁剪终点',
+    'Snap all annotated frames — batch-capture every frame that has draw/text strokes as a frame comment': '撷取所有注解帧',
+    'Save images to a local folder (Chrome / Edge on Win + Mac)': '保存图片到本机文件夹 (Chrome/Edge Win+Mac)',
+    'Folder picker unavailable — will download each image instead': '不支援文件夹选择器 — 改为逐张下载',
+    'Exporting video...': '导出视频中...',
   };
 
   // ── State ──
@@ -6161,9 +6161,9 @@ var I18N = (function() {
     if (statusEl && toZh) {
       var txt = statusEl.textContent || '';
       statusEl.textContent = txt
-        .replace(/Zoom:/g, '縮放：')
-        .replace(/Items:/g, '項目：')
-        .replace(/Undo:/g, '復原：');
+        .replace(/Zoom:/g, '缩放：')
+        .replace(/Items:/g, '项目：')
+        .replace(/Undo:/g, '撤销：');
     }
 
     // Paper toggle button
@@ -6171,9 +6171,9 @@ var I18N = (function() {
     if (paperBtn) {
       var pt = paperBtn.textContent || '';
       if (toZh) {
-        paperBtn.textContent = pt.replace('Show Paper', '顯示紙張').replace('Hide Paper', '隱藏紙張');
+        paperBtn.textContent = pt.replace('Show Paper', '显示纸张').replace('Hide Paper', '隐藏纸张');
       } else {
-        paperBtn.textContent = pt.replace('顯示紙張', 'Show Paper').replace('隱藏紙張', 'Hide Paper');
+        paperBtn.textContent = pt.replace('显示纸张', 'Show Paper').replace('隐藏纸张', 'Hide Paper');
       }
     }
 
@@ -6182,9 +6182,9 @@ var I18N = (function() {
     if (autoFitBtn) {
       var at = autoFitBtn.textContent || '';
       if (toZh) {
-        autoFitBtn.textContent = at.replace('Auto-fit: ON', '自動適應：開').replace('Auto-fit: OFF', '自動適應：關');
+        autoFitBtn.textContent = at.replace('Auto-fit: ON', '自动适应：开').replace('Auto-fit: OFF', '自动适应：关');
       } else {
-        autoFitBtn.textContent = at.replace('自動適應：開', 'Auto-fit: ON').replace('自動適應：關', 'Auto-fit: OFF');
+        autoFitBtn.textContent = at.replace('自动适应：开', 'Auto-fit: ON').replace('自动适应：关', 'Auto-fit: OFF');
       }
     }
   }
@@ -6212,7 +6212,7 @@ var I18N = (function() {
 
     // Show toast
     if (typeof window.toast === 'function') {
-      window.toast(toZh ? '🌐 介面已切換為中文' : '🌐 UI switched to English');
+      window.toast(toZh ? '🌐 界面已切换为中文' : '🌐 UI switched to English');
     }
 
     return currentLang;
@@ -6232,7 +6232,7 @@ var I18N = (function() {
     var btn = document.getElementById('btn-lang');
     if (!btn) return;
     btn.textContent = currentLang === 'zh' ? '中' : 'EN';
-    btn.title = currentLang === 'zh' ? 'Switch UI to English' : '切換介面為中文';
+    btn.title = currentLang === 'zh' ? 'Switch UI to English' : '切换界面为中文';
   }
 
   function createLangButton() {
@@ -6253,7 +6253,7 @@ var I18N = (function() {
     btn.className = 'tb-primary';
     btn.style.cssText = 'font-weight:700;font-size:11px;min-width:32px;padding:0 6px;';
     btn.textContent = currentLang === 'zh' ? '中' : 'EN';
-    btn.title = currentLang === 'zh' ? 'Switch UI to English' : '切換介面為中文';
+    btn.title = currentLang === 'zh' ? 'Switch UI to English' : '切换界面为中文';
     btn.addEventListener('click', toggleLang);
     toolbar.appendChild(btn);
     return btn;
@@ -21771,7 +21771,7 @@ function _tryResetVideoZoomAtCursor() {
 
 // v7.0.14: F-to-reset must work in EVERY mode — including while the video
 // annotation draw mode is active, which is exactly when the user wants it
-// ("draw stroke 嘅時候想佢復原"). The normal dispatch chain (shortcut
+// ("draw stroke 嘅时候想佢撤销"). The normal dispatch chain (shortcut
 // registry + legacy handlers) has too many mode-dependent early returns
 // between the keypress and the reset check, any one of which can swallow
 // the key depending on focus/mode state. Register a CAPTURE-phase listener
@@ -23015,8 +23015,8 @@ viewport.addEventListener('mousedown', e => {
     const wy = (e.clientY - state.pan.y) / state.zoom;
     // v7.0.24: stroke move-on-drag REMOVED. Hovering an existing stroke
     // used to hijack the next mousedown into a move drag, which kept
-    // interrupting continued drawing (user: "放上佢會移動呢條線，好影響
-    // 我繼續畫"). Clicks in draw mode now ALWAYS start a new stroke.
+    // interrupting continued drawing (user: "放上佢会移动呢条线，好影响
+    // 我继续画"). Clicks in draw mode now ALWAYS start a new stroke.
     // The drawMoveState handlers below stay dormant (never armed).
     // Start a new stroke
     G.currentStroke = { strokeId: G.nextStrokeId++, color: drawTool.color, size: drawTool.size, opacity: drawTool.opacity, mode: drawTool.mode, arrowHead: drawTool.arrowHead, points: [[wx, wy, (drawTool.pressure ? (window.__kraftedPressure || 0.5) : 1)]] };
@@ -25559,8 +25559,8 @@ function groupMove(direction) {
 // just before it would overlap anything else (8px gap).
 //   • Process order = sort by move axis. Topmost first for Up,
 //     bottommost first for Down, leftmost first for Left, rightmost
-//     first for Right. This honors the user's rule "以最高位置為
-//     對砌方位" — the topmost item in the input ends up as the
+//     first for Right. This honors the user's rule "以最高位置为
+//     对砌方位" — the topmost item in the input ends up as the
 //     topmost in the layout.
 //   • The first item in sort order is the "reference": it gets to
 //     occupy snapTarget (the selection's min/max in the move
@@ -25574,7 +25574,7 @@ function groupMove(direction) {
 //     iterations in practice; capped at 100 to be safe).
 //   • ABSOLUTELY no overlap is the hard constraint: gap=8 between
 //     every touching pair, including selected-vs-selected and
-//     moving-vs-obstacle. The user's "亂飛" complaint was caused
+//     moving-vs-obstacle. The user's "乱飞" complaint was caused
 //     by Round 44 using a flawed `isAbove`/`isBelow` condition
 //     that missed obstacles that overlapped the moving item's
 //     newY range — e.g. A at y=0 with B at y=20 same X: B's
@@ -32682,16 +32682,16 @@ function _dataUrlToBlobUrl(dataUrl) {
 // ============================================================
 //  SCHEMA VERSIONING & MIGRATION
 // ============================================================
-//  Krafted 文件格式向後兼容系統。
+//  Krafted 文件格式向后兼容系统。
 //
-//  每次改 manifest structure 時：
+//  每次改 manifest structure 时：
 //    1. bump CURRENT_SCHEMA_VERSION
-//    2. 加一個 migration function (e.g. migrateV4toV5)
-//    3. 將新 migration 加入 MIGRATIONS array
+//    2. 加一个 migration function (e.g. migrateV4toV5)
+//    3. 将新 migration 加入 MIGRATIONS array
 //
-//  載入時自動行 migration chain，將舊版 data 升到最新版。
-//  如果載入到未來版本（比 CURRENT_SCHEMA_VERSION 更高），
-//  會彈 warning 但照 load（best-effort forward compatibility）。
+//  载入时自动行 migration chain，将旧版 data 升到最新版。
+//  如果载入到未来版本（比 CURRENT_SCHEMA_VERSION 更高），
+//  会弹 warning 但照 load（best-effort forward compatibility）。
 // ============================================================
 
 var CURRENT_SCHEMA_VERSION = 5;
@@ -32742,9 +32742,9 @@ function migrateData(data) {
   // Future version detection
   if (ver > CURRENT_SCHEMA_VERSION) {
     warnings.push(
-      '⚠️ 此檔案由較新版本 Krafted (v' + ver + ') 建立。' +
-      '當前版本為 v' + CURRENT_SCHEMA_VERSION + '。' +
-      '部分功能可能無法正確載入，建議更新 Krafted。'
+      '⚠️ 此文件由较新版本 Krafted (v' + ver + ') 建立。' +
+      '当前版本为 v' + CURRENT_SCHEMA_VERSION + '。' +
+      '部分功能可能无法正确载入，建议更新 Krafted。'
     );
     // Still try to load — best-effort forward compatibility
     console.warn('[Migration] Future version detected: v' + ver + ' > current v' + CURRENT_SCHEMA_VERSION);
@@ -32759,7 +32759,7 @@ function migrateData(data) {
       console.log('[Migration] v' + (i + 1) + ' → v' + (i + 2) + ' OK');
     } catch (e) {
       console.error('[Migration] v' + (i + 1) + ' → v' + (i + 2) + ' FAILED:', e);
-      warnings.push('⚠️ 資料遷移 v' + (i + 1) + '→v' + (i + 2) + ' 失敗：' + e.message);
+      warnings.push('⚠️ 资料迁移 v' + (i + 1) + '→v' + (i + 2) + ' 失败：' + e.message);
     }
   }
 
@@ -32783,7 +32783,7 @@ function restoreBoard(data, append) {
   if (migration.migrated) {
     console.log('[Load] Data migrated from v' + detectVersion(data) + ' to v' + CURRENT_SCHEMA_VERSION);
     if (typeof window.toast === 'function') {
-      window.toast('✅ 舊版檔案已自動升級至 v' + CURRENT_SCHEMA_VERSION);
+      window.toast('✅ 旧版文件已自动升级至 v' + CURRENT_SCHEMA_VERSION);
     }
   }
   data = migration.data;
@@ -33946,8 +33946,8 @@ async function exportAllImagesToFolder() {
 
 // ═══════════════════════════════════════════════════════════════
 // SCREEN SHARE MODE — 投屏模式（v6.8.0）
-// 安全設計：所有優化只在 body.screen-share-mode 存在時生效
-// 不㩒掣 = 零影響
+// 安全设计：所有优化只在 body.screen-share-mode 存在时生效
+// 不㩒掣 = 零影响
 // ═══════════════════════════════════════════════════════════════
 
 var isScreenShareMode = false;
@@ -33962,14 +33962,14 @@ function toggleScreenShareMode() {
     document.body.classList.add('screen-share-mode');
     _applyScreenShareOptimizations();
     try { localStorage.setItem('kraft_screen_share', '1'); } catch(e) {}
-    if (typeof toast === 'function') toast('投屏模式已啟用');
+    if (typeof toast === 'function') toast('投屏模式已启用');
     _updateSSIndicator(true);
     _ssFpsStart();
   } else {
     document.body.classList.remove('screen-share-mode');
     _restoreScreenShareOptimizations();
     try { localStorage.setItem('kraft_screen_share', '0'); } catch(e) {}
-    if (typeof toast === 'function') toast('投屏模式已關閉');
+    if (typeof toast === 'function') toast('投屏模式已关闭');
     _updateSSIndicator(false);
     _ssFpsStop();
   }
@@ -34004,7 +34004,7 @@ function _ssEnsureIndicator() {
 }
 
 function _ssEnsureBannerElements() {
-  // 頂部橫幅（minimalist — 無 emoji、字少、單色）
+  // 顶部横幅（minimalist — 无 emoji、字少、单色）
   if (!document.getElementById('ss-banner')) {
     var banner = document.createElement('div');
     banner.id = 'ss-banner';
@@ -34069,7 +34069,7 @@ function _restoreScreenShareOptimizations() {
   } catch(e) {}
 }
 
-// Monkey-patch devicePixelRatio：投屏模式強制 1x DPR
+// Monkey-patch devicePixelRatio：投屏模式强制 1x DPR
 var _ssOrigDPR = Object.getOwnPropertyDescriptor(Window.prototype, 'devicePixelRatio');
 if (_ssOrigDPR && _ssOrigDPR.get) {
   var _ssOrigGetter = _ssOrigDPR.get;
@@ -34088,7 +34088,7 @@ if (typeof window !== 'undefined') {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// rAF THROTTLE — 投屏模式降到 ~30fps，釋放一半 frame budget
+// rAF THROTTLE — 投屏模式降到 ~30fps，释放一半 frame budget
 // ═══════════════════════════════════════════════════════════════
 (function() {
   var _origRAF = window.requestAnimationFrame;
@@ -34101,11 +34101,11 @@ if (typeof window !== 'undefined') {
     if (!isScreenShareMode || !document.body.classList.contains('screen-share-mode')) {
       return _origRAF.call(window, callback);
     }
-    // 投屏模式：每隔一幀先真正 call，skip 嘅幀 defer 到下一幀
+    // 投屏模式：每隔一帧先真正 call，skip 嘅帧 defer 到下一帧
     var fid = _nextFakeId++;
     if (_skipNext) {
       _skipNext = false;
-      // Defer: 等下一幀先 call
+      // Defer: 等下一帧先 call
       var realId = _origRAF.call(window, function(ts) {
         var entry = _rafMap[fid];
         if (entry) { entry.callback(ts); delete _rafMap[fid]; }
@@ -34134,7 +34134,7 @@ if (typeof window !== 'undefined') {
 })();
 
 // ═══════════════════════════════════════════════════════════════
-// FPS COUNTER — 只在投屏模式時才啟動，關閉即停，平時零 overhead
+// FPS COUNTER — 只在投屏模式时才启动，关闭即停，平时零 overhead
 // ═══════════════════════════════════════════════════════════════
 var _ssFpsFrames = 0, _ssFpsLastTime = 0, _ssFpsEl = null, _ssFpsRafId = null;
 

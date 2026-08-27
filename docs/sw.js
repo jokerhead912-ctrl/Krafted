@@ -2,7 +2,7 @@
 // Standalone file for PWA caching on GitHub Pages.
 
 const CACHE_NAME = 'krafted-v7.0.24-' + Date.now();
-const APP_VERSION = '7.0.24';
+const APP_VERSION = '7.0.25';
 
 const PRE_CACHE = ['./'];
 
