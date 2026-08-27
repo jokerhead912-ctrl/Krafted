@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.27</title>
+<title>Krafted v7.0.28</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2917,16 +2917,19 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
 .save-progress {
   position: fixed; bottom: 80px; left: 50%;
   transform: translateX(-50%);
-  background: var(--panel-bg);
+  /* v7.0.28: solid, prominent card ABOVE the save-lock overlay
+     (overlay z-index is 999999999 — this must beat it or the bar
+     gets blurred/dimmed by the backdrop-filter). Lock stays on. */
+  background: rgba(16, 18, 24, 0.97);
   border: 1px solid var(--accent);
   color: var(--text);
-  padding: 12px 20px;
-  border-radius: 10px;
-  z-index: 99999998;
-  min-width: 280px;
-  box-shadow: 0 4px 24px rgba(0, 229, 255, 0.2);
+  padding: 14px 22px;
+  border-radius: 12px;
+  z-index: 1000000001;
+  min-width: 360px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 229, 255, 0.15), 0 4px 24px rgba(0, 229, 255, 0.35);
   font-family: 'Inter', sans-serif;
-  font-size: 12px;
+  font-size: 13px;
   pointer-events: none;
 }
 .save-progress .pct {
@@ -4072,7 +4075,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.27';
+var KRAFTED_VERSION = '7.0.28';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
