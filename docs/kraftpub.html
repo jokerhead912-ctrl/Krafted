@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.36</title>
+<title>Krafted v7.0.37</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2675,6 +2675,12 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #export-modal .export-bg-row input[type="color"] { width:36px; height:26px; border:1px solid var(--border); border-radius:6px; cursor:pointer; background:transparent; padding:0; }
 #export-modal .export-bg-preset { padding:5px 10px !important; font-size:11px !important; }
 #export-modal .export-bg-row label.export-bg-transparent { display:flex; align-items:center; gap:5px; cursor:pointer; margin:0; }
+#export-modal .export-bg-preset.active { border-color:var(--accent) !important; color:var(--accent) !important; }
+#export-modal .export-size-label { font-size:11px; color:var(--text-dim); font-family:'Inter',sans-serif; margin-left:4px; white-space:nowrap; }
+.welcome-autosave { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:18px; padding:9px 14px; border:1px solid var(--border-subtle); border-radius:10px; font-size:12px; color:var(--text-dim); font-family:'Inter',sans-serif; }
+.welcome-autosave .wa-dot { width:7px; height:7px; border-radius:50%; background:var(--accent); flex-shrink:0; }
+.welcome-autosave button { padding:5px 12px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); border-radius:7px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; }
+.welcome-autosave button:hover { border-color:var(--accent); }
 
 
 /* STATUS BAR */
@@ -3954,6 +3960,13 @@ body.screen-share-mode #ss-fps {
         <input type="checkbox" id="export-bg-transparent" onchange="setExportBgTransparent(this.checked)"> Transparent
       </label>
     </div>
+    <div class="export-bg-row" id="export-res-row">
+      <span class="export-bg-label">RES:</span>
+      <button class="export-bg-preset" data-scale="1" onclick="setExportScale(1)" title="1 device pixel per on-screen pixel">1x</button>
+      <button class="export-bg-preset" data-scale="2" onclick="setExportScale(2)" title="The pre-v7.0.37 default">2x</button>
+      <button class="export-bg-preset" data-scale="4" onclick="setExportScale(4)" title="Recovers real resolution when you zoomed out to frame the shot">4x</button>
+      <span class="export-size-label" id="export-size-label"></span>
+    </div>
     <div class="modal-actions">
       <button class="folder-btn" onclick="saveExportModalToFolder()" title="Save to a local folder (Chrome/Edge on Win/Mac)">Save to Folder…</button>
       <button onclick="downloadExport()">Save PNG</button>
@@ -4047,6 +4060,12 @@ body.screen-share-mode #ss-fps {
     <div class="welcome-divider"></div>
     <p class="welcome-tagline">For every creative soul.</p>
     <p class="welcome-sub">Professional reference board — images, video, audio, mind maps & more.</p>
+    <div class="welcome-autosave" id="welcome-autosave" style="display:none">
+      <span class="wa-dot"></span>
+      <span id="welcome-autosave-label"></span>
+      <button onclick="loadAutoSave()">Restore</button>
+      <button onclick="discardAutoSave();document.getElementById('welcome-autosave').style.display='none'">Discard</button>
+    </div>
     <button class="btn-primary btn-large" onclick="hideWelcome()">GET STARTED</button>
     <div class="welcome-creator">CREATED BY KINCHEUNG</div>
     <div class="welcome-version" id="welcome-version">V 6 . 5 . 0</div>
@@ -4083,7 +4102,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.36';
+var KRAFTED_VERSION = '7.0.37';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6853,64 +6872,13 @@ function frameSelection() {
     return;
   }
   // Gather bounding boxes of every selected thing in WORLD coordinates.
-  // Items: x/y/w/h are world coords. Texts and todos also use world x/y
-  // with computed size. Mindmaps: use the union of all node positions.
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  let count = 0;
+  // v7.0.37: the walk itself now lives in worldBBoxOf() so that F (frame
+  // selection) and the mobile Fit button cannot drift apart on what counts
+  // as "the content". It used to be inlined here and nowhere else, which is
+  // exactly how zoomToFit() ended up missing entirely.
   const selArr = Array.from(sel);
-  for (const id of selArr) {
-    const it = (state.items || []).find(i => i.id === id);
-    if (it) {
-      if (it.x < minX) minX = it.x;
-      if (it.y < minY) minY = it.y;
-      if (it.x + it.w > maxX) maxX = it.x + it.w;
-      if (it.y + it.h > maxY) maxY = it.y + it.h;
-      count++;
-      continue;
-    }
-    const tx = (state.texts || []).find(t => t.id === id);
-    if (tx && tx.el) {
-      const r = tx.el.getBoundingClientRect();
-      // Convert BCR back to world: subtract pan, divide by zoom.
-      const wx = (r.left - state.pan.x) / state.zoom;
-      const wy = (r.top  - state.pan.y) / state.zoom;
-      const ww = r.width  / state.zoom;
-      const wh = r.height / state.zoom;
-      if (wx < minX) minX = wx;
-      if (wy < minY) minY = wy;
-      if (wx + ww > maxX) maxX = wx + ww;
-      if (wy + wh > maxY) maxY = wy + wh;
-      count++;
-      continue;
-    }
-    const td = (state.todos || []).find(t => t.id === id);
-    if (td && td.el) {
-      const r = td.el.getBoundingClientRect();
-      const wx = (r.left - state.pan.x) / state.zoom;
-      const wy = (r.top  - state.pan.y) / state.zoom;
-      const ww = r.width  / state.zoom;
-      const wh = r.height / state.zoom;
-      if (wx < minX) minX = wx;
-      if (wy < minY) minY = wy;
-      if (wx + ww > maxX) maxX = wx + ww;
-      if (wy + wh > maxY) maxY = wy + wh;
-      count++;
-      continue;
-    }
-    const mm = (state.mindmaps || []).find(m => m.id === id);
-    if (mm && Array.isArray(mm.nodes) && mm.nodes.length > 0) {
-      mm.nodes.forEach(n => {
-        if (typeof n.x === 'number' && typeof n.y === 'number') {
-          if (n.x < minX) minX = n.x;
-          if (n.y < minY) minY = n.y;
-          if (n.x > maxX) maxX = n.x;
-          if (n.y > maxY) maxY = n.y;
-        }
-      });
-      count++;
-    }
-  }
-  if (count === 0 || !isFinite(minX) || !isFinite(maxX)) {
+  const bb = worldBBoxOf(selArr);
+  if (!bb) {
     // Selected IDs don't match anything (e.g. mid-load, stale id). Fall
     // back to default so F still does something sensible.
     state.zoom = 1;
@@ -6920,6 +6888,8 @@ function frameSelection() {
     try { toast('View reset · 100% · (0, 0)  —  F'); } catch (e) {}
     return;
   }
+  let minX = bb.minX, minY = bb.minY, maxX = bb.maxX, maxY = bb.maxY;
+  const count = bb.count;
   // Clamp degenerate selections (single point or zero-area) to a small
   // 80×60 region so we don't divide by zero in the zoom math.
   if (maxX - minX < 1) { minX -= 40; maxX += 40; }
@@ -6949,6 +6919,133 @@ function frameSelection() {
     const tag = count === 1 ? '1 item' : count + ' items';
     toast('Framed ' + tag + ' · ' + Math.round(state.zoom * 100) + '%  —  F');
   } catch (e) {}
+}
+
+// v7.0.37 — P1-8. Union bounding box of board objects, in WORLD coordinates.
+// `ids` is an array or Set of ids, or null/undefined for EVERYTHING on the
+// board. Returns null when nothing matched.
+//   items    — x/y/w/h are already world coords
+//   texts /
+//   todos    — world-positioned but auto-sized from their DOM, so read the
+//              rendered box and convert back through pan + zoom
+//   mindmaps — union of node positions (nodes are points)
+function worldBBoxOf(ids) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, count = 0;
+  const want = (ids == null) ? null
+    : ((typeof Set !== 'undefined' && ids instanceof Set) ? ids : new Set(Array.from(ids)));
+  const takes = function (id) { return !want || want.has(id); };
+  const addRect = function (x, y, w, h) {
+    if (!isFinite(x) || !isFinite(y) || !isFinite(w) || !isFinite(h)) return;
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x + w > maxX) maxX = x + w;
+    if (y + h > maxY) maxY = y + h;
+    count++;
+  };
+  (state.items || []).forEach(function (it) {
+    if (!takes(it.id)) return;
+    addRect(it.x, it.y, it.w || 0, it.h || 0);
+  });
+  [state.texts, state.todos].forEach(function (list) {
+    (list || []).forEach(function (t) {
+      if (!takes(t.id)) return;
+      if (t.el && typeof t.el.getBoundingClientRect === 'function') {
+        const r = t.el.getBoundingClientRect();
+        if (r.width || r.height) {
+          addRect((r.left - state.pan.x) / state.zoom, (r.top - state.pan.y) / state.zoom,
+                  r.width / state.zoom, r.height / state.zoom);
+          return;
+        }
+      }
+      addRect(t.x, t.y, t.w || 0, t.h || 0);
+    });
+  });
+  (state.mindmaps || []).forEach(function (mm) {
+    if (!takes(mm.id)) return;
+    if (!Array.isArray(mm.nodes) || mm.nodes.length === 0) return;
+    let seen = false;
+    mm.nodes.forEach(function (n) {
+      if (typeof n.x !== 'number' || typeof n.y !== 'number') return;
+      if (n.x < minX) minX = n.x;
+      if (n.y < minY) minY = n.y;
+      if (n.x > maxX) maxX = n.x;
+      if (n.y > maxY) maxY = n.y;
+      seen = true;
+    });
+    if (seen) count++;
+  });
+  if (count === 0 || !isFinite(minX) || !isFinite(maxX)) return null;
+  return { minX: minX, minY: minY, maxX: maxX, maxY: maxY, count: count };
+}
+
+// v7.0.37 — P1-8. Pan the board the minimum amount needed to bring a world
+// rect fully on screen. Zoom is left ALONE unless allowZoomOut is set: a
+// user who zoomed to 300% to retouch a detail does not want that thrown away
+// because they pasted a screenshot. When the rect is bigger than the
+// viewport at the current zoom it is centred instead of edge-pinned, so the
+// middle of the content (what they were looking at) stays reachable.
+function revealWorldRect(minX, minY, maxX, maxY, opts) {
+  const sw = window.innerWidth || 0, sh = window.innerHeight || 0;
+  const nothing = { moved: false, dx: 0, dy: 0, zoom: state.zoom };
+  if (!(sw > 0) || !(sh > 0)) return nothing;
+  if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) return nothing;
+  // Degenerate rect (a single point, or a zero-area item) — give it a size
+  // so the edge tests below have something to work with.
+  if (maxX - minX < 1) { const cx = (minX + maxX) / 2; minX = cx - 20; maxX = cx + 20; }
+  if (maxY - minY < 1) { const cy = (minY + maxY) / 2; minY = cy - 15; maxY = cy + 15; }
+  const o = opts || {};
+  // 40px of breathing room, but never eat more than a third of a small
+  // screen (phones) or the margin would push the content back off it.
+  let margin = (o.margin === undefined) ? 40 : o.margin;
+  margin = Math.max(0, Math.min(margin, (Math.min(sw, sh) - 40) / 2));
+  let z = state.zoom;
+  if (o.allowZoomOut) {
+    const fitZ = Math.min((sw - margin * 2) / Math.max(1, maxX - minX),
+                          (sh - margin * 2) / Math.max(1, maxY - minY));
+    if (fitZ < z) { z = Math.max(0.02, fitZ); state.zoom = z; }
+  }
+  // world -> screen is  world * zoom + pan, so a zoom change needs no pan
+  // correction here: we simply recompute where the rect landed.
+  const rw = (maxX - minX) * z, rh = (maxY - minY) * z;
+  const sx = minX * z + state.pan.x, sy = minY * z + state.pan.y;
+  let dx = 0, dy = 0;
+  if (rw + margin * 2 >= sw)      dx = (sw - rw) / 2 - sx;
+  else if (sx < margin)           dx = margin - sx;
+  else if (sx + rw > sw - margin) dx = (sw - margin) - (sx + rw);
+  if (rh + margin * 2 >= sh)      dy = (sh - rh) / 2 - sy;
+  else if (sy < margin)           dy = margin - sy;
+  else if (sy + rh > sh - margin) dy = (sh - margin) - (sy + rh);
+  const moved = Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5;
+  if (moved) { state.pan.x += dx; state.pan.y += dy; }
+  updateCanvas();
+  return { moved: moved, dx: dx, dy: dy, zoom: z };
+}
+
+// Convenience wrapper: reveal one board object by its world x/y/w/h.
+function revealItem(item, opts) {
+  if (!item) return null;
+  return revealWorldRect(item.x, item.y, item.x + (item.w || 0), item.y + (item.h || 0), opts);
+}
+
+// v7.0.37: fit EVERYTHING on the board in view. The mobile toolbar's ⊡
+// button has been calling zoomToFit() since v6 although the function never
+// existed — tapping it threw a ReferenceError and did nothing at all.
+function zoomToFit() {
+  const bb = worldBBoxOf(null);
+  const sw = window.innerWidth || 0, sh = window.innerHeight || 0;
+  if (!bb || !(sw > 0) || !(sh > 0)) {
+    state.zoom = 1; state.pan.x = 0; state.pan.y = 0; updateCanvas();
+    return;
+  }
+  const margin = Math.max(0, Math.min(60, (Math.min(sw, sh) - 40) / 2));
+  const bw = Math.max(1, bb.maxX - bb.minX), bh = Math.max(1, bb.maxY - bb.minY);
+  let z = Math.min(Math.max(1, sw - margin * 2) / bw, Math.max(1, sh - margin * 2) / bh);
+  z = Math.max(0.02, Math.min(10, z));
+  state.zoom = z;
+  state.pan.x = sw / 2 - ((bb.minX + bb.maxX) / 2) * z;
+  state.pan.y = sh / 2 - ((bb.minY + bb.maxY) / 2) * z;
+  updateCanvas();
+  try { toast('Fit · ' + Math.round(state.zoom * 100) + '% · ' + bb.count + ' items'); } catch (e) {}
 }
 
 
@@ -7316,12 +7413,10 @@ function applySnapshot(snap) {
     el.className = 'item';
     let mediaEl;
     if (data.isVideo) {
-      mediaEl = document.createElement('video');
-      mediaEl.src = data.src;
-      mediaEl.playsInline = true;
-      mediaEl.loop = true;
-      mediaEl.muted = true;
-      mediaEl.preload = 'metadata';  // v5.5: metadata-only to avoid memory spike on undo/redo
+      // v7.0.37 — P2: shared builder, which is also where this path finally
+      // gains the codec error listener it never had (v5.5 keeps preload at
+      // 'metadata' so an undo does not spike memory).
+      mediaEl = makeVideoElement(data.src, { preload: 'metadata' });
       // Round 58: restore manual FPS override from snapshot. Must happen
       // BEFORE buildMediaControls so the loadedmetadata handler sees
       // _kraftedFps already set and skips auto-detect (its `if (!mediaEl._kraftedFps)`
@@ -8256,27 +8351,11 @@ function addImage(src, natW, natH, x, y, isVideoFlag, isLast, fileSize, isGifFla
   el.className = 'item';
   let mediaEl;
   if (isVideo) {
-    mediaEl = document.createElement('video');
-    mediaEl.src = src;
-    mediaEl.playsInline = true;
-    mediaEl.loop = true;
-    mediaEl.muted = true;
-    mediaEl.preload = 'auto';  // v6.1.13: auto-buffer needed for high-bitrate blob videos
+    // v7.0.37 — P2: shared builder. preload stays 'auto' here: a fresh blob
+    // is already fully in memory, so buffering it costs no network I/O and
+    // v6.1.13 measured that high-bitrate clips need it.
+    mediaEl = makeVideoElement(src, { preload: 'auto' });
     mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;background:#000;object-fit:contain;will-change:transform;';
-    // v6.1.15: surface codec-unsupported errors so the user knows WHY
-    // playback fails (e.g. ProRes/DNxHR .mov files from screen recorders).
-    // Browser <video> only supports H.264/H.265/VP9/AV1 — anything else
-    // (ProRes, DNxHR, Cineform, etc.) silently fails to decode.
-    mediaEl.addEventListener('error', function() {
-      var err = mediaEl.error;
-      var code = err ? err.code : 0;
-      // code 4 = MEDIA_ERR_SRC_NOT_SUPPORTED
-      if (code === 4) {
-        var msg = 'Unsupported codec — use H.264 MP4.';
-        try { toast(msg, 4000); } catch(e) {}
-        console.warn('[Video] Unsupported codec:', src);
-      }
-    });
   } else {
     mediaEl = document.createElement('img');
     mediaEl.src = src;
@@ -9367,6 +9446,45 @@ function paintAnnoStroke(ctx, stk, opts) {
     ctx.fillStyle = stk.color || '#fff';
     ctx.fillText(text, x + padX, y + padY);
   }
+}
+
+// v7.0.37 — P2. One builder for every board <video>. Three call sites used to
+// hand-roll the element (addImage, undo/redo restore, kpak restore) and they
+// had drifted three ways: preload 'auto' vs 'metadata' vs 'none', and only
+// addImage attached the codec error listener. The visible consequence: a
+// ProRes / DNxHR clip restored from a .kpak failed to decode and sat there as
+// a BLACK FRAME with no explanation, while the very same file dropped onto
+// the board said "Unsupported codec — use H.264 MP4". Same file, two
+// behaviours, and the silent one is the one that wastes the user's time.
+// opts: { preload: 'auto' | 'metadata' | 'none' (default 'metadata'),
+//         onError: false to skip the codec listener }
+function makeVideoElement(src, opts) {
+  const o = opts || {};
+  const v = document.createElement('video');
+  v.src = src || '';
+  v.playsInline = true;
+  v.loop = true;
+  v.muted = true;
+  v.preload = o.preload || 'metadata';
+  if (o.onError !== false) {
+    v.addEventListener('error', function () {
+      // A lazy video has src='' until the user touches it — setting an empty
+      // src fires MEDIA_ERR_SRC_NOT_SUPPORTED. That is not a real failure.
+      if (!v.src) return;
+      // Only complain about videos the user can actually see; probe elements
+      // (metadata sniffers) are detached and must stay quiet.
+      if (!v.isConnected) return;
+      var code = v.error ? v.error.code : 0;
+      if (code === 4) {
+        // MEDIA_ERR_SRC_NOT_SUPPORTED: browsers only do H.264/H.265/VP9/AV1.
+        try { toast('Unsupported codec — use H.264 MP4.', 4000); } catch (e) {}
+      } else if (code) {
+        try { toast('Video failed to load (error ' + code + ')', 4000); } catch (e) {}
+      }
+      console.warn('[Video] load error ' + code + ':', v.src);
+    });
+  }
+  return v;
 }
 
 function buildMediaControls(el, mediaEl, isVideo, isGif) {
@@ -18519,10 +18637,13 @@ function handleAudioUpload(event) {
   hideWelcome();
   const pasteX = (G.lastScreenX - state.pan.x) / state.zoom;
   const pasteY = (G.lastScreenY - state.pan.y) / state.zoom;
-  files.forEach((file, idx) => {
+  // v7.0.37 — P1-9: cascade instead of a flat 20px step per file.
+  const cascade = makeCascade(pasteX, pasteY);
+  files.forEach((file) => {
+    const at = cascade(280, 64);   // the audio card's own w/h (addAudioItem)
     // v6.2.1: use blob URL to avoid OOM on large WAVs
     const blobUrl = URL.createObjectURL(file);
-    addAudioItem(blobUrl, file.name, pasteX + idx * 20, pasteY + idx * 20, file.size, file);
+    addAudioItem(blobUrl, file.name, at.x, at.y, file.size, file);
   });
   event.target.value = ''; // Reset for re-upload
 }
@@ -21177,9 +21298,11 @@ window.addEventListener('drop', function(e){
     const img = new Image();
     img.onload = function() {
       let effW = img.naturalWidth, effH = img.naturalHeight;
-      const MAX_EDGE = 1280;
-      const needsResize = Math.max(effW, effH) > MAX_EDGE;
-      const needsReencode = (blob.type === 'image/png' && blob.size > 600 * 1024);
+      // v7.0.37 — P2: the resize / re-encode maths moved into
+      // normalizeImageBlob() so the file-drop and paste paths use the very
+      // same rule. What stays here is the disk-backed storage step: a web
+      // image has no file behind it, so the blob is round-tripped through
+      // IndexedDB to keep it off the renderer heap.
       function _finish(outBlob, outW, outH) {
         _dragImgStore.putAndGet(outBlob).then(function(diskBlob) {
           const finalUrl = URL.createObjectURL(diskBlob);
@@ -21190,35 +21313,7 @@ window.addEventListener('drop', function(e){
           toast('Pasted image');
         });
       }
-      if (needsResize || needsReencode) {
-        try {
-          const scale = Math.min(1, MAX_EDGE / Math.max(effW, effH));
-          const c = document.createElement('canvas');
-          c.width = Math.max(1, Math.round(effW * scale));
-          c.height = Math.max(1, Math.round(effH * scale));
-          const cctx = c.getContext('2d');
-          cctx.drawImage(img, 0, 0, c.width, c.height);
-          let opaque = true;
-          if (blob.type === 'image/png') {
-            // Cheap alpha probe on a 32px sample: fully opaque photos
-            // become JPEG (~10x smaller); real alpha survives as PNG.
-            const sv = document.createElement('canvas');
-            sv.width = 32; sv.height = 32;
-            const sctx = sv.getContext('2d');
-            sctx.drawImage(c, 0, 0, 32, 32);
-            const px = sctx.getImageData(0, 0, 32, 32).data;
-            for (let pi = 3; pi < px.length; pi += 4) {
-              if (px[pi] < 250) { opaque = false; break; }
-            }
-          }
-          c.toBlob(function(b) {
-            if (b) _finish(b, c.width, c.height);
-            else _finish(blob, effW, effH);
-          }, opaque ? 'image/jpeg' : 'image/png', 0.87);
-          return;
-        } catch (e2) { /* fall through to the original bytes */ }
-      }
-      _finish(blob, effW, effH);
+      normalizeImageBlob(blob, img, effW, effH, false, _finish);
     };
     img.onerror = function() {
       try { URL.revokeObjectURL(tmpUrl); } catch (e) {}
@@ -21522,6 +21617,85 @@ function _finishFolderImport(e, allFiles) {
   _handleFileDrop(e, sorted);
 }
 
+// v7.0.37 — P1-9. Cascade placement for a multi-file drop / paste.
+// Every file used to be offset by a flat 20px, so a drop of 30 images
+// landed as one 97%-overlapping stack: the user could not see or grab any
+// of them, and the only clue was the toast saying "Imported 30 files".
+// Now each item steps by a fraction of its OWN size, and wraps to a new row
+// every `cols` so a big drop stays a compact block rather than a 4000px
+// diagonal walk off screen. Returns a function you call with (w, h) of the
+// item you are about to place; it answers where that item should go.
+function makeCascade(originX, originY, cols) {
+  let n = 0, step = 0;
+  const COLS = cols || 6;
+  return function (w, h) {
+    const s = Math.max(32, Math.min(200, Math.min(w || 720, h || 720) * 0.22));
+    // Step only ever grows: a big item later in the batch must not end up
+    // hidden behind the small one that happened to be placed before it.
+    if (s > step) step = s;
+    const col = n % COLS, row = (n / COLS) | 0;
+    n++;
+    return { x: originX + col * step, y: originY + row * step };
+  };
+}
+
+// v7.0.37 — P2. One image-import normaliser. The rule used to be inlined in
+// the web drag-in path only (v7.0.22), so an 8000px PNG pasted from disk
+// landed on the board at full size while the SAME file dragged off a website
+// came in capped. Two paths, two results, one of them able to OOM the tab.
+//   - caps the longest edge, so a pathologically large file cannot blow up
+//     the decoded bitmap or the KPAK payload
+//   - re-encodes fat PNGs as JPEG when a 32px alpha probe says they are
+//     fully opaque (~10x smaller); real transparency survives as PNG
+// `local` files get a much higher ceiling than web drags: a director's own
+// 8K render is reference material they may want to crop into, whereas a web
+// image is only ever looked at.
+const IMAGE_MAX_EDGE = 1280;
+const IMAGE_MAX_EDGE_LOCAL = 4096;
+const IMAGE_PNG_REENCODE_BYTES = 600 * 1024;
+
+function imageNeedsNormalize(w, h, type, size, local) {
+  if (Math.max(w || 0, h || 0) > (local ? IMAGE_MAX_EDGE_LOCAL : IMAGE_MAX_EDGE)) return true;
+  return type === 'image/png' && size > IMAGE_PNG_REENCODE_BYTES;
+}
+
+// `file` is the original Blob (handed straight back when nothing needs doing);
+// `source` is anything ctx.drawImage accepts (ImageBitmap or HTMLImageElement);
+// `cb(blob, w, h)` always fires — on any failure it fires with the ORIGINAL
+// bytes, so a normalise attempt can never lose the user's import.
+function normalizeImageBlob(file, source, w, h, local, cb) {
+  const bail = function () { cb(file, w, h); };
+  if (!file || !source || !w || !h) return bail();
+  if (!imageNeedsNormalize(w, h, file.type, file.size, local)) return bail();
+  try {
+    const cap = local ? IMAGE_MAX_EDGE_LOCAL : IMAGE_MAX_EDGE;
+    const scale = Math.min(1, cap / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * scale));
+    c.height = Math.max(1, Math.round(h * scale));
+    c.getContext('2d').drawImage(source, 0, 0, c.width, c.height);
+    let opaque = true;
+    if (file.type === 'image/png') {
+      // Cheap alpha probe on a 32px sample: fully opaque photos become JPEG
+      // (~10x smaller); real alpha survives as PNG.
+      const sv = document.createElement('canvas');
+      sv.width = 32; sv.height = 32;
+      const sctx = sv.getContext('2d');
+      sctx.drawImage(c, 0, 0, 32, 32);
+      const px = sctx.getImageData(0, 0, 32, 32).data;
+      for (let pi = 3; pi < px.length; pi += 4) {
+        if (px[pi] < 250) { opaque = false; break; }
+      }
+    }
+    c.toBlob(function (b) {
+      if (b) cb(b, c.width, c.height); else bail();
+    }, opaque ? 'image/jpeg' : 'image/png', 0.87);
+  } catch (e) {
+    console.warn('[ImageNormalize] skipped:', e && e.message);
+    bail();
+  }
+}
+
 function _handleFileDrop(e, files) {
   console.log('[FileDrop] _handleFileDrop called with', files.length, 'files');
   // v7.0.27: .kpak/.zip drop = OPEN the board package (was silently
@@ -21550,6 +21724,10 @@ function _handleFileDrop(e, files) {
   });
   const dropX0 = (e.clientX - state.pan.x) / state.zoom;
   const dropY0 = (e.clientY - state.pan.y) / state.zoom;
+  // v7.0.37 — P1-9: ONE cascade shared by the image, video and audio chains
+  // so all three fan out from the cursor instead of each starting on top of
+  // the others at dropX0/dropY0.
+  const cascade = makeCascade(dropX0, dropY0);
   // Process images SEQUENTIALLY (one at a time) to avoid memory crash.
   // v6.1.23: Use createImageBitmap() for dimension reading (zero-copy,
   // no blob URL needed for the temp decode). The canvas <img> gets the
@@ -21560,28 +21738,39 @@ function _handleFileDrop(e, files) {
   let imgIdx = 0;
   async function processNextImage() {
     if (imgIdx >= imageFiles.length) return;
-    const { file, idx } = imageFiles[imgIdx];
-    const dropX = dropX0 + idx * 20;
-    const dropY = dropY0 + idx * 20;
+    const { file } = imageFiles[imgIdx];
     const isLast = (imgIdx === imageFiles.length - 1);
     imgIdx++;
     try {
       // createImageBitmap is async, zero-copy, no DOM needed
       const bitmap = await createImageBitmap(file);
       const w = bitmap.width, h = bitmap.height;
-      bitmap.close();  // release immediately — we only needed dimensions
-      // Now create the blob URL for the canvas <img> (long-lived)
-      const blobUrl = URL.createObjectURL(file);
       const isGif = file.type === 'image/gif' || /\.gif$/i.test(file.name);
-      addImage(blobUrl, w, h, dropX, dropY, false, isLast, file.size, isGif, file);
+      // v7.0.37 — P2: same normalise rule as a web drag-in (was: raw, full
+      // size). GIFs are skipped — re-encoding would kill the animation.
+      const at = cascade(w, h);
+      if (isGif) {
+        bitmap.close();
+        const blobUrl = URL.createObjectURL(file);
+        addImage(blobUrl, w, h, at.x, at.y, false, isLast, file.size, true, file);
+      } else {
+        normalizeImageBlob(file, bitmap, w, h, true, function (outBlob, ow, oh) {
+          bitmap.close();  // release as soon as we are done drawing it
+          const blobUrl = URL.createObjectURL(outBlob);
+          addImage(blobUrl, ow, oh, at.x, at.y, false, isLast, outBlob.size, false, outBlob);
+        });
+      }
     } catch(e) {
       console.warn('[FileDrop] Image decode failed:', file.name, e.message);
     }
     // Brief pause to let GC run before next image
     setTimeout(processNextImage, 50);
   }
-  // Start the chain
-  processNextImage();
+  // Start the chain. v7.0.37 — P1-9: this used to call processNextImage()
+  // unconditionally AND then again inside the guard below, so two chains ran
+  // concurrently over the same imgIdx. That defeated the whole point of the
+  // "one at a time to avoid a memory crash" sequencing above and made the
+  // isLast flag (hence which item ends up selected) a race.
   if (imageFiles.length > 0) {
     processNextImage();
     if (imageFiles.length > 1) toast('Importing ' + imageFiles.length + ' images…');
@@ -21595,15 +21784,14 @@ function _handleFileDrop(e, files) {
   let videoQueueIdx = 0;
   function processNextVideo() {
     if (videoQueueIdx >= videoFiles.length) return;
-    const { file, idx } = videoFiles[videoQueueIdx];
-    const dropX = dropX0 + idx * 20;
-    const dropY = dropY0 + idx * 20;
+    const { file } = videoFiles[videoQueueIdx];
     const isLast = (videoQueueIdx === videoFiles.length - 1);
     const blobUrl = URL.createObjectURL(file);
     // Use a generous default size; the real dimensions will be picked up
     // by the main <video> element once metadata loads asynchronously.
     // 720p default covers most common video sources without looking wrong.
-    const newItem = addImage(blobUrl, 1280, 720, dropX, dropY, true, isLast, file.size, false, file);
+    const at = cascade(1280, 720);
+    const newItem = addImage(blobUrl, 1280, 720, at.x, at.y, true, isLast, file.size, false, file);
     if (newItem && file && file.name) {
       newItem.filename = file.name;
       try { if (newItem.el && newItem.el._setFilenameBadge) newItem.el._setFilenameBadge(file.name); } catch (e) {}
@@ -21613,14 +21801,13 @@ function _handleFileDrop(e, files) {
   }
   processNextVideo();
   // Process audio files
-  audioFiles.forEach(({ file, idx }) => {
-    const dropX = dropX0 + idx * 20;
-    const dropY = dropY0 + idx * 20;
+  audioFiles.forEach(({ file }) => {
+    const at = cascade(280, 64);   // the audio card's own w/h (addAudioItem)
     // v6.2.1: use blob URL instead of data URL — WAV files can be hundreds of MB,
     // and readAsDataURL allocates a base64 string (~33% bigger) that OOMs the tab
     // and crashes JSON.stringify during pushUndo/captureSnapshot.
     const blobUrl = URL.createObjectURL(file);
-    addAudioItem(blobUrl, file.name, dropX, dropY, file.size, file);
+    addAudioItem(blobUrl, file.name, at.x, at.y, file.size, file);
   });
 }
 
@@ -21787,6 +21974,8 @@ document.addEventListener('paste', e => {
     if (imageFiles.length > 0 || videoFiles.length > 0 || audioFiles.length > 0) {
       e.preventDefault();
       const { x, y } = getPasteXY();
+      // v7.0.37 — P1-9: same cascade as drag-drop (was a flat 20px step).
+      const cascade = makeCascade(x, y);
       // v6.8.27: Paste images via blob URL + createImageBitmap (same as drag-drop).
       // readAsDataURL creates a base64 copy (~33% larger) that bloats the undo
       // snapshot and can push JSON.stringify over the browser's string limit.
@@ -21796,15 +21985,25 @@ document.addEventListener('paste', e => {
       (async function processNextImage() {
         if (imgIdx >= imageFiles.length) return;
         const f = imageFiles[imgIdx];
-        const px = x + imgIdx * 20, py = y + imgIdx * 20;
         const isLast = (imgIdx === imageFiles.length - 1);
         imgIdx++;
         try {
           const bitmap = await createImageBitmap(f);
           const w = bitmap.width, h = bitmap.height;
-          bitmap.close();
-          const blobUrl = URL.createObjectURL(f);
-          addImage(blobUrl, w, h, px, py, false, isLast, f.size, false, f);
+          const isGif = f.type === 'image/gif' || /\.gif$/i.test(f.name);
+          const at = cascade(w, h);
+          // v7.0.37 — P2: same normalise rule as drag-in (was: raw, full size).
+          if (isGif) {
+            bitmap.close();
+            const blobUrl = URL.createObjectURL(f);
+            addImage(blobUrl, w, h, at.x, at.y, false, isLast, f.size, true, f);
+          } else {
+            normalizeImageBlob(f, bitmap, w, h, true, function (outBlob, ow, oh) {
+              bitmap.close();
+              const blobUrl = URL.createObjectURL(outBlob);
+              addImage(blobUrl, ow, oh, at.x, at.y, false, isLast, outBlob.size, false, outBlob);
+            });
+          }
         } catch (e) {
           console.warn('[Paste] Image decode failed:', e.message);
         }
@@ -21813,12 +22012,9 @@ document.addEventListener('paste', e => {
       // Video: read as base64 data URL so it persists like images (not blob URL).
       if (videoFiles.length > 0) pushUndo();
       let vIdx = 0;
-      let videoOffset = imageFiles.length;
       (function processNextVideo() {
         if (vIdx >= videoFiles.length) return;
         const f = videoFiles[vIdx];
-        const curOffset = videoOffset + vIdx;
-        const px = x + curOffset * 20, py = y + curOffset * 20;
         const isLast = (vIdx === videoFiles.length - 1);
         const blobUrl = URL.createObjectURL(f);
         const tmpVid = document.createElement('video');
@@ -21829,7 +22025,8 @@ document.addEventListener('paste', e => {
           if (done) return; done = true;
           tmpVid.removeAttribute('src'); tmpVid.load();
           // Capture the original file name so the export can use it
-          const newItem = addImage(blobUrl, w, h, px, py, true, isLast, f.size, false, f);
+          const at = cascade(w, h);
+          const newItem = addImage(blobUrl, w, h, at.x, at.y, true, isLast, f.size, false, f);
           if (newItem && f && f.name) {
             newItem.filename = f.name;
             // Round 13: push the file name to the player badge
@@ -21843,11 +22040,10 @@ document.addEventListener('paste', e => {
         setTimeout(() => { if (!done) finish(640, 360); }, 15000);
       })();
       audioFiles.forEach(f => {
-        const curOffset = videoOffset + videoFiles.length + audioFiles.indexOf(f);
-        const px = x + curOffset * 20, py = y + curOffset * 20;
+        const at = cascade(280, 64);   // the audio card's own w/h (addAudioItem)
         // v6.2.1: use blob URL to avoid OOM on large WAVs
         const blobUrl = URL.createObjectURL(f);
-        addAudioItem(blobUrl, f.name, px, py, f.size, f);
+        addAudioItem(blobUrl, f.name, at.x, at.y, f.size, f);
       });
       toast('Pasted ' + (imageFiles.length + videoFiles.length + audioFiles.length) + ' files');
       return;
@@ -30083,15 +30279,59 @@ function finishExport(e) {
 // transparent option). Choice persists across sessions via localStorage.
 const EXPORT_BG_KEY = 'krafted_export_bg';
 const EXPORT_BG_TRANS_KEY = 'krafted_export_bg_transparent';
+const EXPORT_SCALE_KEY = 'krafted_export_scale';
 let lastExportArea = null;
 let exportBgColor = '#2a2a3e';
 let exportBgTransparent = false;
+// v7.0.37 — P1-11. Export resolution was hard-coded to 2x the CURRENT SCREEN
+// size. Because the board is a screen-space capture, that meant zooming out
+// to 30% to see a whole shot and then exporting gave 0.6x of the content's
+// real pixels — a 4K frame came out smaller than the source. 1x / 2x / 4x is
+// now a choice, remembered between sessions, and the dialog shows the output
+// size before the user commits.
+const EXPORT_SCALES = [1, 2, 4];
+let exportScaleFactor = 2;
 try {
   const saved = (window.KraftedStorage && window.KraftedStorage.getItemSync(EXPORT_BG_KEY)) || localStorage.getItem(EXPORT_BG_KEY);
   if (saved && /^#[0-9a-fA-F]{6}$/.test(saved)) exportBgColor = saved;
   const savedT = (window.KraftedStorage && window.KraftedStorage.getItemSync(EXPORT_BG_TRANS_KEY)) || localStorage.getItem(EXPORT_BG_TRANS_KEY);
   if (savedT === '1') exportBgTransparent = true;
+  const savedS = (window.KraftedStorage && window.KraftedStorage.getItemSync(EXPORT_SCALE_KEY)) || localStorage.getItem(EXPORT_SCALE_KEY);
+  const _s = parseInt(savedS, 10);
+  if (EXPORT_SCALES.indexOf(_s) > -1) exportScaleFactor = _s;
 } catch(e) {}
+
+// v7.0.37 — P1-11. Browsers refuse canvases past a size limit and then fail
+// SILENTLY: toDataURL() hands back a blank PNG with no exception. Chrome tops
+// out at 16384px per side and ~268 megapixels of area; iOS Safari is far
+// lower. Halve the requested scale until the buffer fits, so a 4x export of a
+// huge board degrades to 2x with a warning instead of a white rectangle.
+function exportPixelBudget(w, h, scale) {
+  const MAX_SIDE = 16384, MAX_AREA = 268435456;
+  let s = scale;
+  while (s > 0.25 && (w * s > MAX_SIDE || h * s > MAX_SIDE || (w * s) * (h * s) > MAX_AREA)) {
+    s = s / 2;
+  }
+  return Math.max(0.25, s);
+}
+function setExportScale(n) {
+  if (EXPORT_SCALES.indexOf(n) === -1) return;
+  exportScaleFactor = n;
+  try {
+    localStorage.setItem(EXPORT_SCALE_KEY, String(n));
+    if (window.KraftedStorage) window.KraftedStorage.setItem(EXPORT_SCALE_KEY, String(n)).catch(function(){});
+  } catch(e) {}
+  syncExportBgUI();
+  rerenderExport();
+}
+function updateExportSizeLabel(pxW, pxH, clamped) {
+  const el = document.getElementById('export-size-label');
+  if (!el) return;
+  const mp = (pxW * pxH) / 1e6;
+  el.textContent = Math.round(pxW) + ' \u00d7 ' + Math.round(pxH) + ' px \u00b7 '
+    + (mp >= 10 ? Math.round(mp) : mp.toFixed(1)) + ' MP'
+    + (clamped ? '  \u26a0 clamped' : '');
+}
 function setExportBg(color) {
   if (!/^#[0-9a-fA-F]{6}$/.test(color || '')) return;
   exportBgColor = color;
@@ -30118,6 +30358,12 @@ function syncExportBgUI() {
   const t = document.getElementById('export-bg-transparent');
   if (c) c.value = exportBgColor;
   if (t) t.checked = exportBgTransparent;
+  // v7.0.37 — P1-11: mark the active resolution button.
+  const btns = document.querySelectorAll('#export-res-row [data-scale]');
+  for (let i = 0; i < btns.length; i++) {
+    const on = (parseInt(btns[i].getAttribute('data-scale'), 10) === exportScaleFactor);
+    btns[i].classList.toggle('active', on);
+  }
 }
 function rerenderExport() {
   if (lastExportArea) {
@@ -30389,10 +30635,14 @@ function renderExport(sx, sy, sw, sh) {
   setCaptureMode(true);
   void document.body.offsetHeight; // force reflow before measuring
   try {
-  const scale = 2;
+  // v7.0.37 — P1-11: user-chosen resolution instead of a hard-coded 2x.
+  const scale = exportPixelBudget(sw, sh, exportScaleFactor);
+  if (scale < exportScaleFactor) {
+    try { toast('Export clamped to ' + scale + 'x \u2014 ' + exportScaleFactor + 'x exceeds the browser canvas limit'); } catch (e) {}
+  }
   const cv = document.getElementById('export-canvas');
-  cv.width = sw * scale;
-  cv.height = sh * scale;
+  cv.width = Math.max(1, Math.round(sw * scale));
+  cv.height = Math.max(1, Math.round(sh * scale));
   cv.style.width = sw + 'px';
   cv.style.height = sh + 'px';
   const ctx = cv.getContext('2d');
@@ -30408,6 +30658,9 @@ function renderExport(sx, sy, sw, sh) {
   });
   // Remember the area so a colour/toggle change can re-render the preview
   lastExportArea = {x1: sx, y1: sy, w: sw, h: sh};
+  // v7.0.37 — P1-11: tell the user what they are about to save. The old
+  // dialog gave no size at all, so a 0.6x-content export was undetectable.
+  updateExportSizeLabel(cv.width, cv.height, scale < exportScaleFactor);
   document.getElementById('export-modal').classList.add('active');
   } finally {
     setCaptureMode(false);
@@ -30796,7 +31049,13 @@ function pasteCaptureToBoard() {
     const maxW = 720;
     let dispW = img.naturalWidth, dispH = img.naturalHeight;
     if (dispW > maxW) { dispH = dispH * (maxW / dispW); dispW = maxW; }
-    addImage(dataUrl, img.naturalWidth, img.naturalHeight, cx - dispW / 2, cy - dispH / 2);
+    const newItem = addImage(dataUrl, img.naturalWidth, img.naturalHeight, cx - dispW / 2, cy - dispH / 2);
+    // v7.0.37 — P1-8: the pasted capture used to be able to land mostly
+    // OFF SCREEN. The paste button lives in the bottom-left, so a 720px
+    // capture centred on the cursor had its left half and bottom edge
+    // outside the viewport, and there was no revealItem-style helper to
+    // bring it back. Pan (never zoom) if any part of it is out of view.
+    try { revealItem(newItem); } catch (e) {}
     // Close the result panel and free the canvas (already saved to a
     // PNG data URL, so we don't need to keep the live canvas around).
     captureResultPanel.classList.remove('show');
@@ -33791,13 +34050,11 @@ function restoreBoard(data, append) {
     el.className = 'item';
     let mediaEl;
     if (d.isVideo) {
-      mediaEl = document.createElement('video');
       // v6.3.6: lazy video — if _lazyEntry is set, use empty src.
       // The real blob URL is extracted on first user interaction via _activateLazyVideo.
-      mediaEl.src = d._lazyEntry ? '' : d.src;
-      mediaEl.playsInline = true;
-      mediaEl.loop = true;
-      mediaEl.muted = true;
+      // v7.0.37 — P2: shared builder. This is the path that used to load a
+      // kpak ProRes into a silent black frame; it now reports the codec.
+      mediaEl = makeVideoElement(d._lazyEntry ? '' : d.src, { preload: 'none' });
       // R93: preload='none' during batch restore to prevent the browser
       // from attempting to decode video headers for ALL blob-backed videos
       // simultaneously. Each blob-backed video is fully in memory, so even
@@ -34288,10 +34545,55 @@ function scheduleAutoSave() {
     }
   }, 5000);
 }
+// v7.0.37 — P2. scheduleAutoSave() has been WRITING 'krafted_autosave' all
+// along; this function was the only reader and v6.5.0 turned it into `return`.
+// The result was a silent lie: the app keeps autosaving, so a crash looks
+// recoverable, but a reload comes up empty and the board is gone.
+// AUTO-restoring is what v6.5.0 deliberately removed (it left broken
+// placeholder state behind), so instead we surface the autosave and let the
+// user decide — recoverable when they need it, out of the way when they don't.
+const AUTOSAVE_KEY = 'krafted_autosave';
+function readAutoSave() {
+  try {
+    const raw = (window.KraftedStorage && window.KraftedStorage.getItemSync(AUTOSAVE_KEY)) || localStorage.getItem(AUTOSAVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.items)) return null;
+    return data;
+  } catch (e) { return null; }
+}
+function discardAutoSave() {
+  try {
+    localStorage.removeItem(AUTOSAVE_KEY);
+    if (window.KraftedStorage) window.KraftedStorage.removeItem(AUTOSAVE_KEY).catch(function(){});
+  } catch (e) {}
+}
 function loadAutoSave() {
-  // v6.5.0: Startup autosave restore disabled — always starts clean.
-  // User loads kpak manually via Load button.
-  return;
+  const data = readAutoSave();
+  if (!data) return;
+  const n = (data.items || []).length;
+  if (n === 0) { discardAutoSave(); return; }
+  try {
+    restoreBoard(data, false);
+    hideWelcome();
+    toast('Restored autosave · ' + n + ' items — save it to a .kpak now');
+  } catch (e) {
+    console.warn('[AUTOSAVE] restore failed:', e);
+    toast('Autosave could not be restored: ' + (e.message || 'unknown'));
+  }
+}
+// Called once at startup: if an autosave exists, put a Restore / Discard
+// choice on the welcome screen instead of silently throwing the work away.
+function offerAutoSave() {
+  const data = readAutoSave();
+  if (!data) return;
+  const n = (data.items || []).length;
+  if (n === 0) { discardAutoSave(); return; }
+  const bar = document.getElementById('welcome-autosave');
+  const label = document.getElementById('welcome-autosave-label');
+  if (!bar || !label) return;
+  label.textContent = n + ' unsaved item' + (n === 1 ? '' : 's') + ' from your last session';
+  bar.style.display = 'flex';
 }
 
 
@@ -34318,6 +34620,10 @@ window.addEventListener('load', async () => {
   updateAltPanBadge();
   // v7.0.29: fill in the board-pen pack/exit hint on first paint
   if (typeof refreshDrawPackHint === 'function') refreshDrawPackHint();
+
+  // v7.0.37 — P2: the autosave IS being written; stop hiding that fact.
+  // Offer it back instead of silently starting empty.
+  offerAutoSave();
 
   // v6.8.28: warn before closing/reloading while saving or if board is dirty.
   // This reduces the chance of losing the .kpak file if the tab closes during
