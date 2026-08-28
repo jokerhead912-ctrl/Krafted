@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.33</title>
+<title>Krafted v7.0.34</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4083,7 +4083,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.33';
+var KRAFTED_VERSION = '7.0.34';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -5272,7 +5272,7 @@ function _updateFrameStepUI(item, time) {
     if (el._fsIbFcur) el._fsIbFcur.textContent = 'F ' + fIdx2;
     if (el._fsIbFtot) el._fsIbFtot.textContent = '/ ' + fTotal2;
     if (el._fsIbTime) el._fsIbTime.textContent = ts2;
-    if (el._fsIbFps) el._fsIbFps.textContent = fps + ' fps';
+    if (el._fsIbFps) el._fsIbFps.textContent = formatFpsLabel(fps) + ' fps';
   }
 }
 
@@ -9046,6 +9046,66 @@ function applyTextProps(tx) {
 
 // ==== media-player.js ====
 
+// ── v7.0.34: frame-rate helpers ─────────────────────────────────────────
+// The old detection did Math.round(totalVideoFrames / duration), which
+// cannot represent 23.976 / 29.97 / 59.94 at all — it maps them onto
+// 24 / 30 / 60. Those are not exotic rates: they are what a film scan, an
+// NTSC broadcast master and most online screeners actually run at. Being
+// 0.1% off sounds harmless, but a frame comment anchored with the wrong
+// rate drifts a full frame every ~10 seconds of a 23.976 clip, so notes
+// written against "frame 1436" land somewhere else on replay.
+var _FPS_STANDARDS = [23.976, 24, 25, 29.97, 30, 47.952, 48, 50, 59.94, 60, 100, 120];
+function snapFpsToStandard(raw, frames) {
+  if (!isFinite(raw) || raw <= 0) return 24;
+  var best = raw, bestD = Infinity;
+  for (var i = 0; i < _FPS_STANDARDS.length; i++) {
+    var d = Math.abs(_FPS_STANDARDS[i] - raw) / raw;
+    if (d < bestD) { bestD = d; best = _FPS_STANDARDS[i]; }
+  }
+  // totalVideoFrames / duration is a noisy estimate: the browser counts
+  // dropped and repeated frames, and a 10-second clip is quantised to
+  // ~0.1 fps of resolution. So only trust the snap when the sample can
+  // actually resolve it:
+  //   * within 0.4%              → unambiguous, always snap
+  //   * within 2% and >= 1000
+  //     frames counted           → long enough that 23.976 vs 24 (0.1%
+  //                                apart) is a real measurement, not noise
+  // Otherwise hand back the raw estimate; the user can set it on the chip.
+  if (bestD <= 0.004) return best;
+  if (frames && frames >= 1000 && bestD <= 0.02) return best;
+  return Math.round(raw * 1000) / 1000;
+}
+// Chip label: 24 → "24", 23.976 → "23.976", 29.97 → "29.97".
+function formatFpsLabel(f) {
+  if (!isFinite(f)) return '—';
+  var r = Math.round(f);
+  if (Math.abs(f - r) < 1e-6) return String(r);
+  return String(Math.round(f * 1000) / 1000);
+}
+// ONE detection implementation. There were FIVE copies of this heuristic
+// scattered through the file — the fps chip, the loadedmetadata handler,
+// the right-panel label, the frame-step buttons and the arrow-key
+// stepping — and they had drifted apart: three of them still guessed the
+// rate from the pixel height (h >= 2160 → 60fps), and all five rounded.
+// Fixing only the chip would have left the others reporting 24 for a
+// 23.976 clip, so a comment anchored by the chip would still be stepped
+// somewhere else by the arrow keys. Every path now lands here.
+// Returns a rate clamped to [12,120]; falls back to 24 (film / animation
+// review) when the browser cannot tell us anything.
+function detectVideoFps(videoEl) {
+  var detected = 0;
+  try {
+    if (videoEl && typeof videoEl.getVideoPlaybackQuality === 'function') {
+      var q = videoEl.getVideoPlaybackQuality();
+      if (q && q.totalVideoFrames > 0 && videoEl.duration > 0) {
+        detected = snapFpsToStandard(q.totalVideoFrames / videoEl.duration,
+                                     q.totalVideoFrames);
+      }
+    }
+  } catch (e) {}
+  if (!detected || detected <= 0 || detected > 120) detected = 24;
+  return Math.max(12, Math.min(120, detected));
+}
 
 function buildMediaControls(el, mediaEl, isVideo, isGif) {
   el.classList.add('has-media');
@@ -11314,7 +11374,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     playerSnapBtn.style.opacity = '0.4';
     var origTime = mediaEl.currentTime;
     pushUndo();
-    var SNAP_W = 0, snapped = 0;
+    var SNAP_W = 0, snapped = 0;   // 0 = the v7.0.34 default cap (1280)
     for (var i = 0; i < newFrames.length; i++) {
       var frame2 = newFrames[i];
       var targetTime = Math.max(0, Math.min(mediaEl.duration || 0, frame2 / fps2));
@@ -12310,7 +12370,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     snapBtn.disabled = true;
     var origTime = mediaEl.currentTime;
     pushUndo();
-    var SNAP_W = 0, snapped = 0; // 0 = use video native resolution
+    var SNAP_W = 0, snapped = 0;   // 0 = the v7.0.34 default cap (1280)
     for (var i = 0; i < newFrames.length; i++) {
       var frame = newFrames[i];
       var targetTime = Math.max(0, Math.min(mediaEl.duration || 0, frame / fps));
@@ -13597,7 +13657,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     if (!isFinite(mediaEl.duration)) return;
     tDur.textContent = fmt(mediaEl.duration);
     if (tCur) tCur.textContent = fmt(mediaEl.currentTime);
-    if (fpsChip) fpsChip.textContent = getFps() + ' fps';
+    if (fpsChip) fpsChip.textContent = formatFpsLabel(getFps()) + ' fps';
   }
   // First paint: even if duration hasn't loaded yet, show what we have so the
   // trim row doesn't look empty while the user waits for metadata.
@@ -13624,30 +13684,19 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   if (isVideo) {
     fpsChip = document.createElement('span');
     fpsChip.className = 'media-fps-chip';
-    fpsChip.textContent = '30 fps';
+    fpsChip.textContent = '24 fps';
     fpsChip.setAttribute('data-mode', 'auto');
-    fpsChip.title = 'Frame rate. Click to cycle 24→25→30→50→60→auto. Right-click to reset to auto-detect.';
+    fpsChip.title = 'Frame rate. Click to cycle 23.976→24→25→29.97→30→50→59.94→60→auto. Right-click to reset to auto-detect.';
     ctrlsRow.appendChild(fpsChip);
     // Run the actual detection heuristic (extract of the same logic used
     // on metadata load + chip click). Returns a number clamped to [12,120].
     function _runFpsDetection() {
-      var detectedFps = 30;
-      try {
-        if (typeof mediaEl.getVideoPlaybackQuality === 'function') {
-          var q = mediaEl.getVideoPlaybackQuality();
-          if (q && q.totalVideoFrames > 0 && mediaEl.duration > 0) {
-            detectedFps = Math.round(q.totalVideoFrames / mediaEl.duration);
-          }
-        }
-      } catch (e) {}
-      if (!detectedFps || detectedFps <= 0) {
-        var h = mediaEl.videoHeight || mediaEl.height || 720;
-        if (h >= 2160) detectedFps = 60;
-        else if (h >= 1080) detectedFps = 30;
-        else if (h >= 720) detectedFps = 30;
-        else detectedFps = 24;
-      }
-      return Math.max(12, Math.min(120, detectedFps));
+      // v7.0.34: was a private copy of the heuristic that rounded away
+      // 23.976 / 29.97 / 59.94 and, failing that, guessed the rate from
+      // the pixel height (h >= 2160 → 60fps). Resolution says nothing
+      // about frame rate, and for a 4K/24p film scan that guess anchored
+      // every frame comment to the wrong frame. Now one implementation.
+      return detectVideoFps(mediaEl);
     }
     // Refresh the chip's text + mode indicator. Centralized so any code
     // path that changes _kraftedFps (loadedmetadata, click, right-click,
@@ -13655,15 +13704,20 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     function _refreshFpsChip() {
       if (!fpsChip) return;
       var f = getFps();
-      fpsChip.textContent = f + ' fps';
+      fpsChip.textContent = formatFpsLabel(f) + ' fps';
       // Mark manual if user explicitly set it, otherwise auto.
       fpsChip.setAttribute('data-mode', mediaEl._kraftedFpsManual ? 'manual' : 'auto');
     }
-    // Cycle: index 0..4 = manual values, index 5 = auto-detect.
+    // Cycle: index 0..7 = manual values, index 8 = auto-detect.
     // Tracking the index on the media element so the next click on the
     // SAME video continues from where the last click left off (rather
     // than always starting at the same value).
-    var _FPS_CYCLE = [24, 25, 30, 50, 60];
+    // v7.0.34: added the NTSC rates. The cycle used to be
+    // [24, 25, 30, 50, 60] — there was no way to select 23.976, the single
+    // most common delivery rate for film and animation, nor 29.97 for NTSC
+    // broadcast. Longer to click through, but right-click still snaps
+    // straight back to auto-detect.
+    var _FPS_CYCLE = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
     var _FPS_AUTO_IDX = _FPS_CYCLE.length;  // sentinel: "auto"
     function _nextCycleIndex() {
       if (typeof mediaEl._kraftedFpsCycleIdx !== 'number') {
@@ -13694,7 +13748,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       mediaEl._kraftedFpsManual = true;
       _refreshFpsChip();
       refreshTimeLabels();
-      if (typeof toast === 'function') toast('Frame rate: ' + f + ' fps (manual)');
+      if (typeof toast === 'function') toast('Frame rate: ' + formatFpsLabel(f) + ' fps (manual)');
     }
     function _setAutoFps() {
       try { delete mediaEl._kraftedFps; } catch (e) { mediaEl._kraftedFps = undefined; }
@@ -13704,7 +13758,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       mediaEl._kraftedFpsCycleIdx = undefined;
       _refreshFpsChip();
       refreshTimeLabels();
-      if (typeof toast === 'function') toast('Frame rate: ' + mediaEl._kraftedFps + ' fps (auto)');
+      if (typeof toast === 'function') toast('Frame rate: ' + formatFpsLabel(mediaEl._kraftedFps) + ' fps (auto)');
     }
     fpsChip.addEventListener('click', function(ev) {
       ev.stopPropagation(); ev.preventDefault();
@@ -13893,29 +13947,15 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       // immediately (not just "30 fps" until the user presses an arrow key).
       // Same heuristic as the FPS-chip click handler above.
       if (!mediaEl._kraftedFps) {
-        var detectedFps = 30;
-        try {
-          if (typeof mediaEl.getVideoPlaybackQuality === 'function') {
-            var q = mediaEl.getVideoPlaybackQuality();
-            if (q && q.totalVideoFrames > 0 && mediaEl.duration > 0) {
-              detectedFps = Math.round(q.totalVideoFrames / mediaEl.duration);
-            }
-          }
-        } catch (e) {}
-        if (!detectedFps || detectedFps <= 0) {
-          var h = mediaEl.videoHeight || 0;
-          if (h >= 2160) detectedFps = 60;
-          else if (h >= 1080) detectedFps = 30;
-          else if (h >= 720) detectedFps = 30;
-          else detectedFps = 24;
-        }
-        mediaEl._kraftedFps = Math.max(12, Math.min(120, detectedFps));
+        // v7.0.34: was copy #2 of the heuristic (round + guess from
+        // height). Same single implementation as everything else now.
+        mediaEl._kraftedFps = detectVideoFps(mediaEl);
         // On initial metadata load this is auto-detected, not manually set.
         mediaEl._kraftedFpsManual = false;
       }
       // Round 58: use the helper so data-mode gets set too.
       if (typeof _refreshFpsChip === 'function') _refreshFpsChip();
-      else if (fpsChip) fpsChip.textContent = getFps() + ' fps';
+      else if (fpsChip) fpsChip.textContent = formatFpsLabel(getFps()) + ' fps';
       // If the right panel is open, refresh the panel's FPS label too
       if (typeof refreshVideoPanelTimes === 'function') refreshVideoPanelTimes();
       refreshInPlayerTrimUI();
@@ -13989,7 +14029,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
         if (_ibFcurEl && (force || _fIdx !== _p0LastFrame)) _ibFcurEl.textContent = 'F ' + _fIdx;
         if (_ibFtotEl && (force || _fTotal !== _p0LastFrameTotal)) _ibFtotEl.textContent = '/ ' + _fTotal;
         if (_ibTimeEl && (force || _tc !== _p0LastTc)) _ibTimeEl.textContent = _tc;
-        if (_ibFpsEl && (force || _fps !== _p0LastFps)) _ibFpsEl.textContent = _fps + ' fps';
+        if (_ibFpsEl && (force || _fps !== _p0LastFps)) _ibFpsEl.textContent = formatFpsLabel(_fps) + ' fps';
 
         _p0LastFrame = _fIdx;
         _p0LastFrameTotal = _fTotal;
@@ -14217,7 +14257,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
             if (_ibFcur2) _ibFcur2.textContent = 'F ' + _fIdx;
             if (_ibFtot2) _ibFtot2.textContent = '/ ' + _fTotal;
             if (_ibTime2) _ibTime2.textContent = _timeStr;
-            if (_ibFps2)  _ibFps2.textContent = _fps + ' fps';
+            if (_ibFps2)  _ibFps2.textContent = formatFpsLabel(_fps) + ' fps';
           }
         }
       } else {
@@ -14570,14 +14610,14 @@ function refreshVideoPanelTimes() {
   var fpsLabel = document.getElementById('video-frame-rate-label');
   if (fpsLabel) {
     var fps = getCurrentFps();
-    fpsLabel.textContent = fps + ' fps';
+    fpsLabel.textContent = formatFpsLabel(fps) + ' fps';
   }
   // Also refresh the in-player controls' FPS chip and the current-time label
   // for the selected video, so the in-player UI matches the panel.
   try {
     if (it.el) {
       var inPlayerFps = it.el.querySelector && it.el.querySelector('.media-fps-chip');
-      if (inPlayerFps) inPlayerFps.textContent = (v && v._kraftedFps ? v._kraftedFps : 30) + ' fps';
+      if (inPlayerFps) inPlayerFps.textContent = formatFpsLabel(v && v._kraftedFps ? v._kraftedFps : 24) + ' fps';
       // The in-player current-time label has its own per-element time mode,
       // but the user can re-toggle it independently. We don't overwrite it here
       // to preserve their per-video preference.
@@ -14604,28 +14644,13 @@ function refreshVideoPanelTimes() {
         ev.stopPropagation();
         var it = getSelectedVideoItem();
         if (!it || !it.video) return;
-        // Re-detect FPS using the same heuristic as elsewhere in the file
+        // v7.0.34: was copy #3 — round + "guess the rate from the pixel
+        // height". Now the same implementation as the in-player chip.
         try { delete it.video._kraftedFps; } catch (e) { it.video._kraftedFps = undefined; }
-        var detected = 30;
-        try {
-          if (typeof it.video.getVideoPlaybackQuality === 'function') {
-            var q = it.video.getVideoPlaybackQuality();
-            if (q && q.totalVideoFrames > 0 && it.video.duration > 0) {
-              detected = Math.round(q.totalVideoFrames / it.video.duration);
-            }
-          }
-        } catch (e) {}
-        if (!detected || detected <= 0) {
-          var h = it.video.videoHeight || 720;
-          if (h >= 2160) detected = 60;
-          else if (h >= 1080) detected = 30;
-          else if (h >= 720) detected = 30;
-          else detected = 24;
-        }
-        it.video._kraftedFps = Math.max(12, Math.min(120, detected));
-        t.textContent = it.video._kraftedFps + ' fps';
+        it.video._kraftedFps = detectVideoFps(it.video);
+        t.textContent = formatFpsLabel(it.video._kraftedFps) + ' fps';
         refreshVideoPanelTimes();
-        if (typeof toast === 'function') toast('Frame rate: ' + it.video._kraftedFps + ' fps');
+        if (typeof toast === 'function') toast('Frame rate: ' + formatFpsLabel(it.video._kraftedFps) + ' fps');
       }
     });
   }
@@ -14925,7 +14950,7 @@ function videoAnnoAddComment(text, targetItem) {
   // was downscaling a 1080p/4K source to a fixed 800px cap. Now we pass
   // maxW=0 so videoAnnoCaptureSnapshot uses the video's full native
   // dimensions, keeping strokes + text sharp.
-  const SNAPPY_SNAP_MAX_W = 0;
+  const SNAPPY_SNAP_MAX_W = 0;   // 0 = the v7.0.34 default cap (1280)
   // Round 10 + R86 fix: use the already-computed `frame` from the target
   // video (line above) instead of videoAnnoGetCurrentFrame() which uses
   // videoAnnoGetSelected() — with multiple MOV players on the board the
@@ -15052,10 +15077,60 @@ function videoAnnoAddComment(text, targetItem) {
 // as a single self-contained image (no overlay needed at view time).
 // `strokes` is an array of {type, color, size, points} where points
 // are normalized to [0,1] (relative to the captured frame).
+//
+// v7.0.34 — SNAPSHOT WIDTH IS CAPPED. The old line was
+//     effectiveMaxW = Math.max(maxW || 0, w)
+// which makes the caller's maxW a NO-OP: 0 (or anything below the video
+// width) is floored up to the native width. Every call site passes 0, so
+// a 3840-wide clip produced a ~3840px JPEG ≈ 0.5–1 MB of base64 per
+// comment. captureSnapshot() stores each one inside every undo step, so
+// five comments on 4K footage blew past the 300 MB undo budget and
+// Ctrl+Z quietly started discarding the oldest steps.
+//   0 / negative  → VIDEO_SNAP_DEFAULT_MAX_W (the normal case)
+//   n > 0         → min(n, VIDEO_SNAP_HARD_MAX_W): a caller may ask for
+//                   more detail (the frame-comment export does) but never
+//                   for unbounded.
+// We never upscale past the source width either way.
+var VIDEO_SNAP_DEFAULT_MAX_W = 1280;
+var VIDEO_SNAP_HARD_MAX_W = 2048;
+// Undo-snapshot byte budget for one comment thumbnail, measured in
+// base64 characters (~4/3 of the JPEG's real bytes). 260k chars ≈ 195 KB
+// of JPEG — still crisp at 1280px, and ~5x cheaper than the 4K original.
+var VIDEO_SNAP_MAX_B64 = 260000;
+// Re-encode a snapshot canvas down until it fits the budget. A comment
+// thumbnail that is 30% smaller is invisible; an undo step that is 5x
+// bigger is not.
+function _snapshotToBudgetedJpeg(canvas, quality) {
+  var url = '';
+  try { url = canvas.toDataURL('image/jpeg', quality); } catch (e) { return ''; }
+  if (!url || url.length <= VIDEO_SNAP_MAX_B64 || canvas.width <= 320) return url;
+  try {
+    var k = Math.min(0.95, Math.sqrt(VIDEO_SNAP_MAX_B64 / url.length));
+    var s2 = document.createElement('canvas');
+    s2.width = Math.max(2, Math.round(canvas.width * k));
+    s2.height = Math.max(2, Math.round(canvas.height * k));
+    var c2 = s2.getContext('2d');
+    if (!c2) return url;
+    c2.imageSmoothingEnabled = true;
+    if ('imageSmoothingQuality' in c2) c2.imageSmoothingQuality = 'high';
+    c2.drawImage(canvas, 0, 0, s2.width, s2.height);
+    // Drop the quality a notch as well — the resize alone rarely gets a
+    // noisy 4K frame under budget.
+    return s2.toDataURL('image/jpeg', Math.max(0.55, quality - 0.07)) || url;
+  } catch (e) {
+    return url;
+  }
+}
 function videoAnnoCaptureSnapshot(videoEl, maxW, strokes, optItem) {
   if (!videoEl || !videoEl.videoWidth || !videoEl.videoHeight) return '';
   // Don't try to capture before the video has data
   if (videoEl.readyState < 2) return '';
+
+  // v7.0.34: resolve the width budget ONCE, up front, so the zoomed
+  // "paper" path below is bounded by the same rule as the normal path.
+  var _snapCap = (maxW && maxW > 0)
+    ? Math.min(maxW, VIDEO_SNAP_HARD_MAX_W)
+    : VIDEO_SNAP_DEFAULT_MAX_W;
 
   // v7.0.11: ZOOMED "PAPER" CAPTURE — when the video's internal zoom/pan
   // is active (Alt+middle-drag), the comment snapshot should capture what
@@ -15097,7 +15172,10 @@ function videoAnnoCaptureSnapshot(videoEl, maxW, strokes, optItem) {
         let scale = vw / Math.max(1, R.width);
         let pw = Math.round(wrapW * scale);
         let ph = Math.round(wrapH * scale);
-        const MAX_DIM = 4096;
+        // v7.0.34: was a flat 4096, which let a zoomed 4K capture emit a
+        // ~4 MB base64 string into an undo snapshot. Same budget as the
+        // normal path — a comment thumbnail does not need 4K.
+        const MAX_DIM = Math.max(640, _snapCap);
         if (pw > MAX_DIM || ph > MAX_DIM) {
           const k = MAX_DIM / Math.max(pw, ph);
           scale *= k;
@@ -15122,7 +15200,7 @@ function videoAnnoCaptureSnapshot(videoEl, maxW, strokes, optItem) {
               pctx.drawImage(annoCvs, 0, 0, annoCvs.width, annoCvs.height, 0, 0, pc.width, pc.height);
             } catch (e2) { /* canvas blit failed — keep the plain frame */ }
           }
-          return pc.toDataURL('image/jpeg', 0.82);
+          return _snapshotToBudgetedJpeg(pc, 0.82);
         }
       }
     } catch (e) {
@@ -15133,11 +15211,12 @@ function videoAnnoCaptureSnapshot(videoEl, maxW, strokes, optItem) {
 
   const w = videoEl.videoWidth;
   const h = videoEl.videoHeight;
-  // Use the video's native resolution as the floor — never downscale
-  // below the source dimensions. Passing maxW=0 means "no downscale at
-  // all" (the captured snapshot is 1:1 with the video source). This
-  // keeps annotations crisp and text legible in the comment list.
-  const effectiveMaxW = Math.max(maxW || 0, w);
+  // v7.0.34: the old line was `Math.max(maxW || 0, w)` — i.e. "the video's
+  // native resolution is the FLOOR", which silently deleted every caller's
+  // maxW (they all pass 0) and meant a 4K clip always produced a 4K JPEG.
+  // Now the cap is the ceiling and the source width is only a ceiling too:
+  // 4K source + 1280 cap → 1280. 720p source + 1280 cap → 720 (no upscale).
+  const effectiveMaxW = Math.min(_snapCap, w);
   const ratio = Math.min(1, effectiveMaxW / w);
   const cw = Math.max(2, Math.round(w * ratio));
   const ch = Math.max(2, Math.round(h * ratio));
@@ -15273,7 +15352,9 @@ function videoAnnoCaptureSnapshot(videoEl, maxW, strokes, optItem) {
     // JPEG at 0.82 quality — bumped from 0.78 so the annotations stay
     // legible in the export. Strokes are vector-ish so JPEG artifacts
     // around them are more visible than around a photo.
-    return c.toDataURL('image/jpeg', 0.82);
+    // v7.0.34: then re-encode down to the undo-snapshot byte budget if the
+    // frame came out heavier than VIDEO_SNAP_MAX_B64.
+    return _snapshotToBudgetedJpeg(c, 0.82);
   } catch (e) {
     return '';
   }
@@ -15419,7 +15500,10 @@ async function videoAnnoExportComments() {
   // screens and stays legible when zoomed in. This is ~3x the previous
   // resolution (was 720px) and matches the user's request for a "bigger
   // preview that's easy to read".
-  const EXPORT_SNAP_MAX_W = 0; // 0 = use video native resolution
+  // v7.0.34: the frame-comment export writes real files, not undo steps,
+  // so it is the one caller that legitimately wants more pixels than the
+  // 1280 default. 1920 still keeps a 4K clip from emitting 1 MB per frame.
+  const EXPORT_SNAP_MAX_W = 1920;
   const captureOne = (c) => new Promise((resolve) => {
     // For each comment, seek the video to its exact time then capture.
     // We chain via rAF so the video has time to actually paint the new
@@ -16407,7 +16491,7 @@ async function videoAnnoSendToBoard() {
   const v = item.video;
   const prevTime = v.currentTime;
   const wasPaused = v.paused;
-  const SNAP_MAX_W = 0; // 0 = use video native resolution
+  const SNAP_MAX_W = 0;   // 0 = the v7.0.34 default cap (1280)
   const captureOne = (c) => new Promise((resolve) => {
     // v5.5.9: re-composite annoStrokes on top of snapshot.
     // c.snapshot may not have text annotations baked in if the
@@ -17580,18 +17664,8 @@ function videoStep(direction) {
   if (!v.paused) v.pause();
   // Detect or reuse FPS (same heuristic as keyboard frame-step)
   if (!v._kraftedFps) {
-    let fps = 30;
-    if (v.getVideoPlaybackQuality) {
-      try {
-        const q = v.getVideoPlaybackQuality();
-        if (q.totalVideoFrames > 0 && v.duration > 0) fps = Math.round(q.totalVideoFrames / v.duration);
-      } catch (err) {}
-    }
-    if (fps <= 0 || fps > 120) {
-      const h = v.videoHeight || 0;
-      if (h >= 1080) fps = 30; else if (h >= 720) fps = 30; else fps = 24;
-    }
-    v._kraftedFps = Math.max(12, Math.min(120, fps));
+    // v7.0.34: was copy #4 — round + guess from height. One implementation.
+    v._kraftedFps = detectVideoFps(v);
   }
   const frameTime = 1 / v._kraftedFps;
   const target = direction > 0
@@ -18736,7 +18810,7 @@ function updatePropsPanel() {
       updateVideoControls(item);
       // Update the FPS label and re-render the time labels in the current mode
       var fpsLabel = document.getElementById('video-frame-rate-label');
-      if (fpsLabel) fpsLabel.textContent = (item.video._kraftedFps || 30) + ' fps';
+      if (fpsLabel) fpsLabel.textContent = formatFpsLabel(item.video._kraftedFps || 24) + ' fps';
       refreshVideoPanelTimes();
     }
   }
@@ -22529,15 +22603,8 @@ document.addEventListener('keydown', e => {
       var vid = vidItem.video;
       if (!vid.paused) vid.pause();
       if (!vid._kraftedFps) {
-        var detectedFps = 30;
-        if (vid.getVideoPlaybackQuality) {
-          try { var q = vid.getVideoPlaybackQuality(); if (q.totalVideoFrames > 0 && vid.duration > 0) detectedFps = Math.round(q.totalVideoFrames / vid.duration); } catch(ex) {}
-        }
-        if (detectedFps <= 0 || detectedFps > 120) {
-          var h = vid.videoHeight || 0;
-          if (h >= 2160) detectedFps = 60; else if (h >= 1080) detectedFps = 30; else if (h >= 720) detectedFps = 30; else detectedFps = 24;
-        }
-        vid._kraftedFps = Math.max(12, Math.min(120, detectedFps));
+        // v7.0.34: was copy #5 — round + guess from height. One implementation.
+        vid._kraftedFps = detectVideoFps(vid);
       }
       var frameTime = 1 / vid._kraftedFps;
       var frames = e.shiftKey ? 10 : 1;
@@ -25336,9 +25403,95 @@ function colorWheelDrag(e, maskId, wheelEl) {
   document.addEventListener('mouseup', upHandler);
 }
 
+// ── Grain, rendered on canvas (v7.0.34) ─────────────────────────────────
+// On screen, grain is a DOM overlay (.cgi-grain): a tiled SVG feTurbulence
+// fractalNoise at baseFrequency 0.9 / 4 octaves, a 100px tile,
+// mix-blend-mode: overlay, opacity = grain/200. NEITHER canvas renderer
+// drew it — so the same board looked grainy on screen and clean in a
+// screenshot and in an exported PNG. That is the "screenshot and export
+// don't match" complaint.
+// This approximates the SVG filter: four octaves of smoothly interpolated
+// value noise baked into a 100px tile, composited with 'overlay' at the
+// same opacity curve. A tile is generated once and reused.
+var _GRAIN_TILE = null;
+function _getGrainTile() {
+  if (_GRAIN_TILE) return _GRAIN_TILE;
+  var N = 100;
+  var c = document.createElement('canvas');
+  c.width = N; c.height = N;
+  var ctx = c.getContext('2d');
+  if (!ctx) { _GRAIN_TILE = c; return c; }
+  // 4 octaves, halving amplitude — the same ladder feTurbulence walks.
+  var octaves = [{ f: 8, a: 0.5 }, { f: 16, a: 0.25 }, { f: 32, a: 0.15 }, { f: 64, a: 0.10 }];
+  var lattices = octaves.map(function (o) {
+    var vals = new Float32Array(o.f * o.f);
+    for (var i = 0; i < vals.length; i++) vals[i] = Math.random();
+    return { size: o.f, vals: vals };
+  });
+  // Bilinear sample with wrapping, so the tile stitches seamlessly
+  // (the SVG uses stitchTiles="stitch" for exactly this reason).
+  function sample(L, x, y) {
+    var fx = x * L.size, fy = y * L.size;
+    var x0 = Math.floor(fx), y0 = Math.floor(fy);
+    var tx = fx - x0, ty = fy - y0;
+    // smoothstep: raw bilinear value noise looks like soft blocks
+    var sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    var x1 = (x0 + 1) % L.size, y1 = (y0 + 1) % L.size;
+    x0 = x0 % L.size; y0 = y0 % L.size;
+    var v00 = L.vals[y0 * L.size + x0], v10 = L.vals[y0 * L.size + x1];
+    var v01 = L.vals[y1 * L.size + x0], v11 = L.vals[y1 * L.size + x1];
+    var a = v00 + (v10 - v00) * sx;
+    var b = v01 + (v11 - v01) * sx;
+    return a + (b - a) * sy;
+  }
+  var img = ctx.createImageData(N, N);
+  var d = img.data;
+  var norm = 0;
+  for (var q = 0; q < octaves.length; q++) norm += octaves[q].a;
+  for (var y = 0; y < N; y++) {
+    for (var x = 0; x < N; x++) {
+      var v = 0;
+      for (var o = 0; o < octaves.length; o++) {
+        v += sample(lattices[o], x / N, y / N) * octaves[o].a;
+      }
+      var g = Math.max(0, Math.min(255, Math.round((v / norm) * 255)));
+      var i2 = (y * N + x) * 4;
+      d[i2] = g; d[i2 + 1] = g; d[i2 + 2] = g; d[i2 + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  _GRAIN_TILE = c;
+  return c;
+}
+// Draw an item's grain. Call INSIDE the item's local transform (translated
+// to the item centre, rotated, flipped) — it fills (-iw/2, -ih/2, iw, ih)
+// and inherits that transform, exactly like the DOM overlay does.
+function drawGrainOnCanvas(targetCtx, item, iw, ih) {
+  var g = item.grain || 0;
+  if (!g || g <= 0 || iw <= 0 || ih <= 0) return;
+  var tile = _getGrainTile();
+  if (!tile || !tile.width) return;
+  var pat = null;
+  try { pat = targetCtx.createPattern(tile, 'repeat'); } catch (e) { return; }
+  if (!pat) return;
+  targetCtx.save();
+  // Same blend + same opacity curve as the .cgi-grain CSS.
+  targetCtx.globalCompositeOperation = 'overlay';
+  targetCtx.globalAlpha = Math.min(1, g / 200);
+  targetCtx.fillStyle = pat;
+  targetCtx.fillRect(-iw / 2, -ih / 2, iw, ih);
+  targetCtx.restore();
+}
+
 // Draw masks on export/capture canvas
-function drawMasksOnCanvas(targetCtx, item, iw, ih) {
+// v7.0.34: `ss` supersamples the intermediate canvases. Both renderers run
+// at scale=2 — the drawing units are screen px while the backing store is
+// 2x — so a mask composited at 1x came out visibly soft. Pass the scale.
+function drawMasksOnCanvas(targetCtx, item, iw, ih, ss) {
   if (!item.masks || !item.img || !item.src) return;
+  const k = (ss && ss > 1) ? ss : 1;
+  const W = Math.max(1, Math.round(iw * k));
+  const H = Math.max(1, Math.round(ih * k));
   item.masks.forEach(mask => {
     if (!mask.enabled) return;
     let maskCanvas = null;
@@ -25351,42 +25504,45 @@ function drawMasksOnCanvas(targetCtx, item, iw, ih) {
     if (!maskCanvas) return;
     // Create adjusted image canvas
     const adjCanvas = document.createElement('canvas');
-    adjCanvas.width = iw; adjCanvas.height = ih;
+    adjCanvas.width = W; adjCanvas.height = H;
     const adjCtx = adjCanvas.getContext('2d');
+    if (!adjCtx) return;
     // Draw image with object-fit: contain
     const img = item.img;
     const imgAspect = img.naturalWidth / img.naturalHeight;
     const elAspect = iw / ih;
     let drawW, drawH, dx, dy;
     if (imgAspect > elAspect) {
-      drawW = iw; drawH = iw / imgAspect; dx = 0; dy = (ih - drawH) / 2;
+      drawW = W; drawH = W / imgAspect; dx = 0; dy = (H - drawH) / 2;
     } else {
-      drawH = ih; drawW = ih * imgAspect; dy = 0; dx = (iw - drawW) / 2;
+      drawH = H; drawW = H * imgAspect; dy = 0; dx = (W - drawW) / 2;
     }
     adjCtx.filter = combineMaskFilter(item, mask);
     adjCtx.drawImage(img, dx, dy, drawW, drawH);
     adjCtx.filter = 'none';
     // Apply mask
     adjCtx.globalCompositeOperation = 'destination-in';
-    adjCtx.drawImage(maskCanvas, 0, 0, iw, ih);
+    adjCtx.drawImage(maskCanvas, 0, 0, W, H);
     adjCtx.globalCompositeOperation = 'source-over';
-    // Draw on target
-    targetCtx.drawImage(adjCanvas, -iw/2, -ih/2);
+    // Draw on target — always at the item's own size, whatever size the
+    // intermediate was built at.
+    targetCtx.drawImage(adjCanvas, -iw/2, -ih/2, iw, ih);
     // Apply tint overlay if set
     if (mask.tintColor) {
       const tintCanvas = document.createElement('canvas');
-      tintCanvas.width = iw; tintCanvas.height = ih;
+      tintCanvas.width = W; tintCanvas.height = H;
       const tintCtx = tintCanvas.getContext('2d');
+      if (!tintCtx) return;
       tintCtx.fillStyle = mask.tintColor;
-      tintCtx.fillRect(0, 0, iw, ih);
+      tintCtx.fillRect(0, 0, W, H);
       tintCtx.globalCompositeOperation = 'destination-in';
-      tintCtx.drawImage(maskCanvas, 0, 0, iw, ih);
+      tintCtx.drawImage(maskCanvas, 0, 0, W, H);
       tintCtx.globalCompositeOperation = 'source-over';
       tintCtx.globalAlpha = (mask.tintStrength || 50) / 100 * 0.6;
       // Use 'color' blend: preserve luminance, apply hue+saturation
       targetCtx.save();
       targetCtx.globalCompositeOperation = 'color';
-      targetCtx.drawImage(tintCanvas, -iw/2, -ih/2);
+      targetCtx.drawImage(tintCanvas, -iw/2, -ih/2, iw, ih);
       targetCtx.restore();
     }
   });
@@ -30166,8 +30322,9 @@ function renderExport(sx, sy, sw, sh) {
       const drawSrc = item.video || item.img;
       try { ctx.drawImage(drawSrc, -iw/2, -ih/2, iw, ih); } catch(e) {}
       ctx.filter = 'none';
-      // Mask overlays
-      drawMasksOnCanvas(ctx, item, iw, ih);
+      // Mask overlays — supersampled like captureArea's, since this canvas
+      // is also backed at 2x.
+      drawMasksOnCanvas(ctx, item, iw, ih, scale);
       // Vignette overlay
       if (item.vignette && item.vignette > 0) {
         const intensity = item.vignette / 100;
@@ -30177,6 +30334,9 @@ function renderExport(sx, sy, sw, sh) {
         ctx.fillStyle = vGrad;
         ctx.fillRect(-iw/2, -ih/2, iw, ih);
       }
+      // v7.0.34: grain — same call, same order as captureArea, so a
+      // screenshot and an export of the same pixels are identical.
+      try { drawGrainOnCanvas(ctx, item, iw, ih); } catch (e) {}
     } else if (item.el && item.el.classList.contains('todo-item')) {
       // Todo checklist — render as card on canvas
       ctx.fillStyle = '#1e1e2e';
@@ -30643,6 +30803,12 @@ function captureArea(sx, sy, sw, sh) {
         }
       } catch(e) {}
       ctx.filter = 'none';
+      // v7.0.34: masks were export-only. drawMasksOnCanvas() was written
+      // for renderExport and simply never called here, so a screenshot of
+      // a locally graded image came back ungraded while the exported PNG
+      // of the same pixels was graded. Supersample by `scale` — the
+      // drawing units are screen px but the backing store is 2x.
+      try { drawMasksOnCanvas(ctx, item, iw, ih, scale); } catch (e) {}
       // Vignette overlay (video only — applies to the video area, not the controls bar)
       if (item.vignette && item.vignette > 0) {
         const intensity = Math.min(item.vignette / 100, 2.0);
@@ -30655,6 +30821,11 @@ function captureArea(sx, sy, sw, sh) {
         ctx.fillStyle = vGrad;
         ctx.fillRect(-vigW/2, vigCy - vigH/2, vigW, vigH);
       }
+      // v7.0.34: grain, matching the .cgi-grain overlay the user sees.
+      // Before the controls bar on purpose — grain is a picture effect,
+      // so it should grit the frame and not the player UI. Neither
+      // renderer drew it at all before this.
+      try { drawGrainOnCanvas(ctx, item, iw, ih); } catch (e) {}
       // R50: render the visible controls bar as a dark gradient in the
       // .item's local frame (local Y from -ih/2+videoH to +ih/2). Two-stop
       // gradient + 1px top border matches the live .media-controls CSS.
@@ -30966,6 +31137,29 @@ function getPasteXY() {
 // Tries direct fetch first; if CORS-blocked, falls back to an image element load
 // (which works for most public images but won't give us the raw bytes — we use
 // a canvas to convert to data URL for persistence).
+//
+// v7.0.34: "we got a Blob" is NOT proof we got an image. Two ways the old
+// code produced an invisible item while the toast still said success:
+//   1. fetch(mode:'no-cors') → an OPAQUE response. res.ok is false,
+//      res.status is 0, and res.blob() resolves to a ZERO-BYTE blob without
+//      throwing. URL.createObjectURL(that) loads nothing at all.
+//   2. a server that answers 200 with text/html (error page, login wall,
+//      hotlink "no" gif replaced by a redirect). The bytes are real; they
+//      just aren't a picture.
+// _blobIsUsableImage() rejects both, mirroring _acceptImageResponse() in the
+// drag-in chain (which has had this check since v7.0.22).
+function _blobIsUsableImage(res, blob) {
+  if (!blob) return false;
+  // no-cors: the browser deliberately hides the body. There is never
+  // anything usable in here, no matter what the promise looks like.
+  if (res && res.type === 'opaque') return false;
+  if (res && typeof res.status === 'number' && res.status !== 0 && !res.ok) return false;
+  // Opaque responses report size 0. So do genuinely empty bodies.
+  if (!blob.size) return false;
+  // Only trust content-type when the server actually sent one we can read.
+  if (blob.type && blob.type.indexOf('image/') !== 0) return false;
+  return true;
+}
 function fetchImageFromURL(url, x, y) {
   console.log('[fetchImageFromURL] start:', url);
   try { hideWelcome(); } catch (err) {}
@@ -30975,10 +31169,14 @@ function fetchImageFromURL(url, x, y) {
     .then(res => {
       console.log('[fetchImageFromURL] fetch response status:', res.status);
       if (!res.ok) throw new Error('HTTP ' + res.status);
+      // Reject HTML error pages / login walls that answer 200.
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (ct && ct.indexOf('image/') !== 0) throw new Error('not an image (' + ct + ')');
       return res.blob();
     })
     .then(blob => {
       console.log('[fetchImageFromURL] got blob size:', blob.size);
+      if (!blob || !blob.size) throw new Error('empty image body');
       const reader = new FileReader();
       reader.onload = ev => {
         const img = new Image();
@@ -31006,19 +31204,34 @@ function fetchImageFromURL(url, x, y) {
         // Try fetch(no-cors) to get the bytes — opaque response still
         // gives us a Blob, which we convert to objectURL. This avoids
         // any future CORS check since objectURL is same-origin.
+        //
+        // v7.0.34: it "gives us a Blob" that is always 0 bytes. That was
+        // never a way to obtain pixels — it was a way to obtain an empty
+        // item plus a success toast. Keep the attempt (some servers DO
+        // send permissive CORS headers on the second request, e.g. after
+        // the <img> warmed a cache that returns Access-Control-Allow-Origin),
+        // but check what came back before trusting it.
         fetch(url, { mode: 'no-cors' })
-          .then(res => res.blob())
-          .then(blob => {
-            const objUrl = URL.createObjectURL(blob);
+          .then(res => res.blob().then(blob => ({ res: res, blob: blob })))
+          .then(function (out) {
+            if (!_blobIsUsableImage(out.res, out.blob)) {
+              throw new Error('no readable image bytes (opaque/empty response)');
+            }
+            const objUrl = URL.createObjectURL(out.blob);
             addImage(objUrl, img.naturalWidth, img.naturalHeight, x, y);
-            toast('Pasted image (hotlinked)');
+            toast('Pasted image from URL');
           })
           .catch(() => {
-            // Even blob conversion failed — fall back to direct URL.
-            // The browser's <img> cache will at least make re-renders
-            // not re-trigger CORS for this src.
+            // No bytes available — fall back to the raw URL. The <img>
+            // above DID load, so the pixels are real and the browser
+            // cache keeps re-renders cheap. What is NOT real is
+            // persistence: a remote URL cannot be written into a .kpak,
+            // so this item comes back blank after save → reload.
+            // Say that out loud instead of "Pasted image (hotlinked)".
             addImage(url, img.naturalWidth, img.naturalHeight, x, y);
-            toast('Pasted image (hotlinked)');
+            toast(_isZhUI()
+              ? '已贴上（仅显示用，存档后不保留 — 请截图再贴上）'
+              : 'Pasted (display only — will NOT survive save; screenshot instead)');
           });
       };
       img.onerror = () => {
