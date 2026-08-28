@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.34</title>
+<title>Krafted v7.0.36</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4083,7 +4083,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.34';
+var KRAFTED_VERSION = '7.0.36';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -5135,6 +5135,20 @@ const state = {
   tool: 'select',
   spaceDown: false,
   undoStack: [], redoStack: [],
+  // v7.0.36: parallel sequence arrays. _undoSeqs[k] is the G._actionSeq
+  // value at the moment undoStack[k] was captured, and _redoSeqs[k] matches
+  // redoStack[k]. Ctrl+Z needs to know WHICH action happened last — a board
+  // op (covered by undoStack) or a video-annotation stroke commit (covered
+  // by G._annoUndoStack, which never takes a board snapshot because doing so
+  // per stroke would be far too heavy). Comparing these two numbers is the
+  // only reliable way to interleave the two stacks.
+  //   _undoSeqs[k] / _redoSeqs[k] = the sequence number OF THE STATE that
+  //   snapshot holds — i.e. what the board looks like after restoring it.
+  //   _boardSeq = the sequence number of the state on screen right now.
+  //   (Those two are different at the top of the stack: undoStack[top] holds
+  //   the state you get BY pressing Ctrl+Z, not the state you are in.)
+  _undoSeqs: [], _redoSeqs: [],
+  _boardSeq: 0,
   clipboard: null,
   autoSaveTimer: null,
   // v6.8.27: save mutex — blocks destructive user actions while a save is in
@@ -5357,6 +5371,12 @@ const G = {
 };
 
 G.drawStrokes = _drawStrokes;
+// v7.0.36: the two video-annotation history stacks. _annoUndoStack holds one
+// lightweight entry per frame stroke / text commit (never a board snapshot);
+// _annoRedoStack holds the strokes removed by Ctrl+Z so Ctrl+Shift+Z can put
+// them back. Both are reset whenever the board they reference is destroyed.
+G._annoUndoStack = [];
+G._annoRedoStack = [];
 G.currentStroke = _currentStroke;
 G.exportDrag = _exportDrag;
 G.captureDrag = _captureDrag;
@@ -7080,11 +7100,16 @@ function _captureSnapshotSafe() {
   catch (e) { console.warn('[undo] captureSnapshot failed:', e && e.message); return null; }
 }
 
-function _trimStack(stack, bytesRef) {
+function _trimStack(stack, bytesRef, seqsRef) {
+  // v7.0.36: seqsRef is the parallel sequence array (state._undoSeqs /
+  // state._redoSeqs). Evicting a snapshot must evict its sequence number too,
+  // or the two arrays drift apart and Ctrl+Z starts mis-attributing actions.
+  const seqs = seqsRef ? state[seqsRef] : null;
   while (stack.length > _UNDO_MAX_STEPS || state[bytesRef] > _UNDO_MAX_BYTES) {
     const old = stack.shift();
     if (old) state[bytesRef] -= old.length;
     if (state[bytesRef] < 0) state[bytesRef] = 0;
+    if (seqs && seqs.length) seqs.shift();
   }
 }
 
@@ -7104,19 +7129,30 @@ function pushUndo() {
   }
   const snapStr = _captureSnapshotSafe();
   if (!snapStr) return;
-  state.undoStack.push(snapStr);
-  state._undoBytes += snapStr.length;
-  // v5.5.1: cap undo history at 100 steps to prevent memory bloat
-  // on long sessions with large boards (each snapshot can be 1-5MB+)
-  // v6.8.27: also drop oldest entries if total snapshot bytes exceed ~300MB,
-  // so boards with many images cannot eat all RAM through undo history.
-  _trimStack(state.undoStack, '_undoBytes');
-  state.redoStack = [];
-  state._redoBytes = 0;
   // v7.0.10: bump the global action sequence so the Ctrl+Z handler can tell
   // whether the most recent action was a board op (covered by this stack) or
   // a video-annotation stroke commit (covered by G._annoUndoStack).
   G._actionSeq = (G._actionSeq || 0) + 1;
+  state.undoStack.push(snapStr);
+  if (!state._undoSeqs) state._undoSeqs = [];
+  // v7.0.36: this snapshot holds the board as it was BEFORE the action, i.e.
+  // the state we are leaving. Advancing _boardSeq to the new action's number
+  // is what tells Ctrl+Z that the board was touched more recently than any
+  // pending annotation stroke.
+  state._undoSeqs.push(state._boardSeq || 0);
+  state._boardSeq = G._actionSeq;
+  // v5.5.1: cap undo history at 100 steps to prevent memory bloat
+  // on long sessions with large boards (each snapshot can be 1-5MB+)
+  // v6.8.27: also drop oldest entries if total snapshot bytes exceed ~300MB,
+  // so boards with many images cannot eat all RAM through undo history.
+  _trimStack(state.undoStack, '_undoBytes', '_undoSeqs');
+  state.redoStack = [];
+  state._redoBytes = 0;
+  state._redoSeqs = [];
+  // v7.0.36: a fresh board action invalidates pending annotation REDO history
+  // (the redo stack holds strokes removed by Ctrl+Z; once the user does
+  // something new those strokes must not come back).
+  G._annoRedoStack = [];
   updateStatus();
 }
 
@@ -7125,22 +7161,33 @@ function _flushDeferredUndo() {
   if (!state._deferredUndo || state._saving) return;
   const snapStr = state._deferredUndo;
   state._deferredUndo = null;
+  G._actionSeq = (G._actionSeq || 0) + 1;
   state.undoStack.push(snapStr);
   state._undoBytes += snapStr.length;
-  _trimStack(state.undoStack, '_undoBytes');
-  G._actionSeq = (G._actionSeq || 0) + 1;
+  if (!state._undoSeqs) state._undoSeqs = [];
+  state._undoSeqs.push(state._boardSeq || 0);
+  state._boardSeq = G._actionSeq;
+  _trimStack(state.undoStack, '_undoBytes', '_undoSeqs');
+  G._annoRedoStack = [];
   updateStatus();
 }
 
 // v7.0.30: the redo stack had no cap at all. Every Ctrl+Z pushed a full
 // snapshot, so twenty undos on a 50MB board put ~1GB in it and took the tab
 // down — which reads to the user as "everything just vanished".
-function _pushRedo() {
+// v7.0.36: `seq` is the sequence number of the board state this snapshot
+// captures — the state undo() is leaving behind. Recording it keeps the redo
+// stack orderable against the annotation stacks, so Ctrl+Shift+Z replays
+// whichever action was undone last.
+function _pushRedo(seq) {
   const snapStr = _captureSnapshotSafe();
-  if (!snapStr) return;
+  if (!snapStr) return false;
   state.redoStack.push(snapStr);
   state._redoBytes = (state._redoBytes || 0) + snapStr.length;
-  _trimStack(state.redoStack, '_redoBytes');
+  if (!state._redoSeqs) state._redoSeqs = [];
+  state._redoSeqs.push((typeof seq === 'number') ? seq : 0);
+  _trimStack(state.redoStack, '_redoBytes', '_redoSeqs');
+  return true;
 }
 // v7.0.30 — "Ctrl+Z sometimes wipes the whole board".
 //
@@ -7456,23 +7503,146 @@ function applySnapshot(snap) {
 }
 function undo() {
   if (state.undoStack.length === 0) return;
-  _pushRedo();
+  // v7.0.36: pop the sequence number in lockstep with the snapshot. It is the
+  // sequence of the state we are about to show, so it becomes _boardSeq; the
+  // state we are leaving is what the redo entry has to carry.
+  const backSeq = (state._undoSeqs && state._undoSeqs.length)
+    ? state._undoSeqs.pop() : 0;
+  const pushed = _pushRedo(state._boardSeq || 0);
   // Whatever _pushRedo() just captured IS the live board — reuse it as the
   // restore's safety net instead of serialising a second time.
-  const safety = state.redoStack[state.redoStack.length - 1] || null;
+  const safety = pushed ? (state.redoStack[state.redoStack.length - 1] || null) : null;
   restoreSnapshot(state.undoStack.pop(), safety);
+  state._boardSeq = backSeq;
   updateStatus();
 }
 function redo() {
   if (state.redoStack.length === 0) return;
+  const fwdSeq = (state._redoSeqs && state._redoSeqs.length)
+    ? state._redoSeqs.pop() : null;
+  const backSeq = state._boardSeq || 0;
   const snapStr = _captureSnapshotSafe();
   if (snapStr) {
     state.undoStack.push(snapStr);
     state._undoBytes += snapStr.length;
-    _trimStack(state.undoStack, '_undoBytes');
+    if (!state._undoSeqs) state._undoSeqs = [];
+    state._undoSeqs.push(backSeq);
+    _trimStack(state.undoStack, '_undoBytes', '_undoSeqs');
   }
   restoreSnapshot(state.redoStack.pop(), snapStr || null);
+  if (fwdSeq !== null) state._boardSeq = fwdSeq;
   updateStatus();
+}
+
+// ============================================================
+//  v7.0.36 — ONE decision point for Ctrl+Z / Ctrl+Shift+Z
+// ============================================================
+//
+// Two stacks cover two very different kinds of action:
+//   • state.undoStack — full board snapshots (pushUndo). Heavy, but a single
+//     snapshot restores everything: items, text, board pen strokes, and
+//     (since R85) each video's live per-frame annotation strokes.
+//   • G._annoUndoStack — one lightweight entry per video-annotation stroke or
+//     text commit. A board snapshot per stroke would be far too expensive.
+//
+// Before v7.0.36 the handler tested `_top.seq === G._actionSeq` — an EXACT
+// equality. Any drift (a board op firing after the last stroke, a deferred
+// undo flushing at the end of a save, or the target element having been
+// rebuilt so the entry was stale) made the test fail, and Ctrl+Z then fell
+// through to the global board undo(). Because annotation strokes never take a
+// board snapshot, the snapshot on top of undoStack predated every stroke the
+// user had drawn — restoring it wiped all of the frame drawings and text in
+// one keypress. That is the "一撳 Ctrl+Z 就將我所有畫嘅寫嘅嘢都刪除" report.
+//
+// The fix: give the board stack its own sequence numbers and decide by
+// COMPARISON, not equality. Whichever stack owns the higher sequence number
+// was touched last, so it is the one we undo. Equality is no longer a failure
+// mode, and a stale annotation entry is skipped instead of triggering a
+// whole-board restore.
+
+function currentBoardSeq() {
+  return state._boardSeq || 0;
+}
+function currentAnnoSeq() {
+  const st = G._annoUndoStack;
+  return (st && st.length) ? (st[st.length - 1].seq || 0) : -1;
+}
+function currentBoardRedoSeq() {
+  return (state._redoSeqs && state._redoSeqs.length)
+    ? state._redoSeqs[state._redoSeqs.length - 1] : -1;
+}
+function currentAnnoRedoSeq() {
+  const st = G._annoRedoStack;
+  return (st && st.length) ? (st[st.length - 1].seq || 0) : -1;
+}
+
+// Paint the annotation overlay after a stroke was added/removed.
+function _annoRefreshElement(el) {
+  try { if (el._syncStrokesForFrame) el._syncStrokesForFrame(); } catch (e) {}
+  el._perfLastRenderKey = '';
+  try { if (el._renderAnnoCanvas) el._renderAnnoCanvas(); } catch (e) {}
+  try { if (el._refreshDrawBtnBadge) el._refreshDrawBtnBadge(); } catch (e) {}
+  try { if (el._refreshAllSeekMarkers) el._refreshAllSeekMarkers(); } catch (e) {}
+  try { scheduleAutoSave(); } catch (e) {}
+}
+
+// Remove the newest still-valid annotation commit. Stale entries (element
+// deleted, or its frame array already emptied by something else) are dropped
+// rather than escalating to a board undo.
+function _annoUndoOne() {
+  const st = G._annoUndoStack;
+  if (!st || !st.length) return false;
+  while (st.length) {
+    const top = st.pop();
+    const el = top && top.el;
+    const ds = el && el.isConnected && el._annoDrawState;
+    const arr = ds && ds.strokesByFrame && ds.strokesByFrame[top.frame];
+    if (!arr || !arr.length) continue;   // stale — try the next entry
+    const stroke = arr.pop();
+    if (!arr.length) { try { delete ds.strokesByFrame[top.frame]; } catch (e) {} }
+    try {
+      G._annoRedoStack = G._annoRedoStack || [];
+      G._annoRedoStack.push({ el: el, frame: top.frame, seq: top.seq, stroke: stroke });
+      if (G._annoRedoStack.length > 100) G._annoRedoStack.shift();
+    } catch (e) {}
+    _annoRefreshElement(el);
+    return true;
+  }
+  return false;
+}
+
+// Re-apply the annotation commit removed by the last Ctrl+Z.
+function _annoRedoOne() {
+  const st = G._annoRedoStack;
+  if (!st || !st.length) return false;
+  while (st.length) {
+    const top = st.pop();
+    const el = top && top.el;
+    const ds = el && el.isConnected && el._annoDrawState;
+    if (!ds || !ds.strokesByFrame) continue;   // stale — try the next entry
+    if (!ds.strokesByFrame[top.frame]) ds.strokesByFrame[top.frame] = [];
+    ds.strokesByFrame[top.frame].push(top.stroke);
+    try {
+      G._annoUndoStack = G._annoUndoStack || [];
+      G._actionSeq = (G._actionSeq || 0) + 1;
+      G._annoUndoStack.push({ el: el, frame: top.frame, seq: G._actionSeq });
+      if (G._annoUndoStack.length > 100) G._annoUndoStack.shift();
+    } catch (e) {}
+    _annoRefreshElement(el);
+    return true;
+  }
+  return false;
+}
+
+// Ctrl+Z — undo whichever action happened last.
+function undoLastAction() {
+  if (currentAnnoSeq() >= currentBoardSeq() && _annoUndoOne()) return;
+  undo();
+}
+// Ctrl+Shift+Z / Ctrl+Y — redo whichever action was undone last.
+function redoLastAction() {
+  if (currentAnnoRedoSeq() >= currentBoardRedoSeq() && _annoRedoOne()) return;
+  redo();
 }
 
 
@@ -8985,36 +9155,11 @@ function updateItemStyle(item, lightweight) {
   // CSS filter for images/videos
   const mediaEl = item.img || item.video;
   if (mediaEl) {
-    let bri = item.brightness || 100;
-    let con = item.contrast || 100;
-    // Temperature: warm = shift toward orange, cool = shift toward blue
-    let tempFilter = '';
-    const temp = item.temp || 0;
-    if (temp > 0) {
-      const sepiaAmt = Math.min(100, temp * 0.33);
-      const satAmt = Math.min(400, 100 + temp * 0.5);
-      tempFilter = ` sepia(${sepiaAmt}%) saturate(${satAmt}%)`;
-    } else if (temp < 0) {
-      const hueAmt = Math.min(180, Math.abs(temp) * 0.6);
-      const satAmt = Math.max(10, 100 + temp * 0.3);
-      tempFilter = ` hue-rotate(${hueAmt}deg) saturate(${satAmt}%)`;
-    }
-    // Shadow: >100 lifts shadows (brighten dark areas), <100 deepens
-    let shadowFilter = '';
-    const shadowVal = item.shadow !== undefined ? item.shadow : 100;
-    if (shadowVal !== 100) {
-      const sAdj = 100 + (shadowVal - 100) * 0.4;
-      shadowFilter = ` brightness(${sAdj}%)`;
-    }
-    // Highlight: >100 brightens highlights (boost contrast), <100 suppresses
-    let highlightFilter = '';
-    const highlightVal = item.highlight !== undefined ? item.highlight : 100;
-    if (highlightVal !== 100) {
-      const hAdj = 100 + (highlightVal - 100) * 0.4;
-      highlightFilter = ` contrast(${hAdj}%)`;
-    }
-    const f = `brightness(${bri}%) contrast(${con}%) saturate(${item.saturate||100}%) hue-rotate(${item.hueRotate||0}deg) blur(${item.blur||0}px) sepia(${item.sepia||0}%) grayscale(${item.grayscale||0}%)${tempFilter}${shadowFilter}${highlightFilter}`;
-    mediaEl.style.filter = f;
+    // v7.0.35: one filter table for the screen, the mask compositor, the
+    // screenshot and the export. Shadow lifts/lowers (brightness) and
+    // highlight boosts/suppresses (contrast) — see shadowFilterString /
+    // highlightFilterString for the shared curves.
+    mediaEl.style.filter = mediaFilterString(item);
     // Shadow/Highlight overlay
     updateCgiOverlays(item);
     // Mask layer overlays — filter-only update (mask shape unchanged)
@@ -9105,6 +9250,123 @@ function detectVideoFps(videoEl) {
   } catch (e) {}
   if (!detected || detected <= 0 || detected > 120) detected = 24;
   return Math.max(12, Math.min(120, detected));
+}
+
+// ============================================================
+//  VIDEO ANNOTATION STROKES   (v7.0.35: one painter)
+// ============================================================
+// This loop used to exist SIX times: the live annotation canvas, the comment
+// thumbnail, the comment snapshot, the .webm bake, the frame-comment zip
+// export and the lightbox. They disagreed on line width (size / size*unit /
+// size*unit*1.3), on arrow-head length (2.5x / 3.2x, floors 2/4/6/8/10) and
+// on text size (3x / 4x / 4.5x / 5x), so the same annotation was a different
+// shape in every surface. Six copies also meant a fix had to be applied six
+// times — which is exactly why they drifted.
+//
+// Every surface now calls paintAnnoStroke() and only picks its own scale:
+//   opts.box    [cw, ch]  the rect normalised [0,1] points map onto
+//   opts.unit   pixels per 1 unit of stk.size (the surface's legibility scale)
+//   opts.zoom   extra multiplier for the live video zoom (default 1)
+//   opts.weight boldness multiplier (default 1)
+//   opts.minW   line-width floor      (default 1)
+//   opts.minHead arrow-head floor     (default 2)
+//   opts.minFont text-size floor      (default 5)
+function paintAnnoStroke(ctx, stk, opts) {
+  if (!stk || !stk.points || stk.points.length === 0) return;
+  const o = opts || {};
+  const cw = (o.box && o.box[0]) || 0;
+  const ch = (o.box && o.box[1]) || 0;
+  if (!(cw > 0) || !(ch > 0)) return;
+  const zoom = o.zoom === undefined ? 1 : o.zoom;
+  const k = (o.unit === undefined ? 1 : o.unit) * zoom * (o.weight === undefined ? 1 : o.weight);
+
+  const color = stk.color || '#ff4444';
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(o.minW === undefined ? 1 : o.minW, (stk.size || 4) * k);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const pts = stk.points.map(p => [p[0] * cw, p[1] * ch]);
+
+  if (stk.type === 'pen') {
+    if (pts.length < 2) return;
+    ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]));
+    ctx.stroke();
+  } else if (stk.type === 'arrow') {
+    if (pts.length < 2) return;
+    const [x0, y0] = pts[0];
+    const [x1, y1] = pts[pts.length - 1];
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    const angle = Math.atan2(y1 - y0, x1 - x0);
+    // v7.0.15: the head follows the video zoom too, otherwise zoomed-out
+    // arrows look bloated (huge head, thin shaft) and zoomed-in ones
+    // pin-headed. z=1 behaviour is unchanged.
+    const headLen = Math.max(o.minHead === undefined ? 2 : o.minHead,
+                             Math.max(10, (stk.size || 4) * 3.2) * k);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - headLen * Math.cos(angle - Math.PI / 6), y1 - headLen * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(x1 - headLen * Math.cos(angle + Math.PI / 6), y1 - headLen * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fill();
+  } else if (stk.type === 'box') {
+    // Rectangle from start -> end, the same way the global drawing tool does.
+    if (pts.length < 2) return;
+    const [x0, y0] = pts[0];
+    const [x1, y1] = pts[pts.length - 1];
+    ctx.beginPath();
+    ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
+  } else if (stk.type === 'circle') {
+    // Ellipse fitted to the bounding box of the two pointer positions. Both
+    // radii are floored at 0.5 so a single click can't produce a zero radius.
+    if (pts.length < 2) return;
+    const [x0, y0] = pts[0];
+    const [x1, y1] = pts[pts.length - 1];
+    ctx.beginPath();
+    ctx.ellipse((x0 + x1) / 2, (y0 + y1) / 2,
+                Math.max(0.5, Math.abs(x1 - x0) / 2), Math.max(0.5, Math.abs(y1 - y0) / 2),
+                0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (stk.type === 'text') {
+    // The stroke stores one normalised [x, y] point plus a `text` string.
+    // Rendered with a translucent black pill so it stays readable on light
+    // AND dark frames. Font size, padding and corner radius all follow the
+    // same scale as the line width, so a note keeps its proportions on any
+    // surface and at any video zoom (v7.0.15).
+    const [x, y] = pts[0];
+    const text = (stk.text || '').trim();
+    if (!text) return;
+    const fontSize = Math.max(o.minFont === undefined ? 5 : o.minFont,
+                              Math.max(14, (stk.size || 4) * 5) * k);
+    ctx.font = '600 ' + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
+    ctx.textBaseline = 'top';
+    const metrics = ctx.measureText(text);
+    const padX = 6 * k, padY = 4 * k;
+    const bgW = metrics.width + padX * 2;
+    const bgH = fontSize * 1.15 + padY * 2;
+    const radius = Math.min(5 * k, Math.min(bgW, bgH) / 2);
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + bgW - radius, y);
+    ctx.quadraticCurveTo(x + bgW, y, x + bgW, y + radius);
+    ctx.lineTo(x + bgW, y + bgH - radius);
+    ctx.quadraticCurveTo(x + bgW, y + bgH, x + bgW - radius, y + bgH);
+    ctx.lineTo(x + radius, y + bgH);
+    ctx.quadraticCurveTo(x, y + bgH, x, y + bgH - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = stk.color || '#fff';
+    ctx.fillText(text, x + padX, y + padY);
+  }
 }
 
 function buildMediaControls(el, mediaEl, isVideo, isGif) {
@@ -10256,118 +10518,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       if (s.drawing) _drawAnnoStroke(ctx, s.drawing, cw, ch);
     }
     function _drawAnnoStroke(ctx, stk, cw, ch) {
-      if (!stk || !stk.points || stk.points.length === 0) return;
-      ctx.strokeStyle = stk.color;
-      ctx.fillStyle = stk.color;
-      // v5.5.7: scale stroke width by video zoom so strokes look
-      // consistent at any zoom level — zoom in = thicker lines,
-      // zoom out = thinner lines, matching the video content scale.
+      // v7.0.35: shared painter (see paintAnnoStroke). The live canvas is the
+      // 1:1 reference surface, so unit stays 1 and the video zoom is the only
+      // extra multiplier.
       var zoom = 1;
       var item = el._item;
       if (item && item._videoZoom !== undefined) zoom = item._videoZoom;
-      ctx.lineWidth = stk.size * zoom;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      const pts = stk.points.map(p => [p[0] * cw, p[1] * ch]);
-      if (stk.type === 'pen') {
-        if (pts.length < 2) return;
-        ctx.beginPath();
-        pts.forEach((p, i) => i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]));
-        ctx.stroke();
-      } else if (stk.type === 'arrow') {
-        if (pts.length < 2) return;
-        const [x0, y0] = pts[0];
-        const [x1, y1] = pts[pts.length - 1];
-        ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        ctx.lineTo(x1, y1);
-        ctx.stroke();
-        // Arrowhead — v7.0.15: scale the head by the video zoom too.
-        // Previously only ctx.lineWidth was zoom-scaled; the head stayed
-        // at a fixed pixel size, so at zoom < 1 arrows looked bloated
-        // (huge head, thin shaft) and at zoom > 1 they looked pin-headed.
-        // Multiplying the whole clamped expression by zoom keeps z=1
-        // behavior identical while following the content at any zoom.
-        const angle = Math.atan2(y1 - y0, x1 - x0);
-        const headLen = Math.max(2, Math.max(10, stk.size * 3.2) * zoom);
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x1 - headLen * Math.cos(angle - Math.PI / 6), y1 - headLen * Math.sin(angle - Math.PI / 6));
-        ctx.lineTo(x1 - headLen * Math.cos(angle + Math.PI / 6), y1 - headLen * Math.sin(angle + Math.PI / 6));
-        ctx.closePath();
-        ctx.fill();
-      } else if (stk.type === 'box') {
-        // Round 7: rectangle from start → end (the same way as the
-        // global drawing tool uses in renderStrokes). Lives on a
-        // separate branch so the existing `else` (freehand pen)
-        // doesn't accidentally try to stroke a single point.
-        if (pts.length < 2) return;
-        const [x0, y0] = pts[0];
-        const [x1, y1] = pts[pts.length - 1];
-        const bx = Math.min(x0, x1), by = Math.min(y0, y1);
-        const bw = Math.abs(x1 - x0), bh = Math.abs(y1 - y0);
-        ctx.beginPath();
-        ctx.strokeRect(bx, by, bw, bh);
-      } else if (stk.type === 'circle') {
-        // Round 7: ellipse fitted to the bounding box of the two
-        // pointer positions. cx/cy = center, rx/ry = half of the
-        // box width/height. Both radii are clamped to >= 0.5 so
-        // a single-click does not crash.
-        if (pts.length < 2) return;
-        const [x0, y0] = pts[0];
-        const [x1, y1] = pts[pts.length - 1];
-        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-        const rx = Math.max(0.5, Math.abs(x1 - x0) / 2);
-        const ry = Math.max(0.5, Math.abs(y1 - y0) / 2);
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-        ctx.stroke();
-      } else if (stk.type === 'text') {
-        // Round 12: text annotation. The stroke stores a single
-        // normalised [x, y] point and a `text` string. We render
-        // the text with a translucent black pill background so the
-        // text stays readable on light AND dark video frames.
-        const [x, y] = pts[0];
-        const text = (stk.text || '').trim();
-        if (!text) return;
-        // Font size scales with the stroke's `size` field (the
-        // S/M/L picker value, 2-7px). Translate that to a readable
-        // pixel size for the text.
-        // v7.0.15: also scale by video zoom (like ctx.lineWidth) — text
-        // annotations previously stayed at a fixed pixel size while the
-        // video content zoomed/panned underneath, so they visually
-        // "didn't follow" the frame. The pill padding and radius scale
-        // by the same factor. z=1 behavior is identical to before.
-        const fontSize = Math.max(5, Math.max(14, (stk.size || 4) * 5) * zoom);
-        ctx.font = '600 ' + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
-        ctx.textBaseline = 'top';
-        // Measure to build a background pill
-        const metrics = ctx.measureText(text);
-        const padX = 6 * zoom, padY = 4 * zoom;
-        const bgW = metrics.width + padX * 2;
-        const bgH = fontSize * 1.15 + padY * 2;
-        // Translucent background for readability on any frame
-        ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-        const radius = 5 * zoom;
-        const bx2 = x, by2 = y, bw2 = bgW, bh2 = bgH;
-        ctx.beginPath();
-        ctx.moveTo(bx2 + radius, by2);
-        ctx.lineTo(bx2 + bw2 - radius, by2);
-        ctx.quadraticCurveTo(bx2 + bw2, by2, bx2 + bw2, by2 + radius);
-        ctx.lineTo(bx2 + bw2, by2 + bh2 - radius);
-        ctx.quadraticCurveTo(bx2 + bw2, by2 + bh2, bx2 + bw2 - radius, by2 + bh2);
-        ctx.lineTo(bx2 + radius, by2 + bh2);
-        ctx.quadraticCurveTo(bx2, by2 + bh2, bx2, by2 + bh2 - radius);
-        ctx.lineTo(bx2, by2 + radius);
-        ctx.quadraticCurveTo(bx2, by2, bx2 + radius, by2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-        // Text on top
-        ctx.fillStyle = stk.color || '#fff';
-        ctx.fillText(text, x + padX, y + padY);
-      }
+      paintAnnoStroke(ctx, stk, { box: [cw, ch], zoom: zoom, minHead: 2, minFont: 5 });
     }
     // Expose helpers for later use (lightbox / export compositing)
     el._renderAnnoCanvas = _renderAnnoCanvas;
@@ -10874,6 +11031,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           G._annoUndoStack = G._annoUndoStack || [];
           G._annoUndoStack.push({ el: el, frame: targetFrame, seq: G._actionSeq });
           if (G._annoUndoStack.length > 100) G._annoUndoStack.shift();
+          // v7.0.36: a new commit invalidates pending annotation redo history.
+          G._annoRedoStack = [];
         } catch (e) {}
         // Re-bind the live alias to the target frame so the canvas
         // re-render shows the new text (the alias may have moved
@@ -10997,6 +11156,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
           G._annoUndoStack = G._annoUndoStack || [];
           G._annoUndoStack.push({ el: el, frame: spawnFrame, seq: G._actionSeq });
           if (G._annoUndoStack.length > 100) G._annoUndoStack.shift();
+          // v7.0.36: a new commit invalidates pending annotation redo history.
+          G._annoRedoStack = [];
         } catch (e) {}
         // Re-sync the flat alias so the canvas re-renders correctly.
         // If we're still on the spawn frame, this re-points to the
@@ -12998,79 +13159,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     }
     function _compositeThumbStrokes(ctx, comment, cw, ch) {
       var strokes = comment.annoStrokes;
-      // v5.5.9 debug: log strokes to console so user can verify
-      if (strokes && strokes.length) {
-        console.log('[thumb] compositing ' + strokes.length + ' strokes for comment ' + (comment.frame||'?') + ':', strokes.map(function(s){ return s.type + (s.text ? ':"'+s.text+'"' : ''); }));
-      }
       if (!strokes || !strokes.length) return;
-      var sx = cw, sy = ch;
-      strokes.forEach(function(stk) {
-        if (!stk || !stk.points || stk.points.length === 0) return;
-        ctx.strokeStyle = stk.color || '#ff4444';
-        ctx.fillStyle = stk.color || '#ff4444';
-        var sw = Math.max(1, (stk.size || 4) * Math.min(sx, sy) / 400);
-        ctx.lineWidth = sw;
-        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        var pts = stk.points.map(function(p) { return [p[0] * sx, p[1] * sy]; });
-        if (stk.type === 'pen') {
-          if (pts.length < 2) return;
-          ctx.beginPath();
-          pts.forEach(function(p, i) { i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]); });
-          ctx.stroke();
-        } else if (stk.type === 'arrow') {
-          if (pts.length < 2) return;
-          var x0 = pts[0][0], y0 = pts[0][1];
-          var x1 = pts[pts.length-1][0], y1 = pts[pts.length-1][1];
-          ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-          var angle = Math.atan2(y1-y0, x1-x0);
-          var headLen = Math.max(4, sw * 2.5);
-          ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x1 - headLen*Math.cos(angle-Math.PI/6), y1 - headLen*Math.sin(angle-Math.PI/6));
-          ctx.lineTo(x1 - headLen*Math.cos(angle+Math.PI/6), y1 - headLen*Math.sin(angle+Math.PI/6));
-          ctx.closePath(); ctx.fill();
-        } else if (stk.type === 'box') {
-          if (pts.length < 2) return;
-          var bx0 = pts[0][0], by0 = pts[0][1];
-          var bx1 = pts[pts.length-1][0], by1 = pts[pts.length-1][1];
-          ctx.strokeRect(Math.min(bx0,bx1), Math.min(by0,by1), Math.abs(bx1-bx0), Math.abs(by1-by0));
-        } else if (stk.type === 'circle') {
-          if (pts.length < 2) return;
-          var cx0 = pts[0][0], cy0 = pts[0][1];
-          var cx1 = pts[pts.length-1][0], cy1 = pts[pts.length-1][1];
-          var ccx = (cx0+cx1)/2, ccy = (cy0+cy1)/2;
-          var crx = Math.max(0.5, Math.abs(cx1-cx0)/2);
-          var cry = Math.max(0.5, Math.abs(cy1-cy0)/2);
-          ctx.beginPath(); ctx.ellipse(ccx, ccy, crx, cry, 0, 0, Math.PI*2); ctx.stroke();
-        } else if (stk.type === 'text') {
-          var tx = pts[0][0], ty = pts[0][1];
-          var txt = (stk.text || '').trim();
-          if (!txt) return;
-          var fontSize = Math.max(8, (stk.size || 4) * 3);
-          ctx.font = '600 ' + fontSize + 'px -apple-system, system-ui, sans-serif';
-          ctx.textBaseline = 'top';
-          var metrics = ctx.measureText(txt);
-          var padX = 3, padY = 2;
-          var bgW = metrics.width + padX*2;
-          var bgH = fontSize*1.15 + padY*2;
-          ctx.save();
-          ctx.fillStyle = 'rgba(0,0,0,0.55)';
-          var rx = 3;
-          ctx.beginPath();
-          ctx.moveTo(tx+rx, ty); ctx.lineTo(tx+bgW-rx, ty);
-          ctx.quadraticCurveTo(tx+bgW, ty, tx+bgW, ty+rx);
-          ctx.lineTo(tx+bgW, ty+bgH-rx);
-          ctx.quadraticCurveTo(tx+bgW, ty+bgH, tx+bgW-rx, ty+bgH);
-          ctx.lineTo(tx+rx, ty+bgH);
-          ctx.quadraticCurveTo(tx, ty+bgH, tx, ty+bgH-rx);
-          ctx.lineTo(tx, ty+rx);
-          ctx.quadraticCurveTo(tx, ty, tx+rx, ty);
-          ctx.closePath(); ctx.fill();
-          ctx.restore();
-          ctx.fillStyle = stk.color || '#fff';
-          ctx.fillText(txt, tx+padX, ty+padY);
-        }
-      });
+      // v7.0.35: shared painter (see paintAnnoStroke). The thumbnail is a tiny
+      // surface, so the strokes scale with it and get a legibility floor.
+      var opts = { box: [cw, ch], unit: Math.min(cw, ch) / 400, minW: 1, minHead: 4, minFont: 8 };
+      strokes.forEach(function (stk) { paintAnnoStroke(ctx, stk, opts); });
     }
     // Frame number badge overlaid on the thumbnail's bottom-left
     const thumbFrame = document.createElement('span');
@@ -15260,86 +15353,10 @@ function videoAnnoCaptureSnapshot(videoEl, maxW, strokes, optItem) {
       ctx.translate(dx, dy);
       // Scale so stroke (1,1) maps to content bottom-right
       const sx = dw, sy = dh;
-      strokes.forEach(stk => {
-        if (!stk || !stk.points || stk.points.length === 0) return;
-        ctx.strokeStyle = stk.color || '#ff4444';
-        ctx.fillStyle = stk.color || '#ff4444';
-        // Scale stroke width so it stays visible at the export size —
-        // strokes were drawn at the on-screen pixel size; on a small
-        // export they should be proportionally smaller.
-        const sw = Math.max(1, (stk.size || 4) * Math.min(sx, sy) / 400);
-        ctx.lineWidth = sw;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        // Convert normalized pts → pixel pts in the content rect
-        const pts = stk.points.map(p => [p[0] * sx, p[1] * sy]);
-        if (stk.type === 'pen') {
-          if (pts.length < 2) return;
-          ctx.beginPath();
-          pts.forEach((p, i) => i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]));
-          ctx.stroke();
-        } else if (stk.type === 'arrow') {
-          if (pts.length < 2) return;
-          const [x0, y0] = pts[0];
-          const [x1, y1] = pts[pts.length - 1];
-          ctx.beginPath();
-          ctx.moveTo(x0, y0);
-          ctx.lineTo(x1, y1);
-          ctx.stroke();
-          const angle = Math.atan2(y1 - y0, x1 - x0);
-          const headLen = Math.max(8, sw * 3.2);
-          ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x1 - headLen * Math.cos(angle - Math.PI / 6), y1 - headLen * Math.sin(angle - Math.PI / 6));
-          ctx.lineTo(x1 - headLen * Math.cos(angle + Math.PI / 6), y1 - headLen * Math.sin(angle + Math.PI / 6));
-          ctx.closePath();
-          ctx.fill();
-        } else if (stk.type === 'box') {
-          if (pts.length < 2) return;
-          const [bx0, by0] = pts[0];
-          const [bx1, by1] = pts[pts.length - 1];
-          ctx.strokeRect(Math.min(bx0, bx1), Math.min(by0, by1), Math.abs(bx1 - bx0), Math.abs(by1 - by0));
-        } else if (stk.type === 'circle') {
-          if (pts.length < 2) return;
-          const [cx0, cy0] = pts[0];
-          const [cx1, cy1] = pts[pts.length - 1];
-          const ccx = (cx0 + cx1) / 2, ccy = (cy0 + cy1) / 2;
-          const crx = Math.max(0.5, Math.abs(cx1 - cx0) / 2);
-          const cry = Math.max(0.5, Math.abs(cy1 - cy0) / 2);
-          ctx.beginPath();
-          ctx.ellipse(ccx, ccy, crx, cry, 0, 0, Math.PI * 2);
-          ctx.stroke();
-        } else if (stk.type === 'text') {
-          const [tx, ty] = pts[0];
-          const txt = (stk.text || '').trim();
-          if (!txt) return;
-          const fontSize = Math.max(10, (stk.size || 4) * 4);
-          ctx.font = '600 ' + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
-          ctx.textBaseline = 'top';
-          const metrics = ctx.measureText(txt);
-          const padX = 5, padY = 3;
-          const bgW = metrics.width + padX * 2;
-          const bgH = fontSize * 1.15 + padY * 2;
-          ctx.save();
-          ctx.fillStyle = 'rgba(0,0,0,0.55)';
-          const rx = 4;
-          ctx.beginPath();
-          ctx.moveTo(tx + rx, ty);
-          ctx.lineTo(tx + bgW - rx, ty);
-          ctx.quadraticCurveTo(tx + bgW, ty, tx + bgW, ty + rx);
-          ctx.lineTo(tx + bgW, ty + bgH - rx);
-          ctx.quadraticCurveTo(tx + bgW, ty + bgH, tx + bgW - rx, ty + bgH);
-          ctx.lineTo(tx + rx, ty + bgH);
-          ctx.quadraticCurveTo(tx, ty + bgH, tx, ty + bgH - rx);
-          ctx.lineTo(tx, ty + rx);
-          ctx.quadraticCurveTo(tx, ty, tx + rx, ty);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
-          ctx.fillStyle = stk.color || '#fff';
-          ctx.fillText(txt, tx + padX, ty + padY);
-        }
-      });
+      // v7.0.35: shared painter (see paintAnnoStroke). This is a full
+      // frame, so the strokes scale with the output resolution.
+      const strokeOpts = { box: [sx, sy], unit: Math.min(sx, sy) / 400, minW: 1, minHead: 8, minFont: 10 };
+      strokes.forEach(stk => paintAnnoStroke(ctx, stk, strokeOpts));
       ctx.restore();
     } catch (e) {
       // If compositing fails for any reason, fall through and return
@@ -15361,92 +15378,13 @@ function videoAnnoCaptureSnapshot(videoEl, maxW, strokes, optItem) {
 }
 
 // ── Global helper: render an array of strokes onto any 2D context ──
-// Used by the video export to bake per-frame drawings into the
-// exported .webm. The same logic is also used by videoAnnoCaptureSnapshot
-// (which has its own inline version with extra letterboxing handling).
-// This global version is a flat, no-letterbox renderer that just draws
-// the strokes into the supplied context with normalized [0,1] coords
-// mapped to the given (cw, ch) dimensions. The caller is responsible
-// for clearing / transform / clip if they need letterboxing.
+// Used by the video export to bake per-frame drawings into the exported
+// .webm. v7.0.35: delegates to paintAnnoStroke, the same painter every
+// other surface uses. Flat and letterbox-free — the caller is responsible
+// for clearing / transform / clip.
 function _renderStrokesToCtx(ctx, strokes, cw, ch) {
   if (!ctx || !strokes || strokes.length === 0) return;
-  strokes.forEach(stk => {
-    if (!stk || !stk.points || stk.points.length === 0) return;
-    ctx.strokeStyle = stk.color || '#ff4444';
-    ctx.fillStyle = stk.color || '#ff4444';
-    const sw = Math.max(1, (stk.size || 4));
-    ctx.lineWidth = sw;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    const pts = stk.points.map(p => [p[0] * cw, p[1] * ch]);
-    if (stk.type === 'pen') {
-      if (pts.length < 2) return;
-      ctx.beginPath();
-      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]));
-      ctx.stroke();
-    } else if (stk.type === 'arrow') {
-      if (pts.length < 2) return;
-      const [x0, y0] = pts[0];
-      const [x1, y1] = pts[pts.length - 1];
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-      const angle = Math.atan2(y1 - y0, x1 - x0);
-      const headLen = Math.max(10, sw * 3.2);
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x1 - headLen * Math.cos(angle - Math.PI / 6), y1 - headLen * Math.sin(angle - Math.PI / 6));
-      ctx.lineTo(x1 - headLen * Math.cos(angle + Math.PI / 6), y1 - headLen * Math.sin(angle + Math.PI / 6));
-      ctx.closePath();
-      ctx.fill();
-    } else if (stk.type === 'box') {
-      if (pts.length < 2) return;
-      const [x0, y0] = pts[0];
-      const [x1, y1] = pts[pts.length - 1];
-      ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
-    } else if (stk.type === 'circle') {
-      if (pts.length < 2) return;
-      const [x0, y0] = pts[0];
-      const [x1, y1] = pts[pts.length - 1];
-      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-      const rx = Math.max(0.5, Math.abs(x1 - x0) / 2);
-      const ry = Math.max(0.5, Math.abs(y1 - y0) / 2);
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (stk.type === 'text') {
-      // R86: render text annotations into export/composited output
-      const [tx, ty] = pts[0];
-      const txt = (stk.text || '').trim();
-      if (!txt) return;
-      const fontSize = Math.max(14, (stk.size || 4) * 5);
-      ctx.font = '600 ' + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
-      ctx.textBaseline = 'top';
-      const metrics = ctx.measureText(txt);
-      const padX = 6, padY = 4;
-      const bgW = metrics.width + padX * 2;
-      const bgH = fontSize * 1.15 + padY * 2;
-      ctx.save();
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      const radius = 5;
-      ctx.beginPath();
-      ctx.moveTo(tx + radius, ty);
-      ctx.lineTo(tx + bgW - radius, ty);
-      ctx.quadraticCurveTo(tx + bgW, ty, tx + bgW, ty + radius);
-      ctx.lineTo(tx + bgW, ty + bgH - radius);
-      ctx.quadraticCurveTo(tx + bgW, ty + bgH, tx + bgW - radius, ty + bgH);
-      ctx.lineTo(tx + radius, ty + bgH);
-      ctx.quadraticCurveTo(tx, ty + bgH, tx, ty + bgH - radius);
-      ctx.lineTo(tx, ty + radius);
-      ctx.quadraticCurveTo(tx, ty, tx + radius, ty);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-      ctx.fillStyle = stk.color || '#fff';
-      ctx.fillText(txt, tx + padX, ty + padY);
-    }
-  });
+  strokes.forEach(stk => paintAnnoStroke(ctx, stk, { box: [cw, ch], unit: 1, minHead: 10 }));
 }
 
 // ── Export frame comments to a supplier-friendly HTML report ──
@@ -16382,76 +16320,12 @@ function autoFitTextItem(tx, opts) {
 // v5.5.9: helper — composite annotation strokes onto a canvas.
 // Used by both thumbnail render and Board export to ensure text
 // annotations are always visible even if c.snapshot doesn't have them.
+// v7.0.35: delegates to paintAnnoStroke instead of carrying a sixth copy
+// of the drawing loop.
 function _compositeStrokesOnCanvas(ctx, strokes, cw, ch) {
   if (!strokes || !strokes.length) return;
-  var sx = cw, sy = ch;
-  strokes.forEach(function(stk) {
-    if (!stk || !stk.points || stk.points.length === 0) return;
-    ctx.strokeStyle = stk.color || '#ff4444';
-    ctx.fillStyle = stk.color || '#ff4444';
-    var sw = Math.max(1.5, (stk.size || 4) * Math.min(sx, sy) / 400);
-    ctx.lineWidth = sw;
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    var pts = stk.points.map(function(p) { return [p[0] * sx, p[1] * sy]; });
-    if (stk.type === 'pen') {
-      if (pts.length < 2) return;
-      ctx.beginPath();
-      pts.forEach(function(p, i) { i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]); });
-      ctx.stroke();
-    } else if (stk.type === 'arrow') {
-      if (pts.length < 2) return;
-      var x0 = pts[0][0], y0 = pts[0][1];
-      var x1 = pts[pts.length-1][0], y1 = pts[pts.length-1][1];
-      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-      var angle = Math.atan2(y1-y0, x1-x0);
-      var headLen = Math.max(6, sw * 2.5);
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x1 - headLen*Math.cos(angle-Math.PI/6), y1 - headLen*Math.sin(angle-Math.PI/6));
-      ctx.lineTo(x1 - headLen*Math.cos(angle+Math.PI/6), y1 - headLen*Math.sin(angle+Math.PI/6));
-      ctx.closePath(); ctx.fill();
-    } else if (stk.type === 'box') {
-      if (pts.length < 2) return;
-      var bx0 = pts[0][0], by0 = pts[0][1];
-      var bx1 = pts[pts.length-1][0], by1 = pts[pts.length-1][1];
-      ctx.strokeRect(Math.min(bx0,bx1), Math.min(by0,by1), Math.abs(bx1-bx0), Math.abs(by1-by0));
-    } else if (stk.type === 'circle') {
-      if (pts.length < 2) return;
-      var cx0 = pts[0][0], cy0 = pts[0][1];
-      var cx1 = pts[pts.length-1][0], cy1 = pts[pts.length-1][1];
-      var ccx = (cx0+cx1)/2, ccy = (cy0+cy1)/2;
-      var crx = Math.max(0.5, Math.abs(cx1-cx0)/2);
-      var cry = Math.max(0.5, Math.abs(cy1-cy0)/2);
-      ctx.beginPath(); ctx.ellipse(ccx, ccy, crx, cry, 0, 0, Math.PI*2); ctx.stroke();
-    } else if (stk.type === 'text') {
-      var tx = pts[0][0], ty = pts[0][1];
-      var txt = (stk.text || '').trim();
-      if (!txt) return;
-      var fontSize = Math.max(10, (stk.size || 4) * 4);
-      ctx.font = '600 ' + fontSize + 'px -apple-system, system-ui, sans-serif';
-      ctx.textBaseline = 'top';
-      var metrics = ctx.measureText(txt);
-      var padX = 5, padY = 3;
-      var bgW = metrics.width + padX*2;
-      var bgH = fontSize*1.15 + padY*2;
-      ctx.save();
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      var rx = 4;
-      ctx.beginPath();
-      ctx.moveTo(tx+rx, ty); ctx.lineTo(tx+bgW-rx, ty);
-      ctx.quadraticCurveTo(tx+bgW, ty, tx+bgW, ty+rx);
-      ctx.lineTo(tx+bgW, ty+bgH-rx);
-      ctx.quadraticCurveTo(tx+bgW, ty+bgH, tx+bgW-rx, ty+bgH);
-      ctx.lineTo(tx+rx, ty+bgH);
-      ctx.quadraticCurveTo(tx, ty+bgH, tx, ty+bgH-rx);
-      ctx.lineTo(tx, ty+rx);
-      ctx.quadraticCurveTo(tx, ty, tx+rx, ty);
-      ctx.closePath(); ctx.fill();
-      ctx.restore();
-      ctx.fillStyle = stk.color || '#fff';
-      ctx.fillText(txt, tx+padX, ty+padY);
-    }
-  });
+  var opts = { box: [cw, ch], unit: Math.min(cw, ch) / 400, minW: 1.5, minHead: 6, minFont: 10 };
+  strokes.forEach(function (stk) { paintAnnoStroke(ctx, stk, opts); });
 }
 
 async function videoAnnoSendToBoard() {
@@ -16854,15 +16728,23 @@ async function videoAnnoSendToBoard() {
     // v7.0.30: truncating the stack without recomputing _undoBytes left the
     // byte counter permanently over-counted, so _trimStack() then evicted
     // good history far more aggressively than the 300MB budget intends.
+    // v7.0.36: the collapsed history needs one sequence number — the one the
+    // FIRST dropped snapshot carried (the state just before the batch began).
+    const _batchSeq = (state._undoSeqs && state._undoSeqs.length > initialUndoLen)
+      ? state._undoSeqs[initialUndoLen] : (G._actionSeq || 0);
     while (state.undoStack.length > initialUndoLen) {
       const dropped = state.undoStack.pop();
       if (dropped) state._undoBytes -= dropped.length;
+      if (state._undoSeqs && state._undoSeqs.length > initialUndoLen) state._undoSeqs.pop();
     }
     state.undoStack.push(preBatchSnap);
+    if (!state._undoSeqs) state._undoSeqs = [];
+    state._undoSeqs.push(_batchSeq);
     state._undoBytes = (state._undoBytes < 0 ? 0 : state._undoBytes) + preBatchSnap.length;
-    _trimStack(state.undoStack, '_undoBytes');
+    _trimStack(state.undoStack, '_undoBytes', '_undoSeqs');
     state.redoStack = [];
     state._redoBytes = 0;
+    state._redoSeqs = [];
     updateStatus();
   } catch (e) {}
   // ── 5) Select all the new items so the user sees the result ─────
@@ -17300,79 +17182,11 @@ function videoAnnoOpenLightbox(c) {
       if (c.annoStrokes && c.annoStrokes.length) {
         const strokes = c.annoStrokes;
         const sx = dw, sy = dh;
-        strokes.forEach(stk => {
-          if (!stk || !stk.points || stk.points.length === 0) return;
-          ctx.strokeStyle = stk.color || '#ff4444';
-          ctx.fillStyle = stk.color || '#ff4444';
-          const sw = Math.max(1.5, (stk.size || 4) * Math.min(sx, sy) / 400 * 1.3);
-          ctx.lineWidth = sw;
-          ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-          const pts = stk.points.map(p => [p[0] * sx, p[1] * sy]);
-          if (stk.type === 'pen') {
-            if (pts.length < 2) return;
-            ctx.beginPath();
-            pts.forEach((p, i) => i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]));
-            ctx.stroke();
-          } else if (stk.type === 'arrow') {
-            if (pts.length < 2) return;
-            const [x0, y0] = pts[0];
-            const [x1, y1] = pts[pts.length - 1];
-            ctx.beginPath();
-            ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-            const angle = Math.atan2(y1 - y0, x1 - x0);
-            const headLen = Math.max(10, sw * 3.2);
-            ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x1 - headLen * Math.cos(angle - Math.PI / 6), y1 - headLen * Math.sin(angle - Math.PI / 6));
-            ctx.lineTo(x1 - headLen * Math.cos(angle + Math.PI / 6), y1 - headLen * Math.sin(angle + Math.PI / 6));
-            ctx.closePath();
-            ctx.fill();
-          } else if (stk.type === 'box') {
-            if (pts.length < 2) return;
-            const [bx0, by0] = pts[0];
-            const [bx1, by1] = pts[pts.length - 1];
-            ctx.strokeRect(Math.min(bx0, bx1), Math.min(by0, by1), Math.abs(bx1 - bx0), Math.abs(by1 - by0));
-          } else if (stk.type === 'circle') {
-            if (pts.length < 2) return;
-            const [cx0, cy0] = pts[0];
-            const [cx1, cy1] = pts[pts.length - 1];
-            const ccx = (cx0 + cx1) / 2, ccy = (cy0 + cy1) / 2;
-            const crx = Math.max(0.5, Math.abs(cx1 - cx0) / 2);
-            const cry = Math.max(0.5, Math.abs(cy1 - cy0) / 2);
-            ctx.beginPath();
-            ctx.ellipse(ccx, ccy, crx, cry, 0, 0, Math.PI * 2);
-            ctx.stroke();
-          } else if (stk.type === 'text') {
-            const [tx, ty] = pts[0];
-            const txt = (stk.text || '').trim();
-            if (!txt) return;
-            const fontSize = Math.max(12, (stk.size || 4) * 4.5);
-            ctx.font = '600 ' + fontSize + 'px -apple-system, "SF Pro Display", system-ui, sans-serif';
-            ctx.textBaseline = 'top';
-            const metrics = ctx.measureText(txt);
-            const padX = 6, padY = 4;
-            const bgW = metrics.width + padX * 2;
-            const bgH = fontSize * 1.15 + padY * 2;
-            ctx.save();
-            ctx.fillStyle = 'rgba(0,0,0,0.55)';
-            const rx = 4;
-            ctx.beginPath();
-            ctx.moveTo(tx + rx, ty);
-            ctx.lineTo(tx + bgW - rx, ty);
-            ctx.quadraticCurveTo(tx + bgW, ty, tx + bgW, ty + rx);
-            ctx.lineTo(tx + bgW, ty + bgH - rx);
-            ctx.quadraticCurveTo(tx + bgW, ty + bgH, tx + bgW - rx, ty + bgH);
-            ctx.lineTo(tx + rx, ty + bgH);
-            ctx.quadraticCurveTo(tx, ty + bgH, tx, ty + bgH - rx);
-            ctx.lineTo(tx, ty + rx);
-            ctx.quadraticCurveTo(tx, ty, tx + rx, ty);
-            ctx.closePath();
-            ctx.fill();
-            ctx.restore();
-            ctx.fillStyle = stk.color || '#fff';
-            ctx.fillText(txt, tx + padX, ty + padY);
-          }
-        });
+        // v7.0.35: shared painter (see paintAnnoStroke). The lightbox is a
+        // large display, so strokes keep the 1.3x boldness boost this view
+        // always used — only the geometry rules are shared now.
+        const strokeOpts = { box: [sx, sy], unit: Math.min(sx, sy) / 400, weight: 1.3, minW: 1.5, minHead: 10, minFont: 12 };
+        strokes.forEach(stk => paintAnnoStroke(ctx, stk, strokeOpts));
       }
       // Round 6: mount the canvas via the zoom helper (preserves the
       // zoom bar, wraps the canvas in a transformable inner div, and
@@ -18966,6 +18780,86 @@ function togglePropSection(header) {
 // ============================================================
 //  CGI DIRECTOR FILTERS
 // ============================================================
+// v7.0.35: the numbers below are the SINGLE source of truth for the
+// vignette / temperature / shadow / highlight look. They used to be
+// hand-written in four places (on-screen CSS, mask compositor, capture,
+// export) with three different sets of constants, so an exported PNG never
+// matched the board the user graded it on. Every surface calls these now.
+
+// One vignette definition. On screen it is a CSS radial-gradient; the two
+// canvas renderers must reproduce that gradient exactly, or a screenshot and
+// an export of the same pixels disagree with each other AND with the board.
+function vignetteStops(value) {
+  const v = Math.max(0, +value || 0);
+  if (!v) return { intensity: 0, innerFrac: 1, alpha: 0, visible: false };
+  const intensity = Math.min(v / 100, 2);   // the slider goes to 500 -> clamp
+  const innerFrac = Math.max(0, 60 - intensity * 30) / 100;
+  const alpha = Math.min(1, intensity * 0.8);
+  return { intensity: intensity, innerFrac: innerFrac, alpha: alpha, visible: alpha > 0.001 };
+}
+function vignetteGradientCss(value) {
+  const s = vignetteStops(value);
+  return 'radial-gradient(ellipse at center, transparent ' + (s.innerFrac * 100) + '%, rgba(0,0,0,' + s.alpha + ') 100%)';
+}
+// Paint that same gradient into a canvas. Call INSIDE the item's local
+// transform. (cx, cy) is the centre of the area to darken and (w, h) its
+// size — for a video that is the PICTURE rect, not the whole .item, which
+// also carries the player controls bar below it.
+function paintVignetteOnCanvas(ctx, value, cx, cy, w, h) {
+  const s = vignetteStops(value);
+  if (!s.visible || !(w > 0) || !(h > 0)) return;
+  // CSS sizes `radial-gradient(ellipse at center, ... 100%)` to the FARTHEST
+  // CORNER: rx = (w/2)*sqrt(2), ry = (h/2)*sqrt(2). createRadialGradient only
+  // makes circles, so squash one into that ellipse with a scale.
+  const rx = (w / 2) * Math.SQRT2;
+  const ry = (h / 2) * Math.SQRT2;
+  if (!(rx > 0) || !(ry > 0)) return;
+  const squash = ry / rx;                 // === h / w
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1, squash);
+  const g = ctx.createRadialGradient(0, 0, rx * s.innerFrac, 0, 0, rx);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,0,' + s.alpha + ')');
+  ctx.fillStyle = g;
+  ctx.fillRect(-w / 2, -(h / 2) / squash, w, h / squash);
+  ctx.restore();
+}
+
+// Temperature / shadow / highlight -> CSS filter fragments. The export
+// renderer carried its own constants (sepia 0.3 / saturate 0.2) while the
+// screen used 0.33 / 0.3, so an exported warm image came back cooler than
+// the board. One table now.
+function tempFilterString(temp) {
+  const t = +temp || 0;
+  if (t > 0) return ' sepia(' + Math.min(100, t * 0.33) + '%) saturate(' + Math.min(400, 100 + t * 0.5) + '%)';
+  if (t < 0) return ' hue-rotate(' + Math.min(180, Math.abs(t) * 0.6) + 'deg) saturate(' + Math.max(10, 100 + t * 0.3) + '%)';
+  return '';
+}
+function shadowFilterString(v) {
+  const s = (v === undefined || v === null || v === '') ? 100 : +v;
+  if (!(Math.abs(s - 100) > 0.1)) return '';
+  return ' brightness(' + (100 + (s - 100) * 0.4) + '%)';
+}
+function highlightFilterString(v) {
+  const h = (v === undefined || v === null || v === '') ? 100 : +v;
+  if (!(Math.abs(h - 100) > 0.1)) return '';
+  return ' contrast(' + (100 + (h - 100) * 0.4) + '%)';
+}
+function mediaFilterString(a) {
+  const o = a || {};
+  return 'brightness(' + (o.brightness || 100) + '%)'
+       + ' contrast(' + (o.contrast || 100) + '%)'
+       + ' saturate(' + (o.saturate || 100) + '%)'
+       + ' hue-rotate(' + (o.hueRotate || 0) + 'deg)'
+       + ' blur(' + (o.blur || 0) + 'px)'
+       + ' sepia(' + (o.sepia || 0) + '%)'
+       + ' grayscale(' + (o.grayscale || 0) + '%)'
+       + tempFilterString(o.temp)
+       + shadowFilterString(o.shadow)
+       + highlightFilterString(o.highlight);
+}
+
 function setCgiFilter(filter, value) {
   const sel = getSelectedImages();
   if (sel.length === 0) return;
@@ -18989,8 +18883,9 @@ function updateCgiOverlays(item) {
       vig.style.cssText = 'position:absolute;inset:0;pointer-events:none;border-radius:0;';
       item.el.appendChild(vig);
     }
-    const intensity = Math.min(vigVal / 100, 2.0); // Allow extreme vignette up to 200
-    vig.style.background = `radial-gradient(ellipse at center, transparent ${Math.max(0, 60 - intensity * 30)}%, rgba(0,0,0,${Math.min(1, intensity * 0.8)}) 100%)`;
+    // v7.0.35: the DOM gradient is the reference — the two canvas renderers
+    // reproduce these exact stops (see vignetteStops / paintVignetteOnCanvas).
+    vig.style.background = vignetteGradientCss(vigVal);
   } else if (vig) {
     vig.remove();
   }
@@ -22366,9 +22261,12 @@ function _dispatchShortcut(e) {
       if (_tryResetVideoZoomAtCursor()) return true;
       frameSelection(); return true;
     // Edit
-    case 'edit-undo':        undo(); return true;
-    case 'edit-redo':        redo(); return true;
-    case 'edit-redo-alt':    redo(); return true;
+    // v7.0.36: the Edit menu must behave exactly like Ctrl+Z / Ctrl+Shift+Z —
+    // it has to undo the last action whatever kind it was, including a video
+    // annotation stroke (which lives on its own lightweight stack).
+    case 'edit-undo':        undoLastAction(); return true;
+    case 'edit-redo':        redoLastAction(); return true;
+    case 'edit-redo-alt':    redoLastAction(); return true;
     case 'edit-copy':        copySelected(); return true;
     case 'edit-paste':       return true; // handled by native paste event
     case 'edit-duplicate':   duplicateSelected(); return true;
@@ -22666,43 +22564,14 @@ document.addEventListener('keydown', e => {
     if (e.key === 'ArrowRight') { e.preventDefault(); tetrisAlign('right'); return; }
     if (e.key === 'z' || e.key === 'Z') {
       e.preventDefault();
-      // v7.0.10: Ctrl+Z (no shift) first undoes a video-annotation stroke
-      // commit if that was the most recent action. Stroke commits never
-      // push board snapshots (a full captureSnapshot per stroke would be
-      // far too heavy), so the global undo() alone could never revert a
-      // frame draw — the user had to use the toolbar ↰ button. We keep a
-      // lightweight per-commit stack (G._annoUndoStack) sequenced against
-      // the same G._actionSeq that pushUndo() bumps, so board ops and
-      // annotation strokes interleave correctly: Ctrl+Z always undoes
-      // whichever happened LAST.
-      if (!e.shiftKey && G._annoUndoStack && G._annoUndoStack.length > 0) {
-        const _top = G._annoUndoStack[G._annoUndoStack.length - 1];
-        if (_top && _top.seq === (G._actionSeq || 0)) {
-          G._annoUndoStack.pop();
-          G._actionSeq = (G._actionSeq || 1) - 1;
-          const _tel = _top.el;
-          const _tds = _tel && _tel.isConnected && _tel._annoDrawState;
-          const _tArr = _tds && _tds.strokesByFrame && _tds.strokesByFrame[_top.frame];
-          if (_tArr && _tArr.length > 0) {
-            _tArr.pop();
-            // Re-sync the flat alias if the playhead is currently on this
-            // frame so the canvas paints the removal immediately.
-            try { if (_tel._syncStrokesForFrame) _tel._syncStrokesForFrame(); } catch (e2) {}
-            _tel._perfLastRenderKey = '';
-            try { if (_tel._renderAnnoCanvas) _tel._renderAnnoCanvas(); } catch (e2) {}
-            try { if (_tel._refreshDrawBtnBadge) _tel._refreshDrawBtnBadge(); } catch (e2) {}
-            try { if (_tel._refreshAllSeekMarkers) _tel._refreshAllSeekMarkers(); } catch (e2) {}
-            try { scheduleAutoSave(); } catch (e2) {}
-            return;
-          }
-          // Stale entry (item deleted or frame already empty) — fall
-          // through to the global board undo.
-        }
-      }
-      if (e.shiftKey) redo(); else undo();
+      // v7.0.36: the whole decision lives in undoLastAction() / redoLastAction()
+      // next to the stacks themselves — see the block above them for why the
+      // old exact-equality test here could wipe every frame annotation in a
+      // single keypress.
+      if (e.shiftKey) redoLastAction(); else undoLastAction();
       return;
     }
-    if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); redo(); return; }
+    if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); redoLastAction(); return; }
     if (e.key === 'c' || e.key === 'C') { e.preventDefault(); copySelected(); return; }
     if (e.key === 'v' || e.key === 'V') {
       // v5.5: don't intercept Ctrl+V — let the native paste event fire.
@@ -25556,27 +25425,22 @@ function combineMaskFilter(item, mask) {
   const bHue = (item.hueRotate || 0) + (mask.hueRotate || 0);
   const bBlur = (item.blur || 0) + 0; // Don't add blur to mask
   const bSepia = Math.min(100, (item.sepia || 0) + (mask.sepia || 0));
-  // Temperature
-  const totalTemp = (item.temp || 0) + (mask.temp || 0);
-  let tempFilter = '';
-  if (totalTemp > 0) {
-    tempFilter = ` sepia(${Math.min(100, totalTemp * 0.33)}%) saturate(${Math.min(400, 100 + totalTemp * 0.5)}%)`;
-  } else if (totalTemp < 0) {
-    tempFilter = ` hue-rotate(${Math.min(180, Math.abs(totalTemp) * 0.6)}deg) saturate(${Math.max(10, 100 + totalTemp * 0.3)}%)`;
-  }
-  // Shadow
-  const totalShadow = (item.shadow !== undefined ? item.shadow : 100) * (mask.shadow || 100) / 100;
-  let shadowFilter = '';
-  if (Math.abs(totalShadow - 100) > 0.1) {
-    shadowFilter = ` brightness(${100 + (totalShadow - 100) * 0.4}%)`;
-  }
-  // Highlight
-  const totalHighlight = (item.highlight !== undefined ? item.highlight : 100) * (mask.highlight || 100) / 100;
-  let highlightFilter = '';
-  if (Math.abs(totalHighlight - 100) > 0.1) {
-    highlightFilter = ` contrast(${100 + (totalHighlight - 100) * 0.4}%)`;
-  }
-  return `brightness(${bBri}%) contrast(${bCon}%) saturate(${bSat}%) hue-rotate(${bHue}deg) blur(${bBlur}px) sepia(${bSepia}%)${tempFilter}${shadowFilter}${highlightFilter}`;
+  // v7.0.35: same table as every other surface (see mediaFilterString). The
+  // mask layer is a separate overlay drawn ON TOP of the already-filtered
+  // image, so grayscale is deliberately left at 0 here — doubling it would
+  // drain the masked region twice.
+  return mediaFilterString({
+    brightness: bBri,
+    contrast: bCon,
+    saturate: bSat,
+    hueRotate: bHue,
+    blur: bBlur,
+    sepia: bSepia,
+    grayscale: 0,
+    temp: (item.temp || 0) + (mask.temp || 0),
+    shadow: (item.shadow !== undefined ? item.shadow : 100) * (mask.shadow || 100) / 100,
+    highlight: (item.highlight !== undefined ? item.highlight : 100) * (mask.highlight || 100) / 100
+  });
 }
 
 function renderMasks(item, filterOnly) {
@@ -30262,81 +30126,118 @@ function rerenderExport() {
 }
 // Apply saved prefs to the modal UI on first load
 syncExportBgUI();
-function renderExport(sx, sy, sw, sh) {
-  // Hide media UI so it doesn't bleed into the exported PNG
-  setCaptureMode(true);
-  void document.body.offsetHeight; // force reflow before measuring
-  try {
-  const scale = 2;
-  const cv = document.getElementById('export-canvas');
-  cv.width = sw * scale;
-  cv.height = sh * scale;
-  cv.style.width = sw + 'px';
-  cv.style.height = sh + 'px';
-  const ctx = cv.getContext('2d');
-  ctx.scale(scale, scale);
-  // v3.10: user-controllable export background (color or transparent)
-  if (exportBgTransparent) {
+// ============================================================
+//  BOARD -> CANVAS   (v7.0.35: one painter)
+// ============================================================
+// captureArea() and renderExport() used to be two ~140-line copies of the
+// same walk over the board. They drifted, and every drift was a bug:
+//   - masks were drawn by the export only, so screenshots lost local grading
+//   - rotated text kept its highlight / outline / shadow only in the capture
+//   - temperature used different constants, so an export never matched the
+//     board the user graded it on
+//   - three different vignette formulas, none of them the on-screen one
+//   - the z-sort defaulted to 1 in one copy and to undefined in the other
+// Both surfaces now call paintBoardRegion() and differ only by options.
+//
+// opts:
+//   sx, sy, sw, sh  screen-space rect to paint
+//   scale           backing-store supersample (masks rasterise at this)
+//   bg              'transparent' or any CSS colour
+//   controls        true -> also paint the video player's controls bar.
+//                   The screenshot stays WYSIWYG (R50: the user asked for
+//                   the bar to remain visible). The export hides it through
+//                   body.capturing, so it must NOT draw it.
+function paintBoardRegion(ctx, opts) {
+  const sx = opts.sx, sy = opts.sy, sw = opts.sw, sh = opts.sh;
+  const scale = opts.scale || 1;
+  const withControls = !!opts.controls;
+
+  if (opts.bg === 'transparent') {
     ctx.clearRect(0, 0, sw, sh);
   } else {
-    ctx.fillStyle = exportBgColor;
+    ctx.fillStyle = opts.bg || '#1a1a1a';
     ctx.fillRect(0, 0, sw, sh);
   }
-  // Remember the area so a color/toggle change can re-render the preview
-  lastExportArea = {x1: sx, y1: sy, w: sw, h: sh};
-  // Render items
-  [...state.items, ...state.texts, ...(state.todos||[]), ...(state.mindmaps||[])].sort((a, b) => a.z - b.z).forEach(item => {
+
+  const board = [].concat(state.items || [], state.texts || [], state.todos || [], state.mindmaps || []);
+  board.sort((a, b) => (a.z || 1) - (b.z || 1));
+
+  board.forEach(item => {
     const el = item.el;
+    if (!el) return;
     const r = el.getBoundingClientRect();
     const ix = r.left - sx, iy = r.top - sy;
     const iw = r.width, ih = r.height;
+    // Skip if entirely outside the region
     if (ix + iw < 0 || iy + ih < 0 || ix > sw || iy > sh) return;
-    // v7.0.30: same fix as captureArea — draw unrotated text from the
-    // browser's own line boxes in screen space instead of re-deriving the
-    // layout from item.size (world px) with a hard-coded line height.
+
+    // v7.0.30: unrotated text items are re-drawn straight from the browser's
+    // own line boxes in SCREEN space. They must not go through the rotate /
+    // flip transform below — the boxes are already final screen positions.
     if (el.classList && el.classList.contains('text-item') && !(item.rot || 0) && !item.flipH && !item.flipV) {
       drawTextItemCaptured(ctx, item, sx, sy, sw, sh);
       return;
     }
+
     ctx.save();
     ctx.globalAlpha = item.opacity !== undefined ? item.opacity : 1;
-    const cx = ix + iw / 2, cy = iy + ih / 2;
-    ctx.translate(cx, cy);
+    ctx.translate(ix + iw / 2, iy + ih / 2);
     ctx.rotate((item.rot || 0) * Math.PI / 180);
     ctx.scale(item.flipH ? -1 : 1, item.flipV ? -1 : 1);
+
     if (item.img || item.video) {
-      // Build full filter string including temperature, shadow, highlight
-      let tempFilter = '';
-      const temp = item.temp || 0;
-      if (temp > 0) tempFilter = ` sepia(${temp*0.3}%) saturate(${100+temp*0.5}%)`;
-      else if (temp < 0) tempFilter = ` hue-rotate(${Math.abs(temp)*0.6}deg) saturate(${100+temp*0.2}%)`;
-      // Shadow filter
-      let shadowFilter = '';
-      const shadowVal = item.shadow !== undefined ? item.shadow : 100;
-      if (shadowVal !== 100) { shadowFilter = ` brightness(${100 + (shadowVal - 100) * 0.4}%)`; }
-      // Highlight filter
-      let highlightFilter = '';
-      const highlightVal = item.highlight !== undefined ? item.highlight : 100;
-      if (highlightVal !== 100) { highlightFilter = ` contrast(${100 + (highlightVal - 100) * 0.4}%)`; }
-      ctx.filter = `brightness(${item.brightness||100}%) contrast(${item.contrast||100}%) saturate(${item.saturate||100}%) hue-rotate(${item.hueRotate||0}deg) blur(${item.blur||0}px) sepia(${item.sepia||0}%) grayscale(${item.grayscale||0}%)${tempFilter}${shadowFilter}${highlightFilter}`;
+      // v7.0.35: one filter table (see mediaFilterString) — the export used
+      // to carry its own temperature constants.
+      ctx.filter = mediaFilterString(item);
       const drawSrc = item.video || item.img;
-      try { ctx.drawImage(drawSrc, -iw/2, -ih/2, iw, ih); } catch(e) {}
-      ctx.filter = 'none';
-      // Mask overlays — supersampled like captureArea's, since this canvas
-      // is also backed at 2x.
-      drawMasksOnCanvas(ctx, item, iw, ih, scale);
-      // Vignette overlay
-      if (item.vignette && item.vignette > 0) {
-        const intensity = item.vignette / 100;
-        const vGrad = ctx.createRadialGradient(0, 0, Math.min(iw,ih) * (0.3 + intensity * 0.2), 0, 0, Math.max(iw,ih) * 0.7);
-        vGrad.addColorStop(0, 'transparent');
-        vGrad.addColorStop(1, `rgba(0,0,0,${intensity * 0.8})`);
-        ctx.fillStyle = vGrad;
-        ctx.fillRect(-iw/2, -ih/2, iw, ih);
+
+      // R50: a video .item is a flex column — .media-wrap (the picture) plus
+      // .media-controls (the ~30-50px bar beneath it). With the bar on screen
+      // the .item is taller than the picture, so the frame goes in the TOP
+      // portion and the bar is filled in afterwards. The export path hides
+      // the bar (body.capturing), collapsing .item back onto the picture, so
+      // there videoH === ih and the bar block below never runs.
+      const wrapEl = el.querySelector('.media-wrap');
+      const isVideo = !!item.video;
+      let videoH = ih;
+      if (withControls && isVideo && wrapEl) {
+        const wr = wrapEl.getBoundingClientRect();
+        videoH = Math.max(0, ih - Math.max(0, r.height - wr.height));
       }
-      // v7.0.34: grain — same call, same order as captureArea, so a
-      // screenshot and an export of the same pixels are identical.
+
+      try {
+        if (drawSrc.readyState === undefined || drawSrc.readyState >= 2) {
+          ctx.drawImage(drawSrc, -iw / 2, -ih / 2, iw, videoH);
+        }
+      } catch (e) {}
+      ctx.filter = 'none';
+
+      // v7.0.34: masks, then the vignette, then grain — same three steps in
+      // the same order for every surface, so a screenshot and an export of
+      // the same pixels are identical.
+      try { drawMasksOnCanvas(ctx, item, iw, ih, scale); } catch (e) {}
+      // v7.0.35: one vignette formula, and it darkens the PICTURE only —
+      // never the player controls bar below it.
+      if (item.vignette) {
+        paintVignetteOnCanvas(ctx, item.vignette, 0, (videoH < ih) ? (-ih / 2 + videoH / 2) : 0, iw, videoH);
+      }
       try { drawGrainOnCanvas(ctx, item, iw, ih); } catch (e) {}
+
+      // R50: render the visible controls bar as a dark gradient in the
+      // .item's local frame (local Y from -ih/2+videoH to +ih/2). Two-stop
+      // gradient + 1px top border mirror the live .media-controls CSS.
+      if (withControls && isVideo && wrapEl && videoH < ih) {
+        const ctlTop = -ih / 2 + videoH;
+        const ctlH = ih - videoH;
+        const ctlGrad = ctx.createLinearGradient(0, ctlTop, 0, ctlTop + ctlH);
+        ctlGrad.addColorStop(0, 'rgba(22,22,22,0.94)');
+        ctlGrad.addColorStop(1, 'rgba(16,16,16,0.98)');
+        ctx.fillStyle = ctlGrad;
+        ctx.fillRect(-iw / 2, ctlTop, iw, ctlH);
+        // 1px top border — matches live border-top: 1px solid rgba(255,255,255,0.07)
+        ctx.fillStyle = 'rgba(255,255,255,0.07)';
+        ctx.fillRect(-iw / 2, ctlTop, iw, 1);
+      }
     } else if (item.el && item.el.classList.contains('todo-item')) {
       // Todo checklist — render as card on canvas
       ctx.fillStyle = '#1e1e2e';
@@ -30429,28 +30330,51 @@ function renderExport(sx, sy, sw, sh) {
         ctx.fillText(n.text || '', -iw/2 + n.x + nw/2, -ih/2 + n.y + 30 + nh - 12);
       });
     } else if (!item.isLink) {
-      // Text (skip link cards without cover image)
+      // Text item (skip link cards without cover image)
       ctx.font = `${item.italic?'italic ':''}${item.bold?'bold ':''}${item.size}px ${item.font}`;
       ctx.fillStyle = item.color;
       ctx.textAlign = item.align || 'left';
       ctx.textBaseline = 'top';
+      // Background (highlight)
+      if (item.highlight || item.bg) {
+        const hc = item.highlightColor || '#ffff00';
+        const bg = item.highlight ? hc : hc + '88';
+        ctx.fillStyle = bg;
+        ctx.fillRect(-iw/2, -ih/2, iw, ih);
+        ctx.fillStyle = item.color;
+      }
+      // Text shadow / outline
+      if (item.outline) {
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+      }
+      if (item.shadow && !item.outline) {
+        ctx.shadowColor = 'rgba(0,0,0,0.7)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+      }
       const text = item.el.textContent;
       const lines = text.split('\n');
       lines.forEach((line, i) => {
         let tx = -iw/2;
         if (item.align === 'center') tx = 0;
         else if (item.align === 'right') tx = iw/2;
-        ctx.fillText(line, tx, -ih/2 + i * item.size * 1.3);
+        const ty = -ih/2 + i * item.size * 1.3;
+        if (item.outline) { ctx.strokeText(line, tx, ty); }
+        ctx.fillText(line, tx, ty);
       });
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
     }
     ctx.restore();
   });
-  // Render drawing
-  // v7.0.30: use the shared painter (see captureArea) — this copy had
-  // drifted too and dropped pen pressure.
+
+  // Board pen strokes — the shared painter, with a world -> region projection.
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
-  G.drawStrokes.forEach(stroke => {
+  (G.drawStrokes || []).forEach(stroke => {
     if (!stroke || !stroke.points || stroke.points.length < 2) return;
     paintDrawStroke(ctx, stroke, function (wx, wy) {
       return [wx * state.zoom + state.pan.x - sx, wy * state.zoom + state.pan.y - sy];
@@ -30458,6 +30382,32 @@ function renderExport(sx, sy, sw, sh) {
   });
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
+}
+
+function renderExport(sx, sy, sw, sh) {
+  // Hide media UI so it doesn't bleed into the exported PNG
+  setCaptureMode(true);
+  void document.body.offsetHeight; // force reflow before measuring
+  try {
+  const scale = 2;
+  const cv = document.getElementById('export-canvas');
+  cv.width = sw * scale;
+  cv.height = sh * scale;
+  cv.style.width = sw + 'px';
+  cv.style.height = sh + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.scale(scale, scale);
+  // v7.0.35: the whole board walk lives in paintBoardRegion — the same code
+  // the screenshot uses. Only the background preference differs here.
+  // v3.10: user-controllable export background (colour or transparent).
+  paintBoardRegion(ctx, {
+    sx: sx, sy: sy, sw: sw, sh: sh,
+    scale: scale,
+    bg: exportBgTransparent ? 'transparent' : exportBgColor,
+    controls: false
+  });
+  // Remember the area so a colour/toggle change can re-render the preview
+  lastExportArea = {x1: sx, y1: sy, w: sw, h: sh};
   document.getElementById('export-modal').classList.add('active');
   } finally {
     setCaptureMode(false);
@@ -30693,9 +30643,9 @@ function captureArea(sx, sy, sw, sh) {
   if (sw < 10 || sh < 10) { toast('Nothing to capture'); return; }
 
   // R50: per user request, the per-item media controls panel must
-  // stay visible during capture. captureArea's drawing now uses
-  // .media-wrap BCR for the video and renders the controls bar as
-  // a dark fill, so the captured output matches the on-screen state.
+  // stay visible during capture. paintBoardRegion(controls:true) uses the
+  // .media-wrap BCR for the video and renders the controls bar as a dark
+  // fill, so the captured output matches the on-screen state.
   //
   // The global #media-bar at the bottom of the screen is a fixed UI
   // overlay (not part of the canvas content) and must NOT bleed into
@@ -30709,6 +30659,10 @@ function captureArea(sx, sy, sw, sh) {
   // and text stay sharp when the user pastes the capture into a doc or
   // opens it full-screen. The on-screen crop rectangle still shows the
   // 1:1 pixel dimensions — the 2x scale only affects the exported PNG.
+  //
+  // v7.0.35: the board walk itself lives in paintBoardRegion — the same
+  // painter renderExport uses, so a screenshot of a region and an export of
+  // that same region can no longer drift apart.
   const scale = 2;
   const cv = document.createElement('canvas');
   cv.width = Math.round(sw * scale);
@@ -30718,276 +30672,12 @@ function captureArea(sx, sy, sw, sh) {
 
   // Background: match current theme
   const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#1a1a1a';
-  ctx.fillStyle = bgColor;
-  ctx.fillRect(0, 0, sw, sh);
-
-  // Render all items (images, videos, texts) sorted by z-index
-  [...state.items, ...state.texts, ...(state.todos||[]), ...(state.mindmaps||[])].sort((a, b) => (a.z || 1) - (b.z || 1)).forEach(item => {
-    const el = item.el;
-    const r = el.getBoundingClientRect();
-    const ix = r.left - sx;
-    const iy = r.top - sy;
-    const iw = r.width;
-    const ih = r.height;
-    // Skip if entirely outside capture area
-    if (ix + iw < 0 || iy + ih < 0 || ix > sw || iy > sh) return;
-
-    // v7.0.30: unrotated text items are re-drawn straight from the browser's
-    // own line boxes in SCREEN space. They must not go through the rotate /
-    // flip transform below — the line boxes are already final screen positions,
-    // and forcing them through a rotation could only make them wrong.
-    if (el.classList && el.classList.contains('text-item') && !(item.rot || 0) && !item.flipH && !item.flipV) {
-      drawTextItemCaptured(ctx, item, sx, sy, sw, sh);
-      return;
-    }
-
-    ctx.save();
-    ctx.globalAlpha = item.opacity !== undefined ? item.opacity : 1;
-    const cx = ix + iw / 2;
-    const cy = iy + ih / 2;
-    ctx.translate(cx, cy);
-    ctx.rotate((item.rot || 0) * Math.PI / 180);
-    ctx.scale(item.flipH ? -1 : 1, item.flipV ? -1 : 1);
-
-    if (item.img || item.video) {
-      // Build filter string with all adjustments
-      let tempFilter = '';
-      const temp = item.temp || 0;
-      if (temp > 0) tempFilter = ` sepia(${Math.min(100, temp*0.33)}%) saturate(${Math.min(400, 100+temp*0.5)}%)`;
-      else if (temp < 0) tempFilter = ` hue-rotate(${Math.min(180, Math.abs(temp)*0.6)}deg) saturate(${Math.max(10, 100+temp*0.3)}%)`;
-      let shadowFilter = '';
-      const shadowVal = item.shadow !== undefined ? item.shadow : 100;
-      if (shadowVal !== 100) { shadowFilter = ` brightness(${100 + (shadowVal - 100) * 0.4}%)`; }
-      let highlightFilter = '';
-      const highlightVal = item.highlight !== undefined ? item.highlight : 100;
-      if (highlightVal !== 100) { highlightFilter = ` contrast(${100 + (highlightVal - 100) * 0.4}%)`; }
-      ctx.filter = `brightness(${item.brightness||100}%) contrast(${item.contrast||100}%) saturate(${item.saturate||100}%) hue-rotate(${item.hueRotate||0}deg) blur(${item.blur||0}px) sepia(${item.sepia||0}%) grayscale(${item.grayscale||0}%)${tempFilter}${shadowFilter}${highlightFilter}`;
-      const drawSrc = item.video || item.img;
-
-      // R50: For video items, .item has two flex children — .media-wrap
-      // (the video) and .media-controls (the 30-50px bottom bar). The
-      // user wants the controls panel to stay visible during capture
-      // (R49 hid it, which surprised them). We're inside the outer
-      // transform block (translated to .item center, rotated by
-      // .item.rot), so the .item spans local Y from -ih/2 to +ih/2.
-      // The .media-wrap fills everything EXCEPT the controls bar at
-      // the bottom. To match the on-screen state, we draw the video
-      // in the top portion of the .item and fill the bottom strip
-      // with a dark gradient that mirrors the controls panel styling.
-      // For images, .item IS the image (no controls bar), so we draw
-      // at the full .item size as before.
-      const wrapEl = el.querySelector('.media-wrap');
-      const isVideo = !!item.video;
-      let videoH = ih;  // default: image — full .item height
-      if (isVideo && wrapEl) {
-        const wr = wrapEl.getBoundingClientRect();
-        // In screen space, .item.bottom - .media-wrap.bottom = controlsH
-        // (because the controls bar sits below .media-wrap). This is
-        // true regardless of the .item's rotation, since the whole
-        // stack is rotated as a single unit.
-        const itemRect = el.getBoundingClientRect();
-        const controlsH = Math.max(0, itemRect.height - wr.height);
-        videoH = ih - controlsH;
-      }
-
-      try {
-        if (drawSrc.readyState === undefined || drawSrc.readyState >= 2) {
-          if (isVideo && wrapEl && videoH < ih) {
-            // Video: draw at the TOP of .item in local coords
-            // (y from -ih/2 to -ih/2 + videoH)
-            ctx.drawImage(drawSrc, -iw/2, -ih/2, iw, videoH);
-          } else {
-            // Image (or video with no controls bar): full .item size
-            ctx.drawImage(drawSrc, -iw/2, -ih/2, iw, ih);
-          }
-        }
-      } catch(e) {}
-      ctx.filter = 'none';
-      // v7.0.34: masks were export-only. drawMasksOnCanvas() was written
-      // for renderExport and simply never called here, so a screenshot of
-      // a locally graded image came back ungraded while the exported PNG
-      // of the same pixels was graded. Supersample by `scale` — the
-      // drawing units are screen px but the backing store is 2x.
-      try { drawMasksOnCanvas(ctx, item, iw, ih, scale); } catch (e) {}
-      // Vignette overlay (video only — applies to the video area, not the controls bar)
-      if (item.vignette && item.vignette > 0) {
-        const intensity = Math.min(item.vignette / 100, 2.0);
-        const vigW = iw;
-        const vigH = isVideo && wrapEl ? videoH : ih;
-        const vigCy = isVideo && wrapEl ? (-ih/2 + vigH/2) : 0;
-        const vGrad = ctx.createRadialGradient(0, vigCy, Math.min(vigW,vigH) * (0.3 + intensity * 0.2), 0, vigCy, Math.max(vigW,vigH) * 0.7);
-        vGrad.addColorStop(0, 'transparent');
-        vGrad.addColorStop(1, `rgba(0,0,0,${Math.min(1, intensity * 0.8)})`);
-        ctx.fillStyle = vGrad;
-        ctx.fillRect(-vigW/2, vigCy - vigH/2, vigW, vigH);
-      }
-      // v7.0.34: grain, matching the .cgi-grain overlay the user sees.
-      // Before the controls bar on purpose — grain is a picture effect,
-      // so it should grit the frame and not the player UI. Neither
-      // renderer drew it at all before this.
-      try { drawGrainOnCanvas(ctx, item, iw, ih); } catch (e) {}
-      // R50: render the visible controls bar as a dark gradient in the
-      // .item's local frame (local Y from -ih/2+videoH to +ih/2). Two-stop
-      // gradient + 1px top border matches the live .media-controls CSS.
-      if (isVideo && wrapEl && videoH < ih) {
-        const ctlTop = -ih/2 + videoH;
-        const ctlH = ih - videoH;
-        const ctlGrad = ctx.createLinearGradient(0, ctlTop, 0, ctlTop + ctlH);
-        ctlGrad.addColorStop(0, 'rgba(22,22,22,0.94)');
-        ctlGrad.addColorStop(1, 'rgba(16,16,16,0.98)');
-        ctx.fillStyle = ctlGrad;
-        ctx.fillRect(-iw/2, ctlTop, iw, ctlH);
-        // 1px top border — matches live border-top: 1px solid rgba(255,255,255,0.07)
-        ctx.fillStyle = 'rgba(255,255,255,0.07)';
-        ctx.fillRect(-iw/2, ctlTop, iw, 1);
-      }
-    } else if (item.el && item.el.classList.contains('todo-item')) {
-      // Todo checklist — render as card on canvas
-      ctx.fillStyle = '#1e1e2e';
-      ctx.fillRect(-iw/2, -ih/2, iw, ih);
-      ctx.strokeStyle = '#3a3a4e';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(-iw/2, -ih/2, iw, ih);
-      ctx.fillStyle = '#e0e0e0';
-      ctx.font = 'bold 13px Inter, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillText(item.title || 'Checklist', -iw/2 + 14, -ih/2 + 12);
-      ctx.font = '12px Inter, sans-serif';
-      let ty = -ih/2 + 36;
-      (item.items||[]).forEach(it => {
-        ctx.fillStyle = it.done ? '#888' : '#e0e0e0';
-        ctx.fillText((it.done ? '[x] ' : '[ ] ') + (it.text || ''), -iw/2 + 14, ty);
-        ty += 18;
-      });
-    } else if (item.el && item.el.classList.contains('mindmap-item')) {
-      // Mind map — render as dark card with nodes and connections
-      ctx.fillStyle = '#161616';
-      ctx.fillRect(-iw/2, -ih/2, iw, ih);
-      ctx.strokeStyle = '#333333';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(-iw/2, -ih/2, iw, ih);
-      ctx.fillStyle = '#e0e0e0';
-      ctx.font = 'bold 11px Inter, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillText(item.title || 'Mind Map', -iw/2 + 10, -ih/2 + 8);
-      // Draw connections
-      (item.connections||[]).forEach(c => {
-        const from = (item.nodes||[]).find(n => n.id === c.from);
-        const to = (item.nodes||[]).find(n => n.id === c.to);
-        if (!from || !to) return;
-        ctx.strokeStyle = c.color || '#7c8cf0';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-iw/2 + from.x + (from.w||100)/2, -ih/2 + from.y + (from.h||32)/2 + 30);
-        ctx.lineTo(-iw/2 + to.x + (to.w||100)/2, -ih/2 + to.y + (to.h||32)/2 + 30);
-        ctx.stroke();
-        // Arrow head
-        const ax = -iw/2 + to.x + (to.w||100)/2, ay = -ih/2 + to.y + (to.h||32)/2 + 30;
-        const angle = Math.atan2(ay - (-ih/2 + from.y + (from.h||32)/2 + 30), ax - (-iw/2 + from.x + (from.w||100)/2));
-        ctx.fillStyle = c.color || '#7c8cf0';
-        ctx.beginPath();
-        ctx.moveTo(ax, ay);
-        ctx.lineTo(ax - 8*Math.cos(angle-0.4), ay - 8*Math.sin(angle-0.4));
-        ctx.lineTo(ax - 8*Math.cos(angle+0.4), ay - 8*Math.sin(angle+0.4));
-        ctx.closePath();
-        ctx.fill();
-      });
-      // Draw nodes
-      (item.nodes||[]).forEach(n => {
-        ctx.fillStyle = n.color || '#7c8cf0';
-        const nw = n.w || 100, nh = n.h || 32;
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(-iw/2 + n.x, -ih/2 + n.y + 30, nw, nh, 8);
-        else ctx.rect(-iw/2 + n.x, -ih/2 + n.y + 30, nw, nh);
-        ctx.fill();
-        // Draw node image if present
-        if (n.img) {
-          try {
-            const nodeImg = new Image();
-            nodeImg.src = n.img;
-            const imgDispW = Math.min(120, nw - 8);
-            const imgDispH = Math.min(80, n.imgH * (imgDispW / Math.max(n.imgW, 1)));
-            ctx.save();
-            ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(-iw/2 + n.x + 4, -ih/2 + n.y + 34, imgDispW, imgDispH, 4);
-            else ctx.rect(-iw/2 + n.x + 4, -ih/2 + n.y + 34, imgDispW, imgDispH);
-            ctx.clip();
-            ctx.drawImage(nodeImg, -iw/2 + n.x + 4, -ih/2 + n.y + 34, imgDispW, imgDispH);
-            ctx.restore();
-          } catch(e) {}
-        }
-        // Draw audio indicator if present
-        if (n.audio) {
-          ctx.fillStyle = 'rgba(255,255,255,0.9)';
-          ctx.font = '10px Inter, sans-serif';
-          ctx.textAlign = 'right';
-          ctx.textBaseline = 'top';
-          ctx.fillText('\u266B', -iw/2 + n.x + nw - 4, -ih/2 + n.y + 32);
-        }
-        ctx.fillStyle = n.textColor || '#ffffff';
-        ctx.font = '500 11.5px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(n.text || '', -iw/2 + n.x + nw/2, -ih/2 + n.y + 30 + nh - 12);
-      });
-    } else if (!item.isLink) {
-      // Text item (skip link cards without cover image)
-      ctx.font = `${item.italic?'italic ':''}${item.bold?'bold ':''}${item.size}px ${item.font}`;
-      ctx.fillStyle = item.color;
-      ctx.textAlign = item.align || 'left';
-      ctx.textBaseline = 'top';
-      // Background (highlight)
-      if (item.highlight || item.bg) {
-        const bg = item.highlight ? item.highlightColor : item.highlightColor + '88';
-        ctx.fillStyle = bg;
-        ctx.fillRect(-iw/2, -ih/2, iw, ih);
-        ctx.fillStyle = item.color;
-      }
-      // Text shadow / outline
-      if (item.outline) {
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.lineJoin = 'round';
-      }
-      if (item.shadow && !item.outline) {
-        ctx.shadowColor = 'rgba(0,0,0,0.7)';
-        ctx.shadowBlur = 4;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-      }
-      const text = item.el.textContent;
-      const lines = text.split('\n');
-      lines.forEach((line, i) => {
-        let tx = -iw/2;
-        if (item.align === 'center') tx = 0;
-        else if (item.align === 'right') tx = iw/2;
-        const ty = -ih/2 + i * item.size * 1.3;
-        if (item.outline) { ctx.strokeText(line, tx, ty); }
-        ctx.fillText(line, tx, ty);
-      });
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
-    }
-    ctx.restore();
+  paintBoardRegion(ctx, {
+    sx: sx, sy: sy, sw: sw, sh: sh,
+    scale: scale,
+    bg: bgColor,
+    controls: true
   });
-
-  // Render drawing strokes.
-  // v7.0.30: this used to be a fourth hand-rolled copy of the stroke renderer
-  // (it silently dropped pen pressure and was the same class of drift that
-  // produced the v7.0.29 "two boxes became one line" bug). Use the shared
-  // painter — the capture just supplies a world → capture-space projection.
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.globalAlpha = 1;
-  G.drawStrokes.forEach(stroke => {
-    if (!stroke || !stroke.points || stroke.points.length < 2) return;
-    paintDrawStroke(ctx, stroke, function (wx, wy) {
-      return [wx * state.zoom + state.pan.x - sx, wy * state.zoom + state.pan.y - sy];
-    });
-  });
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.globalAlpha = 1;
 
   // Store canvas for save/discard
   G.captureResultCanvas = cv;
@@ -33899,6 +33589,7 @@ function restoreBoard(data, append) {
     // v7.0.10: drop annotation-stroke undo entries from the previous board —
     // they reference DOM elements that cleanupAllItems() just removed.
     G._annoUndoStack = [];
+    G._annoRedoStack = [];
   }
   // Reset viewport transform so the loaded board renders at 100% zoom,
   // centered. Without this, a previously-zoomed-in session would leave
@@ -34712,6 +34403,7 @@ function newBoard() {
   // v7.0.10: the annotation-stroke stack is still dropped — its entries hold
   // direct DOM references to elements we are about to destroy.
   G._annoUndoStack = [];
+  G._annoRedoStack = [];
   G.nextZ = 1; G.nextId = 1;
   G.drawStrokes.length = 0;
   state.pan = { x: 0, y: 0 };
