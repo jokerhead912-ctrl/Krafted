@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.29</title>
+<title>Krafted v7.0.30</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2523,6 +2523,8 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #cut-panel .cut-btn { padding:5px 11px; background:var(--input-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; transition:all 0.15s; white-space:nowrap; }
 #cut-panel .cut-btn:hover { background:var(--btn-hover); color:var(--text); }
 #cut-panel .cut-btn.primary { background:#00e5ff; color:#000; border-color:#00e5ff; font-weight:600; }
+#cut-panel .cut-checkbox { display:flex; align-items:center; gap:4px; font-size:10px; color:var(--text-dim); font-family:'Inter',sans-serif; cursor:pointer; user-select:none; }
+#cut-panel .cut-checkbox input { accent-color:var(--accent); cursor:pointer; }
 
 /* LASSO (POLYGON CUT) TOOL */
 #lasso-overlay { position:fixed; inset:0; z-index:9999997; display:none; pointer-events:none; }
@@ -3840,6 +3842,8 @@ body.screen-share-mode #ss-fps {
   <div class="cut-sep"></div>
   <span class="cut-label" id="cut-hint">Draw on image to cut</span>
   <div class="cut-sep"></div>
+  <label class="cut-checkbox" title="Drop the crop on the same pixels instead of beside the original"><input type="checkbox" id="cut-inplace-toggle" checked> In place</label>
+  <div class="cut-sep"></div>
   <button class="cut-btn primary" id="cut-extract-btn" onclick="applyCutExtract()" style="display:none;">Extract</button>
   <button class="cut-btn" id="cut-redraw-btn" onclick="clearCutPath()" style="display:none;">Redraw</button>
   <button class="cut-btn" onclick="cancelCut()">Done</button>
@@ -3862,6 +3866,8 @@ body.screen-share-mode #ss-fps {
   <div class="lasso-sep"></div>
   <label class="lasso-checkbox"><input type="checkbox" id="lasso-border-toggle" checked> Border</label>
   <input type="color" class="lasso-border-color" id="lasso-border-color" value="#7c8cf0" title="Border color">
+  <div class="lasso-sep"></div>
+  <label class="lasso-checkbox" title="Drop the crop on the same pixels instead of beside the original"><input type="checkbox" id="lasso-inplace-toggle" checked> In place</label>
   <div class="lasso-sep"></div>
   <button class="lasso-btn" id="lasso-close-btn" onclick="closeLasso()" style="display:none;">Close Shape</button>
   <button class="lasso-btn primary" id="lasso-extract-btn" onclick="applyLassoExtract()" style="display:none;">Extract</button>
@@ -4077,7 +4083,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.29';
+var KRAFTED_VERSION = '7.0.30';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -5140,6 +5146,11 @@ const state = {
   // v6.8.27: track rough undo-stack byte size so we can drop old history
   // before it eats all RAM on boards with large media.
   _undoBytes: 0,
+  // v7.0.30: the redo stack was never capped — see _pushRedo().
+  _redoBytes: 0,
+  // v7.0.30: an undo step that arrived while a save was in flight. Dropping
+  // it (the old behaviour) silently un-made the user's last action.
+  _deferredUndo: null,
   groups: [],  // [{id, color, memberIds:Set, borderEl}]
   mouse: { x: 0, y: 0 }, // last known mouse position (screen coords)
   reframing: null, // { item, origCropX, origCropY }
@@ -5487,6 +5498,7 @@ var I18N = (function() {
 
     // ── Lasso ──
     'Click points on image to cut': '在图片上点击建立裁剪点',
+    'In place': '原位',
     'Border': '边框',
     'Border color': '边框颜色',
     'Close Shape': '闭合形状',
@@ -5867,8 +5879,13 @@ var I18N = (function() {
     'Screen capture cancelled': '屏幕截图已取消',
     'Screen capture failed:': '屏幕截图失败：',
     'Cut shape extracted': '裁剪形状已提取',
+    'Cut shape extracted in place': '裁剪形状已提取（原位）',
+    'Cut shape extracted (beside)': '裁剪形状已提取（旁边）',
     'Lasso extracted': '套索已提取',
+    'Lasso extracted in place': '套索已提取（原位）',
+    'Lasso extracted (beside)': '套索已提取（旁边）',
     'Lasso extracted with border': '套索已提取 (含边框)',
+    'Selection too small': '选取范围太细',
     'Align': '对齐',
     'Column layout': '直列布局',
     'Row layout': '横列布局',
@@ -7008,32 +7025,130 @@ function captureSnapshot() {
   };
   return JSON.stringify(snap);
 }
+const _UNDO_MAX_STEPS = 100;
+const _UNDO_MAX_BYTES = 300 * 1024 * 1024;
+
+// captureSnapshot() can legitimately fail: a board big enough to exceed the
+// V8 string cap, or a property that makes JSON.stringify throw. Losing one
+// history entry is annoying; crashing the caller mid-operation is not.
+function _captureSnapshotSafe() {
+  try { return captureSnapshot(); }
+  catch (e) { console.warn('[undo] captureSnapshot failed:', e && e.message); return null; }
+}
+
+function _trimStack(stack, bytesRef) {
+  while (stack.length > _UNDO_MAX_STEPS || state[bytesRef] > _UNDO_MAX_BYTES) {
+    const old = stack.shift();
+    if (old) state[bytesRef] -= old.length;
+    if (state[bytesRef] < 0) state[bytesRef] = 0;
+  }
+}
+
 function pushUndo() {
   // v6.8.27: don't record new undo states while saving — the save itself may
   // be reading the current state and we don't want to mutate the undo stack
   // mid-flight (which can corrupt redo history and add memory pressure).
-  if (state._saving) return;
-  const snapStr = captureSnapshot();
+  //
+  // v7.0.30: the old code just `return`ed here, which SILENTLY DROPPED the
+  // undo step. Anything the user did during an autosave was therefore
+  // unrecoverable, and the next Ctrl+Z jumped back past every dropped step —
+  // the board appeared to lose a chunk of work in one go. Capture the
+  // snapshot now and push it once the save finishes instead.
+  if (state._saving) {
+    if (!state._deferredUndo) state._deferredUndo = _captureSnapshotSafe();
+    return;
+  }
+  const snapStr = _captureSnapshotSafe();
+  if (!snapStr) return;
   state.undoStack.push(snapStr);
   state._undoBytes += snapStr.length;
   // v5.5.1: cap undo history at 100 steps to prevent memory bloat
   // on long sessions with large boards (each snapshot can be 1-5MB+)
   // v6.8.27: also drop oldest entries if total snapshot bytes exceed ~300MB,
   // so boards with many images cannot eat all RAM through undo history.
-  while (state.undoStack.length > 100 || state._undoBytes > 300 * 1024 * 1024) {
-    const old = state.undoStack.shift();
-    if (old) state._undoBytes -= old.length;
-    if (state._undoBytes < 0) state._undoBytes = 0;
-  }
+  _trimStack(state.undoStack, '_undoBytes');
   state.redoStack = [];
+  state._redoBytes = 0;
   // v7.0.10: bump the global action sequence so the Ctrl+Z handler can tell
   // whether the most recent action was a board op (covered by this stack) or
   // a video-annotation stroke commit (covered by G._annoUndoStack).
   G._actionSeq = (G._actionSeq || 0) + 1;
   updateStatus();
 }
-function restoreSnapshot(snapStr) {
-  const snap = safeJSONParse(snapStr, null);
+
+// Flushed from _setSaving(false): replay the step that arrived during a save.
+function _flushDeferredUndo() {
+  if (!state._deferredUndo || state._saving) return;
+  const snapStr = state._deferredUndo;
+  state._deferredUndo = null;
+  state.undoStack.push(snapStr);
+  state._undoBytes += snapStr.length;
+  _trimStack(state.undoStack, '_undoBytes');
+  G._actionSeq = (G._actionSeq || 0) + 1;
+  updateStatus();
+}
+
+// v7.0.30: the redo stack had no cap at all. Every Ctrl+Z pushed a full
+// snapshot, so twenty undos on a 50MB board put ~1GB in it and took the tab
+// down — which reads to the user as "everything just vanished".
+function _pushRedo() {
+  const snapStr = _captureSnapshotSafe();
+  if (!snapStr) return;
+  state.redoStack.push(snapStr);
+  state._redoBytes = (state._redoBytes || 0) + snapStr.length;
+  _trimStack(state.redoStack, '_redoBytes');
+}
+// v7.0.30 — "Ctrl+Z sometimes wipes the whole board".
+//
+// restoreSnapshot() used to parse the snapshot and then IMMEDIATELY call
+// cleanupAllItems(), dereferencing the parsed result several lines later. So
+// any failure — an unreadable snapshot (safeJSONParse returns null), or a
+// throw from any single item's rebuild — destroyed the board first and then
+// aborted, leaving the user staring at an empty canvas with no way back.
+//
+// The board is now only torn down after the snapshot has been validated, and
+// the live state is captured first as a safety net that gets replayed if the
+// rebuild throws or produces fewer items than the snapshot promised.
+// safetyStr: the state to replay if the rebuild fails. undo()/redo() already
+// snapshot the live board before they restore (that is what feeds the opposite
+// stack), so they hand it in here and we avoid a second full serialisation.
+function restoreSnapshot(snapStr, safetyStr) {
+  let snap = null;
+  try { snap = safeJSONParse(snapStr, null); } catch (e) { snap = null; }
+  if (!snap || typeof snap !== 'object' || !Array.isArray(snap.items)) {
+    console.error('[undo] refusing to restore an unreadable snapshot');
+    try {
+      toast((typeof _isZhUI === 'function' && _isZhUI())
+        ? '撤销失败：无法读取历史记录，画板保持原样'
+        : 'Undo failed — unreadable history, board left untouched');
+    } catch (e) {}
+    return false;
+  }
+  let safety = (typeof safetyStr === 'string' && safetyStr) ? safetyStr : null;
+  if (!safety) { try { safety = _captureSnapshotSafe(); } catch (e) {} }
+  let ok = true;
+  try {
+    applySnapshot(snap);
+  } catch (err) {
+    console.error('[undo] restore threw:', err);
+    ok = false;
+  }
+  if (!ok || (snap.items.length > 0 && state.items.length === 0)) {
+    console.error('[undo] restore produced an empty board — replaying the safety snapshot');
+    if (safety) {
+      try { applySnapshot(safeJSONParse(safety, null)); } catch (e) {}
+    }
+    try {
+      toast((typeof _isZhUI === 'function' && _isZhUI())
+        ? '撤销时出错，已还原画板'
+        : 'Undo hit an error — board restored');
+    } catch (e) {}
+    return false;
+  }
+  return true;
+}
+
+function applySnapshot(snap) {
   // Remove all current items
   cleanupAllItems();
   state.items = [];
@@ -7041,15 +7156,22 @@ function restoreSnapshot(snapStr) {
   state.todos = [];
   state.mindmaps = [];
   state.selected.clear();
-  G.nextZ = snap.nextZ;
-  G.nextId = snap.nextId;
-  G.nextStrokeId = snap.nextStrokeId || G.nextStrokeId;
-  G.nextGroupId = snap.nextGroupId || G.nextGroupId;
+  // v7.0.30: a snapshot missing these counters used to write `undefined`
+  // into them, after which G.nextId++ yields NaN — every later item got a
+  // NaN id and vanished from selection/hit-testing. Fall back to the live
+  // counters instead of trusting the snapshot blindly.
+  G.nextZ = Number.isFinite(snap.nextZ) ? snap.nextZ : G.nextZ;
+  G.nextId = Number.isFinite(snap.nextId) ? snap.nextId : G.nextId;
+  G.nextStrokeId = Number.isFinite(snap.nextStrokeId) ? snap.nextStrokeId : G.nextStrokeId;
+  G.nextGroupId = Number.isFinite(snap.nextGroupId) ? snap.nextGroupId : G.nextGroupId;
   // Restore draw strokes (snapshot keeps flat array; legacy drawLayers is already collapsed in saveBoard)
   G.drawStrokes = Array.isArray(snap.drawStrokes) ? snap.drawStrokes: Array.isArray(snap.drawLayers) ? snap.drawLayers.flatMap(l => l.strokes || [])
               : [];
   // Restore items
+  // v7.0.30: one bad item must not abort the whole restore (that is exactly
+  // how a single failure used to leave the board empty).
   snap.items.forEach(data => {
+   try {
     if (data.videoLost || (data.isVideo && !data.src)) return;
     if (data.type === 'draw') {
       const el = document.createElement('div');
@@ -7168,9 +7290,11 @@ function restoreSnapshot(snapStr) {
         if (mediaEl.paused) { mediaEl.muted = false; mediaEl.play(); } else { mediaEl.pause(); }
       });
     }
+   } catch (e) { console.error('[undo] item restore failed', data && data.id, e); }
   });
   // Restore texts
-  snap.texts.forEach(data => {
+  (snap.texts || []).forEach(data => {
+   try {
     const el = document.createElement('div');
     el.className = 'text-item';
     el.contentEditable = true;
@@ -7200,6 +7324,7 @@ function restoreSnapshot(snapStr) {
     attachTextListeners(tx);
     // Initial auto-grow after render
     setTimeout(() => autoGrowTextItem(tx), 50);
+   } catch (e) { console.error('[undo] text restore failed', data && data.id, e); }
   });
   // Restore todos
   state.todos = [];
@@ -7285,14 +7410,22 @@ function restoreSnapshot(snapStr) {
 }
 function undo() {
   if (state.undoStack.length === 0) return;
-  state.redoStack.push(captureSnapshot());
-  restoreSnapshot(state.undoStack.pop());
+  _pushRedo();
+  // Whatever _pushRedo() just captured IS the live board — reuse it as the
+  // restore's safety net instead of serialising a second time.
+  const safety = state.redoStack[state.redoStack.length - 1] || null;
+  restoreSnapshot(state.undoStack.pop(), safety);
   updateStatus();
 }
 function redo() {
   if (state.redoStack.length === 0) return;
-  state.undoStack.push(captureSnapshot());
-  restoreSnapshot(state.redoStack.pop());
+  const snapStr = _captureSnapshotSafe();
+  if (snapStr) {
+    state.undoStack.push(snapStr);
+    state._undoBytes += snapStr.length;
+    _trimStack(state.undoStack, '_undoBytes');
+  }
+  restoreSnapshot(state.redoStack.pop(), snapStr || null);
   updateStatus();
 }
 
@@ -16679,9 +16812,18 @@ async function videoAnnoSendToBoard() {
   // single pre-batch snapshot on top, so Ctrl+Z reverts the whole
   // storyboard in one step.
   try {
-    state.undoStack.length = initialUndoLen;
+    // v7.0.30: truncating the stack without recomputing _undoBytes left the
+    // byte counter permanently over-counted, so _trimStack() then evicted
+    // good history far more aggressively than the 300MB budget intends.
+    while (state.undoStack.length > initialUndoLen) {
+      const dropped = state.undoStack.pop();
+      if (dropped) state._undoBytes -= dropped.length;
+    }
     state.undoStack.push(preBatchSnap);
+    state._undoBytes = (state._undoBytes < 0 ? 0 : state._undoBytes) + preBatchSnap.length;
+    _trimStack(state.undoStack, '_undoBytes');
     state.redoStack = [];
+    state._redoBytes = 0;
     updateStatus();
   } catch (e) {}
   // ── 5) Select all the new items so the user sees the result ─────
@@ -22223,13 +22365,15 @@ document.addEventListener('keydown', e => {
   // Free cut shortcuts
   if (cutState) {
     if (e.key === 'Escape') { cancelCut(); setTool('select'); return; }
-    if (e.key === 'Enter') { applyCutExtract(); return; }
+    // v7.0.30: Enter = extract in place (default). Shift+Enter = the old
+    // "drop it beside the original" behaviour.
+    if (e.key === 'Enter') { applyCutExtract(e.shiftKey); return; }
     return;
   }
   // Lasso shortcuts
   if (lassoState) {
     if (e.key === 'Escape') { cancelLasso(); setTool('select'); return; }
-    if (e.key === 'Enter') { if (lassoState.points.length >= 3) { closeLasso(); applyLassoExtract(); } return; }
+    if (e.key === 'Enter') { if (lassoState.points.length >= 3) { closeLasso(); applyLassoExtract(e.shiftKey); } return; }
     if (e.key === 'Backspace' || e.key === 'z' || e.key === 'Z') { e.preventDefault(); undoLassoPoint(); return; }
     return;
   }
@@ -27438,45 +27582,146 @@ function endCutDraw() {
   cutHint.textContent = 'Extract or redraw';
 }
 
-// Extract the area inside the freehand path as a new image item
-function applyCutExtract() {
-  const item = getCutItem();
-  if (!item || !cutState || !cutState.closed || cutState.points.length < 3) return;
+// ============================================================
+//  v7.0.30 — SHARED POLYGON EXTRACTOR (Free Shape Cut + Lasso)
+//
+//  Both extractors used to:
+//    1. build a canvas the size of the ENTIRE source image and leave
+//       everything outside the polygon transparent, and
+//    2. drop the result 20px to the right of the original.
+//  Consequences the user hit every time:
+//    * the new item's bounding box (and therefore its resize handles) was
+//      as big as the source image — "the box is huge, impossible to
+//      control";
+//    * it jumped away from where the selection was drawn, so every
+//      recomposition test ("rotate it a bit more", "lift it up") started
+//      with a manual re-scale + re-position.
+//  Now: the canvas is cropped to the selection's bounding box and the new
+//  item is placed on exactly the pixels the selection covered, with the
+//  source's rotation carried over so it sits on top of the original.
+// ============================================================
+async function extractPolyFromItem(item, screenPts, opts) {
+  opts = opts || {};
+  if (!item || !item.el || screenPts.length < 3) return null;
   const imgEl = item.el.querySelector('img');
-  if (!imgEl || !imgEl.complete) { toast('Image not loaded'); return; }
-  const imgW = imgEl.naturalWidth || item.natW;
-  const imgH = imgEl.naturalHeight || item.natH;
+  if (!imgEl || !imgEl.complete || !imgEl.naturalWidth) { toast('Image not loaded'); return null; }
+  const natW = imgEl.naturalWidth || item.natW;
+  const natH = imgEl.naturalHeight || item.natH;
   const r = item.el.getBoundingClientRect();
-  // Convert screen points to image pixel coordinates
-  const imgPoints = cutState.points.map(p => ({
-    x: ((p.x - r.left) / r.width) * imgW,
-    y: ((p.y - r.top) / r.height) * imgH
-  }));
+  if (!r.width || !r.height) return null;
+
+  // ── screen -> source-pixel space (for the crop itself) ──
+  const kx = natW / r.width, ky = natH / r.height;
+  const imgPts = screenPts.map(p => ({ x: (p.x - r.left) * kx, y: (p.y - r.top) * ky }));
+
+  // ── selection bounds in both spaces ──
+  let ix0 = Infinity, iy0 = Infinity, ix1 = -Infinity, iy1 = -Infinity;
+  imgPts.forEach(p => { if (p.x < ix0) ix0 = p.x; if (p.x > ix1) ix1 = p.x; if (p.y < iy0) iy0 = p.y; if (p.y > iy1) iy1 = p.y; });
+  let sL = Infinity, sT = Infinity, sR = -Infinity, sB = -Infinity;
+  screenPts.forEach(p => { if (p.x < sL) sL = p.x; if (p.x > sR) sR = p.x; if (p.y < sT) sT = p.y; if (p.y > sB) sB = p.y; });
+
+  // Clamp: the crop can never be bigger than the pixels that exist.
+  const cx0 = Math.max(0, Math.floor(ix0));
+  const cy0 = Math.max(0, Math.floor(iy0));
+  const cx1 = Math.min(natW, Math.ceil(ix1));
+  const cy1 = Math.min(natH, Math.ceil(iy1));
+  const cw = Math.max(1, Math.round(cx1 - cx0));
+  const ch = Math.max(1, Math.round(cy1 - cy0));
+  if (cw < 3 || ch < 3) { toast('Selection too small'); return null; }
+
+  // ── where the result lands, in WORLD coordinates ──
+  // Un-rotate the selection's screen position back into the source item's
+  // local frame, so an in-place crop is exact even when the source is
+  // rotated. At rot = 0 this reduces to the plain centre-less formula.
+  const zoom = state.zoom || 1;
+  const rad = (item.rot || 0) * Math.PI / 180;
+  const cs = Math.cos(rad), sn = Math.sin(rad);
+  const scrCx = r.left + r.width / 2, scrCy = r.top + r.height / 2;
+  const toLocal = (px, py) => {
+    const dx = px - scrCx, dy = py - scrCy;
+    return [(dx * cs + dy * sn) / zoom, (-dx * sn + dy * cs) / zoom];
+  };
+  const [lx, ly] = toLocal(sL, sT);
+  const worldW = Math.max(1, (sR - sL) / zoom);
+  const worldH = Math.max(1, (sB - sT) / zoom);
+  let worldX, worldY, worldRot;
+  if (opts.place === 'beside') {
+    worldX = item.x + item.w + 20 / zoom;
+    worldY = item.y;
+    worldRot = 0;
+  } else {
+    worldX = item.x + item.w / 2 + lx;
+    worldY = item.y + item.h / 2 + ly;
+    worldRot = item.rot || 0;
+  }
+
+  const cv = document.createElement('canvas');
+  cv.width = cw; cv.height = ch;
+  const ctx = cv.getContext('2d');
+  if (!ctx) { toast('Cannot cut this image'); return null; }
   try {
-    // Create full-resolution canvas
-    const cv = document.createElement('canvas');
-    cv.width = imgW; cv.height = imgH;
-    const ctx = cv.getContext('2d');
-    // Draw the path and clip
+    const tracePath = () => {
+      ctx.beginPath();
+      ctx.moveTo(imgPts[0].x - cx0, imgPts[0].y - cy0);
+      for (let i = 1; i < imgPts.length; i++) ctx.lineTo(imgPts[i].x - cx0, imgPts[i].y - cy0);
+      ctx.closePath();
+    };
     ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(imgPoints[0].x, imgPoints[0].y);
-    for (let i = 1; i < imgPoints.length; i++) {
-      ctx.lineTo(imgPoints[i].x, imgPoints[i].y);
-    }
-    ctx.closePath();
+    tracePath();
     ctx.clip();
-    // Draw the image clipped to the path
-    ctx.drawImage(imgEl, 0, 0, imgW, imgH);
+    ctx.drawImage(imgEl, -cx0, -cy0, natW, natH);
     ctx.restore();
-    const dataURL = cv.toDataURL('image/png');
-    const newItem = addImage(dataURL, imgW, imgH, item.x + item.w + 20 / state.zoom, item.y);
-    toast('Cut shape extracted');
-    // Reset for next cut
-    clearCutPath();
+    if (opts.border) {
+      tracePath();
+      ctx.strokeStyle = opts.borderColor || '#7c8cf0';
+      // Thickness now follows the CROP size, not the whole source image, so
+      // a small cut-out no longer gets a hairline and a big one a slab.
+      ctx.lineWidth = Math.max(2, Math.round(Math.min(cw, ch) * 0.012));
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
   } catch (e) {
     toast('Cannot cut this image (cross-origin)');
+    return null;
   }
+
+  // Blob, not a data URL: a full-res PNG data URL of a big cut-out is tens of
+  // MB of renderer heap AND lands in every undo snapshot verbatim (v7.0.22).
+  const blob = await new Promise(res => {
+    try { cv.toBlob(b => res(b), 'image/png'); } catch (e) { res(null); }
+  });
+  if (!blob) { toast('Cannot cut this image'); return null; }
+
+  const newItem = addImage(URL.createObjectURL(blob), cw, ch, worldX, worldY, false, undefined, blob.size, false, blob);
+  // addImage caps display width at 720 world px. For an in-place crop we want
+  // the result to cover exactly the pixels that were selected, so set the
+  // geometry explicitly instead of inheriting the cap.
+  newItem.w = worldW;
+  newItem.h = worldH;
+  newItem.rot = worldRot;
+  // Carry the source's look across — the baked crop is the RAW image, so
+  // without this a graded source would pop back to ungraded on extract.
+  ['brightness','contrast','saturate','hueRotate','blur','sepia','grayscale',
+   'temp','shadow','highlight'].forEach(k => {
+    if (item[k] !== undefined) newItem[k] = item[k];
+  });
+  newItem.filename = item.filename || '';
+  updateItemStyle(newItem);
+  selectOnly(newItem.id);
+  return newItem;
+}
+
+// Extract the area inside the freehand path as a new image item
+async function applyCutExtract(beside) {
+  const item = getCutItem();
+  if (!item || !cutState || !cutState.closed || cutState.points.length < 3) return;
+  const place = (beside || (document.getElementById('cut-inplace-toggle') && !document.getElementById('cut-inplace-toggle').checked)) ? 'beside' : 'inplace';
+  const newItem = await extractPolyFromItem(item, cutState.points.map(p => ({ x: p.x, y: p.y })), { place: place });
+  if (!newItem) return;
+  toast(place === 'beside' ? 'Cut shape extracted (beside)' : 'Cut shape extracted in place');
+  // Reset for the next cut from the same image
+  clearCutPath();
+  setTool('select');
 }
 
 // ============================================================
@@ -27619,56 +27864,24 @@ function renderLassoPoints() {
   });
 }
 
-function applyLassoExtract() {
+async function applyLassoExtract(beside) {
   const item = getLassoItem();
   if (!item || !lassoState || !lassoState.closed || lassoState.points.length < 3) return;
-  const imgEl = item.el.querySelector('img');
-  if (!imgEl || !imgEl.complete) { toast('Image not loaded'); return; }
-  const imgW = imgEl.naturalWidth || item.natW;
-  const imgH = imgEl.naturalHeight || item.natH;
-  const r = item.el.getBoundingClientRect();
   const withBorder = document.getElementById('lasso-border-toggle').checked;
   const borderColor = document.getElementById('lasso-border-color').value;
-  // Convert screen points to image pixel coordinates
-  const imgPoints = lassoState.points.map(p => ({
-    x: ((p.x - r.left) / r.width) * imgW,
-    y: ((p.y - r.top) / r.height) * imgH
-  }));
-  try {
-    const cv = document.createElement('canvas');
-    cv.width = imgW; cv.height = imgH;
-    const ctx = cv.getContext('2d');
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(imgPoints[0].x, imgPoints[0].y);
-    for (let i = 1; i < imgPoints.length; i++) {
-      ctx.lineTo(imgPoints[i].x, imgPoints[i].y);
-    }
-    ctx.closePath();
-    ctx.clip();
-    ctx.drawImage(imgEl, 0, 0, imgW, imgH);
-    ctx.restore();
-    // Draw border on top (outside clip)
-    if (withBorder) {
-      ctx.beginPath();
-      ctx.moveTo(imgPoints[0].x, imgPoints[0].y);
-      for (let i = 1; i < imgPoints.length; i++) {
-        ctx.lineTo(imgPoints[i].x, imgPoints[i].y);
-      }
-      ctx.closePath();
-      ctx.strokeStyle = borderColor;
-      ctx.lineWidth = Math.max(2, Math.round(imgW * 0.005));
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-    }
-    const dataURL = cv.toDataURL('image/png');
-    const newItem = addImage(dataURL, imgW, imgH, item.x + item.w + 20 / state.zoom, item.y);
-    toast('Lasso extracted' + (withBorder ? ' with border' : ''));
-    cancelLasso();
-    setTool('select');
-  } catch (e) {
-    toast('Cannot cut this image (cross-origin)');
-  }
+  const inplaceEl = document.getElementById('lasso-inplace-toggle');
+  const place = (beside || (inplaceEl && !inplaceEl.checked)) ? 'beside' : 'inplace';
+  const newItem = await extractPolyFromItem(item, lassoState.points.map(p => ({ x: p.x, y: p.y })), {
+    place: place,
+    border: withBorder,
+    borderColor: borderColor,
+  });
+  if (!newItem) return;
+  toast((place === 'beside' ? 'Lasso extracted (beside)' : 'Lasso extracted in place') + (withBorder ? ' with border' : ''));
+  cancelLasso();
+  // Hand the result straight to Select so it can be dragged / rotated / scaled
+  // immediately — that is the whole point of extracting in place.
+  setTool('select');
 }
 
 
@@ -29785,6 +29998,13 @@ function renderExport(sx, sy, sw, sh) {
     const ix = r.left - sx, iy = r.top - sy;
     const iw = r.width, ih = r.height;
     if (ix + iw < 0 || iy + ih < 0 || ix > sw || iy > sh) return;
+    // v7.0.30: same fix as captureArea — draw unrotated text from the
+    // browser's own line boxes in screen space instead of re-deriving the
+    // layout from item.size (world px) with a hard-coded line height.
+    if (el.classList && el.classList.contains('text-item') && !(item.rot || 0) && !item.flipH && !item.flipV) {
+      drawTextItemCaptured(ctx, item, sx, sy, sw, sh);
+      return;
+    }
     ctx.save();
     ctx.globalAlpha = item.opacity !== undefined ? item.opacity : 1;
     const cx = ix + iw / 2, cy = iy + ih / 2;
@@ -29929,62 +30149,15 @@ function renderExport(sx, sy, sw, sh) {
     ctx.restore();
   });
   // Render drawing
+  // v7.0.30: use the shared painter (see captureArea) — this copy had
+  // drifted too and dropped pen pressure.
   ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
   G.drawStrokes.forEach(stroke => {
-    if (stroke.points.length < 2) return;
-    ctx.globalAlpha = stroke.opacity;
-    ctx.strokeStyle = stroke.color;
-    ctx.fillStyle = stroke.color;
-    ctx.lineWidth = stroke.size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    if (stroke.mode === 'eraser') {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.beginPath();
-      stroke.points.forEach((p, i) => {
-        const px = p[0] * state.zoom + state.pan.x - sx;
-        const py = p[1] * state.zoom + state.pan.y - sy;
-        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      });
-      ctx.stroke();
-    } else if (stroke.mode === 'arrow') {
-      ctx.globalCompositeOperation = 'source-over';
-      const p0 = stroke.points[0], p1 = stroke.points[1];
-      const px0 = p0[0] * state.zoom + state.pan.x - sx;
-      const py0 = p0[1] * state.zoom + state.pan.y - sy;
-      const px1 = p1[0] * state.zoom + state.pan.x - sx;
-      const py1 = p1[1] * state.zoom + state.pan.y - sy;
-      ctx.beginPath();
-      ctx.moveTo(px0, py0);
-      ctx.lineTo(px1, py1);
-      ctx.stroke();
-      const angle = Math.atan2(py1 - py0, px1 - px0);
-      const headLen = strokeHeadLen(stroke);
-      const spread = Math.PI / 7;
-      ctx.beginPath();
-      ctx.moveTo(px1, py1);
-      ctx.lineTo(px1 - headLen * Math.cos(angle - spread), py1 - headLen * Math.sin(angle - spread));
-      ctx.lineTo(px1 - headLen * Math.cos(angle + spread), py1 - headLen * Math.sin(angle + spread));
-      ctx.closePath();
-      ctx.fill();
-    } else if (stroke.mode === 'box') {
-      ctx.globalCompositeOperation = 'source-over';
-      const p0 = stroke.points[0], p1 = stroke.points[1];
-      const px0 = p0[0] * state.zoom + state.pan.x - sx;
-      const py0 = p0[1] * state.zoom + state.pan.y - sy;
-      const px1 = p1[0] * state.zoom + state.pan.x - sx;
-      const py1 = p1[1] * state.zoom + state.pan.y - sy;
-      ctx.strokeRect(Math.min(px0,px1), Math.min(py0,py1), Math.abs(px1-px0), Math.abs(py1-py0));
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.beginPath();
-      stroke.points.forEach((p, i) => {
-        const px = p[0] * state.zoom + state.pan.x - sx;
-        const py = p[1] * state.zoom + state.pan.y - sy;
-        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      });
-      ctx.stroke();
-    }
+    if (!stroke || !stroke.points || stroke.points.length < 2) return;
+    paintDrawStroke(ctx, stroke, function (wx, wy) {
+      return [wx * state.zoom + state.pan.x - sx, wy * state.zoom + state.pan.y - sy];
+    });
   });
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
@@ -30075,6 +30248,150 @@ function finishCapture(e) {
   captureArea(x1, y1, w, h);
 }
 
+// ---------------------------------------------------------------------------
+// v7.0.30 — text items in a capture.
+//
+// Text boxes used to be re-drawn onto the capture canvas from `item.size`
+// (WORLD px) with a hard-coded 1.3 line height, zero padding and a naive
+// textContent.split('\n'). The capture canvas is in SCREEN space, so:
+//   * at any zoom != 100% the font was the wrong size,
+//   * the 10px/4px .text-item CSS padding was never applied, so every line
+//     was offset up and to the left,
+//   * since v7.0.26 boxes auto-wrap at 520 world px, but textContent has no
+//     '\n' for a SOFT wrap — a wrapped paragraph came out as one long line
+//     running off the edge.
+// Net effect: "the capture doesn't match what I typed".
+//
+// Instead of re-implementing CSS layout (which is exactly how the v7.0.29
+// pen bug happened), we ask the browser for the line boxes it already
+// computed: walk every text node and read Range.getClientRects() per
+// character. That gives us the true on-screen position of every rendered
+// glyph, soft wraps and padding included.
+// ---------------------------------------------------------------------------
+function captureTextLineBoxes(el) {
+  const out = [];
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+  const nodes = [];
+  let n;
+  while ((n = walker.nextNode())) { if (n.nodeValue && n.nodeValue.length) nodes.push(n); }
+  if (!nodes.length) return out;
+  // Guard: per-character rects force a layout query each. Text boxes are
+  // short, but a pathological 50k-char box must not freeze the capture.
+  let total = 0;
+  nodes.forEach(nd => { total += nd.nodeValue.length; });
+  if (total > 4000) return out;
+  const range = document.createRange();
+  for (let ni = 0; ni < nodes.length; ni++) {
+    const node = nodes[ni];
+    const parent = node.parentElement || el;
+    const cs = getComputedStyle(parent);
+    const color = cs.color || '#ffffff';
+    const text = node.nodeValue;
+    let cur = null;
+    for (let i = 0; i < text.length; i++) {
+      range.setStart(node, i);
+      range.setEnd(node, i + 1);
+      const rect = range.getClientRects()[0];
+      if (!rect) continue;
+      if (cur && Math.abs(rect.top - cur.top) < 1.5 && rect.left >= cur.left - 0.5) {
+        cur.text += text[i];
+        cur.right = rect.right;
+        cur.bottom = Math.max(cur.bottom, rect.bottom);
+        cur.height = Math.max(cur.height, rect.height);
+      } else {
+        if (cur) out.push(cur);
+        cur = { text: text[i], left: rect.left, top: rect.top, right: rect.right,
+                bottom: rect.bottom, height: rect.height, color: color };
+      }
+    }
+    if (cur) out.push(cur);
+  }
+  return out;
+}
+
+function drawTextItemCaptured(ctx, item, sx, sy, sw, sh) {
+  const el = item.el;
+  if (!el || !el.isConnected) return;
+  const raw = el.textContent || '';
+  if (!raw.trim()) return;
+  const r = el.getBoundingClientRect();
+  const ix = r.left - sx, iy = r.top - sy, iw = r.width, ih = r.height;
+  if (ix + iw < 0 || iy + ih < 0 || ix > sw || iy > sh) return;
+
+  const zoom = state.zoom || 1;
+  ctx.save();
+  ctx.globalAlpha = item.opacity !== undefined ? item.opacity : 1;
+
+  // Card background (highlight / bg) uses the element's own box.
+  if (item.highlight || item.bg) {
+    ctx.fillStyle = item.highlight ? (item.highlightColor || '#ffff00') : (item.highlightColor || '#ffff00') + '88';
+    ctx.fillRect(ix, iy, iw, ih);
+  }
+
+  const cs = getComputedStyle(el);
+  const fsScreen = (parseFloat(cs.fontSize) || (item.size || 16)) * zoom;
+  const weight = (cs.fontWeight === 'bold' || Number(cs.fontWeight) >= 600) ? 'bold ' : '';
+  const style = (cs.fontStyle === 'italic') ? 'italic ' : '';
+  ctx.font = style + weight + fsScreen + 'px ' + cs.fontFamily;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  // Chrome 99+ honours ctx.letterSpacing — .text-item sets 0.01em, so match it
+  // or long lines drift progressively to the right of the real layout.
+  if ('letterSpacing' in ctx) {
+    try { ctx.letterSpacing = cs.letterSpacing || '0px'; } catch (e) {}
+  }
+  if (item.shadow) {
+    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowBlur = 4 * zoom;
+    ctx.shadowOffsetX = 2 * zoom;
+    ctx.shadowOffsetY = 2 * zoom;
+  }
+
+  const upper = (cs.textTransform === 'uppercase');
+  const m = ctx.measureText('Hxg');
+  const asc = (typeof m.fontBoundingBoxAscent === 'number') ? m.fontBoundingBoxAscent : fsScreen * 0.8;
+  const desc = (typeof m.fontBoundingBoxDescent === 'number') ? m.fontBoundingBoxDescent : fsScreen * 0.21;
+  const fontH = asc + desc;
+
+  const lines = captureTextLineBoxes(el);
+  if (lines.length) {
+    lines.forEach(ln => {
+      // Some browsers report the full line box (line-height) instead of the
+      // font's content box for a character range. Strip the half-leading so
+      // the baseline lands in the right place either way.
+      const halfLead = Math.max(0, (ln.height - fontH) / 2);
+      const baseline = ln.bottom - halfLead - desc;
+      const txt = upper ? ln.text.toUpperCase() : ln.text;
+      ctx.fillStyle = ln.color;
+      if (item.outline) {
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = Math.max(1, fsScreen * 0.06);
+        ctx.lineJoin = 'round';
+        ctx.strokeText(txt, ln.left - sx, baseline - sy);
+      }
+      ctx.fillText(txt, ln.left - sx, baseline - sy);
+    });
+  } else {
+    // Fallback: no line boxes (huge text box, or the element is detached from
+    // layout). Keep the old approach but at least scale it to screen space,
+    // apply the CSS padding and use the real 1.5 line-height.
+    const padL = 10 * zoom, padT = 4 * zoom;
+    const lh = fsScreen * 1.5;
+    ctx.fillStyle = item.color || cs.color;
+    raw.split('\n').forEach((line, i) => {
+      let tx = ix + padL;
+      if (item.align === 'center') { ctx.textAlign = 'center'; tx = ix + iw / 2; }
+      else if (item.align === 'right') { ctx.textAlign = 'right'; tx = ix + iw - padL; }
+      const ty = iy + padT + i * lh + Math.max(0, (lh - fontH) / 2) + asc;
+      if (item.outline) ctx.strokeText(line, tx, ty);
+      ctx.fillText(line, tx, ty);
+    });
+  }
+  if ('letterSpacing' in ctx) { try { ctx.letterSpacing = '0px'; } catch (e) {} }
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+  ctx.restore();
+}
+
 function captureArea(sx, sy, sw, sh) {
   if (sw < 10 || sh < 10) { toast('Nothing to capture'); return; }
 
@@ -30117,6 +30434,15 @@ function captureArea(sx, sy, sw, sh) {
     const ih = r.height;
     // Skip if entirely outside capture area
     if (ix + iw < 0 || iy + ih < 0 || ix > sw || iy > sh) return;
+
+    // v7.0.30: unrotated text items are re-drawn straight from the browser's
+    // own line boxes in SCREEN space. They must not go through the rotate /
+    // flip transform below — the line boxes are already final screen positions,
+    // and forcing them through a rotation could only make them wrong.
+    if (el.classList && el.classList.contains('text-item') && !(item.rot || 0) && !item.flipH && !item.flipV) {
+      drawTextItemCaptured(ctx, item, sx, sy, sw, sh);
+      return;
+    }
 
     ctx.save();
     ctx.globalAlpha = item.opacity !== undefined ? item.opacity : 1;
@@ -30339,52 +30665,18 @@ function captureArea(sx, sy, sw, sh) {
     ctx.restore();
   });
 
-  // Render drawing strokes
+  // Render drawing strokes.
+  // v7.0.30: this used to be a fourth hand-rolled copy of the stroke renderer
+  // (it silently dropped pen pressure and was the same class of drift that
+  // produced the v7.0.29 "two boxes became one line" bug). Use the shared
+  // painter — the capture just supplies a world → capture-space projection.
   ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
   G.drawStrokes.forEach(stroke => {
-    if (stroke.points.length < 2) return;
-    ctx.globalAlpha = stroke.opacity;
-    ctx.strokeStyle = stroke.color;
-    ctx.fillStyle = stroke.color;
-    ctx.lineWidth = stroke.size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    const toScreen = (p) => [p[0] * state.zoom + state.pan.x - sx, p[1] * state.zoom + state.pan.y - sy];
-    if (stroke.mode === 'eraser') {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.beginPath();
-      stroke.points.forEach((p, i) => {
-        const [px, py] = toScreen(p);
-        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      });
-      ctx.stroke();
-    } else if (stroke.mode === 'arrow') {
-      ctx.globalCompositeOperation = 'source-over';
-      const [px0, py0] = toScreen(stroke.points[0]);
-      const [px1, py1] = toScreen(stroke.points[1]);
-      ctx.beginPath(); ctx.moveTo(px0, py0); ctx.lineTo(px1, py1); ctx.stroke();
-      const angle = Math.atan2(py1 - py0, px1 - px0);
-      const headLen = strokeHeadLen(stroke);
-      const spread = Math.PI / 7;
-      ctx.beginPath();
-      ctx.moveTo(px1, py1);
-      ctx.lineTo(px1 - headLen * Math.cos(angle - spread), py1 - headLen * Math.sin(angle - spread));
-      ctx.lineTo(px1 - headLen * Math.cos(angle + spread), py1 - headLen * Math.sin(angle + spread));
-      ctx.closePath(); ctx.fill();
-    } else if (stroke.mode === 'box') {
-      ctx.globalCompositeOperation = 'source-over';
-      const [px0, py0] = toScreen(stroke.points[0]);
-      const [px1, py1] = toScreen(stroke.points[1]);
-      ctx.strokeRect(Math.min(px0,px1), Math.min(py0,py1), Math.abs(px1-px0), Math.abs(py1-py0));
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.beginPath();
-      stroke.points.forEach((p, i) => {
-        const [px, py] = toScreen(p);
-        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      });
-      ctx.stroke();
-    }
+    if (!stroke || !stroke.points || stroke.points.length < 2) return;
+    paintDrawStroke(ctx, stroke, function (wx, wy) {
+      return [wx * state.zoom + state.pan.x - sx, wy * state.zoom + state.pan.y - sy];
+    });
   });
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
@@ -32277,6 +32569,8 @@ async function extractKpakV6Entry(kpakBlob, entry) {
 // the chance of OOM crashes caused by concurrent mutations + serialization.
 function _setSaving(isSaving) {
   state._saving = isSaving;
+  // v7.0.30: replay any undo step that was deferred while the save ran.
+  if (!isSaving) { try { _flushDeferredUndo(); } catch (e) {} }
   let overlay = document.getElementById('krafted-save-overlay');
   if (isSaving) {
     if (!overlay) {
@@ -34040,6 +34334,8 @@ function newBoard() {
   state.undoStack = [];
   state.redoStack = [];
   state._undoBytes = 0;
+  state._redoBytes = 0;
+  state._deferredUndo = null;
   // v7.0.10: also clear the annotation-stroke undo stack — its entries
   // reference DOM elements from the wiped board.
   G._annoUndoStack = [];
