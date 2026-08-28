@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.28</title>
+<title>Krafted v7.0.29</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3817,6 +3817,8 @@ body.screen-share-mode #ss-fps {
     <button onclick="undoDraw()" title="Undo Last Stroke">Undo</button>
     <button onclick="clearDraw()" title="Clear All Draws">Clear All</button>
   </div>
+  <!-- v7.0.29: pack / exit shortcut hint, kept in sync with UI language by refreshDrawPackHint() -->
+  <p id="draw-tip-pack" style="font-size:9px;color:var(--text-dim);margin:6px 0 0;line-height:1.4;letter-spacing:0.2px;"></p>
   <p style="font-size:9px;color:var(--text-dim);margin:6px 0 0;line-height:1.4;letter-spacing:0.2px;">
     Tip: switch to <b>Select</b> (V), click any drawing to select it, then press <kbd style="background:var(--input-bg);border:1px solid var(--border);border-radius:2px;padding:0 3px;font-size:8px;font-family:inherit;">Del</kbd> to remove.
   </p>
@@ -4075,7 +4077,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.28';
+var KRAFTED_VERSION = '7.0.29';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4372,7 +4374,16 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if (it.masks && it.masks.length) { node.masks = it.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }); }
       if (it.anno) { node.anno = { comments: (it.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text, translation: c.translation, translationDir: c.translationDir, originalText: c.originalText, snapshot: c.snapshot, annoStrokes: c.annoStrokes }; }) }; }
       if (it.isVideo && it.el && it.el._annoDrawState) { var sbf = it.el._annoDrawState.strokesByFrame; if (sbf) { node._annoStrokesByFrame = {}; Object.keys(sbf).forEach(function(f) { if (sbf[f] && sbf[f].length) { node._annoStrokesByFrame[f] = sbf[f].map(function(s) { return { type: s.type, color: s.color, size: s.size, points: (s.points || []).map(function(p) { return [p[0], p[1]]; }), text: s.text || '' }; }); } }); } }
-      if (it.type === 'draw') { node.type = 'draw'; node.strokeId = it.strokeId; node.drawMode = it.drawMode; node.drawColor = it.drawColor; node.drawSize = it.drawSize; node.drawOpacity = it.drawOpacity; node.drawArrowHead = it.drawArrowHead; }
+      if (it.type === 'draw') {
+        node.type = 'draw'; node.strokeId = it.strokeId; node.drawMode = it.drawMode; node.drawColor = it.drawColor; node.drawSize = it.drawSize; node.drawOpacity = it.drawOpacity; node.drawArrowHead = it.drawArrowHead;
+        // v7.0.29: packed strokes travel with the item on every save path
+        var _pds3 = it.drawStrokes || (it.el && it.el._strokeData) || null;
+        if (_pds3 && _pds3.length) {
+          node.drawStrokes = _pds3;
+          node.drawPad = it.drawPad; node.drawMinX = it.drawMinX; node.drawMinY = it.drawMinY;
+          node.drawW = it.drawW; node.drawH = it.drawH;
+        }
+      }
       else if (it.isVideo) { node.type = 'video'; node.assetId = it.id; }
       else if (it.isAudio) { node.type = 'audio'; node.assetId = it.id; node.audioName = it.audioName || it.filename || ''; node.filename = it.filename || it.audioName || ''; }
       else if (it.isLink) { node.type = 'link'; node.linkUrl = it.linkUrl || ''; node.linkTitle = it.linkTitle || ''; node.linkDesc = it.linkDesc || ''; }
@@ -6235,6 +6246,10 @@ var I18N = (function() {
       ti.setAttribute('data-placeholder', toZh ? '输入文字…' : 'Type here...');
     });
 
+    // v7.0.29: board-pen pack/exit hint is injected by JS, so the tree walk
+    // above cannot translate it — refresh it explicitly.
+    if (typeof refreshDrawPackHint === 'function') refreshDrawPackHint();
+
     // Update the lang button icon
     updateLangButton();
 
@@ -6876,6 +6891,14 @@ function captureSnapshot() {
       type: i.type || undefined,
       strokeId: i.strokeId, drawMode: i.drawMode, drawColor: i.drawColor,
       drawSize: i.drawSize, drawOpacity: i.drawOpacity, drawArrowHead: i.drawArrowHead,
+      // v7.0.29: packed strokes ride along in the undo snapshot, otherwise
+      // Ctrl+Z / Ctrl+Shift+Z came back with an empty transparent box.
+      drawStrokes: (i.type === 'draw') ? (i.drawStrokes || (i.el && i.el._strokeData) || null) : null,
+      drawPad: (i.type === 'draw') ? i.drawPad : null,
+      drawMinX: (i.type === 'draw') ? i.drawMinX : null,
+      drawMinY: (i.type === 'draw') ? i.drawMinY : null,
+      drawW: (i.type === 'draw') ? i.drawW : null,
+      drawH: (i.type === 'draw') ? i.drawH : null,
       src: i.src, natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false,
       audioName: i.audioName || i.filename || '',
       filename: i.filename || i.audioName || '',
@@ -7031,10 +7054,13 @@ function restoreSnapshot(snapStr) {
     if (data.type === 'draw') {
       const el = document.createElement('div');
       el.className = 'item draw-item';
-      el.style.cssText = 'background:transparent;border:none;pointer-events:auto;';
+      el.style.cssText = 'background:transparent;border:none;pointer-events:auto;overflow:visible;';
       canvasContent.appendChild(el);
       const item = { ...data, el };
       state.items.push(item);
+      // v7.0.29: repaint the baked canvas from the snapshot's stroke data —
+      // undo/redo used to restore the box but not what was drawn inside it.
+      rebuildDrawItemCanvas(item);
       updateItemStyle(item);
       return;
     }
@@ -19038,6 +19064,8 @@ function setTool(tool) {
   if (btnMap[tool]) document.getElementById(btnMap[tool]).classList.add('active');
   document.getElementById('text-toolbar').classList.toggle('active', tool === 'text');
   document.getElementById('draw-toolbar').classList.toggle('active', tool === 'draw');
+  // v7.0.29: refresh the Enter=pack / Esc=exit hint whenever the pen opens
+  if (tool === 'draw' && typeof refreshDrawPackHint === 'function') refreshDrawPackHint();
   if (tool === 'export') { toast('Drag to select export area'); }
   if (tool === 'capture') { toast('Drag to select capture area'); captureHint.style.display = 'block'; }
   if (tool === 'cut') { toast('Click an image to start cutting'); cancelCut(); }
@@ -24427,8 +24455,16 @@ document.addEventListener('mouseup', e => {
     G.currentStroke = null;
     // Strokes stay on the draw layer — no items created.
     // Press Enter or Esc to pack all strokes into one movable item.
-    try { pushUndo(); } catch (e) {}
-    scheduleAutoSave();
+    // v7.0.29: throw away accidental micro-strokes (a stray click, or a 2px
+    // twitch right as you begin a box/arrow). Those used to be committed as
+    // invisible dots that still consumed a stroke id and an undo step — and
+    // for box/arrow they are exactly what looked like "my box became a line".
+    if (isMicroStroke(stroke)) {
+      G.drawStrokes = G.drawStrokes.filter(s => s !== stroke);
+    } else {
+      try { pushUndo(); } catch (e) {}
+      scheduleAutoSave();
+    }
     redrawDrawLayer();
   }
 
@@ -26795,101 +26831,197 @@ function setDrawMode(mode) {
     const btn = document.getElementById('dm-' + m);
     if (btn) btn.classList.toggle('active', mode === m);
   });
+  refreshDrawPackHint();
 }
+// v7.0.29: the pack/exit shortcut was invisible — the only place it was
+// documented was a comment in the source. Show it in the draw toolbar and
+// keep it in sync with the UI language.
+function refreshDrawPackHint() {
+  const el = document.getElementById('draw-tip-pack');
+  if (!el) return;
+  const zh = (typeof _isZhUI === 'function') ? _isZhUI() : false;
+  const kbd = 'background:var(--input-bg);border:1px solid var(--border);border-radius:2px;padding:0 3px;font-size:8px;font-family:inherit;';
+  el.innerHTML = zh
+    ? ('画完后按 <kbd style="' + kbd + '">Enter</kbd> 打包成一个可移动对象 · <kbd style="' + kbd + '">Esc</kbd> 退出画笔')
+    : ('Press <kbd style="' + kbd + '">Enter</kbd> to pack strokes into one movable item · <kbd style="' + kbd + '">Esc</kbd> to exit');
+}
+window.refreshDrawPackHint = refreshDrawPackHint;
 function getDrawCtx() {
   const ctx = drawLayer.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return ctx;
 }
+// ============================================================
+//  BOARD PEN — SHARED STROKE RENDERER  (v7.0.29)
+//  One painter, three surfaces. The live draw layer (world -> screen),
+//  a packed draw item's internal canvas (world -> item-local), and the
+//  rebuild path that repaints a packed item after load / undo.
+//  ROOT CAUSE of the "two BOXes become one line" bug: the packing code
+//  used to re-implement only the freehand branch, so a BOX — which is
+//  stored as just two opposite corners — got stroked as a 2-point
+//  polyline (a diagonal line) and an ARROW lost its head entirely.
+//  Everything now goes through paintDrawStroke so the three surfaces
+//  can never drift apart again.
+// ============================================================
+
+// Arrow head length: follows pen thickness so a 40px stroke does not get
+// an invisible 15px head. An explicit per-stroke value still wins.
+function strokeHeadLen(s) {
+  if (s && s.arrowHead) return s.arrowHead;
+  return Math.max(15, (s && s.size ? s.size : 3) * 3.2);
+}
+
+// ctx  : 2D context already scaled for DPR
+// s    : { mode, color, size, opacity, arrowHead, points:[[x,y,pressure?]..] }
+// proj : (worldX, worldY) -> [targetX, targetY]
+function paintDrawStroke(ctx, s, proj) {
+  const pts = s.points || [];
+  if (pts.length < 2) return;
+  ctx.globalAlpha = (s.opacity === undefined ? 1 : s.opacity);
+  ctx.strokeStyle = s.color;
+  ctx.fillStyle = s.color;
+  ctx.lineWidth = s.size;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (s.mode === 'eraser') {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const q = proj(pts[i][0], pts[i][1]);
+      if (i === 0) ctx.moveTo(q[0], q[1]); else ctx.lineTo(q[0], q[1]);
+    }
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+    return;
+  }
+
+  ctx.globalCompositeOperation = 'source-over';
+
+  if (s.mode === 'box') {
+    const a = proj(pts[0][0], pts[0][1]);
+    const b = proj(pts[1][0], pts[1][1]);
+    ctx.strokeRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
+    return;
+  }
+
+  if (s.mode === 'arrow') {
+    const a = proj(pts[0][0], pts[0][1]);
+    const b = proj(pts[1][0], pts[1][1]);
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(b[0], b[1]);
+    ctx.stroke();
+    const angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    const headLen = strokeHeadLen(s);
+    const spread = Math.PI / 7; // ~25 degrees
+    ctx.beginPath();
+    ctx.moveTo(b[0], b[1]);
+    ctx.lineTo(b[0] - headLen * Math.cos(angle - spread), b[1] - headLen * Math.sin(angle - spread));
+    ctx.lineTo(b[0] - headLen * Math.cos(angle + spread), b[1] - headLen * Math.sin(angle + spread));
+    ctx.closePath();
+    ctx.fill();
+    return;
+  }
+
+  // pen — freehand, with optional per-point pressure (variable width)
+  if (pts[0] && pts[0].length >= 3) {
+    for (let i = 1; i < pts.length; i++) {
+      const p0 = pts[i - 1], p1 = pts[i];
+      const q0 = proj(p0[0], p0[1]);
+      const q1 = proj(p1[0], p1[1]);
+      const pr = ((p0[2] || 0.5) + (p1[2] || 0.5)) / 2;
+      ctx.lineWidth = s.size * (0.3 + 0.7 * Math.min(1, Math.max(0, pr)));
+      ctx.beginPath();
+      ctx.moveTo(q0[0], q0[1]);
+      ctx.lineTo(q1[0], q1[1]);
+      ctx.stroke();
+    }
+  } else {
+    ctx.lineWidth = s.size;
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const q = proj(pts[i][0], pts[i][1]);
+      if (i === 0) ctx.moveTo(q[0], q[1]); else ctx.lineTo(q[0], q[1]);
+    }
+    ctx.stroke();
+  }
+}
+
+// v7.0.29: (re)paint a packed draw item's internal canvas from its stored
+// strokes. Without this a packed item came back as an empty transparent
+// box after save/reload or Ctrl+Z, because the baked canvas lived only in
+// the DOM and was never re-created.
+function rebuildDrawItemCanvas(item) {
+  const el = item && item.el;
+  if (!el) return;
+  const sd = (item.drawStrokes && item.drawStrokes.length) ? item.drawStrokes : el._strokeData;
+  if (!sd || !sd.length) return;
+
+  let minX = item.drawMinX, minY = item.drawMinY, pad = item.drawPad;
+  if (typeof minX !== 'number' || typeof minY !== 'number' || !isFinite(minX) || !isFinite(minY)) {
+    minX = Infinity; minY = Infinity;
+    sd.forEach(function (s) {
+      (s.points || []).forEach(function (p) {
+        if (p[0] < minX) minX = p[0];
+        if (p[1] < minY) minY = p[1];
+      });
+    });
+    if (!isFinite(minX)) { minX = 0; minY = 0; }
+    item.drawMinX = minX; item.drawMinY = minY;
+  }
+  if (typeof pad !== 'number') { pad = 8; item.drawPad = pad; }
+
+  // Backing store stays at the ORIGINAL packed size (w/h at pack time), the
+  // canvas is CSS-stretched to 100% so resizing the item still scales it.
+  const lw = item.drawW || item.w || 20;
+  const lh = item.drawH || item.h || 20;
+  const dpr = window.devicePixelRatio || 1;
+
+  let canvas = el.querySelector('canvas');
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    el.appendChild(canvas);
+  }
+  canvas.width = Math.max(1, Math.round(lw * dpr));
+  canvas.height = Math.max(1, Math.round(lh * dpr));
+  canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, lw, lh);
+  sd.forEach(function (s) {
+    paintDrawStroke(ctx, s, function (wx, wy) { return [wx - minX + pad, wy - minY + pad]; });
+  });
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+}
+window.rebuildDrawItemCanvas = rebuildDrawItemCanvas;
+
+// v7.0.29: a stroke shorter than ~4 screen px is almost always an accidental
+// click or a 2px twitch while starting a box/arrow — not a deliberate mark.
+// Drop it instead of committing an invisible dot that still eats a stroke id
+// and an undo step (and, for box/arrow, reads as "my box turned into a line").
+function isMicroStroke(s) {
+  if (!s || !s.points || s.points.length < 2) return true;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (let i = 0; i < s.points.length; i++) {
+    const p = s.points[i];
+    if (p[0] < minX) minX = p[0];
+    if (p[1] < minY) minY = p[1];
+    if (p[0] > maxX) maxX = p[0];
+    if (p[1] > maxY) maxY = p[1];
+  }
+  return (Math.hypot(maxX - minX, maxY - minY) * state.zoom) < 4;
+}
+
 function redrawDrawLayer() {
   const ctx = getDrawCtx();
   ctx.clearRect(0, 0, drawLayer.width, drawLayer.height);
+  const _toScreen = function (wx, wy) { return [wx * state.zoom + state.pan.x, wy * state.zoom + state.pan.y]; };
   G.drawStrokes.forEach(stroke => {
-    if (stroke.points.length < 2) return;
-    ctx.globalAlpha = stroke.opacity;
-    ctx.strokeStyle = stroke.color;
-    ctx.fillStyle = stroke.color;
-    ctx.lineWidth = stroke.size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    if (stroke.mode === 'eraser') {
-      ctx.globalCompositeOperation = 'destination-out';
-      // Draw as freehand path
-      ctx.beginPath();
-      stroke.points.forEach((p, i) => {
-        const sx = p[0] * state.zoom + state.pan.x;
-        const sy = p[1] * state.zoom + state.pan.y;
-        if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
-      });
-      ctx.stroke();
-    } else if (stroke.mode === 'arrow') {
-      ctx.globalCompositeOperation = 'source-over';
-      const p0 = stroke.points[0], p1 = stroke.points[1];
-      const sx0 = p0[0] * state.zoom + state.pan.x;
-      const sy0 = p0[1] * state.zoom + state.pan.y;
-      const sx1 = p1[0] * state.zoom + state.pan.x;
-      const sy1 = p1[1] * state.zoom + state.pan.y;
-      // Draw line
-      ctx.beginPath();
-      ctx.moveTo(sx0, sy0);
-      ctx.lineTo(sx1, sy1);
-      ctx.stroke();
-      // Draw arrowhead
-      const angle = Math.atan2(sy1 - sy0, sx1 - sx0);
-      const headLen = stroke.arrowHead || drawTool.arrowHead || 15;
-      const spread = Math.PI / 7; // ~25 degrees
-      ctx.beginPath();
-      ctx.moveTo(sx1, sy1);
-      ctx.lineTo(sx1 - headLen * Math.cos(angle - spread), sy1 - headLen * Math.sin(angle - spread));
-      ctx.lineTo(sx1 - headLen * Math.cos(angle + spread), sy1 - headLen * Math.sin(angle + spread));
-      ctx.closePath();
-      ctx.fill();
-    } else if (stroke.mode === 'box') {
-      ctx.globalCompositeOperation = 'source-over';
-      const p0 = stroke.points[0], p1 = stroke.points[1];
-      const sx0 = p0[0] * state.zoom + state.pan.x;
-      const sy0 = p0[1] * state.zoom + state.pan.y;
-      const sx1 = p1[0] * state.zoom + state.pan.x;
-      const sy1 = p1[1] * state.zoom + state.pan.y;
-      const bx = Math.min(sx0, sx1), by = Math.min(sy0, sy1);
-      const bw = Math.abs(sx1 - sx0), bh = Math.abs(sy1 - sy0);
-      ctx.strokeRect(bx, by, bw, bh);
-    } else {
-      // Pen: freehand path with optional per-point pressure (variable line width)
-      ctx.globalCompositeOperation = 'source-over';
-      const hasPressure = stroke.points[0] && stroke.points[0].length >= 3;
-      if (hasPressure) {
-        // Variable-width pen — draw each segment with its own line width
-        for (let i = 1; i < stroke.points.length; i++) {
-          const p0 = stroke.points[i - 1];
-          const p1 = stroke.points[i];
-          const sx0 = p0[0] * state.zoom + state.pan.x;
-          const sy0 = p0[1] * state.zoom + state.pan.y;
-          const sx1 = p1[0] * state.zoom + state.pan.x;
-          const sy1 = p1[1] * state.zoom + state.pan.y;
-          // Average pressure of segment endpoints
-          const pr = ((p0[2] || 0.5) + (p1[2] || 0.5)) / 2;
-          // Clamp pressure and map to lineWidth: 0.0 → 30% of size, 0.5 → 80%, 1.0 → 100%
-          const w = stroke.size * (0.3 + 0.7 * Math.min(1, Math.max(0, pr)));
-          ctx.lineWidth = w;
-          ctx.beginPath();
-          ctx.moveTo(sx0, sy0);
-          ctx.lineTo(sx1, sy1);
-          ctx.stroke();
-        }
-      } else {
-        // Constant width (mouse / no pressure)
-        ctx.lineWidth = stroke.size;
-        ctx.beginPath();
-        stroke.points.forEach((p, i) => {
-          const sx = p[0] * state.zoom + state.pan.x;
-          const sy = p[1] * state.zoom + state.pan.y;
-          if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
-        });
-        ctx.stroke();
-      }
-    }
+    paintDrawStroke(ctx, stroke, _toScreen);
   });
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
@@ -26966,17 +27098,31 @@ function convertAllStrokesToItem() {
       if (p[1] > maxY) maxY = p[1];
     });
   });
-  const pad = 8;
+  // v7.0.29: the pad must cover half the line width AND the arrow head fan.
+  // A flat 8px was fine for a 3px pen, but a thick horizontal arrow's head
+  // spreads ~headLen*sin(25°) above and below its end point and used to get
+  // sliced off flush against the item's canvas edge.
+  let pad = 8;
+  strokes.forEach(s => {
+    pad = Math.max(pad, (s.size || 0) / 2 + 4);
+    if (s.mode === 'arrow') pad = Math.max(pad, strokeHeadLen(s) * Math.sin(Math.PI / 7) + 4);
+  });
+  pad = Math.ceil(pad);
   const x = minX - pad;
   const y = minY - pad;
   const w = Math.max(maxX - minX + pad * 2, 20);
   const h = Math.max(maxY - minY + pad * 2, 20);
 
-  // Save stroke data before removing from G.drawStrokes
+  // Save stroke data before removing from G.drawStrokes.
+  // v7.0.29: the data now lives on the ITEM (not only on el._strokeData) so
+  // it survives save/reload and undo. Previously the packed strokes were
+  // attached to the DOM node only, and reloading the board brought back an
+  // empty transparent box. Coordinates are rounded to 2dp — invisible at any
+  // zoom but roughly halves the saved JSON.
   const strokeData = strokes.map(s => ({
     color: s.color, size: s.size, opacity: s.opacity,
     mode: s.mode, arrowHead: s.arrowHead || 0,
-    points: s.points.map(p => [p[0], p[1], p[2] || 0])
+    points: s.points.map(p => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100, p[2] || 0])
   }));
 
   // Remove packed strokes from draw layer
@@ -26987,38 +27133,6 @@ function convertAllStrokesToItem() {
   const el = document.createElement('div');
   el.className = 'item draw-item';
   el.style.cssText = 'background:transparent;border:none;pointer-events:auto;overflow:visible;';
-  el._strokeData = strokeData;
-  el._drawW = w;
-  el._drawH = h;
-  el._drawPad = pad;
-  el._minX = minX;
-  el._minY = minY;
-
-  // Render strokes onto an internal canvas
-  const dpr = window.devicePixelRatio || 1;
-  const canvas = document.createElement('canvas');
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;';
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-  strokeData.forEach(s => {
-    ctx.globalAlpha = s.opacity;
-    ctx.strokeStyle = s.color;
-    ctx.fillStyle = s.color;
-    ctx.lineWidth = s.size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    s.points.forEach((p, i) => {
-      const sx = p[0] - minX + pad;
-      const sy = p[1] - minY + pad;
-      if (i === 0) ctx.moveTo(sx, sy);
-      else ctx.lineTo(sx, sy);
-    });
-    ctx.stroke();
-  });
-  el.appendChild(canvas);
   canvasContent.appendChild(el);
 
   const item = {
@@ -27031,13 +27145,25 @@ function convertAllStrokesToItem() {
     drawColor: strokes[0].color,
     drawSize: strokes[0].size,
     drawOpacity: strokes[0].opacity,
+    drawStrokes: strokeData,
+    drawPad: pad, drawMinX: minX, drawMinY: minY, drawW: w, drawH: h,
   };
+  el._strokeData = strokeData;
+  el._drawW = w;
+  el._drawH = h;
+  el._drawPad = pad;
+  el._minX = minX;
+  el._minY = minY;
   state.items.push(item);
+  // v7.0.29: bake through the shared, mode-aware renderer — a BOX comes out
+  // as a rectangle and an ARROW keeps its head instead of collapsing into a
+  // single diagonal line.
+  rebuildDrawItemCanvas(item);
   updateItemStyle(item);
   pushUndo();
   scheduleAutoSave();
   redrawDrawLayer();
-  toast('Packed ' + strokes.length + ' strokes');
+  toast(_isZhUI() ? ('已打包 ' + strokes.length + ' 条笔迹') : ('Packed ' + strokes.length + ' strokes'));
 }
 
 window.convertAllStrokesToItem = convertAllStrokesToItem;
@@ -27150,7 +27276,7 @@ function hitTestStrokes(wx, wy) {
       if (distToSegment(sx, sy, x0, y0, x1, y1) < HIT_THRESHOLD + s.size / 2) return s;
       // Also check arrowhead
       const angle = Math.atan2(y1 - y0, x1 - x0);
-      const headLen = s.arrowHead || 15;
+      const headLen = strokeHeadLen(s);
       const spread = Math.PI / 7;
       const ax1 = x1 - headLen * Math.cos(angle - spread), ay1 = y1 - headLen * Math.sin(angle - spread);
       const ax2 = x1 - headLen * Math.cos(angle + spread), ay2 = y1 - headLen * Math.sin(angle + spread);
@@ -29833,7 +29959,7 @@ function renderExport(sx, sy, sw, sh) {
       ctx.lineTo(px1, py1);
       ctx.stroke();
       const angle = Math.atan2(py1 - py0, px1 - px0);
-      const headLen = stroke.arrowHead || 15;
+      const headLen = strokeHeadLen(stroke);
       const spread = Math.PI / 7;
       ctx.beginPath();
       ctx.moveTo(px1, py1);
@@ -30238,7 +30364,7 @@ function captureArea(sx, sy, sw, sh) {
       const [px1, py1] = toScreen(stroke.points[1]);
       ctx.beginPath(); ctx.moveTo(px0, py0); ctx.lineTo(px1, py1); ctx.stroke();
       const angle = Math.atan2(py1 - py0, px1 - px0);
-      const headLen = stroke.arrowHead || 15;
+      const headLen = strokeHeadLen(stroke);
       const spread = Math.PI / 7;
       ctx.beginPath();
       ctx.moveTo(px1, py1);
@@ -31281,6 +31407,15 @@ function buildManifest() {
       d.drawMode = i.drawMode; d.drawColor = i.drawColor;
       d.drawSize = i.drawSize; d.drawOpacity = i.drawOpacity;
       d.drawArrowHead = i.drawArrowHead;
+      // v7.0.29: packed board-pen strokes travel with the item. Without them
+      // saving and reopening a board left every packed item as an empty
+      // transparent box (the baked canvas was never stored anywhere).
+      var _pds = i.drawStrokes || (i.el && i.el._strokeData) || null;
+      if (_pds && _pds.length) {
+        d.drawStrokes = _pds;
+        d.drawPad = i.drawPad; d.drawMinX = i.drawMinX; d.drawMinY = i.drawMinY;
+        d.drawW = i.drawW; d.drawH = i.drawH;
+      }
     }
     return d;
   });
@@ -32929,6 +33064,13 @@ function serializeBoard() {
         d.drawMode = i.drawMode; d.drawColor = i.drawColor;
         d.drawSize = i.drawSize; d.drawOpacity = i.drawOpacity;
         d.drawArrowHead = i.drawArrowHead;
+        // v7.0.29: keep packed strokes so autosave / export round-trips them
+        var _pds2 = i.drawStrokes || (i.el && i.el._strokeData) || null;
+        if (_pds2 && _pds2.length) {
+          d.drawStrokes = _pds2;
+          d.drawPad = i.drawPad; d.drawMinX = i.drawMinX; d.drawMinY = i.drawMinY;
+          d.drawW = i.drawW; d.drawH = i.drawH;
+        }
       }
       // v5.5: Flag ephemeral media so restoreBoard knows src was stripped
       if ((i.isVideo || i.isGif || i.isAudio) && i.src && (i.src.startsWith('blob:') || i.src.startsWith('data:'))) {
@@ -33226,9 +33368,12 @@ function restoreBoard(data, append) {
     }
     if (d.type === 'draw') {
       // Draw item — create lightweight DOM element, stroke data lives in G.drawStrokes
+      // v7.0.29: PACKED items also carry their own baked strokes
+      // (d.drawStrokes). Rebuild the internal canvas here, or a saved board
+      // reopens with every packed sketch as an empty transparent box.
       const el = document.createElement('div');
       el.className = 'item draw-item';
-      el.style.cssText = 'background:transparent;border:none;pointer-events:auto;';
+      el.style.cssText = 'background:transparent;border:none;pointer-events:auto;overflow:visible;';
       canvasContent.appendChild(el);
       const itemId = _claimId(d.id);
       const item = {
@@ -33238,9 +33383,13 @@ function restoreBoard(data, append) {
         strokeId: d.strokeId,
         drawMode: d.drawMode, drawColor: d.drawColor, drawSize: d.drawSize,
         drawOpacity: d.drawOpacity, drawArrowHead: d.drawArrowHead || 0,
+        drawStrokes: d.drawStrokes || null,
+        drawPad: d.drawPad, drawMinX: d.drawMinX, drawMinY: d.drawMinY,
+        drawW: d.drawW, drawH: d.drawH,
       };
       G.nextZ = Math.max(G.nextZ, item.z + 1);
       state.items.push(item);
+      rebuildDrawItemCanvas(item);
       updateItemStyle(item);
       return;
     }
@@ -33833,6 +33982,8 @@ window.addEventListener('load', async () => {
   // Autosave restore DISABLED — user loads kpak via Load button when ready
   // Show alt-pan status badge if enabled (MacBook trackpad mode)
   updateAltPanBadge();
+  // v7.0.29: fill in the board-pen pack/exit hint on first paint
+  if (typeof refreshDrawPackHint === 'function') refreshDrawPackHint();
 
   // v6.8.28: warn before closing/reloading while saving or if board is dirty.
   // This reduces the chance of losing the .kpak file if the tab closes during
