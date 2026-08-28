@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.30</title>
+<title>Krafted v7.0.31</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4083,7 +4083,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.30';
+var KRAFTED_VERSION = '7.0.31';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -11635,145 +11635,23 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     let _swipeActive = false;     // true while a horizontal scrub gesture is in progress
     let _swipeEndTimer = null;    // timeout id for ending the gesture after finger lift
     let _scrubRafId = null;       // rAF id for batching DOM updates during scrub
-    // v6.1.10 perf: RV-style multi-video preload.
-    // Creates hidden <video> clones that pre-seek to nearby positions,
-    // warming independent decoder caches. When the user seeks, the
-    // main video reuses already-decoded frames from the preloader that
-    // was closest to that position = near-instant seek.
-    // MUCH more effective than single-video pre-buffer because each
-    // <video> has its own decoder state.
-    var _preloadVideos = [];       // [{el, targetTime}]
-    var _preloadTimer = null;
-    var _preloadIndicator = null;
-    var _preloadActive = false;
-    var PRELOAD_COUNT = 4;        // 4 hidden videos covering ±3s range
-    var PRELOAD_SPREAD = 1.5;     // seconds between each preloader
-
-    function _ensurePreloadIndicator() {
-      if (_preloadIndicator) return _preloadIndicator;
-      _preloadIndicator = document.createElement('div');
-      _preloadIndicator.style.cssText = 'position:absolute;top:100%;right:0;margin-top:2px;font-size:9px;color:rgba(124,140,240,0.8);pointer-events:none;display:none;white-space:nowrap;';
-      seekBar.appendChild(_preloadIndicator);
-      return _preloadIndicator;
-    }
-
-    function _initPreloadVideos() {
-      if (_preloadVideos.length > 0) return; // already initialized
-      if (!mediaEl.src) return; // guard: must have a video source loaded (any protocol)
-      // Create an isolated container for preload videos — off-screen,
-      // non-interactive, and hidden from all querySelector/event paths.
-      var _container = document.createElement('div');
-      _container.id = 'krafted-preload-container';
-      _container.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;z-index:-1;';
-      document.body.appendChild(_container);
-      for (var i = 0; i < PRELOAD_COUNT; i++) {
-        var pv = document.createElement('video');
-        pv.muted = true;
-        pv.preload = 'none';  // don't compete with main video for blob reads
-        pv.setAttribute('data-krafted-preload', '1'); // marker so app code can skip these
-        pv.style.cssText = 'width:1px;height:1px;display:none;';
-        pv.src = mediaEl.src;
-        _container.appendChild(pv);
-        _preloadVideos.push({ el: pv, targetTime: -1, ready: true });
-      }
-      console.log('[Preload] ' + PRELOAD_COUNT + ' preloader videos ready (lazy — will buffer on seek)');
-    }
-
-    function _updatePreloadIndicator(text) {
-      var _ind = _ensurePreloadIndicator();
-      _ind.textContent = text || '';
-      _ind.style.display = text ? 'block' : 'none';
-    }
-
-    function _schedulePreload(pct) {
-      if (!isFinite(mediaEl.duration) || mediaEl.duration <= 0) return;
-      if (dragActive) return; // never preload during drag
-
-      // Init preloaders on first hover
-      if (_preloadVideos.length === 0) _initPreloadVideos();
-      if (_preloadVideos.length === 0) return;
-
-      if (_preloadTimer) clearTimeout(_preloadTimer);
-      _preloadTimer = setTimeout(function() {
-        _preloadTimer = null;
-        if (dragActive) return;
-        _doPreload(pct);
-      }, 300);
-    }
-
-    function _doPreload(pct) {
-      if (dragActive) return;
-      var dur = mediaEl.duration;
-      if (!isFinite(dur) || dur <= 0) return;
-      var centerT = pct * dur;
-      _preloadActive = true;
-      var _ready = 0;
-      var _total = PRELOAD_COUNT;
-
-      _preloadVideos.forEach(function(pv, i) {
-        // Spread: [-2.25, -0.75, +0.75, +2.25] seconds from center
-        var offset = (i - (PRELOAD_COUNT - 1) / 2) * PRELOAD_SPREAD;
-        var t = Math.max(0, Math.min(dur, centerT + offset));
-        pv.targetTime = t;
-        pv.ready = false;
-        try { pv.el.currentTime = t; } catch(e) {}
-
-        function _onSeeked() {
-          pv.el.removeEventListener('seeked', _onSeeked);
-          pv.ready = true;
-          _ready++;
-          _updatePreloadIndicator('⚡ ' + _ready + '/' + _total);
-          if (_ready >= _total) {
-            _preloadActive = false;
-            setTimeout(function() { _updatePreloadIndicator(''); }, 800);
-          }
-        }
-        pv.el.addEventListener('seeked', _onSeeked, { once: true });
-        setTimeout(function() {
-          if (!pv.ready) {
-            try { pv.el.removeEventListener('seeked', _onSeeked); } catch(e) {}
-            pv.ready = true; _ready++;
-            _updatePreloadIndicator('⚡ ' + _ready + '/' + _total);
-            if (_ready >= _total) { _preloadActive = false; }
-          }
-        }, 3000);
-      });
-    }
-
-    // v6.1.10: Copy decoded frame from nearest preloader to main video.
-    // This is the RV-style trick: instead of seeking the main video
-    // (which triggers a decode), we check if a preloader is already at
-    // the target position. If yes, we can skip the seek entirely by
-    // swapping the <video> source's currentTime to a cached position.
-    // In practice, the main video still needs to seek, but the browser
-    // reuses the preloader's decoded frames because they share the
-    // same source URL — the decoder cache is keyed by URL+position.
-    function _getNearestPreloader(targetTime) {
-      var best = null, bestDist = Infinity;
-      _preloadVideos.forEach(function(pv) {
-        if (!pv.ready) return;
-        var dist = Math.abs(pv.targetTime - targetTime);
-        if (dist < bestDist) { bestDist = dist; best = pv; }
-      });
-      return best && bestDist < PRELOAD_SPREAD ? best : null;
-    }
-
-    function _stopPreload() {
-      if (_preloadTimer) { clearTimeout(_preloadTimer); _preloadTimer = null; }
-      _preloadActive = false;
-      _updatePreloadIndicator('');
-    }
-
-    function _destroyPreloadVideos() {
-      _stopPreload();
-      _preloadVideos.forEach(function(pv) {
-        try { pv.el.pause(); pv.el.removeAttribute('src'); pv.el.load(); pv.el.remove(); } catch(e) {}
-      });
-      _preloadVideos = [];
-      // Also remove the isolated container
-      var _cont = document.getElementById('krafted-preload-container');
-      if (_cont) try { _cont.remove(); } catch(e) {}
-    }
+    // v7.0.31: the v6.1.10 "RV-style multi-video preload" subsystem has been
+    // REMOVED. On first seek-bar hover it created four hidden <video> clones
+    // per media item and seeked them to warm a decoder cache that was then
+    // never used: `_getNearestPreloader()` — the only consumer, meant to hand
+    // a warm frame to the main video — had ZERO call sites, and
+    // `_destroyPreloadVideos()` was never called either, so the clones were
+    // never torn down.
+    //
+    // Browsers give no guarantee that two media elements on the same URL
+    // share decoded frames, so the benefit was speculative while the cost was
+    // real and unbounded: hover 20 videos and the board silently holds 80
+    // extra media elements (Chrome starts failing around 75 total), each
+    // firing its own seek storm on every hover pass. That, not decode speed,
+    // is why scrolling a video-heavy board felt sticky.
+    //
+    // Seeking is now driven only by the player's own element. Do not
+    // reintroduce this without a measured seek-latency win.
 
     // Round 64: Mac-only two-finger scrub — Two-fix rollout (v5.3).
     //   Fix 1 — Per-event synchronous seek: each wheel event directly
@@ -12790,8 +12668,16 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     if (_popoverTrackRaf) return; // already running
     const mediaWrap = el.querySelector('.media-wrap');
     const tick = function() {
-      if (!listPopover.classList.contains('open')) {
+      // v7.0.31: the popover can be detached while still carrying the `open`
+      // class — deleting the item, clearing the board, or an undo restore all
+      // go through removeAnnoPopoversFor(). The old loop only stopped when
+      // `open` was removed, so a deleted video left a rAF tick running at
+      // 60fps forever, calling getBoundingClientRect() on detached nodes —
+      // plus a live ResizeObserver and two window listeners, per leak.
+      // isConnected is the only reliable "still on the board" signal.
+      if (!listPopover.isConnected || !listPopover.classList.contains('open')) {
         _popoverTrackRaf = null;
+        _stopTrackingPopover();
         return;
       }
       try { _positionPopover(listPopover, commentsFab); } catch (e) {}
@@ -13471,6 +13357,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   el._repositionAnnoPopovers = function() {
     if (listPopover.classList.contains('open')) _positionPopover(listPopover, commentsFab);
   };
+  // v7.0.31: expose the teardown so removeAnnoPopoversFor() can stop the rAF
+  // tracking loop before it detaches the popover. Without this, deleting a
+  // video whose comment panel is open leaves the loop running forever.
+  el._stopAnnoPopoverTracking = _stopTrackingPopover;
   // Initial badge + markers
   _refreshBadges();
   // Build markers once the video duration is known (loadedmetadata or
@@ -14397,17 +14287,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       if (timeEl) timeEl.textContent = fmtTT(t);
     }
     // Hover → update tooltip
+    // v7.0.31: this handler used to also drive the RV-style preloaders (see
+    // the note where they were removed). Besides being dead weight, it did a
+    // synchronous getBoundingClientRect() on EVERY mousemove across the seek
+    // bar — a forced layout on the hottest pointer path on the board. The
+    // tooltip is all that is left, and it only needs clientX.
     seekBar.addEventListener('mousemove', function(ev) {
       updateSeekTooltip(ev.clientX);
-      // v6.1.10: Multi-video preload when hovering (RV-style) — always-on
-      var _tr = track.getBoundingClientRect();
-      if (_tr.width > 0) {
-        var _pct = Math.max(0, Math.min(1, (ev.clientX - _tr.left) / _tr.width));
-        _schedulePreload(_pct);
-      }
-    });
-    seekBar.addEventListener('mouseleave', function() {
-      _stopPreload();
     });
     // ── Playhead-position label (round 58) ──
     // Distinct from the hover/drag tooltip above: this one follows the
@@ -20641,11 +20527,25 @@ viewport.addEventListener('wheel', e => {
   //   and wheelMode='mouse' (right-click menu) -> wheel zooms.
   const macWheelLikeMouse = (wheelMode === 'mouse');
 
+  // v7.0.31: ZOOM MUST STAY ANCHORED UNDER THE CURSOR.
+  // Every zoom branch below used to pass the viewport centre, so zooming
+  // yanked the content toward the middle of the screen — inspecting a detail
+  // meant "zoom → drag it back → zoom again", over and over. The comment at
+  // the top of this handler always claimed the cursor stays anchored to the
+  // same world point; `zoomTo(z, cx, cy)` has always accepted an arbitrary
+  // anchor. The wheel handler simply never passed one.
+  // Fix: use the event's own client coords. For a trackpad pinch Chrome
+  // reports the centroid between the two fingers, which is exactly the point
+  // the user expects to hold still.
+  const _hasWheelPt = Number.isFinite(e.clientX) && Number.isFinite(e.clientY);
+  const wheelCx = _hasWheelPt ? e.clientX : window.innerWidth / 2;
+  const wheelCy = _hasWheelPt ? e.clientY : window.innerHeight / 2;
+
   // ── Mac Cmd + wheel: zoom (metaKey on Mac, absent on Windows) ──
   if (Platform.mac && e.metaKey) {
     const s = state.zoomStep;
     const rawDY = state.naturalScroll ? -e.deltaY : e.deltaY;
-    zoomBy(rawDY < 0 ? s : 1 / s, window.innerWidth / 2, window.innerHeight / 2);
+    zoomBy(rawDY < 0 ? s : 1 / s, wheelCx, wheelCy);
     return;
   }
 
@@ -20665,19 +20565,19 @@ viewport.addEventListener('wheel', e => {
       if (!(e.target && e.target.closest && e.target.closest('.item.has-media'))) {
         const _pct = (state.zoomStep - 1) * 0.26;
         const pinchStep = Math.max(0.020, Math.min(0.080, Math.abs(e.deltaY) * _pct));
-        zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, window.innerWidth / 2, window.innerHeight / 2);
+        zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, wheelCx, wheelCy);
       }
     } else if (e.deltaMode !== 0 || _WheelKind.isMouse) {
       // Real mouse wheel → use zoomStep (discrete notch zoom)
       const s = state.zoomStep;
       const rawDY = state.naturalScroll ? -e.deltaY : e.deltaY;
-      zoomBy(rawDY < 0 ? s : 1 / s, window.innerWidth / 2, window.innerHeight / 2);
+      zoomBy(rawDY < 0 ? s : 1 / s, wheelCx, wheelCy);
     } else {
       // Fallback pinch path (non-mac or ambiguous device)
       if (!(e.target && e.target.closest && e.target.closest('.item.has-media'))) {
         const _pct = (state.zoomStep - 1) * 0.26;
         const pinchStep = Math.max(0.020, Math.min(0.080, Math.abs(e.deltaY) * _pct));
-        zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, window.innerWidth / 2, window.innerHeight / 2);
+        zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, wheelCx, wheelCy);
       }
     }
   // ── Two-finger trackpad pan ──
@@ -20719,7 +20619,7 @@ viewport.addEventListener('wheel', e => {
     }
     const s = state.zoomStep;
     const rawDY = state.naturalScroll ? -e.deltaY : e.deltaY;
-    zoomBy(rawDY < 0 ? s : 1 / s, window.innerWidth / 2, window.innerHeight / 2);
+    zoomBy(rawDY < 0 ? s : 1 / s, wheelCx, wheelCy);
   }
 }, { passive: false });
 
@@ -26814,6 +26714,14 @@ function cleanupVideoItem(item, revokeBlob) {
 function removeAnnoPopoversFor(item) {
   if (!item || !item.el) return;
   const l = item.el._annoListPopover;
+  // v7.0.31: stop the rAF tracking loop BEFORE detaching. It restarts itself
+  // every frame while the popover has the `open` class, and detaching does not
+  // remove that class — so without this the loop (plus its ResizeObserver and
+  // two window listeners) outlives the item and burns a frame callback forever.
+  if (item.el._stopAnnoPopoverTracking) {
+    try { item.el._stopAnnoPopoverTracking(); } catch (e) {}
+    item.el._stopAnnoPopoverTracking = null;
+  }
   if (l && l.parentNode) l.parentNode.removeChild(l);
   item.el._annoListPopover = null;
   // Also reset the floating pill ref so a new item doesn't inherit a
@@ -34322,6 +34230,32 @@ document.addEventListener('visibilitychange', function() {
 
 // New Board — clear everything and show fresh welcome
 function newBoard() {
+  // v7.0.31: Clear used to be a one-click, unrecoverable wipe of everything —
+  // the board AND both history stacks AND the autosave — behind a prominent
+  // toolbar button with no confirmation. A misclick destroyed hours of work
+  // with no way back: Ctrl+Z was empty, the autosave was already deleted.
+  //
+  // Two changes:
+  //   1. Ask first — but only when there is actually something to lose, so
+  //      clearing an already-empty board stays a single no-nag click.
+  //   2. Record an undo step instead of nuking history, so Ctrl+Z brings the
+  //      whole board back even after confirming.
+  const _n = state.items.length + state.texts.length +
+             (state.todos ? state.todos.length : 0) +
+             (state.mindmaps ? state.mindmaps.length : 0) +
+             (G.drawStrokes ? G.drawStrokes.length : 0);
+  if (_n > 0) {
+    const _zh = (typeof _isZhUI === 'function') ? _isZhUI() : false;
+    const _msg = _zh
+      ? '清空画板？\n\n将移除 ' + _n + ' 个项目。\n可以用 Ctrl+Z 撤销。'
+      : 'Clear the board?\n\nThis removes ' + _n + ' item' + (_n === 1 ? '' : 's') +
+        '.\nYou can undo with Ctrl+Z.';
+    if (!window.confirm(_msg)) return;
+  }
+  // Snapshot BEFORE wiping so the step above is recoverable. pushUndo()
+  // handles the save-in-flight case itself (it defers), so don't touch
+  // state._deferredUndo here or the pending step would be dropped.
+  try { pushUndo(); } catch (e) {}
   cleanupAllItems();
   state.items = [];
   state.texts = [];
@@ -34331,13 +34265,11 @@ function newBoard() {
   state.groups.forEach(g => g.borderEl.remove());
   state.groups = [];
   G.nextGroupId = 1;
-  state.undoStack = [];
-  state.redoStack = [];
-  state._undoBytes = 0;
-  state._redoBytes = 0;
-  state._deferredUndo = null;
-  // v7.0.10: also clear the annotation-stroke undo stack — its entries
-  // reference DOM elements from the wiped board.
+  // v7.0.31: the undo/redo stacks are deliberately NOT cleared — the snapshot
+  // pushed above is the way back, and it is bounded by the same 100-step /
+  // 300MB cap as every other undo entry. pushUndo() already emptied redoStack.
+  // v7.0.10: the annotation-stroke stack is still dropped — its entries hold
+  // direct DOM references to elements we are about to destroy.
   G._annoUndoStack = [];
   G.nextZ = 1; G.nextId = 1;
   G.drawStrokes.length = 0;
@@ -34350,7 +34282,9 @@ function newBoard() {
   _frozenGifs.clear();
   updateMediaBar();
   showWelcome();
-  toast('Board cleared!');
+  toast(((typeof _isZhUI === 'function') ? _isZhUI() : false)
+    ? '画板已清空（Ctrl+Z 可撤销）'
+    : 'Board cleared! (Ctrl+Z to undo)');
 }
 
 // ============================================================
