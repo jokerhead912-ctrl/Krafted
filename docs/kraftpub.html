@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.32</title>
+<title>Krafted v7.0.33</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4083,7 +4083,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.32';
+var KRAFTED_VERSION = '7.0.33';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6588,11 +6588,31 @@ function updateCanvas() {
   // canvas-local (50000, 50000) — always inside the canvas box.
   const OFF = 50000;
   canvas.style.transform = `translate(${state.pan.x + OFF - OFF * state.zoom}px, ${state.pan.y + OFF - OFF * state.zoom}px) scale(${state.zoom})`;
+  // v7.0.33: assigning canvas.width/height ALWAYS reallocates and wipes the
+  // backing store, even when the value is identical — ~24 MB per call at
+  // dpr 2 on a 1512x982 screen. updateCanvas() runs on every pan/zoom tick
+  // (60-120/sec during a trackpad swipe), so the old lines were churning
+  // well over 1 GB/s of GPU-side allocation while the user merely dragged
+  // the board. The buffer only ever needs to change on a window resize,
+  // and window resize already routes through updateCanvas() (see the
+  // resize listener), so guarding on the current size is safe.
+  // `| 0` matches what the canvas width/height setters do internally
+  // (unsigned long truncation), so the computed size is bit-identical to
+  // the old code's result.
   const dpr = window.devicePixelRatio || 1;
-  drawLayer.width = window.innerWidth * dpr;
-  drawLayer.height = window.innerHeight * dpr;
-  drawLayer.style.width = window.innerWidth + 'px';
-  drawLayer.style.height = window.innerHeight + 'px';
+  const _bw = (window.innerWidth * dpr) | 0;
+  const _bh = (window.innerHeight * dpr) | 0;
+  const _sw = window.innerWidth + 'px';
+  const _sh = window.innerHeight + 'px';
+  if (drawLayer.width !== _bw || drawLayer.height !== _bh ||
+      drawLayer.style.width !== _sw || drawLayer.style.height !== _sh) {
+    drawLayer.width = _bw;
+    drawLayer.height = _bh;
+    drawLayer.style.width = _sw;
+    drawLayer.style.height = _sh;
+  }
+  // redrawDrawLayer() clearRect()s the whole buffer and repaints every
+  // stroke unconditionally, so skipping the realloc above is invisible.
   redrawDrawLayer();
   updateAllGroupBorders();
   // Update mind map connectors on pan/zoom
@@ -6661,10 +6681,25 @@ function cullOffscreenItems() {
       // Off-screen
       if (!it._culled) {
         it._culled = true;
-        if (it.video && !it.video.paused) {
-          // Pause video but remember it was playing
-          it._wasPlaying = true;
-          it.video.pause();
+        if (it.video) {
+          if (!it.video.paused) {
+            // Pause video but remember it was playing
+            it._wasPlaying = true;
+            it.video.pause();
+          }
+          // v7.0.33: stop the browser buffering ahead for a clip nobody is
+          // looking at. preload='metadata' caps how far the demuxer runs
+          // while the video is parked off screen; 'auto' comes back the
+          // moment it returns (see below), and playMediaEl() forces 'auto'
+          // as well.
+          // NOTE: this deliberately does NOT drop the src. Releasing the
+          // decoder properly needs removeAttribute('src') + load(), which
+          // also zeroes videoWidth/duration — and export / capture / frame
+          // comments all draw off-screen videos synchronously, so a parked
+          // video would silently export as a black rectangle. Not worth it.
+          if (it.video.paused && it.video.preload === 'auto') {
+            try { it.video.preload = 'metadata'; it._preloadWasAuto = true; } catch (e) {}
+          }
         } else if (it.img && (it.isGif || isAnimatedGif(it.src)) && !_frozenGifs.has(it.id)) {
           // Freeze animated GIFs (replace with static first frame) — this is the biggest perf win
           try {
@@ -6683,8 +6718,17 @@ function cullOffscreenItems() {
       // On-screen
       if (it._culled) {
         it._culled = false;
+        // v7.0.33: give back the buffering budget the cull took away.
+        if (it.video && it._preloadWasAuto) {
+          try { it.video.preload = 'auto'; } catch (e) {}
+          it._preloadWasAuto = false;
+        }
         if (it.video && it._wasPlaying) {
-          it.video.play().catch(() => {});
+          // v7.0.33: an automatic resume — registers in the LRU order but
+          // never evicts. _wasPlaying is only ever set by the culling pass
+          // itself, so Pause All / budget evictions no longer "come back
+          // to life" here on the next pan.
+          resumeMediaEl(it.video);
           it._wasPlaying = false;
         } else if (it.img && _frozenGifs.has(it.id) && !it._userFrozen) {
           // Restore animated GIF — only if cull froze it (not user-frozen)
@@ -7255,8 +7299,9 @@ function applySnapshot(snap) {
           }
         } catch (e) {}
         if (_shouldPlay) {
-          // .play() returns a promise; swallow autoplay rejections.
-          try { mediaEl.play().catch(() => {}); } catch (e) {}
+          // v7.0.33: automatic resume of what the user already had playing
+          // (resumeMediaEl swallows autoplay rejections internally).
+          resumeMediaEl(mediaEl);
         }
       });
     } else {
@@ -7287,7 +7332,8 @@ function applySnapshot(snap) {
     if (data.isVideo) {
       setupVideoTrim(item);
       el.addEventListener('dblclick', () => {
-        if (mediaEl.paused) { mediaEl.muted = false; mediaEl.play(); } else { mediaEl.pause(); }
+        // v7.0.33: route through the concurrency budget.
+        if (mediaEl.paused) { playMediaEl(mediaEl); } else { mediaEl.pause(); }
       });
     }
    } catch (e) { console.error('[undo] item restore failed', data && data.id, e); }
@@ -11007,9 +11053,9 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     if (!mediaEl.duration || mediaEl.readyState < 2) return;
     ev.stopPropagation();
     // Round 73: toggle play/pause (was: seek to click position + pause)
+    // v7.0.33: route through the concurrency budget.
     if (mediaEl.paused) {
-      mediaEl.muted = false;
-      mediaEl.play().catch(function(){});
+      playMediaEl(mediaEl);
     } else {
       mediaEl.pause();
     }
@@ -13998,10 +14044,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     btn.addEventListener('mousedown', function(ev) { ev.stopPropagation(); ev.preventDefault(); });
     btn.addEventListener('click', function(ev) {
       ev.stopPropagation();
+      // v7.0.33: route through the concurrency budget (playMediaEl also
+      // unmutes, which is what the two duplicated lines above were for).
       if (mediaEl.paused) {
-        mediaEl.muted = false;
-        mediaEl.muted = false;
-        mediaEl.play().catch(function(){});
+        playMediaEl(mediaEl);
       }
       else { mediaEl.pause(); }
     });
@@ -14043,7 +14089,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // Double-click toggle play
     el.addEventListener('dblclick', function(ev) {
       ev.stopPropagation();
-      if (mediaEl.paused) { mediaEl.muted = false; mediaEl.play(); } else { mediaEl.pause(); }
+      // v7.0.33: route through the concurrency budget.
+      if (mediaEl.paused) { playMediaEl(mediaEl); } else { mediaEl.pause(); }
     });
 
     // ── Seek bar drag ──
@@ -14747,7 +14794,7 @@ function toggleVideoPlay() {
   if (v.paused) {
     const ts = item.trimStart || 0;
     if (v.currentTime < ts || v.currentTime >= (item.trimEnd || v.duration) - 0.1) v.currentTime = ts;
-    v.muted = false; v.play().catch(() => {});
+    playMediaEl(v);   // v7.0.33: concurrency budget
   } else { v.pause(); }
   document.getElementById('btn-video-play').textContent = v.paused ? '▶️ Play' : '⏸ Pause';
   updateMediaBar();
@@ -14758,7 +14805,7 @@ function restartVideo() {
   const item = sel[0];
   const v = item.video;
   v.currentTime = item.trimStart || 0;
-  v.play().catch(() => {});
+  playMediaEl(v, { unmute: false });   // v7.0.33: concurrency budget
   document.getElementById('btn-video-play').textContent = '⏸ Pause';
   updateMediaBar();
 }
@@ -15407,7 +15454,7 @@ async function videoAnnoExportComments() {
     }
     // Restore the user's previous playhead + play state
     try { v.currentTime = prevTime; } catch (e) {}
-    if (!wasPaused) { try { v.play().catch(() => {}); } catch (e) {} }
+    if (!wasPaused) { resumeMediaEl(v); }   // v7.0.33: LRU re-register, never evict
     // Build the HTML report
     // ── Derive the file name for both display and download ──
     // Use the original file name if known (item.filename is set by
@@ -15746,7 +15793,7 @@ async function videoAnnoExportVideo() {
       try { v.pause(); } catch (e) {}
       try { v.currentTime = prevTime; } catch (e) {}
       try { v.muted = prevMuted; } catch (e) {}
-      if (!wasPaused) { try { v.play().catch(() => {}); } catch (e) {} }
+      if (!wasPaused) { resumeMediaEl(v); }   // v7.0.33: LRU re-register, never evict
       try { prog.remove(); } catch (e) {}
       restoreUi();
     }
@@ -16424,7 +16471,7 @@ async function videoAnnoSendToBoard() {
   // disturbed the video above)
   if (needsFreshCapture) {
     try { v.currentTime = prevTime; } catch (e) {}
-    if (!wasPaused) { try { v.play().catch(() => {}); } catch (e) {} }
+    if (!wasPaused) { resumeMediaEl(v); }   // v7.0.33: LRU re-register, never evict
   }
   // ── 1.5) Read the overall comment from the popover (or saved) ──
   // v5.5.7: Send-to-Board now also exports the (overall comment) the
@@ -17558,8 +17605,7 @@ function videoTogglePlay() {
   if (!item || !item.video) return;
   const v = item.video;
   if (v.paused) {
-    v.muted = false;
-    v.play().catch(() => {});
+    playMediaEl(v);   // v7.0.33: concurrency budget
   } else { v.pause(); }
   const playBtn = document.getElementById('btn-video-anno-play');
   if (playBtn) playBtn.textContent = v.paused ? '▶ Play' : '⏸ Pause';
@@ -17707,12 +17753,132 @@ if (typeof ResizeObserver !== 'undefined') {
   });
 }
 
+// ============================================================
+//  MEDIA PLAYBACK BUDGET (v7.0.33)
+// ============================================================
+// Hardware decoders handle roughly 4-8 concurrent streams, but every video
+// on this board is rendered through a CSS filter chain (brightness /
+// contrast / saturate / blur / vignette...), which forces an extra
+// off-screen composite per frame per video. In practice 4 is the ceiling
+// before the board starts dropping frames.
+//
+// Before v7.0.33 the cap existed ONLY inside playAllMedia(). Double-click,
+// the per-item play button, Space, the media-bar toggle, the undo-restore
+// resume and the "came back on screen" resume all started videos without
+// any limit — a board with 30 clips could have all 30 decoding at once,
+// which is exactly the "playback is choppy" symptom.
+//
+// Rules:
+//   * Every USER-initiated play goes through playMediaEl(): it registers
+//     the video in a most-recently-used order, then evicts the
+//     least-recently-used videos above the cap. The video the user just
+//     started is never the one evicted.
+//   * Automatic resumes (undo restore, tab visibility, after save, after a
+//     move drag, back-on-screen) go through resumeMediaEl(): they only
+//     re-register in the LRU order, they never evict, because evicting
+//     would undo state the user already had.
+//   * Anything the budget pauses MUST clear it._wasPlaying, or the
+//     viewport-culling pass resurrects it on the next pan — the
+//     "press Pause All, then pan, and everything starts again" bug.
+var MAX_CONCURRENT_VIDEOS = 4;
+var _mediaPlaySeq = 0;
+var _mediaPlayOrder = Object.create(null);
+
+function _itemForMediaEl(v) {
+  if (!v) return null;
+  for (var i = 0; i < state.items.length; i++) {
+    if (state.items[i].video === v) return state.items[i];
+  }
+  return null;
+}
+// !paused is the user-visible truth: play() flips it synchronously, so a
+// video that was asked to play counts even while it is still buffering
+// (readyState < 2). Gating on readyState would let a queue of buffering
+// streams slip straight past the cap.
+function _mediaIsPlaying(v) { return !!v && !v.paused && !v.ended; }
+
+function _markMediaPlayed(item) {
+  if (item) _mediaPlayOrder[item.id] = ++_mediaPlaySeq;
+}
+
+var _budgetToastAt = 0;
+function _toastVideoBudget(n) {
+  // Throttled — flicking through a wall of clips shouldn't spam toasts.
+  var now = Date.now();
+  if (now - _budgetToastAt < 3000) return;
+  _budgetToastAt = now;
+  try {
+    toast(_isZhUI()
+      ? ('\u5df2\u6682\u505c ' + n + ' \u500b\u5176\u5b83\u8996\u983b\uff08\u540c\u6642\u6700\u591a ' + MAX_CONCURRENT_VIDEOS + ' \u500b\uff09')
+      : ('Paused ' + n + ' other video' + (n > 1 ? 's' : '') + ' \u2014 ' + MAX_CONCURRENT_VIDEOS + ' at a time'));
+  } catch (e) {}
+}
+
+// Returns how many videos were paused to make room.
+function _enforceVideoBudget(keepItem) {
+  var playing = [];
+  for (var i = 0; i < state.items.length; i++) {
+    var it = state.items[i];
+    if (_mediaIsPlaying(it.video)) playing.push(it);
+  }
+  if (playing.length <= MAX_CONCURRENT_VIDEOS) return 0;
+  // LRU first: lowest sequence number = started longest ago.
+  playing.sort(function (a, b) {
+    return (_mediaPlayOrder[a.id] || 0) - (_mediaPlayOrder[b.id] || 0);
+  });
+  var need = playing.length - MAX_CONCURRENT_VIDEOS;
+  var evicted = 0;
+  for (var j = 0; j < playing.length && evicted < need; j++) {
+    var victim = playing[j];
+    if (keepItem && victim === keepItem) continue;
+    try { victim.video.pause(); } catch (e) {}
+    _mediaPlayOrder[victim.id] = 0;
+    victim._wasPlaying = false;   // never auto-resume this on the next pan
+    victim._evictedByBudget = true;
+    evicted++;
+  }
+  if (evicted > 0) _toastVideoBudget(evicted);
+  return evicted;
+}
+
+// User-initiated play. Unmutes (every manual play in the app unmutes),
+// registers in the LRU order, then applies the budget.
+function playMediaEl(v, opts) {
+  if (!v) return null;
+  opts = opts || {};
+  if (opts.unmute !== false) { try { v.muted = false; } catch (e) {} }
+  // The clip being watched is the one that must stay buffered.
+  try { v.preload = 'auto'; } catch (e) {}
+  try {
+    var p = v.play();
+    if (p && p.catch) p.catch(function () {});
+  } catch (e) {}
+  var item = _itemForMediaEl(v);
+  _markMediaPlayed(item);
+  _enforceVideoBudget(item);
+  return item;
+}
+
+// Automatic resume (undo restore, visibility change, after save, after a
+// drag, back on screen). Never evicts — this is state the user already had.
+function resumeMediaEl(v) {
+  if (!v) return null;
+  try {
+    var p = v.play();
+    if (p && p.catch) p.catch(function () {});
+  } catch (e) {}
+  var item = _itemForMediaEl(v);
+  _markMediaPlayed(item);
+  return item;
+}
+
 function playAllMedia() {
   // Limit concurrent video playback to avoid crashes with many videos.
   // Hardware decoders typically handle 4-8 concurrent, but with CSS filter applied drops to 2-3.
-  // 3 is the sweet spot for "always smooth" with filters enabled.
-  const MAX_CONCURRENT_VIDEOS = 3;
-  // Pick the 3 most-visible videos first (selected, or nearest to viewport center).
+  // (v7.0.33: the cap used to be a local `3` here and nothing else in the
+  // app honoured it. It now lives in MAX_CONCURRENT_VIDEOS and every play
+  // path routes through playMediaEl(), so the limit is real.)
+  // Pick the most-visible videos first (selected, or nearest to viewport center).
   // This way the user always sees something playing, even if they have 50 videos on the board.
   const vw = window.innerWidth, vh = window.innerHeight;
   const cx = vw / 2 - state.pan.x;
@@ -17731,12 +17897,13 @@ function playAllMedia() {
   let videoCount = 0;
   videos.forEach(item => {
     if (videoCount < MAX_CONCURRENT_VIDEOS) {
-      item.video.muted = false;
-      item.video.play().catch(() => {});
-      videoCount++;
+      playMediaEl(item.video);
+      if (_mediaIsPlaying(item.video)) videoCount++;
     } else {
       // Pause the rest — they're queued for later, no point decoding them
       item.video.pause();
+      // v7.0.33: don't let the culling pass resume them on the next pan.
+      item._wasPlaying = false;
     }
   });
   // Unfreeze GIFs (cheap, just restores img.src)
@@ -17755,6 +17922,12 @@ function pauseAllMedia() {
   state.items.forEach(item => {
     if (item.video) {
       item.video.pause();
+      // v7.0.33: Pause All used to leave it._wasPlaying set from the last
+      // culling pass, so the very next pan "resurrected" every video — the
+      // cull resume path replays anything with _wasPlaying. The user hit
+      // Pause All and the board started playing again the moment they
+      // moved it. Clearing the flag is what the pause is meant to cancel.
+      item._wasPlaying = false;
     }
     // Freeze GIFs by replacing src with a static first frame
     if (item.img && (item.isGif || isAnimatedGif(item.src)) && !_frozenGifs.has(item.id)) {
@@ -17781,7 +17954,8 @@ function toggleMediaItem(itemId) {
   const item = state.items.find(i => i.id === itemId);
   if (!item) return;
   if (item.video) {
-    if (item.video.paused) { item.video.muted = false; item.video.play().catch(() => {}); }
+    // v7.0.33: route through the concurrency budget.
+    if (item.video.paused) { playMediaEl(item.video); }
     else { item.video.pause(); }
   } else if (_frozenGifs.has(item.id)) {
     const origSrc = _frozenGifs.get(item.id);
@@ -22274,8 +22448,7 @@ document.addEventListener('keydown', e => {
       if (vidItem && vidItem.video) {
         e.preventDefault();
         if (vidItem.video.paused) {
-          vidItem.video.muted = false;
-          vidItem.video.play().catch(function() {});
+          playMediaEl(vidItem.video);   // v7.0.33: concurrency budget
         } else {
           vidItem.video.pause();
         }
@@ -23843,13 +24016,29 @@ document.addEventListener('mousemove', e => {
   if (!d) return;
 
   if (d.type === 'pan') {
-    state.pan.x = e.clientX - d.startX;
-    state.pan.y = e.clientY - d.startY;
-    updateCanvas();
-    // Keep any open annotation popovers parallel to their video while the
-    // canvas pans (they're on <body> at position: fixed, so they'd stay
-    // stuck without this).
-    repositionAllAnnoPopovers();
+    // v7.0.33: coalesce to one updateCanvas() per frame. This was the ONLY
+    // drag type doing its work synchronously inside mousemove — the
+    // neighbouring 'move' and 'resize' branches have both merged into rAF
+    // since v6.x, with a comment explaining why. mousemove fires 100+ times
+    // per second, and updateCanvas() walks every item (culling, relation
+    // lines, group borders, mind-map connectors, annotation popovers) on
+    // every call, so a 200-item board was doing that whole pass twice for
+    // every mouse sample. Store the latest cursor position and let the
+    // pending frame read it; if a frame is already scheduled there is
+    // nothing to do.
+    d._panCx = e.clientX;
+    d._panCy = e.clientY;
+    if (d._panRafId) return;
+    d._panRafId = requestAnimationFrame(function () {
+      d._panRafId = null;
+      if (typeof d._panCx !== 'number') return;
+      state.pan.x = d._panCx - d.startX;
+      state.pan.y = d._panCy - d.startY;
+      updateCanvas();
+      // Note: updateCanvas() ends with repositionAllAnnoToolbars() +
+      // repositionAllAnnoPopovers(), so the extra popover pass that used to
+      // live here was pure duplicate work on every mouse sample.
+    });
     return;
   }
 
@@ -24329,7 +24518,7 @@ document.addEventListener('mouseup', e => {
           delete it._dragPoster;
           // Resume playback if it was playing before drag
           if (it._dragWasPlaying) {
-            it.video.play().catch(function(){});
+            resumeMediaEl(it.video);   // v7.0.33
             delete it._dragWasPlaying;
           }
           if (it._annoCanvas) it._annoCanvas.style.visibility = '';
@@ -24494,7 +24683,22 @@ document.addEventListener('mouseup', e => {
         requestAnimationFrame(() => mmUpdateConnectors(item));
       }
     }
-    if (state.dragging.type === 'pan') viewport.classList.remove('grabbing');
+    if (state.dragging.type === 'pan') {
+      // v7.0.33: the pan branch now coalesces into a rAF, so on a fast
+      // flick the last few mousemove samples can still be pending when the
+      // button comes up. Flush them synchronously — otherwise the board
+      // settles a few pixels short of where the cursor was released.
+      if (state.dragging._panRafId) {
+        cancelAnimationFrame(state.dragging._panRafId);
+        state.dragging._panRafId = null;
+        if (typeof state.dragging._panCx === 'number') {
+          state.pan.x = state.dragging._panCx - state.dragging.startX;
+          state.pan.y = state.dragging._panCy - state.dragging.startY;
+          updateCanvas();
+        }
+      }
+      viewport.classList.remove('grabbing');
+    }
     if (state.dragging.type === 'box-select') {
       selBox.style.display = 'none';
       // v6.2.3 perf: rebuild handles once on mouseup (was done on every mousemove)
@@ -32841,9 +33045,7 @@ async function saveBoardV6(opts) {
     await new Promise(r => setTimeout(r, 3000));
   } finally {
     // Resume paused videos
-    _pausedVideos.forEach(function(v) {
-      try { v.play().catch(function() {}); } catch(e) {}
-    });
+    _pausedVideos.forEach(function(v) { resumeMediaEl(v); });   // v7.0.33
     try { progUI.done(); } catch (e) {}
     _setSaving(false);
   }
@@ -33776,7 +33978,8 @@ function restoreBoard(data, append) {
     if (d.isVideo) {
       setupVideoTrim(item);
       el.addEventListener('dblclick', () => {
-        if (mediaEl.paused) { mediaEl.muted = false; mediaEl.play(); } else { mediaEl.pause(); }
+        // v7.0.33: route through the concurrency budget.
+        if (mediaEl.paused) { playMediaEl(mediaEl); } else { mediaEl.pause(); }
       });
       // Restore annotation data (frame comments)
       // ── Comments ──
@@ -34247,7 +34450,7 @@ document.addEventListener('visibilitychange', function() {
     document.querySelectorAll('.item.has-media video').forEach(function(vid) {
       if (vid._wasPlayingBeforeHidden) {
         vid._wasPlayingBeforeHidden = false;
-        vid.play().catch(function(){});
+        resumeMediaEl(vid);   // v7.0.33
       }
     });
   }
