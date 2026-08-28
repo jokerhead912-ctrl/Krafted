@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.31</title>
+<title>Krafted v7.0.32</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4083,7 +4083,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.31';
+var KRAFTED_VERSION = '7.0.32';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -11683,25 +11683,47 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     }
 
     wrap.addEventListener('wheel', function(ev) {
-      // Always prevent the browser from handling wheel events over the
-      // player — otherwise two-finger trackpad gestures translate/pan
-      // the player viewport instead of scrubbing the video.
-      ev.preventDefault();
-      ev.stopPropagation();
-
-      if (!_isMac) return;
-      if (ev.ctrlKey) return;
       var absX = Math.abs(ev.deltaX);
       var absY = Math.abs(ev.deltaY);
-      if (absX < 2 && absY > 0) return;
+
+      // ── v7.0.32: DECIDE FIRST, SWALLOW SECOND ──
+      // The old handler called preventDefault() + stopPropagation() *before*
+      // any of the guards below, so it killed EVERY wheel event that landed on
+      // a player — including the ones it then refused to act on:
+      //   • Windows / non-Mac mouse wheel  → bailed at `if (!_isMac) return;`
+      //   • Cmd / Ctrl + wheel (zoom, i.e. trackpad pinch on macOS)
+      //                                   → bailed at `if (ev.ctrlKey) return;`
+      //   • a plain vertical mouse wheel   → bailed at `if (absX < 2 && absY > 0)`
+      // Net effect on a Mac: put the cursor on a picture and scroll → the board
+      // zooms; put it on a video and scroll → absolute nothing. The contract
+      // documented 50 lines above ("Windows mouse: wheel → zoom (let it
+      // bubble)", "pinch (ctrl+wheel) → zoom (let it bubble)") was never what
+      // the code did — the unconditional stopPropagation contradicted it.
+      //
+      // Fix: only consume the event when it is genuinely a horizontal
+      // two-finger scrub. Everything else falls through to the viewport wheel
+      // handler, so a video now reacts exactly like a static image.
+      var _scrubEvent;
+      if (_swipeActive) {
+        // Gesture already in flight — stay sticky so a momentary deltaX dip
+        // mid-swipe can't hand the event back to the canvas and zoom the
+        // board out from under the user's fingers.
+        _scrubEvent = true;
+      } else {
+        _scrubEvent = !!(_isMac && !ev.ctrlKey && !ev.metaKey &&
+                         absX >= 1.6 && !(absY > absX * 2.8));
+      }
+      if (!_scrubEvent) return;   // ← bubbles to the canvas: zoom / pan
+
+      // From here on the gesture is ours.
+      ev.preventDefault();
+      ev.stopPropagation();
 
       if (_swipeActive) {
         clearTimeout(_swipeEndTimer);
         _swipeEndTimer = setTimeout(function() { _swipeActive = false; }, 180);
         if (absX < 0.2 || !mediaEl.duration || !isFinite(mediaEl.duration)) return;
       } else {
-        if (absX < 1.6) return;
-        if (absY > absX * 2.8) return;
         if (!mediaEl.duration || !isFinite(mediaEl.duration)) return;
         _swipeActive = true;
         clearTimeout(_swipeEndTimer);
@@ -20560,13 +20582,16 @@ viewport.addEventListener('wheel', e => {
     const strongTrackpadPinch = _twoFingerPan || _WheelKind.isTrackpad || (e.deltaMode === 0 && (!Number.isInteger(e.deltaY) || ady <= 8 || strongTrackpadDrift));
     const macPinch = Platform.mac && e.deltaMode === 0 && (strongTrackpadPinch || !forceMouseMode);
     if (macPinch) {
-      // Pinch — only if not over a media item (so two-finger
-      // video scrubbing doesn't accidentally zoom the canvas).
-      if (!(e.target && e.target.closest && e.target.closest('.item.has-media'))) {
-        const _pct = (state.zoomStep - 1) * 0.26;
-        const pinchStep = Math.max(0.020, Math.min(0.080, Math.abs(e.deltaY) * _pct));
-        zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, wheelCx, wheelCy);
-      }
+      // ── v7.0.32: the `.item.has-media` guard is GONE ──
+      // It was there to stop "two-finger video scrubbing from accidentally
+      // zooming the canvas" — but a two-finger scrub never sets ctrlKey, so
+      // it never reaches this branch. The guard only ever did one thing:
+      // make pinch-zoom dead over every video while it worked over every
+      // image. The player's own wheel handler consumes genuine horizontal
+      // swipes (see buildMediaControls), so pinch can now be uniform.
+      const _pct = (state.zoomStep - 1) * 0.26;
+      const pinchStep = Math.max(0.020, Math.min(0.080, Math.abs(e.deltaY) * _pct));
+      zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, wheelCx, wheelCy);
     } else if (e.deltaMode !== 0 || _WheelKind.isMouse) {
       // Real mouse wheel → use zoomStep (discrete notch zoom)
       const s = state.zoomStep;
@@ -20574,11 +20599,11 @@ viewport.addEventListener('wheel', e => {
       zoomBy(rawDY < 0 ? s : 1 / s, wheelCx, wheelCy);
     } else {
       // Fallback pinch path (non-mac or ambiguous device)
-      if (!(e.target && e.target.closest && e.target.closest('.item.has-media'))) {
-        const _pct = (state.zoomStep - 1) * 0.26;
-        const pinchStep = Math.max(0.020, Math.min(0.080, Math.abs(e.deltaY) * _pct));
-        zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, wheelCx, wheelCy);
-      }
+      // v7.0.32: same story as the macPinch branch — no media exemption,
+      // pinch behaves identically over a video and over an image.
+      const _pct = (state.zoomStep - 1) * 0.26;
+      const pinchStep = Math.max(0.020, Math.min(0.080, Math.abs(e.deltaY) * _pct));
+      zoomBy(e.deltaY > 0 ? 1 - pinchStep : 1 + pinchStep, wheelCx, wheelCy);
     }
   // ── Two-finger trackpad pan ──
   // v6.8.4: THE macOS MOUSE FIX.
