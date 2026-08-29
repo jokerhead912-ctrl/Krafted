@@ -263,13 +263,13 @@ ok(/if \(cancelled\(\)\) return;/.test(renderBody),
 // ═══════════════════════════════════════════════════════════════════════
 // 6. Version
 // ═══════════════════════════════════════════════════════════════════════
-eq((src.match(/<title>Krafted v([\d.]+)<\/title>/) || [])[1], '7.0.38', 'title carries the version');
-eq((src.match(/var KRAFTED_VERSION = '([\d.]+)';/) || [])[1], '7.0.38', 'KRAFTED_VERSION is bumped');
+eq((src.match(/<title>Krafted v([\d.]+)<\/title>/) || [])[1], '7.0.39', 'title carries the version');
+eq((src.match(/var KRAFTED_VERSION = '([\d.]+)';/) || [])[1], '7.0.39', 'KRAFTED_VERSION is bumped');
 const swPath = path.resolve(__dirname, '../docs/sw.js');
 if (fs.existsSync(swPath)) {
   const sw = fs.readFileSync(swPath, 'utf8');
-  eq((sw.match(/const APP_VERSION = '([\d.]+)';/) || [])[1], '7.0.38', 'service worker version matches');
-  ok(/krafted-v7\.0\.38-/.test(sw), 'service worker cache name matches');
+  eq((sw.match(/const APP_VERSION = '([\d.]+)';/) || [])[1], '7.0.39', 'service worker version matches');
+  ok(/krafted-v7\.0\.39-/.test(sw), 'service worker cache name matches');
 }
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.38</title>
+<title>Krafted v7.0.39</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4170,7 +4170,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.38';
+var KRAFTED_VERSION = '7.0.39';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7465,12 +7465,16 @@ function applySnapshot(snap) {
     // the real player. Also handles blob-URL expiration (refresh / new
     // tab) the same way the paste path does.
     if (data.isAudio) {
-      const _audioBlobOk = data.src && (data.src.startsWith('data:') || (data.src.startsWith('blob:') && _isBlobUrlLive(data.src)));
-      if (!_audioBlobOk) {
+      // v7.0.39: _isBlobUrlLive() could never answer this — it fires a
+      // fetch and optimistically returns true, so the guard was decorative.
+      // Use the real resolver: it knows which URLs we revoked ourselves.
+      const _audRm = _resolveSnapshotMedia(data.src);
+      if (!_audRm) {
         try { toast('Audio source expired — re-add the file to undo this'); } catch (e) {}
         return;
       }
-      const audioItem = addAudioItem(data.src, data.audioName || 'Audio', data.x, data.y, data._fileSize, data._sourceBlob);
+      data.src = _audRm.src;
+      const audioItem = addAudioItem(data.src, data.audioName || 'Audio', data.x, data.y, data._fileSize, data._sourceBlob || _audRm.blob);
       Object.assign(audioItem, {
         w: data.w, h: data.h, rot: data.rot, opacity: data.opacity,
         flipH: data.flipH, flipV: data.flipV, locked: data.locked,
@@ -7484,6 +7488,22 @@ function applySnapshot(snap) {
     }
     const el = document.createElement('div');
     el.className = 'item';
+    // v7.0.39: a blob: URL killed by an earlier delete has to be re-minted
+    // from the cached Blob BEFORE any element is built from it. Otherwise
+    // undo hands back a black, unplayable card with no error anywhere —
+    // the bug the user hit with delete → Ctrl+Z.
+    // Empty src keeps the old behaviour (build the element anyway) — only a
+    // src that actually exists can be dead.
+    const _rm = data.src ? _resolveSnapshotMedia(data.src) : { src: data.src, blob: null };
+    if (!_rm) {
+      try {
+        toast((typeof _isZhUI === 'function' && _isZhUI())
+          ? '这段影片已无法还原 — 请重新导入文件'
+          : 'Video data is gone — re-add the file to bring it back');
+      } catch (e) {}
+      return;
+    }
+    data.src = _rm.src;
     let mediaEl;
     if (data.isVideo) {
       // v7.0.37 — P2: shared builder, which is also where this path finally
@@ -7537,6 +7557,10 @@ function applySnapshot(snap) {
     }
     canvasContent.appendChild(el);
     const item = { ...data, el, img: data.isVideo ? null : mediaEl, video: data.isVideo ? mediaEl : null };
+    // v7.0.39: put the Blob back on the live item. A snapshot cannot carry
+    // it (Blob is not JSON), so without this the next delete would have no
+    // bytes to cache and would be unable to revoke safely.
+    if (_rm.blob) item._sourceBlob = _rm.blob;
     state.items.push(item);
     el._item = item; // stash so buildMediaControls closures can find this item
     updateItemStyle(item);
@@ -20236,9 +20260,44 @@ function showCtx(x, y) {
     html += `<div class="ctx-item" onclick="toggleRelations();hideCtx()">🔗 Toggle Relations</div>`;
   }
   ctxMenu.innerHTML = html;
-  ctxMenu.style.left = x + 'px';
-  ctxMenu.style.top = y + 'px';
+  // v7.0.39: the menu used to be pinned at the cursor with no bounds check
+  // at all, so right-clicking near the right or bottom edge pushed the
+  // lower entries off screen — unreachable, and with no max-height there
+  // was nothing to scroll either. Measure first, then place it.
+  ctxMenu.style.maxHeight = '';
+  ctxMenu.style.overflowY = '';
   ctxMenu.style.display = 'block';
+  positionCtxMenu(x, y);
+}
+
+// Keep the context menu inside the viewport: flip to the other side of the
+// cursor when it fits there, otherwise clamp, and fall back to scrolling
+// when the menu is simply taller than the window.
+function positionCtxMenu(x, y) {
+  if (!ctxMenu) return;
+  const M = 8;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const w = ctxMenu.offsetWidth, h = ctxMenu.offsetHeight;
+  // Flip only when the flipped position actually has room; otherwise the
+  // menu would jump to the far side and overflow there instead.
+  const flipX = (x + w > vw - M) && (x - w >= M);
+  const flipY = (y + h > vh - M) && (y - h >= M);
+  let nx = flipX ? (x - w) : x;
+  let ny = flipY ? (y - h) : y;
+  // Clamp unconditionally, not only when the flip did not happen: a flip
+  // parks the far edge exactly on the cursor, so a right-click 5px from the
+  // edge would still leave the menu 5px off screen.
+  nx = Math.min(nx, Math.max(M, vw - w - M));
+  ny = Math.min(ny, Math.max(M, vh - h - M));
+  const maxH = vh - 2 * M;
+  if (h > maxH) {
+    // Too tall for any position — scroll it instead of hiding entries.
+    ctxMenu.style.maxHeight = maxH + 'px';
+    ctxMenu.style.overflowY = 'auto';
+    ny = M;
+  }
+  ctxMenu.style.left = Math.max(M, nx) + 'px';
+  ctxMenu.style.top = Math.max(M, ny) + 'px';
 }
 function hideCtx() { if (ctxMenu) ctxMenu.style.display = 'none'; }
 
@@ -27643,12 +27702,12 @@ function pasteClipboard() {
       // audio flag stays true so we know it WAS audio, but the actual
       // bytes are gone, so skip with a toast instead of creating a dead
       // item.
-      const _audioBlobOk = data.src && (data.src.startsWith('data:') || (data.src.startsWith('blob:') && _isBlobUrlLive(data.src)));
-      if (!_audioBlobOk) {
+      const _pAudioRm = _resolveSnapshotMedia(data.src);
+      if (!_pAudioRm) {
         try { toast('Audio source expired — re-add the file to paste it again'); } catch (e) {}
         return;
       }
-      const audioItem = addAudioItem(data.src, data.audioName || 'Audio', px, py, data._fileSize, data._sourceBlob);
+      const audioItem = addAudioItem(_pAudioRm.src, data.audioName || 'Audio', px, py, data._fileSize, data._sourceBlob || _pAudioRm.blob);
       Object.assign(audioItem, {
         w: data.w, h: data.h, rot: data.rot, opacity: data.opacity,
         flipH: data.flipH, flipV: data.flipV, locked: data.locked,
@@ -27664,13 +27723,13 @@ function pasteClipboard() {
       // isVideoFlag based on the source's media kind so the right DOM
       // element (<video> for mov/mp4/webm, <img> for everything else)
       // is created and the playback / trim controls work.
-      const _blobOk = data.src && (data.src.startsWith('data:') || (data.src.startsWith('blob:') && _isBlobUrlLive(data.src)));
-      if (!_blobOk) {
+      const _pRm = _resolveSnapshotMedia(data.src);
+      if (!_pRm) {
         try { toast('Media source expired — re-add the file to paste it again'); } catch (e) {}
         return;
       }
       const isVideoPaste = !!data.isVideo;
-      const item = addImage(data.src, data.natW, data.natH, px, py, isVideoPaste);
+      const item = addImage(_pRm.src, data.natW, data.natH, px, py, isVideoPaste, undefined, data._fileSize, false, _pRm.blob);
       Object.assign(item, {
         w: data.w, h: data.h, rot: data.rot, opacity: data.opacity,
         flipH: data.flipH, flipV: data.flipV, locked: data.locked,
@@ -27766,6 +27825,75 @@ function duplicateSelected() {
 // ============================================================
 //  DELETE
 // ============================================================
+// v7.0.39 — "delete a video, Ctrl+Z, it comes back black and won't play".
+//
+// deleteSelected() called cleanupVideoItem(i), which ended in
+// URL.revokeObjectURL(src). But pushUndo() had just captured a snapshot
+// holding that exact blob: URL string, so undo rebuilt the <video> from a
+// dead URL: MEDIA_ERR_SRC_NOT_SUPPORTED, a black rectangle, and nothing
+// anywhere that said why. Images never had this bug because nothing ever
+// revokes an image's URL — which is exactly why only video broke.
+//
+// A revoked URL cannot be un-revoked, but the bytes can be re-wrapped:
+// keep the Blob and hand out a fresh URL when the snapshot comes back.
+// Holding the Blob costs what holding the live URL already cost, so this
+// gives up nothing but a registry entry; the cache is capped so a long
+// session cannot accumulate every clip the user ever deleted.
+var _revokedBlobUrls = new Set();   // blob: URLs we killed ourselves
+var _mediaBlobByUrl = new Map();    // url -> Blob, insertion ordered
+var _mediaBlobBytes = 0;
+var _MEDIA_BLOB_CACHE_MAX_BYTES = 1024 * 1024 * 1024;  // 1 GB
+var _MEDIA_BLOB_CACHE_MAX_ENTRIES = 64;
+
+// Remember the bytes behind a URL we are about to revoke.
+function _cacheMediaBlob(url, blob) {
+  if (!url || typeof url !== 'string' || url.indexOf('blob:') !== 0) return false;
+  if (!(blob instanceof Blob)) return false;
+  if (!_mediaBlobByUrl.has(url)) _mediaBlobBytes += (blob.size || 0);
+  _mediaBlobByUrl.set(url, blob);
+  _trimMediaBlobCache();
+  return true;
+}
+
+// Oldest first. A Blob that a live item still points at is never dropped —
+// that would break the board the user is looking at, not just their history.
+function _trimMediaBlobCache() {
+  var live = null, guard = 0;
+  while ((_mediaBlobBytes > _MEDIA_BLOB_CACHE_MAX_BYTES || _mediaBlobByUrl.size > _MEDIA_BLOB_CACHE_MAX_ENTRIES)
+         && _mediaBlobByUrl.size > 0 && guard++ < 4096) {
+    if (!live) {
+      live = new Set();
+      (state.items || []).forEach(function (it) { if (it && it.src) live.add(it.src); });
+    }
+    var victim = null;
+    var it2 = _mediaBlobByUrl.keys();
+    for (var step = it2.next(); !step.done; step = it2.next()) {
+      if (!live.has(step.value)) { victim = step.value; break; }
+    }
+    if (victim === null) break;   // everything left is still on the board
+    var b = _mediaBlobByUrl.get(victim);
+    _mediaBlobByUrl.delete(victim);
+    _mediaBlobBytes -= (b && b.size) || 0;
+  }
+  if (_mediaBlobBytes < 0) _mediaBlobBytes = 0;
+}
+
+// Resolve a src that came out of a snapshot or a clipboard payload.
+// Returns null when the bytes are gone for good — the caller must then say
+// so out loud instead of quietly building a dead element.
+function _resolveSnapshotMedia(src) {
+  if (!src || typeof src !== 'string') return null;
+  if (src.indexOf('blob:') !== 0) return { src: src, blob: null };  // data:, http(s)
+  if (!_revokedBlobUrls.has(src)) return { src: src, blob: _mediaBlobByUrl.get(src) || null };
+  var blob = _mediaBlobByUrl.get(src);
+  if (!blob) return null;                       // evicted from the cache
+  var fresh = URL.createObjectURL(blob);
+  // Alias without charging the budget twice: it is the same bytes the
+  // cache already accounts for under the original URL.
+  _mediaBlobByUrl.set(fresh, blob);
+  return { src: fresh, blob: blob };
+}
+
 // Clean up video resources for a single item (pause, revoke blob URL)
 function cleanupVideoItem(item, revokeBlob) {
   if (!item.video) return;
@@ -27779,10 +27907,20 @@ function cleanupVideoItem(item, revokeBlob) {
   // during restoreSnapshot, and the snapshot being restored still holds
   // a reference to the same blob URL — revoking here would break the
   // freshly-restored <video> element (it'd silently fail to load, the
-  // player goes black, and the user sees the mov as "lost"). The blob
-  // stays alive as long as the undo stack references it; the URLs
-  // eventually get reclaimed when the page unloads.
-  if (revokeBlob && vsrc && vsrc.startsWith('blob:')) URL.revokeObjectURL(vsrc);
+  // player goes black, and the user sees the mov as "lost").
+  //
+  // v7.0.39: on top of that, only revoke when we can hand the bytes back.
+  // Revoking blind is what made delete → Ctrl+Z produce an unplayable
+  // black card. Keeping the Blob costs exactly what keeping the live URL
+  // cost, so there is nothing to gain by revoking without it.
+  if (revokeBlob && vsrc && vsrc.startsWith('blob:')) {
+    if (_cacheMediaBlob(vsrc, item._sourceBlob || _mediaBlobByUrl.get(vsrc))) {
+      _revokedBlobUrls.add(vsrc);
+      URL.revokeObjectURL(vsrc);
+    }
+    // No Blob in hand: leave the URL alive. Leaking a handle is the
+    // right trade against silently breaking Ctrl+Z.
+  }
 }
 // Detach the comments popover (lives on <body>) for an item.
 // We must remove it explicitly when the item is removed, because the
