@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.37</title>
+<title>Krafted v7.0.38</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -301,6 +301,20 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
 }
 .item.has-media .media-controls-row.compact .media-seek-bar {
   min-width: 60px;
+}
+/* v7.0.38: micro density (below 440px). The volume control is the widest
+   single thing in the bar — an 80px range slider plus a ~26px percent
+   label. Collapsing it to just the mute button hands back ~112px, which
+   is exactly what lets the seek bar and the comments/snap buttons stay
+   on screen inside a 380px Tidy column instead of being pushed into the
+   row's horizontal scroll. Nothing is lost: the slider is still there at
+   every wider size, and the mute button keeps working here. */
+.item.has-media .media-controls-row.micro .media-volume-slider,
+.item.has-media .media-controls-row.micro .media-volume-label {
+  display: none;
+}
+.item.has-media .media-controls-row.micro .media-volume-wrap {
+  margin-left: 0; gap: 0;
 }
 .item.has-media .media-controls-sep {
   width: 1px; height: 22px;
@@ -2682,6 +2696,30 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 .welcome-autosave button { padding:5px 12px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); border-radius:7px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; }
 .welcome-autosave button:hover { border-color:var(--accent); }
 
+/* ── Contact sheet modal (v7.0.38) ─────────────────────────────────────
+   Turns one clip into a filmstrip of stills you can pin next to it.
+   Deliberately the same shell as the export modal: one less set of
+   modal styles to keep in sync. */
+#contact-sheet-modal { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; z-index:99999999; justify-content:center; align-items:center; }
+#contact-sheet-modal.active { display:flex; }
+#contact-sheet-modal .modal-content { background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:14px; padding:24px; max-width:90vw; max-height:90vh; overflow:auto; box-shadow:var(--shadow-heavy); }
+#contact-sheet-modal h3 { margin:0 0 4px; font-size:15px; font-weight:500; color:var(--text); font-family:'Inter',sans-serif; }
+#contact-sheet-modal .cs-sub { margin:0 0 14px; font-size:12px; color:var(--text-dim); font-family:'Inter',sans-serif; max-width:520px; }
+#contact-sheet-modal .cs-row { display:flex; align-items:center; gap:8px; margin-top:12px; justify-content:flex-start; flex-wrap:wrap; font-size:12px; color:var(--text-dim); font-family:'Inter',sans-serif; }
+#contact-sheet-modal .cs-row > .cs-label { font-weight:500; min-width:52px; }
+#contact-sheet-modal .cs-preset { padding:5px 10px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); border-radius:8px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; }
+#contact-sheet-modal .cs-preset:hover { border-color:var(--accent); }
+#contact-sheet-modal .cs-preset.active { border-color:var(--accent) !important; color:var(--accent) !important; }
+#contact-sheet-modal .cs-check { display:flex; align-items:center; gap:5px; cursor:pointer; margin:0; }
+#contact-sheet-modal .cs-preview { display:block; max-width:76vw; max-height:50vh; margin:6px auto 0; border:1px solid var(--border-subtle); border-radius:8px; background:#000; }
+#contact-sheet-modal .cs-note { font-size:11px; color:var(--text-dim); font-family:'Inter',sans-serif; white-space:nowrap; }
+#contact-sheet-modal .cs-progress { text-align:center; font-size:12px; color:var(--accent); font-family:'Inter',sans-serif; margin-top:14px; min-height:16px; }
+#contact-sheet-modal .modal-actions { display:flex; gap:8px; margin-top:16px; justify-content:flex-end; flex-wrap:wrap; }
+#contact-sheet-modal .modal-actions button { padding:9px 18px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); border-radius:8px; cursor:pointer; font-size:13px; font-family:'Inter',sans-serif; transition:all 0.2s ease; }
+#contact-sheet-modal .modal-actions button.primary { background:var(--accent); color:#000; font-weight:600; }
+#contact-sheet-modal .modal-actions button:hover { transform:translateY(-1px); }
+#contact-sheet-modal .modal-actions button:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
+
 
 /* STATUS BAR */
 #status { position:fixed; bottom:42px; right:12px; font-size:10px; color:var(--text-dim); background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:6px; padding:5px 10px; z-index:9999998; font-family:'Inter',sans-serif; letter-spacing:0.3px; transition: bottom 0.18s ease; }
@@ -3975,6 +4013,36 @@ body.screen-share-mode #ss-fps {
   </div>
 </div>
 
+<!-- CONTACT SHEET MODAL (v7.0.38) -->
+<div id="contact-sheet-modal">
+  <div class="modal-content">
+    <h3>Contact sheet</h3>
+    <p class="cs-sub" id="cs-subtitle">Pick how many frames to pull from the clip.</p>
+    <canvas class="cs-preview" id="cs-preview" width="640" height="360" style="display:none"></canvas>
+    <div class="cs-row">
+      <span class="cs-label">Frames</span>
+      <button class="cs-preset" data-count="4"  onclick="setContactSheetCount(4)">4</button>
+      <button class="cs-preset" data-count="6"  onclick="setContactSheetCount(6)">6</button>
+      <button class="cs-preset" data-count="9"  onclick="setContactSheetCount(9)">9</button>
+      <button class="cs-preset" data-count="12" onclick="setContactSheetCount(12)">12</button>
+      <button class="cs-preset" data-count="24" onclick="setContactSheetCount(24)">24</button>
+      <span class="cs-note" id="cs-note"></span>
+    </div>
+    <div class="cs-row">
+      <span class="cs-label">Range</span>
+      <button class="cs-preset" data-scope="trim" onclick="setContactSheetScope('trim')">Trimmed segment</button>
+      <button class="cs-preset" data-scope="all"  onclick="setContactSheetScope('all')">Whole clip</button>
+      <label class="cs-check"><input type="checkbox" id="cs-timecode" checked onchange="renderContactSheet()"> Timecode</label>
+    </div>
+    <div class="cs-progress" id="cs-progress"></div>
+    <div class="modal-actions">
+      <button class="primary" id="cs-add-btn" onclick="contactSheetToBoard()">Add to board</button>
+      <button id="cs-save-btn" onclick="downloadContactSheet()">Save JPG</button>
+      <button onclick="closeContactSheet()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- SELECTION BOX -->
 <div id="sel-box"></div>
 <!-- EXPORT DRAG BOX -->
@@ -4102,7 +4170,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.37';
+var KRAFTED_VERSION = '7.0.38';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6507,6 +6575,11 @@ const DEFAULT_SHORTCUTS = [
   { id: 'media-frame-10-right', category: 'Media', label: 'Jump 10 Frames Right', keys: [{ key: 'ArrowRight', shift: true }] },
   { id: 'media-trim-i',    category: 'Media', label: 'Trim In Point',            keys: [{ key: 'i' }] },
   { id: 'media-trim-o',    category: 'Media', label: 'Trim Out Point',           keys: [{ key: 'o' }] },
+  // v7.0.38: palette-only (keys: []). Trim needs a selected video and opens
+  // a dialog, so binding it to a bare letter would fire while the user is
+  // typing in a board text box. Reachable from the palette and the menu.
+  { id: 'media-contact-sheet', category: 'Media', label: 'Contact Sheet…',       keys: [] },
+  { id: 'media-trim-clear',    category: 'Media', label: 'Clear Trim',           keys: [] },
   // === SCREEN SHARE MODE (v6.8.0) ===
   { id: 'tool-screen-share', category: 'Tools', label: 'Toggle Screen Share Mode', keys: [{ key: 'p', ctrl: true, shift: true }], macKeys: [{ key: 'p', meta: true, shift: true }] },
 ];
@@ -8024,12 +8097,33 @@ function initVideoLazyLoad() {
 // ============================================================
 //  TIDY SELECTION — Masonry layout for selected items
 // ============================================================
+// ── Tidy column widths (v7.0.38) ────────────────────────────────────────
+// TIDY_COL_W is the plain image/text column: dense, Pinterest-like.
+// TIDY_MEDIA_COL_W is the floor for any selection that contains a video or
+// an audio clip. It is not a taste value — it is measured. The player
+// controls bar at its "micro" density (see .media-controls-row.micro) needs
+// ~343px of intrinsic width to fit play + draw + both time labels + the
+// seek bar + comments + snap without scrolling. 380 leaves ~37px of slack
+// for font rendering differences across platforms.
+var TIDY_COL_W = 280;
+var TIDY_MEDIA_COL_W = 380;
+// Does this entry carry a player controls bar? Both shapes exist in the
+// wild — items created in-session carry isVideo/isAudio booleans, items
+// rebuilt from a .kpak may only carry type === 'video'.
+function _itemHasPlayerControls(o) {
+  if (!o) return false;
+  return !!(o.isVideo || o.isAudio || o.type === 'video' || o.type === 'audio');
+}
+
 // Arranges all selected items (items, texts, todos, mindmaps) in a compact
 // masonry (Pinterest-style) grid centered on the original selection bounding
-// box. All items are scaled to a uniform column width (COL_W = 280px world
-// coords) preserving aspect ratio. Uses minimum 2 columns for 2+ items.
+// box. All items are scaled to a uniform column width preserving aspect
+// ratio. Uses minimum 2 columns for 2+ items.
 // After layout, auto-frames the viewport to show all tidied items.
 // Bound to Ctrl+Shift+T (Cmd+Shift+T on Mac) and the 🧹 toolbar button.
+// v7.0.38: the column width is no longer a flat 280 — see TIDY_COL_W /
+// TIDY_MEDIA_COL_W below. 280 was picked for images and it silently turned
+// every tidied video into a control strip you had to scroll sideways.
 function tidySelection() {
   var sel = state.selected;
   if (!sel || sel.size === 0) {
@@ -8040,7 +8134,7 @@ function tidySelection() {
   // --- Collect all selected items with their world-coordinate bounds ---
   var selItems = [];
   var selArr = Array.from(sel);
-  var COL_W = 280;
+  var COL_W = TIDY_COL_W;
   var GAP = 16;
 
   for (var si = 0; si < selArr.length; si++) {
@@ -8119,6 +8213,17 @@ function tidySelection() {
     return;
   }
 
+  // --- v7.0.38: widen the column when the selection carries players ---
+  // One video among forty images is enough. A 280px column leaves the
+  // controls bar scrolling, so every button past the seek bar needs a
+  // sideways drag to reach — which is exactly why videos were being
+  // resized by hand after every tidy.
+  var _hasPlayer = false;
+  for (var _pi = 0; _pi < selItems.length; _pi++) {
+    if (_itemHasPlayerControls(selItems[_pi].item)) { _hasPlayer = true; break; }
+  }
+  if (_hasPlayer && COL_W < TIDY_MEDIA_COL_W) COL_W = TIDY_MEDIA_COL_W;
+
   // --- Push undo before modifying ---
   try { pushUndo(); } catch (e) {}
 
@@ -8165,6 +8270,16 @@ function tidySelection() {
     if (selItems.length === 1) {
       newW = ssi.w;
       newH = ssi.h;
+      // v7.0.38: a lone media item still gets the controls-bar floor.
+      // Tidy used to leave a single-item selection completely untouched
+      // (deliberately — to avoid squeezing a wide video), so a clip
+      // imported at 240px stayed at 240px with a bar you could not read,
+      // and the only cure was dragging a corner handle by hand.
+      if (_itemHasPlayerControls(ssi.item) && newW > 0 && newW < TIDY_MEDIA_COL_W) {
+        scale = TIDY_MEDIA_COL_W / newW;
+        newW = TIDY_MEDIA_COL_W;
+        newH = newH * scale;
+      }
     } else {
       scale = COL_W / ssi.w;
       newW = COL_W;
@@ -8270,7 +8385,10 @@ function tidySelection() {
   // --- Schedule auto-save ---
   try { scheduleAutoSave(); } catch (e) {}
 
-  try { toast('Tidied ' + selItems.length + ' items'); } catch (e) {}
+  try {
+    toast('Tidied ' + selItems.length + ' items · ' + Math.round(COL_W) + 'px columns'
+      + (_hasPlayer ? ' (media)' : ''));
+  } catch (e) {}
 }
 
 // Tidy all items on the board — select everything then run tidySelection
@@ -8280,6 +8398,459 @@ function tidyAll() {
     state.selected.add(i.id);
   });
   tidySelection();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  VIDEO SEGMENT (TRIM) — v7.0.38
+// ═══════════════════════════════════════════════════════════════════════
+// item.trimStart / item.trimEnd were already the single source of truth.
+// The player's timeupdate handler loops back to trimStart the moment it
+// passes trimEnd, the `play` handler re-seeds the playhead, and both values
+// serialise into .kpak. The feature was complete — it was just unreachable
+// unless you already knew that I and O work while the cursor happens to be
+// sitting on the seek bar. These are the front doors.
+
+function selectedVideoItems() {
+  const out = [];
+  (state.items || []).forEach(function (it) {
+    if (!it || !(it.isVideo || it.type === 'video')) return;
+    if (!state.selected || !state.selected.has(it.id)) return;
+    out.push(it);
+  });
+  return out;
+}
+
+// Repaint both trim strips (the mini bar under the controls and the handles
+// on the main seek bar) plus the right-hand panel timeline.
+function refreshTrimUIFor(items) {
+  (items || []).forEach(function (it) {
+    if (!it) return;
+    try {
+      if (it.el && typeof it.el._refreshInPlayerTrimUI === 'function') it.el._refreshInPlayerTrimUI();
+    } catch (e) {}
+    try {
+      if (typeof updateVideoTimeline === 'function') updateVideoTimeline(it);
+    } catch (e) {}
+  });
+}
+
+function setTrimFromPlayhead(which) {
+  const vids = selectedVideoItems();
+  if (!vids.length) { try { toast('Select a video first'); } catch (e) {} return; }
+  try { pushUndo(); } catch (e) {}
+  let done = 0;
+  vids.forEach(function (it) {
+    const v = it.video;
+    if (!v || !isFinite(v.duration) || v.duration <= 0) return;
+    const t = Math.max(0, Math.min(v.duration, v.currentTime || 0));
+    if (which === 'in') {
+      const te = (typeof it.trimEnd === 'number' && it.trimEnd > 0) ? it.trimEnd : v.duration;
+      it.trimStart = Math.max(0, Math.min(t, te - 0.1));
+      if ((v.currentTime || 0) < it.trimStart) v.currentTime = it.trimStart;
+    } else {
+      const ts = (typeof it.trimStart === 'number') ? it.trimStart : 0;
+      it.trimEnd = Math.min(v.duration, Math.max(t, ts + 0.1));
+    }
+    done++;
+  });
+  refreshTrimUIFor(vids);
+  try { scheduleAutoSave(); } catch (e) {}
+  if (!done) { try { toast('Video not ready yet'); } catch (e) {} return; }
+  const it0 = vids[0];
+  const key = (which === 'in') ? 'trimStart' : 'trimEnd';
+  const len = Math.max(0, (it0.trimEnd || 0) - (it0.trimStart || 0));
+  try {
+    toast((which === 'in' ? 'Trim in ' : 'Trim out ') + formatTime(it0[key])
+      + ' · segment ' + formatTime(len)
+      + (vids.length > 1 ? ' · ' + vids.length + ' clips' : ''));
+  } catch (e) {}
+}
+
+function clearTrimSelected() {
+  const vids = selectedVideoItems();
+  if (!vids.length) { try { toast('Select a video first'); } catch (e) {} return; }
+  try { pushUndo(); } catch (e) {}
+  vids.forEach(function (it) {
+    it.trimStart = 0;
+    it.trimEnd = (it.video && isFinite(it.video.duration)) ? it.video.duration : 0;
+  });
+  refreshTrimUIFor(vids);
+  try { scheduleAutoSave(); } catch (e) {}
+  try { toast('Trim cleared · full clip'); } catch (e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  CONTACT SHEET (v7.0.38) — 提案 A
+// ═══════════════════════════════════════════════════════════════════════
+// Pulls N evenly spaced stills out of a clip and lays them out as one
+// filmstrip image. This is the shot-level read a director wants: rhythm,
+// framing drift and lighting changes across a cut, all in one glance
+// instead of dragging the playhead back and forth.
+
+var CONTACT_SHEET_COUNTS = [4, 6, 9, 12, 24];
+var CONTACT_SHEET_CELL_W = 320;   // plenty for judging composition
+var CONTACT_SHEET_SEEK_TIMEOUT = 12000;
+var _cs = { itemId: null, count: 9, scope: 'trim', timecode: true, dataUrl: '', token: 0 };
+
+// Column counts chosen so the strip stays close to the source aspect
+// instead of collapsing into a tall thin column.
+function contactSheetColumns(count) {
+  if (count <= 4) return count;
+  if (count <= 6) return 3;
+  if (count <= 9) return 3;
+  if (count <= 12) return 4;
+  return 6;
+}
+
+// Always m:ss.cc in the exported pixels. The in-app formatTime() follows
+// the user's frame/time toggle, which would bake a preference into a
+// static image and make it wrong the moment they flip the toggle.
+function contactSheetTimecode(t) {
+  if (!isFinite(t)) return '0:00.00';
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  const cs = Math.floor((t * 100) % 100);
+  return m + ':' + String(s).padStart(2, '0') + '.' + String(cs).padStart(2, '0');
+}
+
+function _csItem() {
+  if (!_cs.itemId) return null;
+  const list = state.items || [];
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] && list[i].id === _cs.itemId) return list[i];
+  }
+  return null;
+}
+
+function _csRange(item, scope) {
+  const v = item && item.video;
+  const dur = (v && isFinite(v.duration) && v.duration > 0) ? v.duration : 0;
+  if (scope !== 'trim') return { lo: 0, hi: dur };
+  const lo = Math.max(0, Math.min(dur, item.trimStart || 0));
+  const hi = (item.trimEnd && item.trimEnd > 0) ? Math.min(dur, item.trimEnd) : dur;
+  return { lo: lo, hi: Math.max(lo + 0.1, hi) };
+}
+
+// Frames are pulled from a SEPARATE video element, never from the item's
+// live player. Seeking the on-board element would yank the user's playhead
+// out from under them mid-review, and the media playback budget tracks that
+// element. The probe is detached and torn down the moment it is done.
+function buildContactSheet(item, opts) {
+  const o = opts || {};
+  const count = Math.max(1, Math.min(60, o.count || 9));
+  const withTC = o.timecode !== false;
+  const cols = contactSheetColumns(count);
+  const rows = Math.ceil(count / cols);
+
+  return new Promise(function (resolve, reject) {
+    const live = item && item.video;
+    const src = (live && live.src) || (item && item.src) || '';
+    if (!src) { reject(new Error('empty-src')); return; }
+
+    const v = makeVideoElement(src, { preload: 'auto', onError: false });
+    v.loop = false;
+    v.muted = true;
+
+    let settled = false;
+    const teardown = function () {
+      try { v.pause(); } catch (e) {}
+      // Never park a media element with removeAttribute('src') — see the
+      // media playback notes. This probe is thrown away entirely instead.
+    };
+    const fail = function (msg) {
+      if (settled) return;
+      settled = true;
+      teardown();
+      reject(new Error(msg));
+    };
+    v.addEventListener('error', function () {
+      const c = v.error ? v.error.code : 0;
+      fail(c === 4 ? 'codec' : ('load-' + c));
+    });
+
+    v.addEventListener('loadedmetadata', function () {
+      const dur = v.duration;
+      if (!isFinite(dur) || dur <= 0) { fail('no-duration'); return; }
+      const vw = v.videoWidth, vh = v.videoHeight;
+      if (!vw || !vh) { fail('no-frame'); return; }
+
+      const r = _csRange(item, o.scope);
+      const lo = Math.max(0, Math.min(dur, r.lo));
+      const hi = Math.max(lo + 0.1, Math.min(dur, r.hi || dur));
+
+      const cellW = CONTACT_SHEET_CELL_W;
+      const cellH = Math.round(cellW * (vh / vw));
+      const tcH = withTC ? 20 : 0;
+      const pad = 4;
+      const sheetW = cols * cellW + (cols + 1) * pad;
+      const sheetH = rows * (cellH + tcH) + (rows + 1) * pad;
+      // Same ceiling as board export: past ~16384px a side or ~268MP
+      // Chrome hands back a blank canvas and says nothing.
+      const budget = (typeof exportPixelBudget === 'function') ? exportPixelBudget(sheetW, sheetH, 1) : 1;
+      const s = Math.max(0.25, Math.min(1, budget));
+
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(sheetW * s));
+      cv.height = Math.max(1, Math.round(sheetH * s));
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#0d0d11';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.scale(s, s);
+
+      let i = 0;
+      const step = function () {
+        if (o.cancelled && o.cancelled()) { fail('cancelled'); return; }
+        if (i >= count) {
+          settled = true;
+          teardown();
+          let url = '';
+          try {
+            url = cv.toDataURL('image/jpeg', 0.9);
+          } catch (e) {
+            // Tainted canvas. A cross-origin clip without CORS headers
+            // still *plays* fine, it just cannot be read back out.
+            settled = false;
+            fail('cors');
+            return;
+          }
+          resolve({ dataUrl: url, width: cv.width, height: cv.height, count: count, cols: cols, rows: rows });
+          return;
+        }
+        const t = lo + (hi - lo) * ((i + 0.5) / count);
+        const idx = i;
+        let done = false;
+        const onSeeked = function () {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          v.removeEventListener('seeked', onSeeked);
+          try {
+            const cx = pad + (idx % cols) * (cellW + pad);
+            const cy = pad + Math.floor(idx / cols) * (cellH + tcH + pad);
+            ctx.drawImage(v, cx, cy, cellW, cellH);
+            if (withTC) {
+              ctx.fillStyle = 'rgba(0,0,0,0.72)';
+              ctx.fillRect(cx, cy + cellH, cellW, tcH);
+              ctx.fillStyle = '#00e5ff';
+              ctx.font = '600 13px Inter, sans-serif';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(contactSheetTimecode(v.currentTime || t), cx + 6, cy + cellH + tcH / 2);
+            }
+          } catch (e) {}
+          i++;
+          if (o.onProgress) o.onProgress(i, count);
+          step();
+        };
+        // A seek can hang indefinitely on a codec the decoder dislikes.
+        // Without this the progress line would sit at "3 / 24" forever.
+        const timer = setTimeout(function () {
+          if (done) return;
+          done = true;
+          v.removeEventListener('seeked', onSeeked);
+          fail('seek-timeout');
+        }, CONTACT_SHEET_SEEK_TIMEOUT);
+        v.addEventListener('seeked', onSeeked);
+        try { v.currentTime = t; } catch (e) { clearTimeout(timer); fail('seek-failed'); }
+      };
+      step();
+    });
+  });
+}
+
+function openContactSheetDialog() {
+  const vids = selectedVideoItems();
+  if (!vids.length) { try { toast('Select a video first'); } catch (e) {} return; }
+  const it = vids[0];
+  if (!it) return;
+  const modal = document.getElementById('contact-sheet-modal');
+  if (!modal) { try { toast('Contact sheet unavailable'); } catch (e) {} return; }
+
+  _cs.itemId = it.id;
+  _cs.dataUrl = '';
+  if (CONTACT_SHEET_COUNTS.indexOf(_cs.count) < 0) _cs.count = 9;
+  // Default to the trimmed segment when there is one. The user trimmed it
+  // precisely because that is the part they care about.
+  const r = _csRange(it, 'trim');
+  const dur = (it.video && isFinite(it.video.duration)) ? it.video.duration : 0;
+  _cs.scope = (dur && (r.lo > 0.05 || r.hi < dur - 0.05)) ? 'trim' : 'all';
+
+  const sub = document.getElementById('cs-subtitle');
+  if (sub) {
+    sub.textContent = (it.filename || 'Clip') + ' · '
+      + (dur ? contactSheetTimecode(dur) : 'loading') + ' total'
+      + (dur && _cs.scope === 'trim' ? ' · segment ' + contactSheetTimecode(r.hi - r.lo) : '');
+  }
+  if (!modal._csWired) {
+    modal._csWired = true;
+    modal.addEventListener('mousedown', function (ev) {
+      if (ev.target === modal) closeContactSheet();
+    });
+    // Capture phase, because Escape is also bound to "cancel / deselect"
+    // on the document — without swallowing it here the sheet would close
+    // AND drop the user's selection in the same keystroke.
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && modal.classList.contains('active')) {
+        ev.stopPropagation();
+        closeContactSheet();
+      }
+    }, true);
+  }
+
+  modal.classList.add('active');
+  syncContactSheetUI();
+  renderContactSheet();
+}
+
+function syncContactSheetUI() {
+  const modal = document.getElementById('contact-sheet-modal');
+  if (!modal) return;
+  const counts = modal.querySelectorAll('.cs-preset[data-count]');
+  for (let i = 0; i < counts.length; i++) {
+    counts[i].classList.toggle('active', Number(counts[i].getAttribute('data-count')) === _cs.count);
+  }
+  const scopes = modal.querySelectorAll('.cs-preset[data-scope]');
+  for (let i = 0; i < scopes.length; i++) {
+    scopes[i].classList.toggle('active', scopes[i].getAttribute('data-scope') === _cs.scope);
+  }
+  const note = document.getElementById('cs-note');
+  if (note) note.textContent = contactSheetColumns(_cs.count) + ' × ' + Math.ceil(_cs.count / contactSheetColumns(_cs.count));
+  const add = document.getElementById('cs-add-btn');
+  const save = document.getElementById('cs-save-btn');
+  if (add) add.disabled = !_cs.dataUrl;
+  if (save) save.disabled = !_cs.dataUrl;
+}
+
+function setContactSheetCount(n) {
+  if (_cs.count === n) return;
+  _cs.count = n;
+  _cs.dataUrl = '';
+  syncContactSheetUI();
+  renderContactSheet();
+}
+
+function setContactSheetScope(s) {
+  if (_cs.scope === s) return;
+  _cs.scope = s;
+  _cs.dataUrl = '';
+  syncContactSheetUI();
+  renderContactSheet();
+}
+
+function renderContactSheet() {
+  const it = _csItem();
+  if (!it) return;
+  const prog = document.getElementById('cs-progress');
+  const cv = document.getElementById('cs-preview');
+  const tc = document.getElementById('cs-timecode');
+  _cs.timecode = tc ? !!tc.checked : true;
+  _cs.dataUrl = '';
+  syncContactSheetUI();
+
+  _cs.token++;
+  const token = _cs.token;
+  const cancelled = function () { return token !== _cs.token; };
+  if (prog) prog.textContent = 'Reading frames… 0 / ' + _cs.count;
+
+  buildContactSheet(it, {
+    count: _cs.count,
+    scope: _cs.scope,
+    timecode: _cs.timecode,
+    cancelled: cancelled,
+    onProgress: function (i, n) {
+      if (cancelled()) return;
+      if (prog) prog.textContent = 'Reading frames… ' + i + ' / ' + n;
+    }
+  }).then(function (res) {
+    if (cancelled()) return;
+    _cs.dataUrl = res.dataUrl;
+    if (prog) prog.textContent = res.width + ' × ' + res.height + ' px · ' + res.cols + ' × ' + res.rows;
+    syncContactSheetUI();
+    const img = new Image();
+    img.onload = function () {
+      if (cancelled()) return;
+      const c = cv.getContext('2d');
+      cv.width = img.width;
+      cv.height = img.height;
+      c.drawImage(img, 0, 0);
+      cv.style.display = 'block';
+    };
+    img.src = res.dataUrl;
+  }).catch(function (err) {
+    if (cancelled()) return;
+    const m = (err && err.message) || 'unknown';
+    const msg = (m === 'codec') ? 'This clip uses a codec the browser cannot decode — use H.264 MP4.'
+      : (m === 'cors') ? 'The clip is cross-origin, so its frames cannot be read into an image.'
+      : (m === 'seek-timeout') ? 'The clip took too long to seek — try a shorter range.'
+      : (m === 'no-frame') ? 'No frame available yet — play the clip once and try again.'
+      : (m === 'empty-src') ? 'The clip has no source loaded yet.'
+      : (m === 'cancelled') ? ''
+      : ('Could not build the sheet (' + m + ')');
+    if (prog) prog.textContent = msg;
+    if (msg) { try { toast(msg, 4500); } catch (e) {} }
+    syncContactSheetUI();
+  });
+}
+
+function contactSheetToBoard() {
+  if (!_cs.dataUrl) { try { toast('Nothing to add yet'); } catch (e) {} return; }
+  const it = _csItem();
+  if (!it) return;
+  const url = _cs.dataUrl;
+  const n = _cs.count;
+  const img = new Image();
+  img.onload = function () {
+    // item.h is the media box only — the player's controls bar hangs
+    // below it, so measuring the element is the only way to place the
+    // strip clear of the player instead of on top of it.
+    let belowY = it.y + (it.h || 0) + 24;
+    try {
+      if (it.el && it.el.getBoundingClientRect) {
+        const bcr = it.el.getBoundingClientRect();
+        if (bcr.height > 0) belowY = it.y + (bcr.height / (state.zoom || 1)) + 24;
+      }
+    } catch (e) {}
+    const w = Math.max(120, it.w || 640);
+    const h = Math.round(w * (img.height / img.width));
+    const newItem = addImage(url, img.width, img.height, it.x, belowY);
+    if (newItem) {
+      newItem.w = w;
+      newItem.h = h;
+      try { updateItemStyle(newItem); } catch (e) {}
+      try { updateCanvas(); } catch (e) {}
+    }
+    try { scheduleAutoSave(); } catch (e) {}
+    try { toast('Contact sheet added · ' + n + ' frames'); } catch (e) {}
+    closeContactSheet();
+  };
+  img.onerror = function () { try { toast('Could not decode the sheet'); } catch (e) {} };
+  img.src = url;
+}
+
+function downloadContactSheet() {
+  if (!_cs.dataUrl) return;
+  const it = _csItem();
+  const base = (it && it.filename ? it.filename.replace(/\.[^.]+$/, '') : 'clip') || 'clip';
+  try {
+    const a = document.createElement('a');
+    a.href = _cs.dataUrl;
+    a.download = base + '-contact-sheet-' + _cs.count + '.jpg';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch (e) {
+    try { toast('Download failed'); } catch (e2) {}
+  }
+}
+
+function closeContactSheet() {
+  _cs.token++;   // cancels any in-flight frame read
+  const modal = document.getElementById('contact-sheet-modal');
+  if (modal) modal.classList.remove('active');
+  const cv = document.getElementById('cs-preview');
+  if (cv) cv.style.display = 'none';
+  const prog = document.getElementById('cs-progress');
+  if (prog) prog.textContent = '';
+  _cs.dataUrl = '';
 }
 
 // Helper: frame the viewport to show all tidied items.
@@ -11986,9 +12557,31 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     const _ctrlsRO = new ResizeObserver(function(entries) {
       for (const entry of entries) {
         const w = entry.contentRect.width;
-        ctrlsRow.classList.toggle('compact', w < 420);
+        // v7.0.38: three densities instead of one switch. The thresholds
+        // come from measuring the row's actual intrinsic width, not from
+        // guesswork:
+        //   full    labels + 80px volume slider ... ~643px
+        //   compact icon-only buttons ............. ~518px
+        //   micro   volume collapsed to mute ...... ~343px
+        // The old single `w < 420` test only ever produced "compact",
+        // which still needs 518px — so on a 280px Tidy column the row
+        // scrolled and the right-hand buttons were unreachable unless
+        // you dragged the strip sideways by hand.
+        ctrlsRow.classList.toggle('compact', w < 660);
+        ctrlsRow.classList.toggle('micro', w < 440);
       }
     });
+    // Apply once up front so the bar is correct on the very first paint
+    // (a ResizeObserver only fires after the element has been laid out,
+    // which left the full-width bar visible for one frame and then
+    // snapping — visible as a flicker when loading a board).
+    (function () {
+      const w0 = ctrlsRow.clientWidth || 0;
+      if (w0 > 0) {
+        ctrlsRow.classList.toggle('compact', w0 < 660);
+        ctrlsRow.classList.toggle('micro', w0 < 440);
+      }
+    })();
     _ctrlsRO.observe(ctrlsRow);
   }
 
@@ -14026,6 +14619,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     mainTrimRightOverlay.style.left = endPct + '%';
     mainTrimRightOverlay.style.width = (100 - endPct) + '%';
   }
+  // v7.0.38: publish it on the element. Trim is now settable from the
+  // context menu and (shortly) elsewhere, and those callers live outside
+  // this closure — without a handle they can only change the data and
+  // wait for the next timeupdate tick, which never comes while paused.
+  try { el._refreshInPlayerTrimUI = refreshInPlayerTrimUI; } catch (e) {}
   // Click on the mini bar (not on a handle) → seek to that time
   trimMini.addEventListener('mousedown', function(ev) {
     if (ev.target.classList.contains('trim-handle')) return; // handle drag will own this
@@ -19566,6 +20164,7 @@ function showCtx(x, y) {
   const sel = getSelectedItems();
   const hasItems = sel.length > 0;
   const hasImages = getSelectedImages().length > 0;
+  const hasVideos = sel.some(function (i) { return i && (i.isVideo || i.type === 'video'); });
   let html = '';
   if (hasItems) {
     html += `<div class="ctx-item" onclick="duplicateSelected();hideCtx()">Duplicate <kbd>Ctrl+Shift+D</kbd></div>`;
@@ -19592,6 +20191,16 @@ function showCtx(x, y) {
     html += `<div class="ctx-item" onclick="tidySelection();hideCtx()">🧹 Tidy Selected</div>`;
     html += `<div class="ctx-sep"></div>`;
     if (hasImages && getSelectedImages()[0] && getSelectedImages()[0].src && getSelectedImages()[0].src.includes('image/gif')) html += `<div class="ctx-item" onclick="trimGifSelected();hideCtx()">Trim GIF</div>`;
+    // v7.0.38: video trim (in/out) has worked since Round 20 and it round-trips
+    // through .kpak. The problem was never the feature — it was that the only
+    // way to reach it was to already know that I and O work while the cursor
+    // happens to be over the seek bar. Nothing in the UI ever said so.
+    if (hasVideos) {
+      html += `<div class="ctx-item" onclick="setTrimFromPlayhead('in');hideCtx()" title="Start looping here — the clip will only play from this point">✂ Set Trim In <kbd>I</kbd></div>`;
+      html += `<div class="ctx-item" onclick="setTrimFromPlayhead('out');hideCtx()" title="Stop here and jump back to the trim in point">✂ Set Trim Out <kbd>O</kbd></div>`;
+      html += `<div class="ctx-item" onclick="clearTrimSelected();hideCtx()" title="Play the whole clip again">↺ Clear Trim</div>`;
+      html += `<div class="ctx-item" onclick="openContactSheetDialog();hideCtx()" title="Build a filmstrip of stills from this clip">🎞 Contact Sheet…</div>`;
+    }
     html += `<div class="ctx-item" onclick="exportMediaSelected();hideCtx()">Download Source File</div>`;
     if (hasImages) html += `<div class="ctx-item" onclick="enterCrop(getSelectedImages()[0]);hideCtx()">Crop Image <kbd>C</kbd></div>`;
     if (hasImages) html += `<div class="ctx-item" onclick="enterReframe(getSelectedImages()[0]);hideCtx()">Reframe Image <kbd>Enter</kbd></div>`;
@@ -19764,6 +20373,28 @@ function _guideHTML() {
         '<tr><td style="padding:4px 0;color:#888;">Space (hold)</td><td style="padding:4px 0;">Pan Canvas</td></tr>' +
       '</table>' +
     '</div>' +
+  '</div>' +
+  // v7.0.38: a trimmed clip only plays its segment and loops back to the in
+  // point. That has worked since Round 20 and it saves with the board — but
+  // the I / O hotkeys are scoped to the seek bar and were never written down
+  // anywhere, so the feature may as well not have existed.
+  '<div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">' +
+    '<h3 style="color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Video segment (trim)</h3>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">' +
+      '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
+        '<tr><td style="padding:4px 0;color:#888;">I</td><td style="padding:4px 0;">Trim in — start looping here (cursor on seek bar)</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">O</td><td style="padding:4px 0;">Trim out — jump back from here (cursor on seek bar)</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Right-click ▸ ✂</td><td style="padding:4px 0;">Same two marks from the menu</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Drag the ✂ handles</td><td style="padding:4px 0;">Thin trim strip under the controls</td></tr>' +
+      '</table>' +
+      '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
+        '<tr><td style="padding:4px 0;color:#888;">D</td><td style="padding:4px 0;">Frame draw on the current frame</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Right-click ▸ 🎞</td><td style="padding:4px 0;">Contact sheet — filmstrip of stills</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">H</td><td style="padding:4px 0;">Clean mode — hide every control</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Two-finger swipe</td><td style="padding:4px 0;">Scrub frame by frame (Mac trackpad)</td></tr>' +
+      '</table>' +
+    '</div>' +
+    '<p style="margin:10px 0 0;font-size:11px;color:#7a7a8a;line-height:1.5;">A long clip only needs the shot you care about: mark in and out and the player loops just that segment. The range is saved with the board.</p>' +
   '</div>' +
   '<div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">' +
     '<h3 style="color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Mouse / Touch</h3>' +
@@ -22512,6 +23143,8 @@ function _dispatchShortcut(e) {
     case 'media-frame-10-right':   /* handled by existing logic */ return false;
     case 'media-trim-i':           /* handled by existing logic */ return false;
     case 'media-trim-o':           /* handled by existing logic */ return false;
+    case 'media-trim-clear':       clearTrimSelected(); return true;
+    case 'media-contact-sheet':    openContactSheetDialog(); return true;
     default: return false;
   }
 }
