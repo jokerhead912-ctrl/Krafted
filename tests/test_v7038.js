@@ -263,13 +263,18 @@ ok(/if \(cancelled\(\)\) return;/.test(renderBody),
 // ═══════════════════════════════════════════════════════════════════════
 // 6. Version
 // ═══════════════════════════════════════════════════════════════════════
-eq((src.match(/<title>Krafted v([\d.]+)<\/title>/) || [])[1], '7.0.39', 'title carries the version');
-eq((src.match(/var KRAFTED_VERSION = '([\d.]+)';/) || [])[1], '7.0.39', 'KRAFTED_VERSION is bumped');
+eq((src.match(/<title>Krafted v([\d.]+)<\/title>/) || [])[1], '7.0.40', 'title carries the version');
+eq((src.match(/var KRAFTED_VERSION = '([\d.]+)';/) || [])[1], '7.0.40', 'KRAFTED_VERSION is bumped');
 const swPath = path.resolve(__dirname, '../docs/sw.js');
 if (fs.existsSync(swPath)) {
   const sw = fs.readFileSync(swPath, 'utf8');
-  eq((sw.match(/const APP_VERSION = '([\d.]+)';/) || [])[1], '7.0.39', 'service worker version matches');
-  ok(/krafted-v7\.0\.39-/.test(sw), 'service worker cache name matches');
+  eq((sw.match(/const APP_VERSION = '([\d.]+)';/) || [])[1], '7.0.40', 'service worker version matches');
+  // Derived, not hardcoded: this assertion used to carry a literal escaped
+  // version (/krafted-v7\.0\.39-/) and every bump missed it, because
+  // s/7\.0\.39/7.0.40/g does not match the text "7\.0\.39".
+  const appV = (src.match(/var KRAFTED_VERSION = '([\d.]+)';/) || [])[1];
+  ok(new RegExp('krafted-v' + String(appV).replace(/\./g, '\\.') + '-').test(sw),
+     'service worker cache name matches the app version');
 }
 
 // ═══════════════════════════════════════════════════════════════════════

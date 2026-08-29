@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.39</title>
+<title>Krafted v7.0.40</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2540,6 +2540,80 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #cut-panel .cut-checkbox { display:flex; align-items:center; gap:4px; font-size:10px; color:var(--text-dim); font-family:'Inter',sans-serif; cursor:pointer; user-select:none; }
 #cut-panel .cut-checkbox input { accent-color:var(--accent); cursor:pointer; }
 
+/* NAMED VIEWS + PRESENT (v7.0.40, batch-5 proposal G)
+   Left-hand rail, deliberately the mirror image of #props on the right — same
+   surface, same radius, same shadow, so it reads as part of the app rather
+   than as a bolted-on feature. Collapsed by default: a board with three
+   images does not need a tape beside it. */
+#views-panel { position:fixed; top:12px; left:12px; width:236px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:0; z-index:9999998; max-height:calc(100vh - 130px); display:flex; flex-direction:column; box-shadow:var(--shadow-medium); transition:width 0.2s ease, opacity 0.2s ease; }
+#views-panel.collapsed { width:34px; }
+#views-panel.collapsed #views-body, #views-panel.collapsed #views-foot, #views-panel.collapsed #views-head-text, #views-panel.collapsed #views-save-btn { display:none; }
+#views-panel.collapsed #views-head { border-bottom:none; border-radius:12px; padding:8px; }
+#views-panel.collapsed #views-toggle { transform:rotate(180deg); }
+#views-head { display:flex; align-items:center; gap:6px; padding:9px 10px; border-bottom:1px solid var(--border-subtle); background:rgba(255,255,255,0.015); border-radius:12px 12px 0 0; user-select:none; flex-shrink:0; }
+#views-head h3 { font-size:10px; text-transform:uppercase; color:var(--text-subtle); margin:0; letter-spacing:1.5px; font-weight:500; font-family:'Inter',sans-serif; flex:1; }
+#views-toggle { width:20px; height:20px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; background:var(--input-bg); border:1px solid var(--border); color:var(--text-dim); font-size:9px; line-height:1; flex-shrink:0; transition:all 0.15s; padding:0; }
+#views-toggle:hover { background:var(--btn-hover); color:var(--text); }
+#views-save-btn { width:20px; height:20px; border-radius:4px; cursor:pointer; background:var(--input-bg); border:1px solid var(--border); color:var(--text-dim); font-size:12px; line-height:1; flex-shrink:0; padding:0; transition:all 0.15s; }
+#views-save-btn:hover { background:var(--accent); border-color:var(--accent); color:#000; }
+#views-body { overflow-y:auto; flex:1; min-height:0; }
+#views-list { padding:4px; }
+.views-empty { font-size:10.5px; color:var(--text-subtle); padding:8px; line-height:1.55; font-family:'Inter',sans-serif; }
+.views-empty b { color:var(--text-dim); }
+.view-row { display:flex; align-items:center; gap:4px; padding:3px 4px; border-radius:6px; }
+.view-row:hover { background:rgba(255,255,255,0.04); }
+.view-row.current { background:rgba(0,229,255,0.10); }
+.view-row.active { background:rgba(0,229,255,0.22); box-shadow:inset 0 0 0 1px rgba(0,229,255,0.45); }
+.view-num { width:13px; text-align:center; font-size:9.5px; color:var(--text-subtle); font-family:'Inter',sans-serif; flex-shrink:0; }
+.view-name { flex:1; font-size:11.5px; color:var(--text); font-family:'Inter',sans-serif; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.view-count { font-size:9.5px; color:var(--text-subtle); background:var(--input-bg); border-radius:4px; padding:1px 4px; flex-shrink:0; font-family:'Inter',sans-serif; }
+.view-count.stale { color:#ff6b6b; }
+.view-btn { width:16px; height:16px; padding:0; border-radius:3px; border:1px solid transparent; background:transparent; color:var(--text-subtle); font-size:9px; cursor:pointer; line-height:1; flex-shrink:0; opacity:0; transition:all 0.12s; font-family:'Inter',sans-serif; }
+.view-row:hover .view-btn:not(:disabled) { opacity:1; }
+.view-btn:hover:not(:disabled) { background:var(--input-bg); border-color:var(--border); color:var(--text); }
+.view-btn:disabled { cursor:default; }
+#views-foot { display:flex; gap:6px; padding:7px 8px; border-top:1px solid var(--border-subtle); flex-shrink:0; }
+#views-present-btn { flex:1; padding:6px 10px; background:var(--input-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; cursor:pointer; font-size:11px; font-family:'Inter',sans-serif; font-weight:500; transition:all 0.15s; }
+#views-present-btn:hover { background:var(--btn-hover); border-color:var(--accent); }
+#views-panel.presenting #views-present-btn { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
+
+/* A/B COMPARE (v7.0.40, batch-5 proposal E)
+   Three ways to put two images on top of each other. Deliberately NOT a
+   second full-screen renderer: it is two <img> elements in a box and a
+   clip-path. The duplication that has bitten this project was two code paths
+   painting the SAME pixels — nothing is being painted here. */
+#ab-compare { position:fixed; inset:0; z-index:10000000; display:none; flex-direction:column; background:rgba(8,8,12,0.94); }
+#ab-compare.open { display:flex; }
+#ab-bar { display:flex; align-items:center; gap:7px; padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.08); flex-shrink:0; }
+#ab-title { font-size:12px; color:#8a8a98; font-family:'Inter',sans-serif; margin-right:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ab-mode { padding:5px 12px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#c8c8d4; border-radius:6px; cursor:pointer; font-size:11.5px; font-family:'Inter',sans-serif; transition:all 0.15s; white-space:nowrap; }
+.ab-mode:hover { background:rgba(255,255,255,0.11); color:#fff; }
+.ab-mode.active { background:#00e5ff; color:#000; border-color:#00e5ff; font-weight:600; }
+.ab-swap { padding:5px 10px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#c8c8d4; border-radius:6px; cursor:pointer; font-size:12px; font-family:'Inter',sans-serif; transition:all 0.15s; }
+.ab-swap:hover { background:rgba(255,255,255,0.11); color:#fff; }
+#ab-stage { position:relative; flex:1; min-height:0; overflow:hidden; }
+.ab-pane { position:absolute; inset:0; overflow:hidden; }
+/* In wipe/hold both images share one frame sized to A's aspect, so the
+   divider cuts through matching pixels instead of drifting across two
+   different renderings. Side-by-side clears those inline sizes (abLayout). */
+.ab-frame { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:100%; height:100%; }
+.ab-frame img { width:100%; height:100%; object-fit:contain; display:block; }
+#ab-compare[data-mode="wipe"] #ab-pane-b { clip-path:inset(0 0 0 var(--ab-pos,50%)); }
+#ab-compare[data-mode="side"] #ab-pane-a { inset:0 50% 0 0; border-right:1px solid rgba(255,255,255,0.14); }
+#ab-compare[data-mode="side"] #ab-pane-b { inset:0 0 0 50%; }
+#ab-compare[data-mode="hold"] #ab-pane-b { opacity:0; transition:opacity 0.07s linear; }
+#ab-compare[data-mode="hold"].holding #ab-pane-b { opacity:1; }
+#ab-divider { position:absolute; top:0; bottom:0; left:var(--ab-pos,50%); width:24px; margin-left:-12px; cursor:ew-resize; z-index:3; touch-action:none; }
+#ab-divider::before { content:''; position:absolute; left:50%; top:0; bottom:0; width:2px; margin-left:-1px; background:#00e5ff; box-shadow:0 0 12px rgba(0,229,255,0.55); }
+#ab-divider::after { content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:32px; height:32px; border-radius:50%; background:#00e5ff; box-shadow:0 2px 10px rgba(0,0,0,0.5); }
+#ab-compare[data-mode="side"] #ab-divider, #ab-compare[data-mode="hold"] #ab-divider { display:none; }
+.ab-tag { position:absolute; top:12px; padding:3px 10px; border-radius:5px; background:rgba(0,0,0,0.62); color:#fff; font-size:11px; font-family:'Inter',sans-serif; letter-spacing:1.2px; pointer-events:none; z-index:4; max-width:38%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#ab-tag-a { left:12px; }
+#ab-tag-b { right:12px; background:rgba(0,229,255,0.28); }
+#ab-hint { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); font-size:11px; color:#9a9aa8; background:rgba(0,0,0,0.55); padding:6px 13px; border-radius:6px; font-family:'Inter',sans-serif; pointer-events:none; z-index:4; max-width:80%; text-align:center; }
+#ab-close { position:absolute; top:12px; right:12px; width:30px; height:30px; border-radius:50%; border:1px solid rgba(255,255,255,0.14); background:rgba(0,0,0,0.45); color:#d8d8e2; font-size:19px; cursor:pointer; line-height:1; z-index:5; padding:0; }
+#ab-close:hover { background:rgba(255,255,255,0.16); color:#fff; }
+
 /* LASSO (POLYGON CUT) TOOL */
 #lasso-overlay { position:fixed; inset:0; z-index:9999997; display:none; pointer-events:none; }
 #lasso-overlay.active { display:block; }
@@ -3880,6 +3954,23 @@ body.screen-share-mode #ss-fps {
   <canvas id="cut-preview-mask"></canvas>
 </div>
 
+<!-- NAMED VIEWS + PRESENT (v7.0.40, batch-5 proposal G)
+     Collapsed by default: the rail is only worth its screen space once there
+     is something in it. Uncollapse once and it stays open (localStorage). -->
+<div id="views-panel" class="collapsed">
+  <div id="views-head">
+    <div id="views-toggle" onclick="toggleViewsPanel()" title="Toggle views panel">◀</div>
+    <h3 id="views-head-text">Views</h3>
+    <button id="views-save-btn" onclick="saveViewFromSelection()" title="Save the current selection as a view">＋</button>
+  </div>
+  <div id="views-body">
+    <div id="views-list"></div>
+  </div>
+  <div id="views-foot">
+    <button id="views-present-btn" onclick="startPresent()">▶ Present</button>
+  </div>
+</div>
+
 <!-- FREE CUT PANEL -->
 <div id="cut-panel">
   <span class="cut-label">Free Cut</span>
@@ -4170,7 +4261,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.39';
+var KRAFTED_VERSION = '7.0.40';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4493,7 +4584,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     manifest.canvasBg = getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim() || '#1a1a1a';
     var groups = state.groups || [];
     for (var k = 0; k < groups.length; k++) { var g = groups[k]; manifest.groups.push({ id: g.id, color: g.color, memberIds: g.memberIds ? g.memberIds.slice() : [] }); }
-    manifest.counter = { nextId: (window.G && window.G.nextId) || 1, nextZ: (window.G && window.G.nextZ) || 1, nextStrokeId: (window.G && window.G.nextStrokeId) || 1, nextGroupId: (window.G && window.G.nextGroupId) || 1 };
+    // v7.0.40: named views. Written straight onto the manifest (not through
+    // the schema validator's node table) because they are board metadata, not
+    // nodes — an old Krafted reading this manifest simply ignores the key.
+    manifest.views = (state.views || []).map(function(v) { return { id: v.id, name: v.name || '', ids: (v.ids || []).slice(), panX: v.panX, panY: v.panY, zoom: v.zoom, createdAt: v.createdAt || '' }; });
+    manifest.counter = { nextId: (window.G && window.G.nextId) || 1, nextZ: (window.G && window.G.nextZ) || 1, nextStrokeId: (window.G && window.G.nextStrokeId) || 1, nextGroupId: (window.G && window.G.nextGroupId) || 1, nextViewId: (window.G && window.G.nextViewId) || 1 };
     // CRITICAL: serialize relations into the V5 manifest (save path)
     manifest.relations = (state.relations || []).map(function(r) {
       return {
@@ -4527,6 +4622,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var todos = manifest.todos || []; for (var ti2 = 0; ti2 < todos.length; ti2++) { data.todos = data.todos || []; data.todos.push(todos[ti2]); }
     var mindmaps = manifest.mindmaps || []; for (var ti3 = 0; ti3 < mindmaps.length; ti3++) { data.mindmaps = data.mindmaps || []; data.mindmaps.push(mindmaps[ti3]); }
     var groups = manifest.groups || []; for (var j = 0; j < groups.length; j++) { data.groups.push({ id: groups[j].id, color: groups[j].color, memberIds: groups[j].memberIds ? groups[j].memberIds.slice() : [] }); }
+    // v7.0.40: named views. Absent on any manifest written before this
+    // version, hence the `|| []` — a legacy .kpak simply loads with none.
+    var views = manifest.views || []; data.views = []; for (var vj = 0; vj < views.length; vj++) { data.views.push({ id: views[vj].id, name: views[vj].name || '', ids: (views[vj].ids || []).slice(), panX: views[vj].panX, panY: views[vj].panY, zoom: views[vj].zoom, createdAt: views[vj].createdAt || '' }); }
+    data.nextViewId = (manifest.counter && manifest.counter.nextViewId) || undefined;
     // CRITICAL: copy relations across (V5 manifest → V4 restore shape)
     data.relations = (manifest.relations || []).map(function(r) {
       return {
@@ -5215,6 +5314,13 @@ const touchState = {
 // ============================================================
 const state = {
   items: [], texts: [], todos: [], mindmaps: [],
+  // v7.0.40 (batch-5 proposal G): named views. Each is { id, name, ids[],
+  // panX, panY, zoom, createdAt }. `ids` is the source of truth for framing;
+  // pan/zoom is only a fallback for a view whose items are all gone.
+  views: [],
+  _activeViewIndex: -1,
+  _viewFlight: 0,     // token — a newer camera flight cancels the older one
+  _present: null,     // { index, timer } while the tape is running
   selected: new Set(),
   pan: { x: 0, y: 0 },
   zoom: 1,
@@ -5445,6 +5551,7 @@ const G = {
   nextZ: undefined,  // will be initialized below
   nextId: undefined,  // will be initialized below
   nextGroupId: undefined,  // will be initialized below
+  nextViewId: undefined,  // v7.0.40: named views counter
   nextStrokeId: undefined,  // will be initialized below
   hoveredStroke: undefined,  // will be initialized below
   drawMoveState: undefined,  // will be initialized below
@@ -6580,6 +6687,18 @@ const DEFAULT_SHORTCUTS = [
   // typing in a board text box. Reachable from the palette and the menu.
   { id: 'media-contact-sheet', category: 'Media', label: 'Contact Sheet…',       keys: [] },
   { id: 'media-trim-clear',    category: 'Media', label: 'Clear Trim',           keys: [] },
+  // v7.0.40: named views. All palette-only on purpose: this registry matches
+  // on ev.key, and on macOS Option+<letter> emits the option layer (Alt+S is
+  // 'ß'), so an Alt+letter binding here silently never fires on a Mac. The one
+  // shortcut that IS bound — Alt+1..0 to jump to a view — lives in the views
+  // module and matches ev.code instead.
+  { id: 'view-save',           category: 'View',  label: 'Save View From Selection', keys: [] },
+  { id: 'view-update',         category: 'View',  label: 'Re-aim Current View',      keys: [] },
+  { id: 'view-present',        category: 'View',  label: 'Present Views',            keys: [] },
+  { id: 'view-toggle-panel',   category: 'View',  label: 'Toggle Views Panel',       keys: [] },
+  // v7.0.40: A/B compare. Palette-only — it is modal, so the moment it is open
+  // it owns the keyboard anyway and needs no shortcut of its own.
+  { id: 'view-ab-compare',     category: 'View',  label: 'A/B Compare Two Items',    keys: [] },
   // === SCREEN SHARE MODE (v6.8.0) ===
   { id: 'tool-screen-share', category: 'Tools', label: 'Toggle Screen Share Mode', keys: [{ key: 'p', ctrl: true, shift: true }], macKeys: [{ key: 'p', meta: true, shift: true }] },
 ];
@@ -7121,6 +7240,405 @@ function zoomToFit() {
   try { toast('Fit · ' + Math.round(state.zoom * 100) + '% · ' + bb.count + ' items'); } catch (e) {}
 }
 
+// ============================================================
+//  NAMED VIEWS + PRESENT   (v7.0.40, batch-5 proposal G)
+// ============================================================
+// A view is a named "shot" on the board: the set of items it frames, plus the
+// camera it was saved from as a fallback. Clicking one flies the camera there.
+// Present plays them in order — that is the pitch deck the user described
+// ("將好多視頻嘅片段加一啲圖片加文字去同其他人講我嘅創意係乜嘢"), living on the
+// board instead of in a slide app.
+//
+// IDs, NOT COORDINATES. A view remembers WHICH items it frames and re-fits to
+// their CURRENT bounding box every time it is recalled. Storing a frozen
+// rectangle instead would mean every view silently points at empty space the
+// moment anything gets moved — and on a board that gets tidied and rearranged
+// daily, that is immediately. The saved pan/zoom is kept only to fall back on
+// when every item in a view has been deleted.
+//
+// Nothing here touches rendering: it sets state.pan / state.zoom and calls
+// updateCanvas(), exactly like every other navigation path on the board.
+
+var VIEW_MAX_ZOOM = 1;        // never upscale — magnified pixels kill a pitch
+var VIEW_FIT_MARGIN = 64;     // breathing room, capped on small screens
+var VIEW_FLIGHT_MS = 620;     // camera move duration
+var PRESENT_DWELL_MS = 4000;  // how long a shot holds before advancing
+
+function _viewsList() { return Array.isArray(state.views) ? state.views : []; }
+
+function nextViewId() {
+  if (!Number.isFinite(G.nextViewId)) {
+    G.nextViewId = _viewsList().reduce(function (m, v) {
+      return Math.max(m, (v && Number.isFinite(v.id)) ? v.id : 0);
+    }, 0) + 1;
+  }
+  const id = G.nextViewId;
+  G.nextViewId = id + 1;
+  return id;
+}
+
+// The ids a view points at, minus any that no longer exist (deleted item, or a
+// .kpak that dropped a node on load). Empty means "nothing left to frame".
+function viewLiveIds(v) {
+  if (!v || !Array.isArray(v.ids)) return [];
+  const live = new Set();
+  (state.items || []).forEach(function (it) { live.add(it.id); });
+  [state.texts, state.todos, state.mindmaps].forEach(function (list) {
+    (list || []).forEach(function (t) { live.add(t.id); });
+  });
+  return v.ids.filter(function (id) { return live.has(id); });
+}
+
+function viewBBox(v) {
+  const ids = viewLiveIds(v);
+  if (!ids.length) return null;
+  return worldBBoxOf(ids);
+}
+
+// Where the camera should end up to frame this view.
+function viewCamera(v) {
+  const sw = window.innerWidth || 0, sh = window.innerHeight || 0;
+  const bb = viewBBox(v);
+  if (bb && sw > 0 && sh > 0) {
+    const m = Math.max(0, Math.min(VIEW_FIT_MARGIN, (Math.min(sw, sh) - 40) / 2));
+    const bw = Math.max(1, bb.maxX - bb.minX), bh = Math.max(1, bb.maxY - bb.minY);
+    const z = Math.max(0.02, Math.min(VIEW_MAX_ZOOM,
+      Math.min((sw - m * 2) / bw, (sh - m * 2) / bh)));
+    return { cx: (bb.minX + bb.maxX) / 2, cy: (bb.minY + bb.maxY) / 2, zoom: z };
+  }
+  // Everything the view framed is gone — fall back to where the camera was.
+  if (v && Number.isFinite(v.panX) && Number.isFinite(v.zoom) && sw > 0 && sh > 0) {
+    const z = Math.max(0.02, Math.min(VIEW_MAX_ZOOM, v.zoom));
+    return { cx: (sw / 2 - v.panX) / z, cy: (sh / 2 - v.panY) / z, zoom: z };
+  }
+  return null;
+}
+
+function applyCamera(cx, cy, zoom) {
+  const sw = window.innerWidth || 0, sh = window.innerHeight || 0;
+  state.zoom = zoom;
+  state.pan.x = sw / 2 - cx * zoom;
+  state.pan.y = sh / 2 - cy * zoom;
+  updateCanvas();
+}
+
+// Fly the camera to a world point + zoom. Two details matter:
+//   • Zoom interpolates GEOMETRICALLY (z0 * (z1/z0)^e). Linear zoom reads as a
+//     lurch followed by a crawl, because the perceived rate is relative.
+//   • The WORLD POINT UNDER SCREEN CENTRE interpolates linearly, rather than
+//     interpolating pan directly. Interpolating pan with a changing zoom makes
+//     the content swing in an arc; interpolating the centre point makes it a
+//     single continuous camera move.
+function flyToCamera(cx, cy, zoom, ms, done) {
+  const sw = window.innerWidth || 0, sh = window.innerHeight || 0;
+  if (!(sw > 0) || !(sh > 0)) { if (done) done(); return; }
+  const token = (state._viewFlight = (state._viewFlight || 0) + 1);
+  const z0 = state.zoom;
+  const z1 = Math.max(0.02, Math.min(10, zoom));
+  const c0x = (sw / 2 - state.pan.x) / z0, c0y = (sh / 2 - state.pan.y) / z0;
+  const dur = Math.max(0, (ms === undefined) ? VIEW_FLIGHT_MS : ms);
+  const settled = Math.abs(Math.log(z1 / z0)) < 1e-4 &&
+                  Math.abs(c0x - cx) < 0.5 && Math.abs(c0y - cy) < 0.5;
+  if (dur === 0 || settled) {
+    applyCamera(cx, cy, z1);
+    if (done) done();
+    return;
+  }
+  const t0 = performance.now();
+  const step = function (now) {
+    if (token !== state._viewFlight) return;   // a newer flight took over
+    const p = Math.min(1, (now - t0) / dur);
+    const e = (p < 0.5) ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; // easeInOutCubic
+    applyCamera(c0x + (cx - c0x) * e, c0y + (cy - c0y) * e, z0 * Math.pow(z1 / z0, e));
+    if (p < 1) requestAnimationFrame(step);
+    else if (done) done();
+  };
+  requestAnimationFrame(step);
+}
+
+function gotoView(index, opts) {
+  const list = _viewsList();
+  const v = list[index];
+  if (!v) return false;
+  const cam = viewCamera(v);
+  if (!cam) {
+    try { toast('View "' + (v.name || '?') + '" has nothing left to show'); } catch (e) {}
+    return false;
+  }
+  const o = opts || {};
+  state._activeViewIndex = index;
+  flyToCamera(cam.cx, cam.cy, cam.zoom,
+    o.instant ? 0 : (o.ms === undefined ? VIEW_FLIGHT_MS : o.ms), o.done);
+  renderViewsPanel();
+  return true;
+}
+
+// ── Editing the view list ──────────────────────────────────
+// Every mutation takes an undo step: views live in .kpak, so losing one is
+// losing work, and Ctrl+Z is how this user reflexively corrects a misclick.
+function saveViewFromSelection(name) {
+  const ids = [];
+  state.selected.forEach(function (id) { ids.push(id); });
+  if (!ids.length) {
+    try { toast('Select the items this view should frame first'); } catch (e) {}
+    return null;
+  }
+  try { pushUndo(); } catch (e) {}
+  if (!Array.isArray(state.views)) state.views = [];
+  const v = {
+    id: nextViewId(),
+    name: String(name || ('View ' + (state.views.length + 1))).slice(0, 60) || 'View',
+    ids: ids,
+    panX: state.pan.x, panY: state.pan.y, zoom: state.zoom,
+    createdAt: new Date().toISOString(),
+  };
+  state.views.push(v);
+  state._activeViewIndex = state.views.length - 1;
+  try { scheduleAutoSave(); } catch (e) {}
+  renderViewsPanel();
+  try { toast('Saved "' + v.name + '" · ' + ids.length + ' item' + (ids.length === 1 ? '' : 's')); } catch (e) {}
+  return v;
+}
+
+// Re-aim a view at whatever is selected now / wherever the camera is now.
+// Without this, "fix up the framing" means delete-and-remake.
+function updateViewFromCurrent(index) {
+  const v = _viewsList()[index];
+  if (!v) return false;
+  const ids = [];
+  state.selected.forEach(function (id) { ids.push(id); });
+  try { pushUndo(); } catch (e) {}
+  if (ids.length) v.ids = ids;
+  v.panX = state.pan.x; v.panY = state.pan.y; v.zoom = state.zoom;
+  v.updatedAt = new Date().toISOString();
+  try { scheduleAutoSave(); } catch (e) {}
+  renderViewsPanel();
+  try { toast('Updated "' + (v.name || 'view') + '"' + (ids.length ? (' · ' + ids.length + ' items') : ' · camera only')); } catch (e) {}
+  return true;
+}
+
+function deleteView(index) {
+  const list = _viewsList();
+  const v = list[index];
+  if (!v) return false;
+  try { pushUndo(); } catch (e) {}
+  list.splice(index, 1);
+  if (state._activeViewIndex === index) state._activeViewIndex = -1;
+  else if (state._activeViewIndex > index) state._activeViewIndex--;
+  if (state._present && state._present.index >= list.length) stopPresent();
+  try { scheduleAutoSave(); } catch (e) {}
+  renderViewsPanel();
+  return true;
+}
+
+function renameViewAt(index) {
+  const v = _viewsList()[index];
+  if (!v) return false;
+  let name = null;
+  try { name = window.prompt('Name this view', v.name || ''); } catch (e) {}
+  if (name === null) return false;
+  name = String(name).trim().slice(0, 60);
+  if (!name) return false;
+  try { pushUndo(); } catch (e) {}
+  v.name = name;
+  try { scheduleAutoSave(); } catch (e) {}
+  renderViewsPanel();
+  return true;
+}
+
+function moveView(index, dir) {
+  const list = _viewsList();
+  const j = index + dir;
+  if (!list[index] || j < 0 || j >= list.length) return false;
+  try { pushUndo(); } catch (e) {}
+  const tmp = list[index];
+  list[index] = list[j];
+  list[j] = tmp;
+  // Keep the highlight on the row the user is dragging, not on the slot.
+  if (state._activeViewIndex === index) state._activeViewIndex = j;
+  else if (state._activeViewIndex === j) state._activeViewIndex = index;
+  try { scheduleAutoSave(); } catch (e) {}
+  renderViewsPanel();
+  return true;
+}
+
+// ── Present: walk the views in order ───────────────────────
+var _presentKeyHandler = null;
+var _presentUserHandler = null;
+
+function startPresent() {
+  if (state._present) { stopPresent(); return; }
+  const list = _viewsList();
+  if (!list.length) {
+    try { toast('Save a view first — select items, then +'); } catch (e) {}
+    return;
+  }
+  state._present = { index: -1, timer: null };
+  // Capture phase so a board hotkey cannot swallow the tape controls.
+  _presentKeyHandler = function (ev) {
+    if (!state._present) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); stopPresent(); return; }
+    if (ev.key === ' ' || ev.key === 'ArrowRight') { ev.preventDefault(); ev.stopPropagation(); presentAdvance(1); return; }
+    if (ev.key === 'ArrowLeft') { ev.preventDefault(); ev.stopPropagation(); presentAdvance(-1); }
+  };
+  document.addEventListener('keydown', _presentKeyHandler, true);
+  // Grabbing the board means "I am taking over" — stop flying around under
+  // them. Registered on the next tick so the click that STARTED the tape
+  // (a pointerdown on the Present button) does not immediately end it.
+  setTimeout(function () {
+    if (!state._present) return;
+    _presentUserHandler = function (ev) {
+      const panel = document.getElementById('views-panel');
+      if (panel && ev.target && panel.contains(ev.target)) return;
+      stopPresent();
+    };
+    document.addEventListener('wheel', _presentUserHandler, { passive: true, capture: true });
+    document.addEventListener('pointerdown', _presentUserHandler, true);
+  }, 0);
+  renderViewsPanel();
+  presentAdvance(1);
+}
+
+function stopPresent() {
+  if (state._present && state._present.timer) clearTimeout(state._present.timer);
+  state._present = null;
+  if (_presentKeyHandler) { document.removeEventListener('keydown', _presentKeyHandler, true); _presentKeyHandler = null; }
+  if (_presentUserHandler) {
+    document.removeEventListener('wheel', _presentUserHandler, true);
+    document.removeEventListener('pointerdown', _presentUserHandler, true);
+    _presentUserHandler = null;
+  }
+  renderViewsPanel();
+  try { toast('Presentation ended'); } catch (e) {}
+}
+
+// The advance timer is scheduled up front as flight + dwell rather than in the
+// flight's completion callback. If the flight is cancelled (the user grabbed
+// the board mid-move) the callback never runs, and a tape that can silently
+// stall halfway through a pitch is worse than one whose timing is 600ms loose.
+function presentAdvance(dir) {
+  const p = state._present;
+  if (!p) return;
+  const list = _viewsList();
+  if (!list.length) { stopPresent(); return; }
+  if (p.timer) { clearTimeout(p.timer); p.timer = null; }
+  let i;
+  if (p.index < 0) i = (dir > 0) ? 0 : list.length - 1;
+  else i = p.index + dir;
+  // Only the forward direction ends the tape; stepping backwards off the
+  // first shot clamps, because "went back too far" should not end the pitch.
+  if (i >= list.length) {
+    stopPresent();
+    try { toast('End of presentation'); } catch (e) {}
+    return;
+  }
+  if (i < 0) i = 0;
+  p.index = i;
+  gotoView(i);
+  p.timer = setTimeout(function () { presentAdvance(1); }, VIEW_FLIGHT_MS + PRESENT_DWELL_MS);
+}
+
+// ── The panel ──────────────────────────────────────────────
+function toggleViewsPanel() {
+  const p = document.getElementById('views-panel');
+  if (!p) return;
+  p.classList.toggle('collapsed');
+  try { localStorage.setItem('krafted_views_collapsed', p.classList.contains('collapsed') ? '1' : '0'); } catch (e) {}
+}
+
+function renderViewsPanel() {
+  const el = document.getElementById('views-panel');
+  const listEl = document.getElementById('views-list');
+  if (!el || !listEl) return;
+  const list = _viewsList();
+  el.classList.toggle('presenting', !!state._present);
+  const presentBtn = document.getElementById('views-present-btn');
+  if (presentBtn) presentBtn.textContent = state._present ? '■ Stop' : '▶ Present';
+  if (!list.length) {
+    listEl.innerHTML = '<div class="views-empty">Select items on the board,<br>then press <b>＋</b> to save a view.</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  list.forEach(function (v, i) {
+    const row = document.createElement('div');
+    row.className = 'view-row';
+    if (state._present && state._present.index === i) row.classList.add('active');
+    else if (state._activeViewIndex === i) row.classList.add('current');
+    const num = document.createElement('span');
+    num.className = 'view-num';
+    // Alt+1..9 / Alt+0 address the first ten views; later ones show a dot.
+    num.textContent = (i < 9) ? String(i + 1) : (i === 9 ? '0' : '·');
+    num.title = (i < 10) ? ('Alt+' + ((i + 1) % 10)) : 'No shortcut (past the first 10)';
+    row.appendChild(num);
+    const name = document.createElement('span');
+    name.className = 'view-name';
+    name.textContent = v.name || ('View ' + (i + 1));
+    name.title = 'Click to fly here · double-click to rename';
+    name.addEventListener('click', function (ev) { ev.stopPropagation(); gotoView(i); });
+    name.addEventListener('dblclick', function (ev) { ev.stopPropagation(); renameViewAt(i); });
+    row.appendChild(name);
+    const cnt = document.createElement('span');
+    cnt.className = 'view-count';
+    const live = viewLiveIds(v).length;
+    cnt.textContent = String(live);
+    cnt.title = live + ' item' + (live === 1 ? '' : 's') + ' framed';
+    if (!live) cnt.classList.add('stale');
+    row.appendChild(cnt);
+    const mk = function (txt, title, fn, disabled) {
+      const b = document.createElement('button');
+      b.className = 'view-btn';
+      b.textContent = txt;
+      b.title = title;
+      b.disabled = !!disabled;
+      b.addEventListener('click', function (ev) { ev.stopPropagation(); fn(); });
+      return b;
+    };
+    row.appendChild(mk('↑', 'Move earlier in the tape', function () { moveView(i, -1); }, i === 0));
+    row.appendChild(mk('↓', 'Move later in the tape', function () { moveView(i, 1); }, i === list.length - 1));
+    row.appendChild(mk('↻', 'Re-aim at the current selection / camera', function () { updateViewFromCurrent(i); }));
+    row.appendChild(mk('×', 'Delete this view', function () { deleteView(i); }));
+    listEl.appendChild(row);
+  });
+}
+
+// Alt+1..9, Alt+0 — jump straight to a view. These are the keys that make
+// views worth having in a meeting: no panel, no hunting, just "look at 3".
+// Matching on ev.code, NOT ev.key. On macOS Option+<digit> emits the OPTION
+// LAYER of the keyboard — Alt+1 is '¡', Alt+2 is '™', and so on — so a plain
+// `ev.key >= '0' && ev.key <= '9'` test never fires on a Mac, which is exactly
+// where this shortcut matters most. ev.code reports the physical key
+// ('Digit1') regardless of what the modifier layer produced.
+document.addEventListener('keydown', function (ev) {
+  if (!ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+  const code = ev.code || '';
+  const m = /^(Digit|Numpad)([0-9])$/.exec(code);
+  if (!m) return;
+  const t = ev.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  const idx = (m[2] === '0') ? 9 : (parseInt(m[2], 10) - 1);
+  const list = _viewsList();
+  if (idx >= list.length) return;
+  ev.preventDefault();
+  if (state._present) { stopPresent(); }
+  gotoView(idx);
+}, true);
+
+// Collapsed by default, restored from localStorage once the user has made a
+// choice. The IIFE tolerates either script position (inline after the markup,
+// or deferred), and re-runs harmlessly if it somehow beats the parser.
+(function initViewsPanel() {
+  const apply = function () {
+    const p = document.getElementById('views-panel');
+    if (!p) return;
+    let collapsed = true;
+    try { collapsed = localStorage.getItem('krafted_views_collapsed') !== '0'; } catch (e) {}
+    p.classList.toggle('collapsed', collapsed);
+    renderViewsPanel();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+  else apply();
+})();
+
 
 // ==== undo-redo.js ====
 
@@ -7253,9 +7771,15 @@ function captureSnapshot() {
     groups: state.groups.map(g => ({
       id: g.id, color: g.color, memberIds: [...g.memberIds],
     })),
+    // v7.0.40: named views round-trip through undo. They carry no media, just
+    // names and id lists, so they cost a few hundred bytes per view.
+    views: (state.views || []).map(v => ({
+      id: v.id, name: v.name || '', ids: (v.ids || []).slice(),
+      panX: v.panX, panY: v.panY, zoom: v.zoom, createdAt: v.createdAt || '',
+    })),
     drawStrokes: G.drawStrokes,
     relations: (state.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 6, labelSize: r.labelSize || 16 }; }),
-    nextZ: G.nextZ, nextId: G.nextId, nextGroupId: G.nextGroupId, nextStrokeId: G.nextStrokeId,
+    nextZ: G.nextZ, nextId: G.nextId, nextGroupId: G.nextGroupId, nextViewId: G.nextViewId, nextStrokeId: G.nextStrokeId,
   };
   return JSON.stringify(snap);
 }
@@ -7654,6 +8178,19 @@ function applySnapshot(snap) {
     });
     setTimeout(() => updateAllGroupBorders(), 100);
   }
+  // v7.0.40: restore named views. Nothing to rebuild — a view is data only —
+  // but the panel has to be redrawn or the list keeps showing the pre-undo
+  // rows, which is exactly the "I deleted a view and it came back" confusion
+  // in reverse.
+  state.views = (snap.views || []).map(function (v) {
+    return {
+      id: v.id, name: v.name || '', ids: (v.ids || []).slice(),
+      panX: v.panX, panY: v.panY, zoom: v.zoom, createdAt: v.createdAt || '',
+    };
+  });
+  G.nextViewId = Number.isFinite(snap.nextViewId) ? snap.nextViewId : undefined;
+  if (state._activeViewIndex >= state.views.length) state._activeViewIndex = -1;
+  try { renderViewsPanel(); } catch (e) {}
   // R72: restore the selection that was active when this snapshot was
   // taken. The IDs round-trip cleanly because all item arrays were
   // rebuilt with the same IDs above. Without this, undo would visually
@@ -15331,7 +15868,14 @@ function setupVideoTrim(item) {
   if (v.readyState >= 1) onMeta();
   else v.addEventListener('loadedmetadata', onMeta);
   // Loop within trim range
+  // v7.0.40: _kraftedSuppressTrimLoop lets a batch capture (frame-comment
+  // export, contact sheet) seek OUTSIDE the trimmed segment. Without it the
+  // handler below yanks the playhead back to trimStart the instant the
+  // capture moves past trimEnd, so the capture's `seeked` never matches its
+  // target and every frame falls through to the timeout — an export of a
+  // trimmed clip used to take minutes and then emit the stored snapshots.
   v.addEventListener('timeupdate', () => {
+    if (v._kraftedSuppressTrimLoop) return;
     const ts = item.trimStart || 0;
     const te = item.trimEnd || v.duration;
     if (v.currentTime >= te) {
@@ -15345,6 +15889,7 @@ function setupVideoTrim(item) {
   });
   // Seek to trimStart when playing
   v.addEventListener('play', () => {
+    if (v._kraftedSuppressTrimLoop) return;
     const ts = item.trimStart || 0;
     if (v.currentTime < ts || v.currentTime >= (item.trimEnd || v.duration) - 0.1) {
       v.currentTime = ts;
@@ -16144,6 +16689,78 @@ function _renderStrokesToCtx(ctx, strokes, cw, ch) {
 // The file downloads as `<videoBaseName>-frame-comments.html` (using
 // the original file name without the extension) and can be opened /
 // printed / attached to a Slack message / emailed.
+// v7.0.40 — ONE seek-and-capture, shared by the frame-comment export and
+// Send-to-Board. These used to be two hand-rolled copies of the same wait, and
+// the copy in Send-to-Board still had the broken poll described below.
+//
+// The old capture tested `Math.abs(v.currentTime - c.time) < 0.05` 60ms after
+// starting the seek. That test is meaningless: per the HTML spec a seek moves
+// the OFFICIAL PLAYBACK POSITION to its target immediately, so currentTime
+// reads back the new value long before the decoder has painted that frame. The
+// poll therefore passed on its very first try and drawImage grabbed whatever
+// happened to be on screen — comment N captured comment N-1's frame, and on a
+// slow decoder (4K, a busy machine, a codec the GPU dislikes) every capture
+// grabbed the same one. That is the "export only contains one image" bug:
+// N cards, one picture.
+//
+// `seeked` is the only trustworthy signal — it fires once the seek has
+// completed AND a frame is actually available. Everything below waits for that
+// event; the timeout is a safety net for a seek that never lands.
+var VIDEO_ANNO_SEEK_TIMEOUT = 8000;
+function videoAnnoSeekAndCapture(v, c, maxW) {
+  return new Promise(function (resolve) {
+    const target = (typeof c.time === 'number' && isFinite(c.time)) ? c.time : 0;
+    let settled = false, timer = null, rvf = null;
+    const finish = function (val) {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      try { v.removeEventListener('seeked', onSeeked); } catch (e) {}
+      try { if (rvf && v.cancelVideoFrameCallback) v.cancelVideoFrameCallback(rvf); } catch (e) {}
+      resolve(val || c.snapshot || '');
+    };
+    // Run fn after the element has actually presented the post-seek frame.
+    // requestVideoFrameCallback is exact when it works, but it is not
+    // guaranteed to fire on a paused element, so it is always raced against a
+    // timer rather than trusted alone.
+    const afterFrame = function (fn) {
+      let done = false;
+      const run = function () { if (done) return; done = true; fn(); };
+      if (typeof v.requestVideoFrameCallback === 'function') {
+        try {
+          rvf = v.requestVideoFrameCallback(run);
+          setTimeout(run, 600);   // rVFC is not guaranteed on a paused element
+          return;
+        } catch (e) { /* fall through to the rAF path */ }
+      }
+      requestAnimationFrame(function () { requestAnimationFrame(run); });
+    };
+    const onSeeked = function () {
+      if (settled || v.readyState < 2) return;
+      // Some codecs land a frame or two away from the requested time. Accept
+      // that — a still 40ms off is indistinguishable — but reject a seek that
+      // clearly went somewhere else, so we don't bake in the wrong frame.
+      if (Math.abs((v.currentTime || 0) - target) > 0.5) return;
+      afterFrame(function () {
+        try {
+          // Pass the comment's stored strokes so the fresh capture includes
+          // the same annotations the user drew.
+          finish(videoAnnoCaptureSnapshot(v, maxW, c.annoStrokes));
+        } catch (e) { finish(''); }
+      });
+    };
+    try {
+      timer = setTimeout(function () { finish(''); }, VIDEO_ANNO_SEEK_TIMEOUT);
+      v.addEventListener('seeked', onSeeked);
+      if (v.readyState >= 2 && !v.seeking && Math.abs((v.currentTime || 0) - target) < 0.02) {
+        onSeeked();              // already sitting on that frame — no seek needed
+      } else {
+        v.currentTime = target;
+      }
+    } catch (e) { finish(''); }
+  });
+}
+
 async function videoAnnoExportComments() {
   const item = videoAnnoGetSelected();
   if (!item) { toast('Select a video first'); return; }
@@ -16172,6 +16789,10 @@ async function videoAnnoExportComments() {
   const prevTime = v.currentTime;
   const wasPaused = v.paused;
   try { v.pause(); } catch (e) {}
+  // v7.0.40: a trimmed clip loops back to trimStart on every timeupdate, so a
+  // capture that seeks past trimEnd is dragged home before `seeked` can fire.
+  // Suspend the loop for the duration of the export (see the handler above).
+  v._kraftedSuppressTrimLoop = true;
   // Show a toast — capturing N frames can take a beat for longer videos
   toast('Capturing ' + comments.length + ' frame snapshot' + (comments.length === 1 ? '' : 's') + '…');
   // Capture at 1280px so the displayed 720px snapshot is sharp on retina
@@ -16182,40 +16803,27 @@ async function videoAnnoExportComments() {
   // so it is the one caller that legitimately wants more pixels than the
   // 1280 default. 1920 still keeps a 4K clip from emitting 1 MB per frame.
   const EXPORT_SNAP_MAX_W = 1920;
-  const captureOne = (c) => new Promise((resolve) => {
-    // For each comment, seek the video to its exact time then capture.
-    // We chain via rAF so the video has time to actually paint the new
-    // frame before we drawImage from it.
-    const tryCapture = (tries) => {
-      if (tries <= 0) { resolve(c.snapshot || ''); return; }
-      try {
-        // readyState >= 2 (HAVE_CURRENT_DATA) is enough to drawImage
-        if (v.readyState >= 2 && Math.abs((v.currentTime || 0) - (c.time || 0)) < 0.05) {
-          // Seek succeeded and the new frame is painted — grab it.
-          // We pass the comment's stored strokes so the fresh capture
-          // includes the same annotations the user drew.
-          const dataUrl = videoAnnoCaptureSnapshot(v, EXPORT_SNAP_MAX_W, c.annoStrokes);
-          resolve(dataUrl || c.snapshot || '');
-        } else if (tries < 5) {
-          setTimeout(() => tryCapture(tries - 1), 80);
-        } else {
-          setTimeout(() => tryCapture(tries - 1), 40);
-        }
-      } catch (e) { resolve(c.snapshot || ''); }
-    };
-    try {
-      v.currentTime = c.time || 0;
-    } catch (e) { resolve(c.snapshot || ''); return; }
-    setTimeout(() => tryCapture(12), 60);
-  });
+  // v7.0.40: the shared seek-and-capture lives above; the reasoning behind
+  // waiting for `seeked` is documented there.
+  const captureOne = (c) => videoAnnoSeekAndCapture(v, c, EXPORT_SNAP_MAX_W);
   // Chain the captures so we don't fight the video decoder
   (async () => {
     const results = [];
     for (let i = 0; i < comments.length; i++) {
+      // v7.0.40: waiting for a real `seeked` costs ~100-600ms per frame where
+      // the old (broken) poll returned in 60ms. On a 30-comment review that is
+      // a long silent stretch, so count it out instead of freezing the toast.
+      if (comments.length > 2) {
+        try { toast('Capturing frame ' + (i + 1) + ' / ' + comments.length + '…'); } catch (e) {}
+      }
       results.push(await captureOne(comments[i]));
     }
-    // Restore the user's previous playhead + play state
+    // Only now is it safe to let the trim loop have the playhead back: the
+    // restore below moves the video, and we want it to land where the user
+    // left it without the loop interfering either.
     try { v.currentTime = prevTime; } catch (e) {}
+    v._kraftedSuppressTrimLoop = false;
+    // Restore the user's previous playhead + play state
     if (!wasPaused) { resumeMediaEl(v); }   // v7.0.33: LRU re-register, never evict
     // Build the HTML report
     // ── Derive the file name for both display and download ──
@@ -17133,24 +17741,11 @@ async function videoAnnoSendToBoard() {
     // fresh-capture from the video. This only happens for very old
     // comments or edge cases.
     if (!v) { resolve(''); return; }
-    const tryCapture = (tries) => {
-      if (tries <= 0) { resolve(''); return; }
-      try {
-        if (v.readyState >= 2 && Math.abs((v.currentTime || 0) - (c.time || 0)) < 0.05) {
-          const dataUrl = videoAnnoCaptureSnapshot(v, SNAP_MAX_W, c.annoStrokes);
-          resolve(dataUrl || '');
-        } else if (tries > 7) {
-          // Start with longer waits (video needs time to seek) and
-          // tighten up. R73: was inverted (80ms then 40ms) which
-          // gave up too early on slow seeks.
-          setTimeout(() => tryCapture(tries - 1), 120);
-        } else {
-          setTimeout(() => tryCapture(tries - 1), 60);
-        }
-      } catch (e) { resolve(''); }
-    };
-    try { v.currentTime = c.time || 0; } catch (e) { resolve(''); return; }
-    setTimeout(() => tryCapture(10), 80);
+    // v7.0.40: delegate to the shared seek-and-capture. The hand-rolled
+    // retry loop that used to live here polled currentTime, which reports
+    // the seek TARGET before the decoder has painted the frame — the same
+    // bug that made the frame-comment export emit one picture.
+    videoAnnoSeekAndCapture(v, c, SNAP_MAX_W).then(function (u) { resolve(u || ''); });
   });
   // Pause once for all captures, but only if we actually need to
   // fresh-capture any comment. The fast path doesn't touch the
@@ -17158,6 +17753,9 @@ async function videoAnnoSendToBoard() {
   const needsFreshCapture = comments.some(c => !c.snapshot || !c.snapshot.startsWith('data:image/'));
   if (needsFreshCapture) {
     try { v.pause(); } catch (e) {}
+    // v7.0.40: this path seeks, and a trimmed clip's timeupdate loop
+    // yanks the playhead home before `seeked` can fire.
+    v._kraftedSuppressTrimLoop = true;
     toast('Capturing ' + comments.length + ' snapshot' + (comments.length === 1 ? '' : 's') + '…');
   }
   // v6.1.6: Don't accumulate all dataUrls in an array — each 800px JPEG
@@ -17165,12 +17763,11 @@ async function videoAnnoSendToBoard() {
   // addImage creates an <img>. 30+ comments = 75MB+ decoded bitmaps
   // simultaneously → Out of Memory crash. Instead, capture+place one
   // comment at a time and release the dataUrl reference immediately.
-  // Restore the user's previous playhead + play state (only if we
-  // disturbed the video above)
-  if (needsFreshCapture) {
-    try { v.currentTime = prevTime; } catch (e) {}
-    if (!wasPaused) { resumeMediaEl(v); }   // v7.0.33: LRU re-register, never evict
-  }
+  // v7.0.40: the restore used to sit HERE, above the capture loop — so on
+  // the legacy fresh-capture path it handed the playhead back and then
+  // seeked the video N more times, leaving it parked on the last
+  // comment's frame. Moved below the loop, which is where "after we
+  // disturbed the video" actually is.
   // ── 1.5) Read the overall comment from the popover (or saved) ──
   // v5.5.7: Send-to-Board now also exports the (overall comment) the
   // user typed in the popover — same as HTML Export does. Without this,
@@ -17458,6 +18055,13 @@ async function videoAnnoSendToBoard() {
     const pairH = Math.max(IMG_H, textH);
     colY[col] = rowY + pairH + ROW_GAP;
     if (col === COLS - 1) actualRowsRendered++;
+  }
+  // Restore the user's previous playhead + play state (only if we
+  // disturbed the video above) — v7.0.40: now genuinely after the seeks.
+  if (needsFreshCapture) {
+    v._kraftedSuppressTrimLoop = false;
+    try { v.currentTime = prevTime; } catch (e) {}
+    if (!wasPaused) { resumeMediaEl(v); }   // v7.0.33: LRU re-register, never evict
   }
   // ── 4) Collapse intermediate undo snapshots → single pre-batch ──
   // The addImage / addText calls each pushed their own snapshot. We
@@ -18087,6 +18691,270 @@ async function snapSingleTranslate(id, _explicitItem) {
     toast('Translation failed');
   }
 }
+
+// ============================================================
+//  A/B COMPARE   (v7.0.40, batch-5 proposal E)
+// ============================================================
+// Put two board items on top of each other three ways: wipe, side by side,
+// and hold-to-compare. For "did that grade help", "which composition reads
+// better", "my last pass vs the supplier's".
+//
+// Scoping decision: this is an overlay, NOT a second rendering path. It mounts
+// two <img> tags and moves a clip-path. The duplication that has repeatedly
+// bitten this project was two code paths painting the SAME pixels and drifting
+// apart; nothing is painted here, so there is nothing to drift.
+
+var _ab = { a: null, b: null, mode: 'wipe', pos: 50, el: null, holding: false, dragging: false };
+
+function _abItemComparable(item) {
+  return !!(item && ((item.img && item.img.src) || (item.video && item.video.videoWidth)));
+}
+
+// A video is compared by its CURRENT frame. Synchronous by design: we read the
+// pixels already on screen and never seek — seeking here would move the user's
+// playhead as a side effect of opening a viewer.
+function abSourceFor(item) {
+  if (!item) return null;
+  if (item.img && item.img.src) {
+    return {
+      src: item.img.src,
+      w: item.natW || item.img.naturalWidth || 1,
+      h: item.natH || item.img.naturalHeight || 1,
+      name: item.filename || item.name || 'Image',
+    };
+  }
+  if (item.video && item.video.videoWidth) {
+    const url = videoAnnoCaptureSnapshot(item.video, 0, []);
+    if (!url) return null;
+    return {
+      src: url,
+      w: item.video.videoWidth,
+      h: item.video.videoHeight,
+      name: item.filename ? (item.filename + ' · frame') : 'Video frame',
+    };
+  }
+  return null;
+}
+
+// Selection order, not board order: whichever the user clicked first is A.
+// That is the only ordering that matches what they are looking at.
+function abSelectedPair() {
+  const ids = [];
+  state.selected.forEach(function (id) { ids.push(id); });
+  const out = [];
+  ids.forEach(function (id) {
+    for (let i = 0; i < state.items.length; i++) {
+      if (state.items[i].id === id) { out.push(state.items[i]); return; }
+    }
+  });
+  return out;
+}
+
+function abCanOpen() {
+  const pair = abSelectedPair();
+  return pair.length === 2 && _abItemComparable(pair[0]) && _abItemComparable(pair[1]);
+}
+
+function openABCompare() {
+  const pair = abSelectedPair();
+  if (pair.length !== 2) {
+    try { toast('Select exactly two items to compare'); } catch (e) {}
+    return false;
+  }
+  const a = abSourceFor(pair[0]);
+  const b = abSourceFor(pair[1]);
+  if (!a || !b) {
+    try { toast('Both items need to be an image or a video frame'); } catch (e) {}
+    return false;
+  }
+  _ab.a = a; _ab.b = b;
+  const el = _abEnsureEl();
+  el.querySelector('#ab-img-a').src = a.src;
+  el.querySelector('#ab-img-b').src = b.src;
+  el.querySelector('#ab-tag-a').textContent = 'A · ' + a.name;
+  el.querySelector('#ab-tag-b').textContent = 'B · ' + b.name;
+  el.querySelector('#ab-title').textContent = a.name + '  ↔  ' + b.name;
+  el.classList.add('open');
+  try { document.body.style.overflow = 'hidden'; } catch (e) {}
+  abSetMode(_ab.mode || 'wipe');
+  abSetPos(_ab.pos);
+  abLayout();
+  return true;
+}
+
+function closeABCompare() {
+  if (!_ab.el) return;
+  _ab.el.classList.remove('open', 'holding');
+  _ab.holding = false;
+  _ab.dragging = false;
+  try { document.body.style.overflow = ''; } catch (e) {}
+}
+
+function abSetMode(mode) {
+  if (!_ab.el) return;
+  if (mode !== 'wipe' && mode !== 'side' && mode !== 'hold') mode = 'wipe';
+  _ab.mode = mode;
+  _ab.el.setAttribute('data-mode', mode);
+  Array.prototype.forEach.call(_ab.el.querySelectorAll('.ab-mode'), function (btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
+  });
+  const hint = _ab.el.querySelector('#ab-hint');
+  if (hint) {
+    hint.textContent = (mode === 'wipe')
+      ? 'Drag the divider · ←/→ to nudge (Shift = 10%) · 2 side by side · 3 hold'
+      : (mode === 'side')
+        ? 'Two panes · 1 wipe · 3 hold-to-compare'
+        : 'Press and hold — or hold B — to see B. Release to snap back to A.';
+  }
+  abLayout();
+}
+
+function abSetPos(p) {
+  const pos = Math.max(0, Math.min(100, (typeof p === 'number' && isFinite(p)) ? p : 50));
+  _ab.pos = pos;
+  if (_ab.el) _ab.el.style.setProperty('--ab-pos', pos + '%');
+}
+
+function abSwap() {
+  if (!_ab.el || !_ab.a || !_ab.b) return;
+  const t = _ab.a; _ab.a = _ab.b; _ab.b = t;
+  const ia = _ab.el.querySelector('#ab-img-a'), ib = _ab.el.querySelector('#ab-img-b');
+  const sa = ia.src; ia.src = ib.src; ib.src = sa;
+  const ta = _ab.el.querySelector('#ab-tag-a'), tb = _ab.el.querySelector('#ab-tag-b');
+  const xa = ta.textContent; ta.textContent = tb.textContent; tb.textContent = xa;
+  _ab.el.querySelector('#ab-title').textContent = _ab.a.name + '  ↔  ' + _ab.b.name;
+  abLayout();
+}
+
+// Both images share ONE frame geometry, derived from A. Without this each
+// image is fitted to the stage independently, so two pictures with different
+// aspect ratios render at different sizes and the wipe slides across content
+// that does not line up — the comparison stops meaning anything.
+function abLayout() {
+  const el = _ab.el;
+  if (!el || !el.classList.contains('open')) return;
+  const stage = el.querySelector('#ab-stage');
+  const fa = el.querySelector('#ab-frame-a');
+  const fb = el.querySelector('#ab-frame-b');
+  if (!stage || !fa || !fb) return;
+  if (_ab.mode === 'side') {
+    fa.style.width = ''; fa.style.height = '';
+    fb.style.width = ''; fb.style.height = '';
+    return;
+  }
+  const sw = stage.clientWidth, sh = stage.clientHeight;
+  const a = _ab.a;
+  if (!(sw > 0) || !(sh > 0) || !a || !(a.w > 0) || !(a.h > 0)) return;
+  const ar = a.w / a.h;
+  let bw = sw, bh = sw / ar;
+  if (bh > sh) { bh = sh; bw = sh * ar; }
+  fa.style.width = bw + 'px'; fa.style.height = bh + 'px';
+  fb.style.width = bw + 'px'; fb.style.height = bh + 'px';
+}
+
+function _abEnsureEl() {
+  if (_ab.el) return _ab.el;
+  const el = document.createElement('div');
+  el.id = 'ab-compare';
+  el.setAttribute('data-mode', 'wipe');
+  el.innerHTML =
+    '<div id="ab-bar">' +
+      '<span id="ab-title"></span>' +
+      '<button class="ab-mode" data-mode="wipe" title="Wipe (1)">Wipe</button>' +
+      '<button class="ab-mode" data-mode="side" title="Side by side (2)">Side by side</button>' +
+      '<button class="ab-mode" data-mode="hold" title="Hold to compare (3)">Hold</button>' +
+      '<button class="ab-swap" title="Swap A and B (S)">⇄</button>' +
+    '</div>' +
+    '<div id="ab-stage">' +
+      '<div class="ab-pane" id="ab-pane-a"><div class="ab-frame" id="ab-frame-a"><img id="ab-img-a" alt="A"></div></div>' +
+      '<div class="ab-pane" id="ab-pane-b"><div class="ab-frame" id="ab-frame-b"><img id="ab-img-b" alt="B"></div></div>' +
+      '<div id="ab-divider" title="Drag to wipe"></div>' +
+      '<div class="ab-tag" id="ab-tag-a">A</div>' +
+      '<div class="ab-tag" id="ab-tag-b">B</div>' +
+      '<div id="ab-hint"></div>' +
+      '<button id="ab-close" title="Close (Esc)">×</button>' +
+    '</div>';
+  document.body.appendChild(el);
+
+  el.querySelector('#ab-close').addEventListener('click', function (ev) { ev.stopPropagation(); closeABCompare(); });
+  Array.prototype.forEach.call(el.querySelectorAll('.ab-mode'), function (btn) {
+    btn.addEventListener('click', function (ev) { ev.stopPropagation(); abSetMode(btn.getAttribute('data-mode')); });
+  });
+  el.querySelector('.ab-swap').addEventListener('click', function (ev) { ev.stopPropagation(); abSwap(); });
+  el.addEventListener('click', function (ev) { if (ev.target === el) closeABCompare(); });
+
+  const stage = el.querySelector('#ab-stage');
+  const divider = el.querySelector('#ab-divider');
+  const posFrom = function (ev) {
+    const r = stage.getBoundingClientRect();
+    if (!(r.width > 0)) return null;
+    return Math.max(0, Math.min(100, ((ev.clientX - r.left) / r.width) * 100));
+  };
+  divider.addEventListener('pointerdown', function (ev) {
+    ev.preventDefault(); ev.stopPropagation();
+    _ab.dragging = true;
+    try { divider.setPointerCapture(ev.pointerId); } catch (e) {}
+  });
+  divider.addEventListener('pointermove', function (ev) {
+    if (!_ab.dragging) return;
+    const p = posFrom(ev);
+    if (p !== null) abSetPos(p);
+  });
+  const endDrag = function (ev) {
+    if (!_ab.dragging) return;
+    _ab.dragging = false;
+    try { divider.releasePointerCapture(ev.pointerId); } catch (e) {}
+  };
+  divider.addEventListener('pointerup', endDrag);
+  divider.addEventListener('pointercancel', endDrag);
+
+  // Hold-to-compare: press anywhere on the stage. The window-level pointerup
+  // matters — releasing outside the stage would otherwise leave B stuck on.
+  stage.addEventListener('pointerdown', function (ev) {
+    if (_ab.mode !== 'hold') return;
+    if (ev.target && ev.target.closest && ev.target.closest('#ab-close')) return;
+    _ab.holding = true;
+    el.classList.add('holding');
+  });
+  window.addEventListener('pointerup', function () {
+    if (_ab.holding) { _ab.holding = false; el.classList.remove('holding'); }
+  });
+  window.addEventListener('resize', function () { if (el.classList.contains('open')) abLayout(); });
+
+  _ab.el = el;
+  return el;
+}
+
+// Modal key handling, registered once at load: capture phase so the board's
+// own hotkeys cannot fire underneath an open comparison.
+document.addEventListener('keydown', function (ev) {
+  const el = _ab.el;
+  if (!el || !el.classList.contains('open')) return;
+  const t = ev.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  const k = ev.key;
+  if (k === 'Escape') { ev.preventDefault(); ev.stopPropagation(); closeABCompare(); return; }
+  if (k === '1') { ev.preventDefault(); ev.stopPropagation(); abSetMode('wipe'); return; }
+  if (k === '2') { ev.preventDefault(); ev.stopPropagation(); abSetMode('side'); return; }
+  if (k === '3') { ev.preventDefault(); ev.stopPropagation(); abSetMode('hold'); return; }
+  if (k === 's' || k === 'S') { ev.preventDefault(); ev.stopPropagation(); abSwap(); return; }
+  // Hold B. The repeat guard stops auto-repeat from re-asserting the flag
+  // after a keyup that arrived while the key was still down.
+  if ((k === 'b' || k === 'B') && !ev.repeat) {
+    ev.preventDefault(); ev.stopPropagation();
+    _ab.holding = true; el.classList.add('holding');
+    return;
+  }
+  if (k === 'ArrowLeft' || k === 'ArrowRight') {
+    ev.preventDefault(); ev.stopPropagation();
+    abSetPos(_ab.pos + (k === 'ArrowLeft' ? -(ev.shiftKey ? 10 : 1) : (ev.shiftKey ? 10 : 1)));
+  }
+}, true);
+document.addEventListener('keyup', function (ev) {
+  const el = _ab.el;
+  if (!el) return;
+  if (ev.key === 'b' || ev.key === 'B') { _ab.holding = false; el.classList.remove('holding'); }
+}, true);
 
 function videoAnnoRefreshCommentList(item, highlightId) {
   // Resolve the in-player list element from the item. The right-panel element
@@ -20225,6 +21093,12 @@ function showCtx(x, y) {
       html += `<div class="ctx-item" onclick="clearTrimSelected();hideCtx()" title="Play the whole clip again">↺ Clear Trim</div>`;
       html += `<div class="ctx-item" onclick="openContactSheetDialog();hideCtx()" title="Build a filmstrip of stills from this clip">🎞 Contact Sheet…</div>`;
     }
+    // v7.0.40: A/B compare. Only offered when exactly two comparable things
+    // are selected — a menu entry that needs a different selection to work is
+    // worse than no entry at all.
+    if (typeof abCanOpen === 'function' && abCanOpen()) {
+      html += `<div class="ctx-item" onclick="openABCompare();hideCtx()" title="Compare these two side by side, or wipe between them">◨ A/B Compare</div>`;
+    }
     html += `<div class="ctx-item" onclick="exportMediaSelected();hideCtx()">Download Source File</div>`;
     if (hasImages) html += `<div class="ctx-item" onclick="enterCrop(getSelectedImages()[0]);hideCtx()">Crop Image <kbd>C</kbd></div>`;
     if (hasImages) html += `<div class="ctx-item" onclick="enterReframe(getSelectedImages()[0]);hideCtx()">Reframe Image <kbd>Enter</kbd></div>`;
@@ -20454,6 +21328,45 @@ function _guideHTML() {
       '</table>' +
     '</div>' +
     '<p style="margin:10px 0 0;font-size:11px;color:#7a7a8a;line-height:1.5;">A long clip only needs the shot you care about: mark in and out and the player loops just that segment. The range is saved with the board.</p>' +
+  '</div>' +
+  // v7.0.40: proposal G. The board is 100000px across, so "find the thing I
+  // want to talk about" was the single worst part of presenting from it —
+  // worth a section of its own rather than a footnote.
+  '<div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">' +
+    '<h3 style="color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Named views &amp; presenting</h3>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">' +
+      '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
+        '<tr><td style="padding:4px 0;color:#888;">＋ in the Views rail</td><td style="padding:4px 0;">Save the selection as a view</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Alt+1 … Alt+0</td><td style="padding:4px 0;">Fly to the 1st–10th view</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">▶ Present</td><td style="padding:4px 0;">Play the views in order</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Click a view</td><td style="padding:4px 0;">Fly there · double-click to rename</td></tr>' +
+      '</table>' +
+      '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
+        '<tr><td style="padding:4px 0;color:#888;">Space / →</td><td style="padding:4px 0;">Next view while presenting</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">←</td><td style="padding:4px 0;">Previous view</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Esc</td><td style="padding:4px 0;">Stop presenting</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">↻ on a row</td><td style="padding:4px 0;">Re-aim that view at what is selected now</td></tr>' +
+      '</table>' +
+    '</div>' +
+    '<p style="margin:10px 0 0;font-size:11px;color:#7a7a8a;line-height:1.5;">A view remembers <b>which items</b> it frames, not a frozen rectangle — move or tidy them and the view re-fits to where they ended up. Views save with the .kpak, so whoever opens the board later sees your running order. Touching the board (wheel or click) stops the tape; it assumes you are taking over.</p>' +
+  '</div>' +
+  // v7.0.40: proposal E.
+  '<div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">' +
+    '<h3 style="color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">A/B compare</h3>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">' +
+      '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
+        '<tr><td style="padding:4px 0;color:#888;">Select 2 ▸ right-click ▸ ◨</td><td style="padding:4px 0;">Open the comparison</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">1 / 2 / 3</td><td style="padding:4px 0;">Wipe · side by side · hold</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">S</td><td style="padding:4px 0;">Swap A and B</td></tr>' +
+      '</table>' +
+      '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
+        '<tr><td style="padding:4px 0;color:#888;">Drag the divider</td><td style="padding:4px 0;">Wipe across</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">← / →</td><td style="padding:4px 0;">Nudge 1% (Shift = 10%)</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Hold <b>B</b> (or press)</td><td style="padding:4px 0;">Flash B over A, release to snap back</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Esc</td><td style="padding:4px 0;">Close</td></tr>' +
+      '</table>' +
+    '</div>' +
+    '<p style="margin:10px 0 0;font-size:11px;color:#7a7a8a;line-height:1.5;">Works on images and on a video\'s current frame. The item you selected first is A. In wipe both pictures are fitted to the same frame, so a 16:9 still and a 4:3 still still line up.</p>' +
   '</div>' +
   '<div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">' +
     '<h3 style="color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Mouse / Touch</h3>' +
@@ -23204,6 +24117,12 @@ function _dispatchShortcut(e) {
     case 'media-trim-o':           /* handled by existing logic */ return false;
     case 'media-trim-clear':       clearTrimSelected(); return true;
     case 'media-contact-sheet':    openContactSheetDialog(); return true;
+    // v7.0.40: named views
+    case 'view-save':              saveViewFromSelection(); return true;
+    case 'view-update':            updateViewFromCurrent(state._activeViewIndex); return true;
+    case 'view-present':           startPresent(); return true;
+    case 'view-toggle-panel':      toggleViewsPanel(); return true;
+    case 'view-ab-compare':        openABCompare(); return true;
     default: return false;
   }
 }
@@ -32794,6 +33713,10 @@ function buildManifest() {
     mindmaps: (state.mindmaps||[]).map(m => ({ id: m.id, x: m.x, y: m.y, w: m.w, h: m.h, z: m.z, rot: m.rot || 0, opacity: m.opacity !== undefined ? m.opacity : 1, locked: m.locked || false, title: m.title || '', nodes: (m.nodes||[]).map(n => ({ id: n.id, text: n.text, x: n.x, y: n.y, w: n.w, h: n.h, color: n.color, textColor: n.textColor, parentId: n.parentId || null, img: n.img || null, imgW: n.imgW || 0, imgH: n.imgH || 0, audio: n.audio || null, audioName: n.audioName || null })), connections: (m.connections||[]).map(c => ({ id: c.id, from: c.from, to: c.to, color: c.color })), nextNodeId: m.nextNodeId || 1, nextConnId: m.nextConnId || 1 })),
     drawStrokes: G.drawStrokes,
     groups: state.groups.map(g => ({ id: g.id, color: g.color, memberIds: [...g.memberIds] })),
+    // v7.0.40: named views persist in .kpak, so the running order survives
+    // the meeting — whoever opens the board later sees the same tape.
+    views: (state.views || []).map(v => ({ id: v.id, name: v.name || '', ids: (v.ids || []).slice(), panX: v.panX, panY: v.panY, zoom: v.zoom, createdAt: v.createdAt || '' })),
+    nextViewId: G.nextViewId,
     nextGroupId: G.nextGroupId,
     nextId: G.nextId, nextZ: G.nextZ, nextStrokeId: G.nextStrokeId,
     pan: state.pan, zoom: state.zoom,
@@ -34474,6 +35397,8 @@ function serializeBoard() {
     })),
     drawStrokes: G.drawStrokes,
     groups: state.groups.map(g => ({ id: g.id, color: g.color, memberIds: [...g.memberIds] })),
+    views: (state.views || []).map(v => ({ id: v.id, name: v.name || '', ids: (v.ids || []).slice(), panX: v.panX, panY: v.panY, zoom: v.zoom, createdAt: v.createdAt || '' })),
+    nextViewId: G.nextViewId,
     nextGroupId: G.nextGroupId,
     nextId: G.nextId, nextZ: G.nextZ, nextStrokeId: G.nextStrokeId,
     pan: state.pan, zoom: state.zoom,
@@ -35209,6 +36134,29 @@ function restoreBoard(data, append) {
     });
     setTimeout(() => updateAllGroupBorders(), 200);
   }
+  // v7.0.40: restore named views. Their `ids` go through _idRemap exactly like
+  // group memberIds do — appending a board renumbers every incoming item, so a
+  // view carrying the pre-remap ids would frame nothing at all (or, worse,
+  // frame the OTHER board's items). On a full load the list is replaced; when
+  // appending, the incoming views are added to the ones already on the board.
+  if (!append) state.views = [];
+  if (data.views && data.views.length) {
+    data.views.forEach(function (vd) {
+      state.views.push({
+        id: vd.id,
+        name: vd.name || '',
+        ids: (vd.ids || []).map(_remapId),
+        panX: vd.panX, panY: vd.panY, zoom: vd.zoom,
+        createdAt: vd.createdAt || '',
+      });
+    });
+    // Full load: trust the saved counter. Append: the two boards' counters
+    // may collide, so drop it and let nextViewId() re-derive from the merged
+    // list (it falls back to max(id)+1 when G.nextViewId is not a number).
+    G.nextViewId = (!append && Number.isFinite(data.nextViewId)) ? data.nextViewId : undefined;
+  }
+  if (!append) state._activeViewIndex = -1;
+  try { renderViewsPanel(); } catch (e) {}
   // Restore paper / artboard
   if (data.paper) {
     paperState.enabled = data.paper.enabled || false;
@@ -35474,6 +36422,13 @@ function newBoard() {
   state.groups.forEach(g => g.borderEl.remove());
   state.groups = [];
   G.nextGroupId = 1;
+  // v7.0.40: views name items, so they die with them. Leaving them behind
+  // would fill the rail with rows that fly the camera to nowhere.
+  state.views = [];
+  state._activeViewIndex = -1;
+  G.nextViewId = 1;
+  if (state._present) stopPresent();
+  try { renderViewsPanel(); } catch (e) {}
   // v7.0.31: the undo/redo stacks are deliberately NOT cleared — the snapshot
   // pushed above is the way back, and it is bounded by the same 100-step /
   // 300MB cap as every other undo entry. pushUndo() already emptied redoStack.
