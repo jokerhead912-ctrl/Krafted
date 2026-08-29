@@ -13522,18 +13522,25 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   if (!isVideo) trimRow.style.display = 'none';
 
   // Round 20: keyboard shortcuts for trim. 'i' sets the trim
-  // START to the current playhead, 'o' sets the trim END. The
-  // hotkeys are scoped to EITHER of the two timeline strips on
-  // the mov player — they fire when the cursor is over the top
-  // playback control bar (.media-seek-bar, which contains
-  // .media-seek-track and its trim handles) OR the bottom
-  // trim-only mini-bar (.media-trim-mini). Outside both bars
-  // (e.g. over the video image, the comments FAB, the canvas,
-  // or a text annotation), 'i' and 'o' are plain characters
-  // that pass through to other inputs. The video is paused
-  // first so the playhead can't drift during the press. The
-  // corresponding handle flashes cyan for ~450ms as visual
-  // confirmation.
+  // START, 'o' sets the trim END.
+  //
+  // v7.0.41 — the scoping described below is NO LONGER TRUE. It used to
+  // require the cursor to sit on one of the two timeline strips
+  // (.media-seek-bar or .media-trim-mini); anywhere else, i/o passed
+  // through as plain characters. That produced the bug where the first
+  // press appeared to work and every later press did nothing, because
+  // key events do not reliably carry clientX/clientY, so the
+  // elementFromPoint test landed on <html> and the press silently fell
+  // back to an unmoved playhead. Now:
+  //   - the pointer comes from state.mouse (tracked on mousemove),
+  //   - anywhere inside the selected clip's player counts as intent,
+  //   - a press that would change nothing says so instead of pretending.
+  // The mark itself lives in trimHotkey(), next to the shared
+  // clampTrimMark / applyTrimMark primitives, so the hotkey and the
+  // context menu cannot drift apart again. See the trim module.
+  // The video is still paused first so the playhead can't drift during
+  // the press, and the corresponding handle still flashes cyan for
+  // ~450ms as visual confirmation.
   // Round 34: the i/o trim hotkey helpers below (_isCursorOverPlayer,
   // _flashTrimHandle, _setTrimFromHotkey) used to live here as
   // closure-locals to buildMediaControls(). They were DEAD CODE because
