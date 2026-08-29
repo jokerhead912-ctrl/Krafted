@@ -137,12 +137,26 @@ ok(/el\._refreshInPlayerTrimUI = refreshInPlayerTrimUI;/.test(src),
    'the in-player trim repaint is published so out-of-closure callers can repaint');
 const setTrimBody = fnFull('setTrimFromPlayhead', src);
 ok(setTrimBody.length > 0, 'setTrimFromPlayhead body extracted');
-ok(/Math\.max\(0, Math\.min\(t, te - 0\.1\)\)/.test(setTrimBody),
-   'trim in never lands past the out point');
-ok(/Math\.min\(v\.duration, Math\.max\(t, ts \+ 0\.1\)\)/.test(setTrimBody),
-   'trim out never lands before the in point, nor past the duration');
+// v7.0.41: the clamp is no longer written inline in this function — the menu and
+// the i/o hotkey both route through the shared clampTrimMark(). Pinning a literal
+// `te - 0.1` here would only re-assert the copy that used to live here, and would
+// have kept the menu (0.1s) and the hotkey (0.05s) disagreeing. The bounds
+// themselves are now executed for real in test_v7041.
+ok(/clampTrimMark\(/.test(setTrimBody),
+   'the menu clamps through the shared clampTrimMark, not a private copy');
+ok(!/Math\.min\(t, te -[\s\S]{0,12}\)/.test(setTrimBody),
+   'no hand-rolled in-point clamp survives in the menu path');
+ok(!/Math\.max\(t, ts \+[\s\S]{0,12}\)/.test(setTrimBody),
+   'no hand-rolled out-point clamp survives in the menu path');
+ok(/TRIM_MIN_GAP/.test(fnFull('clampTrimMark', src)),
+   'the minimum segment gap lives in one named constant, not a literal');
 ok(/pushUndo\(\)/.test(setTrimBody), 'setting a trim is undoable');
-ok(/refreshTrimUIFor\(vids\)/.test(setTrimBody), 'setting a trim repaints both strips');
+ok(/plan\.length/.test(setTrimBody),
+   'an undo step is only pushed when a clip actually moves');
+// Relaxed from refreshTrimUIFor(vids): it now repaints only the clips that moved.
+// A clip that did not move needs no repaint, and refreshTrimUIFor is still the one
+// function that drives both strips (asserted by execution in test_v7041).
+ok(/refreshTrimUIFor\(/.test(setTrimBody), 'setting a trim repaints both strips');
 ok(/scheduleAutoSave\(\)/.test(setTrimBody), 'setting a trim is persisted');
 
 const ctxSrc = fnFull('showCtx', src);
@@ -263,12 +277,15 @@ ok(/if \(cancelled\(\)\) return;/.test(renderBody),
 // ═══════════════════════════════════════════════════════════════════════
 // 6. Version
 // ═══════════════════════════════════════════════════════════════════════
-eq((src.match(/<title>Krafted v([\d.]+)<\/title>/) || [])[1], '7.0.40', 'title carries the version');
-eq((src.match(/var KRAFTED_VERSION = '([\d.]+)';/) || [])[1], '7.0.40', 'KRAFTED_VERSION is bumped');
+// One place to edit per bump. Everything below compares against this,
+// never against a value read out of another version site.
+const EXPECT_VERSION = '7.0.41';
+eq((src.match(/<title>Krafted v([\d.]+)<\/title>/) || [])[1], EXPECT_VERSION, 'title carries the version');
+eq((src.match(/var KRAFTED_VERSION = '([\d.]+)';/) || [])[1], EXPECT_VERSION, 'KRAFTED_VERSION is bumped');
 const swPath = path.resolve(__dirname, '../docs/sw.js');
 if (fs.existsSync(swPath)) {
   const sw = fs.readFileSync(swPath, 'utf8');
-  eq((sw.match(/const APP_VERSION = '([\d.]+)';/) || [])[1], '7.0.40', 'service worker version matches');
+    eq((sw.match(/const APP_VERSION = '([\d.]+)';/) || [])[1], EXPECT_VERSION, 'service worker version matches');
   // Derived, not hardcoded: this assertion used to carry a literal escaped
   // version (/krafted-v7\.0\.39-/) and every bump missed it, because
   // s/7\.0\.39/7.0.40/g does not match the text "7\.0\.39".

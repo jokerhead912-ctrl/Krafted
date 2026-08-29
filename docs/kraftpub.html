@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.40</title>
+<title>Krafted v7.0.41</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4261,7 +4261,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.40';
+var KRAFTED_VERSION = '7.0.41';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -8995,35 +8995,96 @@ function refreshTrimUIFor(items) {
   });
 }
 
+// v7.0.41 — ONE trim-marking implementation, shared by the context menu and
+// the I/O hotkey. They used to be two hand-rolled copies that disagreed about
+// the minimum segment length (0.1s vs 0.05s) and about whether the playhead
+// gets dragged along; the hotkey's copy also lacked an undo step entirely.
+//
+// clampTrimMark() is deliberately PURE — it reads and never writes, so a
+// caller can ask "would this press actually change anything?" before it
+// decides whether the press is worth an undo step. Being able to ask that
+// question is what makes the silent no-op fixable at all.
+
+var TRIM_MIN_GAP = 0.05;   // shortest legal segment, seconds
+
+// The edge this call would overwrite, resolved the same way every reader in
+// the app resolves it: an unset or zero trimEnd means "the whole clip".
+function trimEdgeOf(it, which, dur) {
+  if (which === 'in') return (typeof it.trimStart === 'number') ? it.trimStart : 0;
+  return (typeof it.trimEnd === 'number' && it.trimEnd > 0) ? it.trimEnd : dur;
+}
+
+function clampTrimMark(it, which, t, dur) {
+  if (!isFinite(dur) || dur <= 0) return null;
+  let val = Math.max(0, Math.min(dur, (typeof t === 'number' && isFinite(t)) ? t : 0));
+  if (which === 'in') {
+    const te = (typeof it.trimEnd === 'number' && it.trimEnd > 0) ? it.trimEnd : dur;
+    val = Math.max(0, Math.min(val, Math.max(0, te - TRIM_MIN_GAP)));
+  } else {
+    const ts = (typeof it.trimStart === 'number') ? it.trimStart : 0;
+    val = Math.min(dur, Math.max(val, Math.min(dur, ts + TRIM_MIN_GAP)));
+  }
+  return val;
+}
+
+function applyTrimMark(it, which, val) {
+  if (which === 'in') {
+    it.trimStart = val;
+    // The playhead must not sit before the in point it is about to loop from.
+    // The timeupdate loop would drag it back on the next tick anyway, so do
+    // it now and let the picture agree with the mark the user just made.
+    const v = it.video;
+    if (v && (v.currentTime || 0) < val) { try { v.currentTime = val; } catch (e) {} }
+  } else {
+    it.trimEnd = val;
+  }
+}
+
+// Brief flash on the matching handle — the only confirmation that a press
+// landed on THIS clip and THIS edge.
+function flashTrimHandle(it, which) {
+  if (!it || !it.el) return;
+  try {
+    const h = it.el.querySelector('.media-trim-mini .trim-handle-' + which);
+    if (!h) return;
+    h.classList.add('trim-handle-flash');
+    setTimeout(function () { try { h.classList.remove('trim-handle-flash'); } catch (e) {} }, 450);
+  } catch (e) {}
+}
+
 function setTrimFromPlayhead(which) {
   const vids = selectedVideoItems();
   if (!vids.length) { try { toast('Select a video first'); } catch (e) {} return; }
-  try { pushUndo(); } catch (e) {}
-  let done = 0;
+  // Plan the whole batch before touching anything: an undo step is only worth
+  // pushing if at least one clip actually moves.
+  const plan = [];
+  let skipped = 0;
   vids.forEach(function (it) {
     const v = it.video;
-    if (!v || !isFinite(v.duration) || v.duration <= 0) return;
+    if (!v || !isFinite(v.duration) || v.duration <= 0) { skipped++; return; }
     const t = Math.max(0, Math.min(v.duration, v.currentTime || 0));
-    if (which === 'in') {
-      const te = (typeof it.trimEnd === 'number' && it.trimEnd > 0) ? it.trimEnd : v.duration;
-      it.trimStart = Math.max(0, Math.min(t, te - 0.1));
-      if ((v.currentTime || 0) < it.trimStart) v.currentTime = it.trimStart;
-    } else {
-      const ts = (typeof it.trimStart === 'number') ? it.trimStart : 0;
-      it.trimEnd = Math.min(v.duration, Math.max(t, ts + 0.1));
-    }
-    done++;
+    const val = clampTrimMark(it, which, t, v.duration);
+    if (val == null) { skipped++; return; }
+    if (Math.abs(val - trimEdgeOf(it, which, v.duration)) > 0.001) plan.push({ it: it, val: val });
   });
-  refreshTrimUIFor(vids);
+  if (!plan.length) {
+    try {
+      toast(skipped ? 'Video not ready yet'
+                    : 'Trim ' + which + ' is already at the playhead');
+    } catch (e) {}
+    return;
+  }
+  try { pushUndo(); } catch (e) {}
+  plan.forEach(function (p) { applyTrimMark(p.it, which, p.val); });
+  refreshTrimUIFor(plan.map(function (p) { return p.it; }));
   try { scheduleAutoSave(); } catch (e) {}
-  if (!done) { try { toast('Video not ready yet'); } catch (e) {} return; }
-  const it0 = vids[0];
-  const key = (which === 'in') ? 'trimStart' : 'trimEnd';
-  const len = Math.max(0, (it0.trimEnd || 0) - (it0.trimStart || 0));
+  const it0 = plan[0].it;
+  const v0 = it0.video;
+  const end0 = (it0.trimEnd && it0.trimEnd > 0) ? it0.trimEnd : (v0 ? v0.duration : 0);
   try {
-    toast((which === 'in' ? 'Trim in ' : 'Trim out ') + formatTime(it0[key])
-      + ' · segment ' + formatTime(len)
-      + (vids.length > 1 ? ' · ' + vids.length + ' clips' : ''));
+    toast((which === 'in' ? 'Trim in ' : 'Trim out ') + formatTime(plan[0].val)
+      + ' · segment ' + formatTime(Math.max(0, end0 - (it0.trimStart || 0)))
+      + (plan.length > 1 ? ' · ' + plan.length + ' clips' : ''));
   } catch (e) {}
 }
 
@@ -9038,6 +9099,124 @@ function clearTrimSelected() {
   refreshTrimUIFor(vids);
   try { scheduleAutoSave(); } catch (e) {}
   try { toast('Trim cleared · full clip'); } catch (e) {}
+}
+
+// ── I / O hotkey (v7.0.41) ────────────────────────────────────────────────
+// Where does the mark land? Two candidates, and the code now says which one
+// it picked:
+//   • the CURSOR, when it is over one of the clip's timeline strips — the
+//     seek bar or the trim mini-bar. Those are the only two things on a
+//     player that have a time axis.
+//   • the PLAYHEAD otherwise.
+//
+// The version this replaces read the cursor off the key event (e.clientX),
+// and two separate things went wrong there. Both present to the user as
+// "it worked the first time, then stopped responding":
+//
+//   1. A key event's clientX/clientY are 0 whenever the browser does not
+//      carry the pointer position on keyboard events, and they are 0 when
+//      the pointer has never moved. elementFromPoint(0, 0) is the <html>
+//      element, so the "is the cursor on a timeline?" test failed, the
+//      handler silently fell through to the playhead, and the press wrote
+//      back the value that was already there. The board already tracks the
+//      pointer on a document-level mousemove (state.mouse) and the hover
+//      test a few blocks down already trusts it — so does this now.
+//
+//   2. Even with a perfect cursor, the fallback was SILENT. The cursor is
+//      usually on the PICTURE — that is the frame you are judging — and a
+//      picture has no time axis. So the handler wrote the unchanged
+//      playhead back and reported success. The first press looks like it
+//      worked because the playhead happens to be wherever you just
+//      scrubbed it to; every press after that only moves the mouse, and
+//      the mouse is not the playhead.
+//
+// So the mark still follows the cursor when there is a cursor on a
+// timeline — but a press that would change nothing now says so, and says
+// how to change it.
+
+// Last known pointer position, or null when the pointer has never moved
+// (state.mouse starts at 0,0). A null here means "pure keyboard press".
+function _trimPointer() {
+  if (state && state.mouse && (state.mouse.x || state.mouse.y)) {
+    return { x: state.mouse.x, y: state.mouse.y };
+  }
+  return null;
+}
+
+// Time under the pointer on one of the clip's timeline strips, or null when
+// the pointer is somewhere with no time axis (the picture, the canvas, a
+// toolbar). Measured on the visible TRACK for precision, but accepted
+// anywhere inside the seek bar, so the 8px of vertical padding wrapped
+// around a 6px track still counts as "on the timeline".
+function trimTimeAtPointer(item) {
+  const pt = _trimPointer();
+  if (!pt || !item || !item.el || !item.video) return null;
+  const dur = item.video.duration;
+  if (!isFinite(dur) || dur <= 0) return null;
+  let node = null;
+  try { node = document.elementFromPoint(pt.x, pt.y); } catch (e) { return null; }
+  if (!node) return null;
+  const timeIn = function (barEl, trackSel) {
+    if (!barEl) return null;
+    if (node !== barEl && !barEl.contains(node)) return null;
+    const track = trackSel ? barEl.querySelector(trackSel) : null;
+    const rect = (track || barEl).getBoundingClientRect();
+    if (rect.width <= 0) return null;
+    return Math.max(0, Math.min(1, (pt.x - rect.left) / rect.width)) * dur;
+  };
+  const onSeek = timeIn(item.el.querySelector('.media-seek-bar'), '.media-seek-track');
+  if (onSeek != null) return onSeek;
+  return timeIn(item.el.querySelector('.media-trim-mini'), null);
+}
+
+// Returns true when the press was consumed (so the dispatcher can swallow
+// it), false when it was not a trim press at all.
+function trimHotkey(which) {
+  const vids = selectedVideoItems();
+  if (!vids.length) return false;
+  const it = vids[0];
+  const v = it.video;
+  if (!it.el || !v) return false;
+  // Intent gate: the pointer has to be on THIS clip's player. With no pointer
+  // at all (pure keyboard), the selection alone is the intent.
+  const pt = _trimPointer();
+  if (pt) {
+    let node = null;
+    try { node = document.elementFromPoint(pt.x, pt.y); } catch (e) { node = null; }
+    if (!node || (node !== it.el && !it.el.contains(node))) return false;
+  }
+  if (!isFinite(v.duration) || v.duration <= 0) {
+    try { toast('Video not ready yet'); } catch (e) {}
+    return true;
+  }
+  try { if (!v.paused) v.pause(); } catch (e) {}
+  const hoverT = trimTimeAtPointer(it);
+  const t = (hoverT != null) ? hoverT : (v.currentTime || 0);
+  const val = clampTrimMark(it, which, t, v.duration);
+  if (val == null) { try { toast('Video not ready yet'); } catch (e) {} return true; }
+  const moved = Math.abs(val - trimEdgeOf(it, which, v.duration)) > 0.001;
+  if (moved) {
+    try { pushUndo(); } catch (e) {}
+    applyTrimMark(it, which, val);
+    refreshTrimUIFor([it]);
+    try { scheduleAutoSave(); } catch (e) {}
+  }
+  flashTrimHandle(it, which);
+  const endT = (it.trimEnd && it.trimEnd > 0) ? it.trimEnd : v.duration;
+  try {
+    if (moved) {
+      toast('Trim ' + which + ' ' + formatTime(val)
+        + ' · segment ' + formatTime(Math.max(0, endT - (it.trimStart || 0)))
+        + (hoverT != null ? '  (at cursor)' : ''));
+    } else if (hoverT != null) {
+      toast('Trim ' + which + ' stays at ' + formatTime(val) + ' — the cursor is already there.');
+    } else {
+      toast('Trim ' + which + ' stays at ' + formatTime(val)
+        + ' — move the playhead, or hover the timeline and press '
+        + (which === 'in' ? 'I' : 'O') + '.');
+    }
+  } catch (e) {}
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -24113,8 +24292,11 @@ function _dispatchShortcut(e) {
     case 'media-frame-right':      /* handled by existing logic */ return false;
     case 'media-frame-10-left':    /* handled by existing logic */ return false;
     case 'media-frame-10-right':   /* handled by existing logic */ return false;
-    case 'media-trim-i':           /* handled by existing logic */ return false;
-    case 'media-trim-o':           /* handled by existing logic */ return false;
+    // v7.0.41: these used to return false, i.e. the palette closed and
+    // NOTHING happened. Route them at the playhead, which is what their
+    // labels promise — a palette press has no cursor to read.
+    case 'media-trim-i':           setTrimFromPlayhead('in');  return true;
+    case 'media-trim-o':           setTrimFromPlayhead('out'); return true;
     case 'media-trim-clear':       clearTrimSelected(); return true;
     case 'media-contact-sheet':    openContactSheetDialog(); return true;
     // v7.0.40: named views
@@ -24503,182 +24685,23 @@ document.addEventListener('keydown', e => {
     }
   }
 
-  // Round 34: i/o trim hotkey (was: per-video keydown listener that
-  // leaked and raced when multiple videos were on the board). This is
-  // a SINGLE GLOBAL handler — exactly one place where i/o are checked.
-  //   i / I  →  set trim START to current playhead
-  //   o / O  →  set trim END   to current playhead
-  // Round 39: relaxed the "where can the cursor be" rule. Originally
-  // the cursor had to be exactly on the 4px seek bar or thin trim
-  // mini — too tight, users thought the hotkey was broken. Now any
-  // hover over the video's controls bar or video wrap counts, and a
-  // pure-keyboard press (no cursor at all) also works as long as a
-  // video is selected. The video-SELECTED check stays the primary
-  // gate so i/o only trims the selected video.
-  // Round 40: read the time from CURSOR X on the slider, not the
-  // playhead. NLE convention — where you hover is where the mark
-  // goes. Previously the second i press did nothing because the user
-  // moved the cursor to a new position but the playhead hadn't
-  // changed, so the handler wrote the same value back. Now the
-  // cursor X drives the trim, so every press picks up the user's
-  // new mark position. Pure-keyboard presses (no cursor) still fall
-  // back to the playhead.
-  // Active ONLY when:
-  //   • No Ctrl/Meta/Alt modifier (so Ctrl+I/O still work for the browser)
-  //   • Not typing in an INPUT / TEXTAREA / contenteditable
-  //   • A video is the currently SELECTED item
-  //   • The cursor is over the selected video (controls or wrap) OR
-  //     there's no cursor at all (pure-keyboard press)
-  // The cursor test uses document.elementFromPoint() because ev.target
-  // on a keydown is the FOCUSED element (e.g. the play button), not
-  // the element under the cursor.
-  // Round 39: i/o trim hotkey — accepts cursor anywhere within the
-  // SELECTED video's UI (controls bar, seek bar, trim mini bar, or the
-  // video wrap itself). Round 34's stricter check ("cursor must be on
-  // .media-seek-bar OR .media-trim-mini") silently failed when the
-  // user's cursor was a few pixels off the 4px seek bar — the handler
-  // exited and the user thought the hotkey was broken. The expanded
-  // zone matches Premiere/Final Cut mental model: "if I'm hovering the
-  // video player, i/o means trim in/out". The video SELECTED check is
-  // still the primary gate — i/o only trims the selected video.
+  // Round 34: i/o trim hotkey (was: a per-video keydown listener that leaked
+  // and raced when several videos were on the board). This is the only place
+  // i/o are checked.
+  //   i / I  ->  mark the trim IN    o / O  ->  mark the trim OUT
+  // Round 39: the cursor no longer has to sit on the 4px seek bar — anywhere
+  // on the selected clip's player counts as intent.
+  // v7.0.41: the mark itself moved into trimHotkey(), next to the rest of the
+  // trim code, so the menu and the hotkey cannot drift apart again. What
+  // stays here is only the gate: not typing, and the press was consumed.
   if ((e.key === 'i' || e.key === 'I' || e.key === 'o' || e.key === 'O')
       && !e.ctrlKey && !e.metaKey && !e.altKey) {
     var aeIO = document.activeElement;
-    if (aeIO && (aeIO.tagName === 'INPUT' || aeIO.tagName === 'TEXTAREA' ||
-                 (aeIO.getAttribute && aeIO.getAttribute('contenteditable') === 'true'))) {
-      // typing somewhere — let the i/o character be typed normally
-    } else {
-      // Find the selected video
-      var vidItemIO = null;
-      try {
-        if (state && state.selected && state.items) {
-          state.selected.forEach(function(id) {
-            var it = state.items.find(function(i) { return i.id === id; });
-            if (it && it.video && it.isVideo) { vidItemIO = it; }
-          });
-        }
-      } catch (_eIO1) {}
-      if (vidItemIO && vidItemIO.el) {
-        // Accept cursor over ANY of the player's UI sub-areas. The
-        // seek bar is only 4px tall, the trim mini is a thin strip —
-        // requiring the user to land their cursor on those tiny targets
-        // is a UX trap. The whole controls bar + the video wrap count.
-        var seekBarIO   = vidItemIO.el.querySelector('.media-seek-bar');
-        var trimMiniIO  = vidItemIO.el.querySelector('.media-trim-mini');
-        var ctrlsIO     = vidItemIO.el.querySelector('.media-controls');
-        var wrapIO      = vidItemIO.el.querySelector('.media-wrap');
-        function _isInsideIO(container) {
-          if (!container) return false;
-          var node = null;
-          try { node = document.elementFromPoint(e.clientX, e.clientY); } catch (_eX) { return false; }
-          if (!node) return false;
-          return node === container || container.contains(node);
-        }
-        var overTimeline = _isInsideIO(seekBarIO) || _isInsideIO(trimMiniIO)
-                        || _isInsideIO(ctrlsIO)   || _isInsideIO(wrapIO);
-        // Keyboard-without-cursor fallback: if no clientX/Y (e.g. key
-        // pressed from the keyboard without moving the mouse), still
-        // fire if a video is selected. The "selected video" check is
-        // already our intent signal — the cursor test was only there
-        // to disambiguate when multiple videos are on the board.
-        var noCursor = (typeof e.clientX !== 'number' || typeof e.clientY !== 'number');
-        if (overTimeline || noCursor) {
-          // Cursor is over the timeline of the selected video — do the trim.
-          e.preventDefault();
-          e.stopPropagation();
-          var mediaElIO = vidItemIO.video;
-          if (isFinite(mediaElIO.duration) && mediaElIO.duration > 0) {
-            try { if (!mediaElIO.paused) mediaElIO.pause(); } catch (_eP) {}
-            var durIO = mediaElIO.duration;
-            // Round 40: read the time from the CURSOR X on the slider
-            // (seek bar or trim mini bar), falling back to the playhead.
-            // NLE convention — Premiere/Final Cut/Avid all use "where I
-            // hover = where the in/out goes" for I/O keyboard shortcuts.
-            // The previous code always read `mediaElIO.currentTime`, which
-            // produced this bug: on the first i press the cursor was at
-            // the playhead, trim got set, all good. On the second press
-            // the user moved the cursor to a new position on the slider
-            // (intent: "mark this point as the new in") but the playhead
-            // hadn't moved (no click-to-scrub in between), so the handler
-            // read the OLD currentTime, set trim to the same value, and
-            // the user concluded "i/o doesn't work after the first press".
-            // The cursor-X path matches the user's mental model and lets
-            // them re-mark the trim by simply moving the mouse to a new
-            // position and pressing i/o — no scrubbing required.
-            var tIO = null;
-            if (!noCursor) {
-              try {
-                var nodeIO = document.elementFromPoint(e.clientX, e.clientY);
-                function _tFromTrackIO(trackEl) {
-                  if (!trackEl) return null;
-                  var rect = trackEl.getBoundingClientRect();
-                  if (rect.width <= 0) return null;
-                  if (nodeIO !== trackEl && !trackEl.contains(nodeIO)) return null;
-                  var pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                  return pct * durIO;
-                }
-                tIO = _tFromTrackIO(seekBarIO);
-                if (tIO == null) tIO = _tFromTrackIO(trimMiniIO);
-              } catch (_eTC) { tIO = null; }
-            }
-            if (tIO == null) tIO = Math.max(0, Math.min(durIO, mediaElIO.currentTime || 0));
-            var whichIO = (e.key === 'i' || e.key === 'I') ? 'start' : 'end';
-            if (whichIO === 'start') {
-              var currentEndIO = (typeof vidItemIO.trimEnd === 'number') ? vidItemIO.trimEnd : durIO;
-              vidItemIO.trimStart = Math.min(tIO, Math.max(0, currentEndIO - 0.05));
-            } else {
-              var currentStartIO = (typeof vidItemIO.trimStart === 'number') ? vidItemIO.trimStart : 0;
-              vidItemIO.trimEnd = Math.max(tIO, Math.min(durIO, currentStartIO + 0.05));
-            }
-            // In-place UI refresh — we can't call the closure-local
-            // refreshInPlayerTrimUI(), so replicate the bits we need
-            // by querying the DOM directly. The timeupdate listener will
-            // re-sync on the next playback tick, but this gives the user
-            // immediate visual feedback (handle moves, region re-sizes,
-            // time labels update, handle flashes cyan).
-            try {
-              var tsIO = (typeof vidItemIO.trimStart === 'number') ? vidItemIO.trimStart : 0;
-              var teIO = (typeof vidItemIO.trimEnd === 'number') ? vidItemIO.trimEnd : durIO;
-              if (teIO > durIO) teIO = durIO;
-              if (tsIO < 0) tsIO = 0;
-              if (teIO <= tsIO) teIO = durIO;
-              var startPctIO = (tsIO / durIO) * 100;
-              var endPctIO   = (teIO / durIO) * 100;
-              // Mini bar
-              var trimRegionIO = vidItemIO.el.querySelector('.media-trim-mini .trim-region');
-              if (trimRegionIO) { trimRegionIO.style.left = startPctIO + '%'; trimRegionIO.style.width = (endPctIO - startPctIO) + '%'; }
-              var trimStartInfoIO = vidItemIO.el.querySelector('.media-trim-mini .media-trim-info.start');
-              var trimEndInfoIO   = vidItemIO.el.querySelector('.media-trim-mini .media-trim-info.end');
-              if (trimStartInfoIO) trimStartInfoIO.textContent = formatTime(tsIO);
-              if (trimEndInfoIO)   trimEndInfoIO.textContent   = formatTime(teIO);
-              // Main seek bar
-              var mainStartIO = vidItemIO.el.querySelector('.media-seek-track .trim-handle-start');
-              var mainEndIO   = vidItemIO.el.querySelector('.media-seek-track .trim-handle-end');
-              if (mainStartIO) mainStartIO.style.left = startPctIO + '%';
-              if (mainEndIO)   mainEndIO.style.left   = endPctIO   + '%';
-              var mainLeftIO  = vidItemIO.el.querySelector('.media-seek-track .trim-overlay-left');
-              var mainRightIO = vidItemIO.el.querySelector('.media-seek-track .trim-overlay-right');
-              if (mainLeftIO)  mainLeftIO.style.width  = startPctIO + '%';
-              if (mainRightIO) { mainRightIO.style.left = endPctIO + '%'; mainRightIO.style.width = (100 - endPctIO) + '%'; }
-            } catch (_eUI) {}
-            // Flash the trim handle for visual confirmation
-            try {
-              var flashHandleIO = vidItemIO.el.querySelector('.media-trim-mini .trim-handle-' + whichIO);
-              if (flashHandleIO) {
-                flashHandleIO.classList.add('trim-handle-flash');
-                setTimeout(function(){ try { flashHandleIO.classList.remove('trim-handle-flash'); } catch (_eFH) {} }, 450);
-              }
-            } catch (_eF) {}
-            // Toast
-            try {
-              var vIO = (whichIO === 'start') ? vidItemIO.trimStart : vidItemIO.trimEnd;
-              toast('Trim ' + whichIO + ' set to ' + formatTime(vIO));
-            } catch (_eT) {}
-            // Auto-save
-            try { scheduleAutoSave(); } catch (_eS) {}
-          }
-        }
-      }
+    var typingIO = !!(aeIO && (aeIO.tagName === 'INPUT' || aeIO.tagName === 'TEXTAREA' ||
+                 (aeIO.getAttribute && aeIO.getAttribute('contenteditable') === 'true')));
+    if (!typingIO && trimHotkey((e.key === 'i' || e.key === 'I') ? 'in' : 'out')) {
+      e.preventDefault();
+      e.stopPropagation();
     }
   }
 
