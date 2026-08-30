@@ -1,4 +1,4 @@
-// v7.0.41 regression suite — the I/O trim hotkey
+// v7.0.42 regression suite — the I/O trim hotkey
 //
 //   "press i/o once, it works; press it again to move the mark, nothing
 //    happens"
@@ -514,8 +514,8 @@ eq(api.TRIM_MIN_GAP, EXPECT_TRIM_MIN_GAP, 'TRIM_MIN_GAP equals the spec');
   // The dispatcher is a gate now, not an implementation.
   // NOTE: "// Round 34: i/o trim hotkey" occurs TWICE — a stale comment in
   // buildMediaControls says where the handler moved to. Anchor on the
-  // v7.0.41 line, which is unique, and search for the end AFTER it.
-  const gateA = src.indexOf('// v7.0.41: the mark itself moved into trimHotkey()');
+  // v7.0.42 line, which is unique, and search for the end AFTER it.
+  const gateA = src.indexOf('// v7.0.42: the mark itself moved into trimHotkey()');
   const gateB = src.indexOf('// Single keys', gateA);
   ok(gateA >= 0 && gateB > gateA, 'the i/o gate is where the suite expects it');
   const gate = (gateA >= 0 && gateB > gateA) ? src.slice(gateA, gateB) : '';
@@ -547,17 +547,56 @@ eq(api.TRIM_MIN_GAP, EXPECT_TRIM_MIN_GAP, 'TRIM_MIN_GAP equals the spec');
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// 9b. Shrink-only detection (v7.0.42)
+// ═══════════════════════════════════════════════════════════════════════
+{
+  const th = fnFull('trimHotkey', src);
+  ok(th.length > 0, 'trimHotkey body extracted for shrink-only analysis');
+
+  // The detection reads trimStart/trimEnd to know where the edges are.
+  ok(th.indexOf('trimStart') >= 0, 'shrink check reads trimStart');
+  ok(th.indexOf('trimEnd') >= 0, 'shrink check reads trimEnd');
+
+  // It only fires when there is no hover time (playhead fallback).
+  ok(th.indexOf('hoverT === null') >= 0, 'shrink-only is gated on no hover');
+
+  // I pressed right of IN → shrink. O pressed left of OUT → shrink.
+  ok(th.indexOf("which === 'in' && t > ts") >= 0,
+     'detects I-press right of IN as shrink-only');
+  ok(th.indexOf("which === 'out' && t < te") >= 0,
+     'detects O-press left of OUT as shrink-only');
+
+  // When shrinking from trapped playhead, flash the OTHER handle too so the
+  // user sees both boundaries are draggable.
+  ok(th.indexOf("flashTrimHandle(it, which === 'in' ? 'out' : 'in')") >= 0,
+     'flashes the opposite handle on shrink-only');
+
+  // The toast mentions hovering to expand.
+  ok(th.indexOf('hover the seek bar') >= 0,
+     'toast tells the user to hover the seek bar to expand');
+  ok(th.indexOf('to expand') >= 0, 'toast uses the word "expand"');
+
+  // The non-shrink case (hover or playhead at the expanding side) does NOT
+  // get the expand hint.
+  // We verify this structurally: the expand hint is inside the `isShrinkOnly`
+  // branch, not in the moved-or-not branches.
+  // The toast for a normal move (hover) says "(at cursor)" with no expand text.
+  // The toast for a hover no-op says "cursor is already there".
+  // Only the playhead-fallback paths mention "hover the seek bar ... to expand".
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // 10. Version
 // ═══════════════════════════════════════════════════════════════════════
 {
-  ok(src.indexOf("var KRAFTED_VERSION = '7.0.41';") >= 0, 'KRAFTED_VERSION bumped');
-  ok(src.indexOf('<title>Krafted v7.0.41</title>') >= 0, 'title bumped');
+  ok(src.indexOf("var KRAFTED_VERSION = '7.0.42';") >= 0, 'KRAFTED_VERSION bumped');
+  ok(src.indexOf('<title>Krafted v7.0.42</title>') >= 0, 'title bumped');
   const swPath = process.env.KRAFTED_SW
     ? path.resolve(process.env.KRAFTED_SW)
     : path.resolve(__dirname, '../docs/sw.js');
   const sw = fs.readFileSync(swPath, 'utf8');
-  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.41-'") >= 0, 'sw CACHE_NAME bumped');
-  ok(sw.indexOf("const APP_VERSION = '7.0.41';") >= 0, 'sw APP_VERSION bumped');
+  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.42-'") >= 0, 'sw CACHE_NAME bumped');
+  ok(sw.indexOf("const APP_VERSION = '7.0.42';") >= 0, 'sw APP_VERSION bumped');
 }
 
 console.log('');

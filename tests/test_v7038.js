@@ -137,7 +137,7 @@ ok(/el\._refreshInPlayerTrimUI = refreshInPlayerTrimUI;/.test(src),
    'the in-player trim repaint is published so out-of-closure callers can repaint');
 const setTrimBody = fnFull('setTrimFromPlayhead', src);
 ok(setTrimBody.length > 0, 'setTrimFromPlayhead body extracted');
-// v7.0.41: the clamp is no longer written inline in this function — the menu and
+// v7.0.42: the clamp is no longer written inline in this function — the menu and
 // the i/o hotkey both route through the shared clampTrimMark(). Pinning a literal
 // `te - 0.1` here would only re-assert the copy that used to live here, and would
 // have kept the menu (0.1s) and the hotkey (0.05s) disagreeing. The bounds
@@ -279,7 +279,7 @@ ok(/if \(cancelled\(\)\) return;/.test(renderBody),
 // ═══════════════════════════════════════════════════════════════════════
 // One place to edit per bump. Everything below compares against this,
 // never against a value read out of another version site.
-const EXPECT_VERSION = '7.0.41';
+const EXPECT_VERSION = '7.0.42';
 eq((src.match(/<title>Krafted v([\d.]+)<\/title>/) || [])[1], EXPECT_VERSION, 'title carries the version');
 eq((src.match(/var KRAFTED_VERSION = '([\d.]+)';/) || [])[1], EXPECT_VERSION, 'KRAFTED_VERSION is bumped');
 const swPath = path.resolve(__dirname, '../docs/sw.js');

@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.41</title>
+<title>Krafted v7.0.42</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4261,7 +4261,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.41';
+var KRAFTED_VERSION = '7.0.42';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -9194,7 +9194,21 @@ function trimHotkey(which) {
   const t = (hoverT != null) ? hoverT : (v.currentTime || 0);
   const val = clampTrimMark(it, which, t, v.duration);
   if (val == null) { try { toast('Video not ready yet'); } catch (e) {} return true; }
-  const moved = Math.abs(val - trimEdgeOf(it, which, v.duration)) > 0.001;
+  const currentEdge = trimEdgeOf(it, which, v.duration);
+  const moved = Math.abs(val - currentEdge) > 0.001;
+
+  // v7.0.42: detect when the playhead fallback would shrink the range.
+  // The timeupdate loop traps the playhead inside [trimStart, trimEnd], so
+  // pressing I when the playhead is right of IN can only move IN rightward
+  // (shrinking). The same for O left of OUT. The hover path does NOT have
+  // this problem — the seek bar spans [0, dur] so hovering before IN or
+  // after OUT gives an expanding value.
+  const ts = it.trimStart || 0;
+  const te = (it.trimEnd && it.trimEnd > 0) ? it.trimEnd : v.duration;
+  const isShrinkOnly = (hoverT === null && moved &&
+    ((which === 'in' && t > ts + 0.001) ||
+     (which === 'out' && t < te - 0.001)));
+
   if (moved) {
     try { pushUndo(); } catch (e) {}
     applyTrimMark(it, which, val);
@@ -9202,18 +9216,32 @@ function trimHotkey(which) {
     try { scheduleAutoSave(); } catch (e) {}
   }
   flashTrimHandle(it, which);
+  // Flash the OTHER handle too when shrinking from a trapped playhead,
+  // so the user sees both boundaries and remembers they're draggable.
+  if (isShrinkOnly) { flashTrimHandle(it, which === 'in' ? 'out' : 'in'); }
+
   const endT = (it.trimEnd && it.trimEnd > 0) ? it.trimEnd : v.duration;
   try {
     if (moved) {
       toast('Trim ' + which + ' ' + formatTime(val)
         + ' · segment ' + formatTime(Math.max(0, endT - (it.trimStart || 0)))
-        + (hoverT != null ? '  (at cursor)' : ''));
+        + (hoverT != null ? '  (at cursor)' : '')
+        + (isShrinkOnly
+          ? '  · hover the seek bar ' + (which === 'in' ? 'left' : 'right')
+            + ' of the handle and press '
+            + (which === 'in' ? 'I' : 'O') + ' to expand'
+          : ''));
     } else if (hoverT != null) {
       toast('Trim ' + which + ' stays at ' + formatTime(val) + ' — the cursor is already there.');
     } else {
+      var hasTrim = ((ts > 0.001) && (te < v.duration - 0.001));
       toast('Trim ' + which + ' stays at ' + formatTime(val)
-        + ' — move the playhead, or hover the timeline and press '
-        + (which === 'in' ? 'I' : 'O') + '.');
+        + (hasTrim
+          ? ' — hover the seek bar ' + (which === 'in' ? 'left' : 'right')
+            + ' of the handle and press '
+            + (which === 'in' ? 'I' : 'O') + ' to expand'
+          : ' — move the playhead, or hover the timeline and press '
+            + (which === 'in' ? 'I' : 'O') + '.'));
     }
   } catch (e) {}
   return true;
@@ -24698,7 +24726,7 @@ document.addEventListener('keydown', e => {
   //   i / I  ->  mark the trim IN    o / O  ->  mark the trim OUT
   // Round 39: the cursor no longer has to sit on the 4px seek bar — anywhere
   // on the selected clip's player counts as intent.
-  // v7.0.41: the mark itself moved into trimHotkey(), next to the rest of the
+  // v7.0.42: the mark itself moved into trimHotkey(), next to the rest of the
   // trim code, so the menu and the hotkey cannot drift apart again. What
   // stays here is only the gate: not typing, and the press was consumed.
   if ((e.key === 'i' || e.key === 'I' || e.key === 'o' || e.key === 'O')
