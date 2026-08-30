@@ -345,7 +345,7 @@ function buildViews() {
   };
   const doc = {
     getElementById: function (id) { return (id === 'views-panel' || id === 'views-list') ? el : null; },
-    // v7.0.46: a row being renamed is a real <input>, so the fake has to
+    // v7.0.47: a row being renamed is a real <input>, so the fake has to
     // accept what the panel does to one — setAttribute, focus, select. It was
     // the fake that was incomplete here, not the panel.
     createElement: function () {
@@ -519,17 +519,35 @@ function viewsTests() {
     ok(st._present !== null, 'stepping back off the first shot does not end the tape');
     eq(st._present.index, 0, 'stepping back off the first shot clamps to the first shot');
 
-    // Stepping forward off the last shot ends it.
-    st._present = { index: 2, timer: null };
+    // Stepping forward off the last shot. v7.0.47: a MANUAL tape HOLDS here.
+    // It used to end the tape, which cost the director their place for
+    // pressing "next" once too often — the user asked for a tape that waits.
+    // Auto-play still ends it, because a reel with nobody at the keyboard has
+    // to stop somewhere.
+    st._present = { index: 2, timer: null, auto: false };
     a.presentAdvance(1);
-    eq(st._present, null, 'stepping forward off the last shot ends the tape');
+    ok(st._present !== null, 'stepping forward off the last shot does not end a manual tape');
+    eq(st._present.index, 2, 'a manual tape holds on the last shot');
+
+    st._present = { index: 2, timer: null, auto: true };
+    a.presentAdvance(1);
+    eq(st._present, null, 'an auto tape ends off the last shot');
 
     // The advance timer is scheduled UP FRONT as flight + dwell. Arming it in
     // the flight's completion callback means a cancelled flight stalls the
     // tape forever — worse than a tape whose timing is 620ms loose.
-    st._present = { index: -1, timer: null };
+    // v7.0.47: the timer is armed only while auto-play is on. A manual tape
+    // arms nothing at all — that is the whole point of the change, and the
+    // assertion that used to sit here ("the timer is always armed") was
+    // pinning the behaviour the user rejected.
+    st._present = { index: -1, timer: null, auto: false };
     a.presentAdvance(1);
     eq(st._present.index, 0, 'the first advance lands on the first shot');
+    ok(a.sched.pendingTimerDelays().indexOf(EXPECT_PRESENT_TIMER) < 0,
+       'a manual tape arms no advance timer at all');
+
+    st._present = { index: -1, timer: null, auto: true };
+    a.presentAdvance(1);
     ok(a.sched.pendingTimerDelays().indexOf(EXPECT_PRESENT_TIMER) >= 0,
        'the advance timer is armed for flight + dwell (' + EXPECT_PRESENT_TIMER + 'ms)');
     a.stopPresent();
@@ -602,7 +620,7 @@ function viewsTests() {
     eq(count(src, 'data.views = []'), 1, 'the manifest reader consumes views');
 
     const rb = around('if (!append) state.views = [];', 0, 1500, 'restoreBoard');
-    // v7.0.46: the remap is now passed into the shared reader rather than
+    // v7.0.47: the remap is now passed into the shared reader rather than
     // spelled out here. That the remap actually runs is asserted behaviourally
     // in test_v7046; this is the call site it happens at.
     ok(rb.indexOf('deserializeView(vd, _remapId)') >= 0,
@@ -776,10 +794,10 @@ function versionTests() {
     ? path.resolve(process.env.KRAFTED_SW)
     : path.resolve(__dirname, '../docs/sw.js');
   const sw = fs.readFileSync(swPath, 'utf8');
-  ok(src.indexOf("var KRAFTED_VERSION = '7.0.46';") >= 0, 'KRAFTED_VERSION bumped');
-  ok(src.indexOf('<title>Krafted v7.0.46</title>') >= 0, 'title bumped');
-  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.46-'") >= 0, 'sw CACHE_NAME bumped');
-  ok(sw.indexOf("const APP_VERSION = '7.0.46';") >= 0, 'sw APP_VERSION bumped');
+  ok(src.indexOf("var KRAFTED_VERSION = '7.0.47';") >= 0, 'KRAFTED_VERSION bumped');
+  ok(src.indexOf('<title>Krafted v7.0.47</title>') >= 0, 'title bumped');
+  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.47-'") >= 0, 'sw CACHE_NAME bumped');
+  ok(sw.indexOf("const APP_VERSION = '7.0.47';") >= 0, 'sw APP_VERSION bumped');
 }
 
 (async function () {

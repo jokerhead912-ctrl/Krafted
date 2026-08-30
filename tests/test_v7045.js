@@ -1,4 +1,4 @@
-// v7.0.46 regression suite — a 0 KB save is impossible to report as success
+// v7.0.47 regression suite — a 0 KB save is impossible to report as success
 //
 //   "Sometimes when I save it's unstable and it writes a 0 KB file. First get
 //    rid of that. Then, if a save really does fail, make it raise an alarm and
@@ -42,7 +42,7 @@ const SWJS = process.env.KRAFTED_SW
 const src = fs.readFileSync(HTML, 'utf8');
 const sw = fs.readFileSync(SWJS, 'utf8');
 
-const EXPECT_VERSION = '7.0.46';
+const EXPECT_VERSION = '7.0.47';
 
 let pass = 0, fail = 0;
 function ok(cond, label) {

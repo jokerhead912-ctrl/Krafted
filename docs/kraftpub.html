@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.46</title>
+<title>Krafted v7.0.47</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2586,6 +2586,17 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #views-present-btn:hover { background:var(--btn-hover); border-color:var(--accent); }
 #views-panel.presenting #views-present-btn { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
 
+/* PRESENT HUD (v7.0.47)
+   Bottom-centre under the shot, hidden until the tape starts. Tabular
+   numerals so "3 / 12" does not jitter as the count changes mid-pitch. */
+#present-hud { position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(8px); display:none; align-items:center; gap:10px; padding:8px 14px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:999px; box-shadow:var(--shadow-medium); z-index:9999997; font-family:'Inter',sans-serif; opacity:0; transition:opacity 0.18s ease, transform 0.18s ease; }
+#present-hud.show { display:flex; opacity:1; transform:translateX(-50%) translateY(0); }
+#present-hud .present-btn { width:26px; height:26px; padding:0; border-radius:50%; border:1px solid var(--border); background:var(--input-bg); color:var(--text); font-size:13px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.12s; }
+#present-hud .present-btn:hover { background:var(--btn-hover); border-color:var(--accent); color:var(--text); }
+#present-count { font-size:11px; color:var(--text-subtle); font-variant-numeric:tabular-nums; flex-shrink:0; }
+#present-name { font-size:13px; font-weight:600; color:var(--text); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#present-hint { font-size:10.5px; color:var(--text-subtle); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-left:1px solid var(--border-subtle); padding-left:10px; }
+
 /* A/B COMPARE (v7.0.40, batch-5 proposal E)
    Three ways to put two images on top of each other. Deliberately NOT a
    second full-screen renderer: it is two <img> elements in a box and a
@@ -4047,8 +4058,22 @@ body.screen-share-mode #ss-fps {
     <div id="views-list"></div>
   </div>
   <div id="views-foot">
-    <button id="views-present-btn" onclick="startPresent()" title="Play the views in order (Shift+P)">▶ Present</button>
+    <button id="views-present-btn" onclick="startPresent()" title="Present the views — you advance it, Space or → for the next shot (Shift+P)">▶ Present</button>
   </div>
+</div>
+
+<!-- PRESENT HUD (v7.0.47)
+     Bottom-centre, so it sits under the shot instead of across it. Only
+     visible while the tape is running. The buttons use inline handlers like
+     the rest of the chrome — the app wires its panels that way throughout,
+     and a second wiring style would be one more thing to keep in step. -->
+<div id="present-hud">
+  <button id="present-prev" class="present-btn" onclick="presentAdvance(-1)" title="Previous shot (← / Page Up)">‹</button>
+  <button id="present-play" class="present-btn" onclick="presentToggleAuto()" title="Auto-play the tape (A)">▶</button>
+  <button id="present-next" class="present-btn" onclick="presentAdvance(1)" title="Next shot (Space / → / Page Down)">›</button>
+  <span id="present-count">1 / 1</span>
+  <span id="present-name">Shot</span>
+  <span id="present-hint"></span>
 </div>
 
 <!-- FREE CUT PANEL -->
@@ -4341,7 +4366,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.46';
+var KRAFTED_VERSION = '7.0.47';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7422,7 +7447,13 @@ function zoomToFit() {
 var VIEW_MAX_ZOOM = 1;        // never upscale — magnified pixels kill a pitch
 var VIEW_FIT_MARGIN = 64;     // breathing room, capped on small screens
 var VIEW_FLIGHT_MS = 620;     // camera move duration
-var PRESENT_DWELL_MS = 4000;  // how long a shot holds before advancing
+var PRESENT_DWELL_MS = 4000;  // auto-play only: how long a shot holds
+// v7.0.47: the tape is MANUAL by default. It used to advance on a fixed
+// 4.6-second clock no matter what the user was doing — including right
+// after they pressed "next" themselves, which simply restarted the same
+// clock. Presenting means talking about a shot for as long as it takes.
+// Auto-play survives as a mode you switch on, for a reel nobody narrates.
+var PRESENT_AUTO_DEFAULT = false;
 
 function _viewsList() { return Array.isArray(state.views) ? state.views : []; }
 
@@ -7793,13 +7824,45 @@ function startPresent() {
     try { toast('Save a view first — select items, then +'); } catch (e) {}
     return;
   }
-  state._present = { index: -1, timer: null };
+  // v7.0.47: auto starts OFF. See PRESENT_AUTO_DEFAULT.
+  state._present = { index: -1, timer: null, auto: PRESENT_AUTO_DEFAULT };
   // Capture phase so a board hotkey cannot swallow the tape controls.
   _presentKeyHandler = function (ev) {
     if (!state._present) return;
-    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); stopPresent(); return; }
-    if (ev.key === ' ' || ev.key === 'ArrowRight') { ev.preventDefault(); ev.stopPropagation(); presentAdvance(1); return; }
-    if (ev.key === 'ArrowLeft') { ev.preventDefault(); ev.stopPropagation(); presentAdvance(-1); }
+    // v7.0.47: never shadow the browser. Cmd/Ctrl+1 switches tab and Cmd+A
+    // selects all, and a pitch tool that eats those is worse than one that
+    // misses a keypress. Alt is left out too — on macOS the Option layer
+    // turns "1" into "¡", so ev.key is not even the character shown.
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    // v7.0.47: if a text field has the caret, every key belongs to it. The
+    // rename editor can still be open when a tape starts, and without this
+    // the tape eats the typing — Space advanced the shot instead of typing
+    // a space. Escape included: cancelling the rename is what was meant.
+    const ae = document.activeElement;
+    if (ae && (ae.contentEditable === 'true' || ae.tagName === 'INPUT' ||
+               ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
+    const k = ev.key;
+    if (k === 'Escape') { ev.preventDefault(); ev.stopPropagation(); stopPresent(); return; }
+    // Next. ArrowDown / PageDown / Enter are bound because that is what a
+    // physical presenter remote actually sends — this is a pitch tool, and a
+    // clicker in the hand is how a pitch is run. Binding only Space and the
+    // right arrow built a feature that needed a keyboard within arm's reach.
+    if (k === ' ' || k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' ||
+        k === 'Enter' || k === 'n' || k === 'N') {
+      ev.preventDefault(); ev.stopPropagation(); presentAdvance(1); return;
+    }
+    if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp' || k === 'p' || k === 'P') {
+      ev.preventDefault(); ev.stopPropagation(); presentAdvance(-1); return;
+    }
+    if (k === 'a' || k === 'A') { ev.preventDefault(); ev.stopPropagation(); presentToggleAuto(); return; }
+    if (k === 'Home') { ev.preventDefault(); ev.stopPropagation(); presentGoTo(0); return; }
+    if (k === 'End') { ev.preventDefault(); ev.stopPropagation(); presentGoTo(_viewsList().length - 1); return; }
+    // Bare digits jump to a shot, the way a slideshow remote numbers slides.
+    if (k.length === 1 && k >= '0' && k <= '9') {
+      ev.preventDefault(); ev.stopPropagation();
+      presentGoTo((k === '0' ? 10 : parseInt(k, 10)) - 1);
+      return;
+    }
   };
   document.addEventListener('keydown', _presentKeyHandler, true);
   // Grabbing the board means "I am taking over" — stop flying around under
@@ -7808,6 +7871,10 @@ function startPresent() {
   setTimeout(function () {
     if (!state._present) return;
     _presentUserHandler = function (ev) {
+      // v7.0.47: the HUD's own buttons must not read as the user grabbing the
+      // board, or the first click on "next" would end the tape it advances.
+      const hud = document.getElementById('present-hud');
+      if (hud && ev.target && hud.contains(ev.target)) return;
       const panel = document.getElementById('views-panel');
       if (panel && ev.target && panel.contains(ev.target)) return;
       stopPresent();
@@ -7817,6 +7884,13 @@ function startPresent() {
   }, 0);
   renderViewsPanel();
   presentAdvance(1);
+  // Say how to drive it. A tape that holds forever with no visible control
+  // reads as a hung app, and the previous build taught everyone that it
+  // advances by itself — nobody would press anything.
+  try {
+    toast(list.length + (list.length === 1 ? ' shot — ' : ' shots — ') +
+          'Space or → for the next one, Esc to stop');
+  } catch (e) {}
 }
 
 function stopPresent() {
@@ -7829,6 +7903,7 @@ function stopPresent() {
     _presentUserHandler = null;
   }
   renderViewsPanel();
+  renderPresentHud();
   try { toast('Presentation ended'); } catch (e) {}
 }
 
@@ -7836,6 +7911,16 @@ function stopPresent() {
 // flight's completion callback. If the flight is cancelled (the user grabbed
 // the board mid-move) the callback never runs, and a tape that can silently
 // stall halfway through a pitch is worse than one whose timing is 600ms loose.
+// v7.0.47: that timer now exists ONLY while auto-play is on. It used to be
+// scheduled unconditionally, so pressing "next" by hand started a 4.6-second
+// clock that then took the shot away mid-sentence.
+function presentScheduleNext() {
+  const p = state._present;
+  if (!p || !p.auto) return;
+  if (p.timer) { clearTimeout(p.timer); p.timer = null; }
+  p.timer = setTimeout(function () { presentAdvance(1); }, VIEW_FLIGHT_MS + PRESENT_DWELL_MS);
+}
+
 function presentAdvance(dir) {
   const p = state._present;
   if (!p) return;
@@ -7845,17 +7930,91 @@ function presentAdvance(dir) {
   let i;
   if (p.index < 0) i = (dir > 0) ? 0 : list.length - 1;
   else i = p.index + dir;
-  // Only the forward direction ends the tape; stepping backwards off the
-  // first shot clamps, because "went back too far" should not end the pitch.
   if (i >= list.length) {
-    stopPresent();
-    try { toast('End of presentation'); } catch (e) {}
-    return;
+    // Auto-play ends the tape; a manual tape holds on the last shot. Ending
+    // a pitch because someone pressed "next" once too often throws away the
+    // control the manual tape exists to give, and costs them their place.
+    if (p.auto) {
+      stopPresent();
+      try { toast('End of presentation'); } catch (e) {}
+      return;
+    }
+    i = list.length - 1;
+    if (i === p.index) { renderPresentHud(); return; }
   }
+  // Stepping backwards off the first shot clamps: "went back too far" should
+  // not end the pitch either way.
   if (i < 0) i = 0;
   p.index = i;
   gotoView(i);
-  p.timer = setTimeout(function () { presentAdvance(1); }, VIEW_FLIGHT_MS + PRESENT_DWELL_MS);
+  renderPresentHud();
+  if (p.auto) presentScheduleNext();
+}
+
+// v7.0.47 — auto-play is opt-in, not the default. Switching it on starts the
+// clock from now; switching it off leaves the tape exactly where it is, so
+// "I want to talk about this one" never costs the user their place.
+function presentToggleAuto(on) {
+  const p = state._present;
+  if (!p) return;
+  p.auto = (on === undefined) ? !p.auto : !!on;
+  if (p.auto) presentScheduleNext();
+  else if (p.timer) { clearTimeout(p.timer); p.timer = null; }
+  renderPresentHud();
+  try { toast(p.auto ? 'Auto-play on' : 'Auto-play off — you are driving'); } catch (e) {}
+}
+
+// Jump straight to a shot: Home / End / the number keys.
+function presentGoTo(i) {
+  const p = state._present;
+  if (!p) return;
+  const list = _viewsList();
+  if (!list.length) { stopPresent(); return; }
+  if (i < 0) i = 0;
+  if (i > list.length - 1) i = list.length - 1;
+  if (p.timer) { clearTimeout(p.timer); p.timer = null; }
+  p.index = i;
+  gotoView(i);
+  renderPresentHud();
+  if (p.auto) presentScheduleNext();
+}
+
+// v7.0.47 — the HUD. Presenting from a board 100000px across, the two things
+// you cannot see are "where am I in the running order" and "what comes next",
+// so a pitch used to be paced from memory. The nodes are built once in the
+// markup and updated here by textContent only: a shot name is user text and
+// it must never be able to become markup.
+function renderPresentHud() {
+  const hud = document.getElementById('present-hud');
+  if (!hud) return;
+  const p = state._present;
+  if (!p) { hud.classList.remove('show'); return; }
+  const list = _viewsList();
+  const cur = list[p.index];
+  const nmEl = document.getElementById('present-name');
+  const ctEl = document.getElementById('present-count');
+  const hintEl = document.getElementById('present-hint');
+  const playEl = document.getElementById('present-play');
+  if (nmEl) {
+    // An unnamed shot still needs a label, and "Shot 4" beats a blank gap
+    // where the audience expects the name of what they are looking at.
+    nmEl.textContent = (cur && cur.name) || ('Shot ' + (p.index + 1));
+    nmEl.style.color = viewColor(cur || {}) || '';
+  }
+  if (ctEl) ctEl.textContent = (p.index + 1) + ' / ' + list.length;
+  if (playEl) {
+    playEl.textContent = p.auto ? '❚❚' : '▶';
+    playEl.title = p.auto ? 'Stop auto-play (A) — take back control'
+                          : 'Auto-play the tape (A)';
+  }
+  if (hintEl) {
+    const nx = list[p.index + 1];
+    hintEl.textContent = p.auto
+      ? ('Auto — ' + (PRESENT_DWELL_MS / 1000) + 's a shot · A to stop')
+      : (nx ? ('Next: ' + ((nx && nx.name) || ('Shot ' + (p.index + 2))) + ' · Space to advance')
+            : 'Last shot · Esc to stop');
+  }
+  hud.classList.add('show');
 }
 
 // ── The panel ──────────────────────────────────────────────
@@ -22028,14 +22187,16 @@ function _guideHTML() {
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">' +
       '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
         '<tr><td style="padding:4px 0;color:#888;"><b>P</b></td><td style="padding:4px 0;">Add what is selected to Present — the name field opens ready to type</td></tr>' +
-        '<tr><td style="padding:4px 0;color:#888;"><b>Shift+P</b></td><td style="padding:4px 0;">Play the views in order</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;"><b>Shift+P</b></td><td style="padding:4px 0;">Start Present — you advance it yourself, it never runs away</td></tr>' +
         '<tr><td style="padding:4px 0;color:#888;">Alt+1 … Alt+0</td><td style="padding:4px 0;">Fly to the 1st–10th view</td></tr>' +
         '<tr><td style="padding:4px 0;color:#888;">Click a view</td><td style="padding:4px 0;">Fly there · double-click or <b>F2</b> to rename</td></tr>' +
         '<tr><td style="padding:4px 0;color:#888;">A name ending in a number</td><td style="padding:4px 0;">The next shot offers the one after it — "CU 1" then "CU 2"</td></tr>' +
       '</table>' +
       '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
-        '<tr><td style="padding:4px 0;color:#888;">Space / →</td><td style="padding:4px 0;">Next view while presenting</td></tr>' +
-        '<tr><td style="padding:4px 0;color:#888;">←</td><td style="padding:4px 0;">Previous view</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;"><b>Space</b> / → / Page Down</td><td style="padding:4px 0;">Next shot — a presenter clicker works</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">← / Page Up / <b>P</b></td><td style="padding:4px 0;">Previous shot</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;"><b>A</b></td><td style="padding:4px 0;">Auto-play on a 4s clock — press again to drive it yourself</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">1 … 0</td><td style="padding:4px 0;">Jump to the 1st–10th shot · <b>Home</b> / <b>End</b> for first and last</td></tr>' +
         '<tr><td style="padding:4px 0;color:#888;">Esc</td><td style="padding:4px 0;">Stop presenting</td></tr>' +
         '<tr><td style="padding:4px 0;color:#888;">↻ on a row</td><td style="padding:4px 0;">Re-aim that view at what is selected now</td></tr>' +
         '<tr><td style="padding:4px 0;color:#888;">Click the number</td><td style="padding:4px 0;">Colour-code a view so it is findable at a glance</td></tr>' +
