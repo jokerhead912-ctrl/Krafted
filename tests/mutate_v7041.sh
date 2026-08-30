@@ -51,10 +51,10 @@ mutate "cursor time is never read — every press falls back to the playhead" \
   return timeIn(item.el.querySelector('.media-trim-mini'), null);"
 
 mutate "the no-op press reports success instead of saying how to move it" \
-  "      toast('Trim ' + which + ' stays at ' + formatTime(val)
-        + ' — move the playhead, or hover the timeline and press '
+  "      toast('Trim ' + which + ' stays at ' + formatTime(plan.val)
+        + ' — move the playhead (or the cursor) where you want it and press '
         + (which === 'in' ? 'I' : 'O') + '.');" \
-  "      toast('Trim ' + which + ' ' + formatTime(val));"
+  "      toast('Trim ' + which + ' ' + formatTime(plan.val));"
 
 mutate "a place with no time axis is treated as time 0" \
   "  if (!node) return null;" \
@@ -86,29 +86,31 @@ mutate "an unset out edge reads as 0 instead of the whole clip" \
   "  return (typeof it.trimEnd === 'number' && it.trimEnd > 0) ? it.trimEnd : dur;" \
   "  return (typeof it.trimEnd === 'number') ? it.trimEnd : dur;"
 
-mutate "the playhead is left outside the segment it will loop" \
-  "    if (v && (v.currentTime || 0) < val) { try { v.currentTime = val; } catch (e) {} }" \
-  "    void 0;"
+# v7.0.47: REMOVED - v7.0.44 reversed this behaviour on purpose. The old code
+# dragged the playhead onto a new in point, which parked it exactly on the mark,
+# so the very next press of the other key read that same time back and produced
+# a segment one minimum-gap long with both handles glued together. Premiere
+# leaves the playhead alone: moving a mark must not move your place in the clip.
+# The NEW rule is pinned from the other side by mutate_v7044.sh's
+# "THE PLAYHEAD DRAG IS BACK", which puts the drag into applyTrimMark and
+# expects the suite to go red. This one asserts the opposite and could never
+# be caught again.
 
 # ── undo discipline ───────────────────────────────────────────────────────
 
 mutate "the hotkey stops taking an undo step" \
   "  if (moved) {
     try { pushUndo(); } catch (e) {}
-    applyTrimMark(it, which, val);" \
+    applyTrimPlan(it, plan, v.duration);" \
   "  if (moved) {
     void 0;
-    applyTrimMark(it, which, val);"
+    applyTrimPlan(it, plan, v.duration);"
 
 mutate "an undo step is pushed even when nothing moves" \
-  "  const moved = Math.abs(val - trimEdgeOf(it, which, v.duration)) > 0.001;
-  if (moved) {
-    try { pushUndo(); } catch (e) {}
-    applyTrimMark(it, which, val);" \
-  "  const moved = Math.abs(val - trimEdgeOf(it, which, v.duration)) > 0.001;
-  try { pushUndo(); } catch (e) {}
-  if (moved) {
-    applyTrimMark(it, which, val);"
+  "  const currentEdge = trimEdgeOf(it, which, v.duration);
+  const moved = plan.clearsOpp || Math.abs(plan.val - currentEdge) > 0.001;" \
+  "  const currentEdge = trimEdgeOf(it, which, v.duration);
+  const moved = true;"
 
 mutate "the menu pushes an undo step even when nothing moves" \
   "  if (!plan.length) {
@@ -131,17 +133,20 @@ mutate "the menu pushes an undo step even when nothing moves" \
 # ── one implementation, not two ───────────────────────────────────────────
 
 mutate "the hotkey stops repainting through refreshTrimUIFor" \
-  "    applyTrimMark(it, which, val);
+  "    applyTrimPlan(it, plan, v.duration);
     refreshTrimUIFor([it]);" \
-  "    applyTrimMark(it, which, val);"
+  "    applyTrimPlan(it, plan, v.duration);"
 
 mutate "the menu starts reading the cursor (the two paths diverge)" \
   "    const t = Math.max(0, Math.min(v.duration, v.currentTime || 0));" \
   "    const t = (trimTimeAtPointer(it) != null) ? trimTimeAtPointer(it) : Math.max(0, Math.min(v.duration, v.currentTime || 0));"
 
-mutate "the dispatcher stops delegating to trimHotkey" \
-  "    if (!typingIO && trimHotkey((e.key === 'i' || e.key === 'I') ? 'in' : 'out')) {" \
-  "    if (false) {"
+# v7.0.47: REMOVED as a duplicate. v7.0.44 rewrote the dispatcher as an
+# `if (!typingIO) {` guard wrapping
+#   var _ioHit = e.shiftKey ? clearTrimMark(_ioWhich) : trimHotkey(_ioWhich);
+# and mutate_v7044.sh pins that exact line twice: "Shift+I / Shift+O stop
+# reaching clearTrimMark" and "the bare keys clear instead of marking". The
+# second one IS this mutation under a spelling that still matches.
 
 mutate "the palette entries go dead again" \
   "    case 'media-trim-i':           setTrimFromPlayhead('in');  return true;" \
