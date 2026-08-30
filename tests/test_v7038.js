@@ -142,8 +142,17 @@ ok(setTrimBody.length > 0, 'setTrimFromPlayhead body extracted');
 // `te - 0.1` here would only re-assert the copy that used to live here, and would
 // have kept the menu (0.1s) and the hotkey (0.05s) disagreeing. The bounds
 // themselves are now executed for real in test_v7041.
-ok(/clampTrimMark\(/.test(setTrimBody),
-   'the menu clamps through the shared clampTrimMark, not a private copy');
+//
+// v7.0.44: one more hop. Both doors now go through planTrimMark(), and
+// planTrimMark() is what asks clampTrimMark() — because a request can also
+// be a CONFLICT (a mark landing across the opposite one), which is not a
+// number to clamp at all. Pinning /clampTrimMark\(/ here would pin the
+// pre-.44 shape and go red every time the planning layer is touched; the
+// behaviour it was guarding is executed for real in test_v7044.
+ok(/planTrimMark\(/.test(setTrimBody),
+   'the menu plans through the shared planTrimMark, not a private copy');
+ok(/clampTrimMark\(/.test(fnFull('planTrimMark', src)),
+   'planTrimMark is the layer that asks clampTrimMark, so the menu still gets the shared bounds');
 ok(!/Math\.min\(t, te -[\s\S]{0,12}\)/.test(setTrimBody),
    'no hand-rolled in-point clamp survives in the menu path');
 ok(!/Math\.max\(t, ts \+[\s\S]{0,12}\)/.test(setTrimBody),
@@ -279,7 +288,7 @@ ok(/if \(cancelled\(\)\) return;/.test(renderBody),
 // ═══════════════════════════════════════════════════════════════════════
 // One place to edit per bump. Everything below compares against this,
 // never against a value read out of another version site.
-const EXPECT_VERSION = '7.0.43';
+const EXPECT_VERSION = '7.0.44';
 eq((src.match(/<title>Krafted v([\d.]+)<\/title>/) || [])[1], EXPECT_VERSION, 'title carries the version');
 eq((src.match(/var KRAFTED_VERSION = '([\d.]+)';/) || [])[1], EXPECT_VERSION, 'KRAFTED_VERSION is bumped');
 const swPath = path.resolve(__dirname, '../docs/sw.js');

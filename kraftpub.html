@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.43</title>
+<title>Krafted v7.0.44</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -390,7 +390,7 @@ body[data-dpi-scale] .item.has-media .media-controls-sep {
 .item.has-media:hover .media-controls,
 .item.has-media.selected .media-controls { display: flex; }
 .item.has-media .media-trim-reset {
-  font-size: 9px; padding: 2px 5px; background: rgba(255,255,255,0.05);
+  font-size: 12px; line-height: 1; padding: 3px 7px; background: rgba(255,255,255,0.05);
   border: 1px solid var(--border); color: var(--text-dim); border-radius: 3px;
   cursor: pointer; font-family: 'Inter', sans-serif; flex-shrink: 0;
   transition: background 0.15s, color 0.15s;
@@ -4261,7 +4261,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.43';
+var KRAFTED_VERSION = '7.0.44';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6767,6 +6767,10 @@ const DEFAULT_SHORTCUTS = [
   // typing in a board text box. Reachable from the palette and the menu.
   { id: 'media-contact-sheet', category: 'Media', label: 'Contact Sheet…',       keys: [] },
   { id: 'media-trim-clear',    category: 'Media', label: 'Clear Trim',           keys: [] },
+  // v7.0.44: Premiere's Marker > Clear In / Clear Out. Palette-only —
+  // see the note above about the registry matching on ev.key.
+  { id: 'media-trim-clear-in',  category: 'Media', label: 'Clear In Point',      keys: [] },
+  { id: 'media-trim-clear-out', category: 'Media', label: 'Clear Out Point',     keys: [] },
   // v7.0.40: named views. All palette-only on purpose: this registry matches
   // on ev.key, and on macOS Option+<letter> emits the option layer (Alt+S is
   // 'ß'), so an Alt+letter binding here silently never fires on a Mac. The one
@@ -9108,16 +9112,70 @@ function clampTrimMark(it, which, t, dur) {
 }
 
 function applyTrimMark(it, which, val) {
-  if (which === 'in') {
-    it.trimStart = val;
-    // The playhead must not sit before the in point it is about to loop from.
-    // The timeupdate loop would drag it back on the next tick anyway, so do
-    // it now and let the picture agree with the mark the user just made.
-    const v = it.video;
-    if (v && (v.currentTime || 0) < val) { try { v.currentTime = val; } catch (e) {} }
-  } else {
-    it.trimEnd = val;
+  // v7.0.44: this used to drag the playhead forward onto a new in point, on
+  // the grounds that the loop would do it on the next tick anyway. Two
+  // things were wrong. The loop no longer touches a paused playhead (see
+  // setupVideoTrim), and moving it parked the playhead EXACTLY on the mark
+  // — so the very next press of the other key read that same time back and
+  // produced a segment one minimum-gap long, with both handles glued
+  // together. Premiere leaves the playhead alone: moving a mark must not
+  // move your place in the clip.
+  if (which === 'in') { it.trimStart = val; } else { it.trimEnd = val; }
+}
+
+// ── Conflicting marks (v7.0.44) ─────────────────────────────────────────
+// A request that lands on or across the OPPOSITE mark is not a number to
+// clamp — it is a contradiction, and clamping it is precisely what glued
+// the two handles together. Asking for an out point at 0:08 when the in
+// point is 0:10 does not mean "0:08"; it means the 0:10 in point is no
+// longer the one you want. Clamping answers "0:08" with "0:10.05" and
+// leaves the user staring at a collapsed segment with nowhere to go.
+//
+// Premiere's answer is to refuse, and make you run Marker > Clear In or
+// Clear Out by hand. Krafted's answer is to clear the stale mark for you
+// and say so out loud: the range reopens, and the next press sets the
+// boundary you actually meant. One undo step restores both.
+//
+// The three clear commands Premiere puts in its Marker menu exist here too
+// — context menu, and Shift+I / Shift+O. The only difference is that a
+// contradictory press runs the clear for you instead of doing nothing.
+function markIsSet(it, which, dur) {
+  // "Unset" and "sitting on the clip edge" are the same state in this data
+  // model (see trimEdgeOf), so an unset mark must not be treated as
+  // something to clear — otherwise clearing it is a no-op that still
+  // consumes the press.
+  if (which === 'in') return (typeof it.trimStart === 'number' && it.trimStart > 0.001);
+  return (typeof it.trimEnd === 'number' && it.trimEnd > 0 &&
+          it.trimEnd < dur - 0.001);
+}
+
+function planTrimMark(it, which, t, dur) {
+  if (!isFinite(dur) || dur <= 0) return null;
+  const raw = Math.max(0, Math.min(dur, (typeof t === 'number' && isFinite(t)) ? t : 0));
+  const ts = trimEdgeOf(it, 'in', dur);
+  const te = trimEdgeOf(it, 'out', dur);
+  const conflict = (which === 'in') ? (raw >= te - TRIM_MIN_GAP)
+                                    : (raw <= ts + TRIM_MIN_GAP);
+  if (conflict && markIsSet(it, which === 'in' ? 'out' : 'in', dur)) {
+    return { which: which, val: raw, clearsOpp: true,
+             oppWas: (which === 'in') ? te : ts };
   }
+  const val = clampTrimMark(it, which, raw, dur);
+  if (val == null) return null;
+  return { which: which, val: val, clearsOpp: false, oppWas: null };
+}
+
+function applyTrimPlan(it, plan, dur) {
+  if (!plan) return;
+  if (plan.clearsOpp) {
+    // Clearing sets the far edge to the clip boundary, which is how
+    // "unset" is spelled everywhere else in the app — trimEdgeOf, and the
+    // loadedmetadata handler in setupVideoTrim. No third state to sync.
+    if (plan.which === 'in') { it.trimStart = plan.val; it.trimEnd = dur; }
+    else { it.trimStart = 0; it.trimEnd = plan.val; }
+    return;
+  }
+  applyTrimMark(it, plan.which, plan.val);
 }
 
 // Brief flash on the matching handle — the only confirmation that a press
@@ -9143,9 +9201,11 @@ function setTrimFromPlayhead(which) {
     const v = it.video;
     if (!v || !isFinite(v.duration) || v.duration <= 0) { skipped++; return; }
     const t = Math.max(0, Math.min(v.duration, v.currentTime || 0));
-    const val = clampTrimMark(it, which, t, v.duration);
-    if (val == null) { skipped++; return; }
-    if (Math.abs(val - trimEdgeOf(it, which, v.duration)) > 0.001) plan.push({ it: it, val: val });
+    const p = planTrimMark(it, which, t, v.duration);
+    if (!p) { skipped++; return; }
+    if (p.clearsOpp || Math.abs(p.val - trimEdgeOf(it, which, v.duration)) > 0.001) {
+      plan.push({ it: it, p: p, dur: v.duration });
+    }
   });
   if (!plan.length) {
     try {
@@ -9155,17 +9215,46 @@ function setTrimFromPlayhead(which) {
     return;
   }
   try { pushUndo(); } catch (e) {}
-  plan.forEach(function (p) { applyTrimMark(p.it, which, p.val); });
-  refreshTrimUIFor(plan.map(function (p) { return p.it; }));
+  plan.forEach(function (e) { applyTrimPlan(e.it, e.p, e.dur); });
+  refreshTrimUIFor(plan.map(function (e) { return e.it; }));
   try { scheduleAutoSave(); } catch (e) {}
   const it0 = plan[0].it;
   const v0 = it0.video;
   const end0 = (it0.trimEnd && it0.trimEnd > 0) ? it0.trimEnd : (v0 ? v0.duration : 0);
   try {
-    toast((which === 'in' ? 'Trim in ' : 'Trim out ') + formatTime(plan[0].val)
-      + ' · segment ' + formatTime(Math.max(0, end0 - (it0.trimStart || 0)))
-      + (plan.length > 1 ? ' · ' + plan.length + ' clips' : ''));
+    if (plan[0].p.clearsOpp) {
+      toast((which === 'in' ? 'Trim in ' : 'Trim out ') + formatTime(plan[0].p.val)
+        + ' · ' + (which === 'in' ? 'out' : 'in') + ' ' + formatTime(plan[0].p.oppWas)
+        + ' cleared' + (plan.length > 1 ? ' · ' + plan.length + ' clips' : ''));
+    } else {
+      toast((which === 'in' ? 'Trim in ' : 'Trim out ') + formatTime(plan[0].p.val)
+        + ' · segment ' + formatTime(Math.max(0, end0 - (it0.trimStart || 0)))
+        + (plan.length > 1 ? ' · ' + plan.length + ' clips' : ''));
+    }
   } catch (e) {}
+}
+
+// v7.0.44: clear ONE mark. Premiere calls these Marker > Clear In and
+// Marker > Clear Out, and having only "clear both" meant that undoing half
+// a trim threw away the half that was right. Returns false when there was
+// nothing to act on, so the key dispatcher can leave the keystroke alone
+// instead of swallowing it.
+function clearTrimMark(which) {
+  const vids = selectedVideoItems();
+  if (!vids.length) { try { toast('Select a video first'); } catch (e) {} return false; }
+  try { pushUndo(); } catch (e) {}
+  vids.forEach(function (it) {
+    const dur = (it.video && isFinite(it.video.duration)) ? it.video.duration : 0;
+    if (which === 'in') { it.trimStart = 0; }
+    else { it.trimEnd = dur; }
+  });
+  refreshTrimUIFor(vids);
+  try { scheduleAutoSave(); } catch (e) {}
+  try {
+    toast((which === 'in' ? 'In' : 'Out') + ' point cleared · '
+      + (which === 'in' ? 'clip starts at 0:00' : 'clip runs to the end'));
+  } catch (e) {}
+  return true;
 }
 
 function clearTrimSelected() {
@@ -9213,6 +9302,14 @@ function clearTrimSelected() {
 // So the mark still follows the cursor when there is a cursor on a
 // timeline — but a press that would change nothing now says so, and says
 // how to change it.
+//
+// v7.0.44: the shrink-only guidance added in v7.0.42 is gone, because the
+// thing it was working around is fixed. It told the user to hover the seek
+// bar to expand, since that was the only way to reach a time the trap had
+// made unreachable. Nowhere is unreachable now — a paused playhead goes
+// anywhere — so the plain thing works and the special case does not need
+// explaining. What replaces it is the conflict rule above: a press that
+// lands on the other mark clears it instead of collapsing onto it.
 
 // Last known pointer position, or null when the pointer has never moved
 // (state.mouse starts at 0,0). A null here means "pure keyboard press".
@@ -9272,56 +9369,38 @@ function trimHotkey(which) {
   try { if (!v.paused) v.pause(); } catch (e) {}
   const hoverT = trimTimeAtPointer(it);
   const t = (hoverT != null) ? hoverT : (v.currentTime || 0);
-  const val = clampTrimMark(it, which, t, v.duration);
-  if (val == null) { try { toast('Video not ready yet'); } catch (e) {} return true; }
+  const plan = planTrimMark(it, which, t, v.duration);
+  if (!plan) { try { toast('Video not ready yet'); } catch (e) {} return true; }
   const currentEdge = trimEdgeOf(it, which, v.duration);
-  const moved = Math.abs(val - currentEdge) > 0.001;
-
-  // v7.0.42: detect when the playhead fallback would shrink the range.
-  // The timeupdate loop traps the playhead inside [trimStart, trimEnd], so
-  // pressing I when the playhead is right of IN can only move IN rightward
-  // (shrinking). The same for O left of OUT. The hover path does NOT have
-  // this problem — the seek bar spans [0, dur] so hovering before IN or
-  // after OUT gives an expanding value.
-  const ts = it.trimStart || 0;
-  const te = (it.trimEnd && it.trimEnd > 0) ? it.trimEnd : v.duration;
-  const isShrinkOnly = (hoverT === null && moved &&
-    ((which === 'in' && t > ts + 0.001) ||
-     (which === 'out' && t < te - 0.001)));
+  const moved = plan.clearsOpp || Math.abs(plan.val - currentEdge) > 0.001;
 
   if (moved) {
     try { pushUndo(); } catch (e) {}
-    applyTrimMark(it, which, val);
+    applyTrimPlan(it, plan, v.duration);
     refreshTrimUIFor([it]);
     try { scheduleAutoSave(); } catch (e) {}
   }
   flashTrimHandle(it, which);
-  // Flash the OTHER handle too when shrinking from a trapped playhead,
-  // so the user sees both boundaries and remembers they're draggable.
-  if (isShrinkOnly) { flashTrimHandle(it, which === 'in' ? 'out' : 'in'); }
+  // A cleared mark moves the OTHER handle too. Flash it, or the change
+  // reads as the segment simply refusing to move.
+  if (plan.clearsOpp) { flashTrimHandle(it, which === 'in' ? 'out' : 'in'); }
 
   const endT = (it.trimEnd && it.trimEnd > 0) ? it.trimEnd : v.duration;
   try {
-    if (moved) {
-      toast('Trim ' + which + ' ' + formatTime(val)
+    if (plan.clearsOpp) {
+      toast('Trim ' + which + ' ' + formatTime(plan.val)
+        + ' · ' + (which === 'in' ? 'out' : 'in') + ' ' + formatTime(plan.oppWas)
+        + ' cleared — press ' + (which === 'in' ? 'O' : 'I') + ' to set a new one');
+    } else if (moved) {
+      toast('Trim ' + which + ' ' + formatTime(plan.val)
         + ' · segment ' + formatTime(Math.max(0, endT - (it.trimStart || 0)))
-        + (hoverT != null ? '  (at cursor)' : '')
-        + (isShrinkOnly
-          ? '  · hover the seek bar ' + (which === 'in' ? 'left' : 'right')
-            + ' of the handle and press '
-            + (which === 'in' ? 'I' : 'O') + ' to expand'
-          : ''));
+        + (hoverT != null ? '  (at cursor)' : ''));
     } else if (hoverT != null) {
-      toast('Trim ' + which + ' stays at ' + formatTime(val) + ' — the cursor is already there.');
+      toast('Trim ' + which + ' stays at ' + formatTime(plan.val) + ' — the cursor is already there.');
     } else {
-      var hasTrim = ((ts > 0.001) && (te < v.duration - 0.001));
-      toast('Trim ' + which + ' stays at ' + formatTime(val)
-        + (hasTrim
-          ? ' — hover the seek bar ' + (which === 'in' ? 'left' : 'right')
-            + ' of the handle and press '
-            + (which === 'in' ? 'I' : 'O') + ' to expand'
-          : ' — move the playhead, or hover the timeline and press '
-            + (which === 'in' ? 'I' : 'O') + '.'));
+      toast('Trim ' + which + ' stays at ' + formatTime(plan.val)
+        + ' — move the playhead (or the cursor) where you want it and press '
+        + (which === 'in' ? 'I' : 'O') + '.');
     }
   } catch (e) {}
   return true;
@@ -13619,7 +13698,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   const trimResetBtn = document.createElement('button');
   trimResetBtn.className = 'media-trim-reset';
   trimResetBtn.textContent = '↺';
-  trimResetBtn.title = 'Reset trim';
+  trimResetBtn.title = 'Reset trim — play the whole clip (Shift+I / Shift+O clear one end)';
   trimRow.appendChild(trimStartInfo);
   trimRow.appendChild(trimMini);
   trimRow.appendChild(trimEndInfo);
@@ -15492,30 +15571,38 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     mediaEl.muted = false;
     refreshInPlayerTrimUI();
   });
-  // Drag a trim handle
-  function dragHandle(handleEl, whichSide) {
+  // v7.0.44: ONE trim-drag implementation, shared by the mini bar and the
+  // main seek bar. The two used to be near-identical copies, each
+  // hard-coding its own minimum gap (0.1s) while clampTrimMark — the one
+  // the keyboard and the menu go through — used TRIM_MIN_GAP (0.05s). So
+  // dragging and pressing disagreed about where a handle could stop, and
+  // only the keyboard path ever got the conflict rule. Both strips now ask
+  // planTrimMark(), so a drag that crosses the opposite handle clears it
+  // instead of piling up against it and staying there.
+  //
+  // One undo step per gesture, and the autosave fires on mouseup: the
+  // main-bar copy used to scheduleAutoSave() on every mousemove, i.e. a
+  // full board serialisation per pointer event.
+  function buildTrimDrag(handleEl, which, trackEl) {
     handleEl.addEventListener('mousedown', function(ev) {
       ev.stopPropagation(); ev.preventDefault();
       if (!isFinite(mediaEl.duration) || mediaEl.duration <= 0) return;
       var dur = mediaEl.duration;
       var _itm = _getItem();
       if (!_itm) return;
-      var ts = (typeof _itm.trimStart === 'number') ? _itm.trimStart : 0;
-      var te = (typeof _itm.trimEnd === 'number') ? _itm.trimEnd : dur;
+      try { pushUndo(); } catch (e) {}
       var onMove = function(e) {
-        var rect = trimMini.getBoundingClientRect();
-        var pct = (e.clientX - rect.left) / rect.width;
-        pct = Math.max(0, Math.min(1, pct));
-        var newTime = pct * dur;
-        if (whichSide === 'start') {
-          // Keep at least 0.1s of clip
-          ts = Math.max(0, Math.min(te - 0.1, newTime));
-        } else {
-          // Keep at least 0.1s of clip
-          te = Math.min(dur, Math.max(ts + 0.1, newTime));
-        }
-        _itm.trimStart = ts;
-        _itm.trimEnd = te;
+        // Resolved per move: the main-bar handles are parented into the
+        // seek track after this builder runs.
+        var track = trackEl || handleEl.parentElement;
+        if (!track) return;
+        var rect = track.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        var pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        var plan = planTrimMark(_itm, which, pct * dur, dur);
+        if (!plan) return;
+        applyTrimPlan(_itm, plan, dur);
+        // Refreshes the mini bar, the main-bar overlays and both labels.
         refreshInPlayerTrimUI();
         // Also keep the right-panel timeline in sync so Save/Export use the right bounds
         if (typeof updateVideoTimeline === 'function') updateVideoTimeline();
@@ -15523,69 +15610,38 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       var onUp = function() {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-  }
-  dragHandle(trimStartHandle, 'start');
-  dragHandle(trimEndHandle, 'end');
-
-  // Round 17: drag handlers for the MAIN-seek-bar trim handles.
-  // Same data model (item.trimStart / item.trimEnd) and same
-  // 0.1s minimum clip as the mini bar — just on the primary
-  // timeline so the user doesn't need a second row. The handlers
-  // stop event propagation so the seek bar's seek-to-x logic
-  // (which fires on mousedown of the bar) doesn't also fire when
-  // the user grabs a handle.
-  function dragMainHandle(handleEl, whichSide) {
-    handleEl.addEventListener('mousedown', function(ev) {
-      ev.stopPropagation(); ev.preventDefault();
-      if (!isFinite(mediaEl.duration) || mediaEl.duration <= 0) return;
-      var dur = mediaEl.duration;
-      var _itm = _getItem();
-      if (!_itm) return;
-      var ts = (typeof _itm.trimStart === 'number') ? _itm.trimStart : 0;
-      var te = (typeof _itm.trimEnd === 'number') ? _itm.trimEnd : dur;
-      var track = handleEl.parentElement;  // the .media-seek-track
-      var onMove = function(e) {
-        var rect = track.getBoundingClientRect();
-        var pct = (e.clientX - rect.left) / rect.width;
-        pct = Math.max(0, Math.min(1, pct));
-        var newTime = pct * dur;
-        if (whichSide === 'start') {
-          ts = Math.max(0, Math.min(te - 0.1, newTime));
-        } else {
-          te = Math.min(dur, Math.max(ts + 0.1, newTime));
-        }
-        _itm.trimStart = ts;
-        _itm.trimEnd = te;
-        // Refresh the main-bar UI (overlays + handles) AND the
-        // mini-bar UI (region + labels) so both stay in sync.
-        refreshInPlayerTrimUI();
-        if (typeof updateVideoTimeline === 'function') updateVideoTimeline();
         try { scheduleAutoSave(); } catch (e) {}
       };
-      var onUp = function() {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-      };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
   }
-  dragMainHandle(mainTrimStartHandle, 'start');
-  dragMainHandle(mainTrimEndHandle, 'end');
+  buildTrimDrag(trimStartHandle, 'in', trimMini);
+  buildTrimDrag(trimEndHandle, 'out', trimMini);
+  // Round 17: the MAIN-seek-bar handles get the same builder against their
+  // own track, so the primary timeline needs no second row. trackEl is
+  // null on purpose — see the per-move resolution above. Stopping
+  // propagation on mousedown is what keeps the seek bar's seek-to-x logic
+  // from also firing when the user grabs a handle.
+  buildTrimDrag(mainTrimStartHandle, 'in', null);
+  buildTrimDrag(mainTrimEndHandle, 'out', null);
   // Reset trim button
   trimResetBtn.addEventListener('click', function(ev) {
     ev.stopPropagation(); ev.preventDefault();
     if (!isFinite(mediaEl.duration) || mediaEl.duration <= 0) return;
     var _itm = _getItem();
     if (!_itm) return;
+    // v7.0.44: the reset changed the data without an undo step and without
+    // an autosave — so the one control whose entire job is "undo my trim
+    // experiments" was itself un-undoable, and a reload silently brought
+    // the old trim back. It also reset BOTH ends; the Shift+I / Shift+O
+    // commands next to it now cover the half-and-half case.
+    try { pushUndo(); } catch (e) {}
     _itm.trimStart = 0;
     _itm.trimEnd = mediaEl.duration;
     refreshInPlayerTrimUI();
     if (typeof updateVideoTimeline === 'function') updateVideoTimeline();
+    try { scheduleAutoSave(); } catch (e) {}
   });
   // Toggle trim info labels (start/end) between 0:00 and f 1234 — same as the
   // main time labels. Click either trim info to flip the mode for this video.
@@ -16168,7 +16224,24 @@ function setupVideoTrim(item) {
   // capture moves past trimEnd, so the capture's `seeked` never matches its
   // target and every frame falls through to the timeout — an export of a
   // trimmed clip used to take minutes and then emit the stored snapshots.
+  // v7.0.44: the handler below is a PLAYBACK loop, not a cage for the
+  // playhead — and the difference is the bug. It used to run on every
+  // timeupdate, including the ones a user seek raises, so parking the
+  // playhead outside [trimStart, trimEnd] was impossible: the handler
+  // snapped it straight back to trimStart. In and out could therefore only
+  // ever move inward. Every edit shrank the range, and the only way back
+  // out was Clear Trim and start again — which is exactly what was
+  // reported. In Premiere, In and Out mark the range you intend to use;
+  // they do not stop you from looking at the rest of the clip. So:
+  //   • PLAYING  → the loop still holds the clip inside the trimmed
+  //                segment. That is the board's behaviour and it stays.
+  //   • PAUSED   → the playhead is the user choosing a new range. Leave it
+  //                exactly where they parked it. Pressing play re-seeds
+  //                from trimStart in the `play` handler below.
   v.addEventListener('timeupdate', () => {
+    // Only update playhead UI if this item is currently selected
+    if (state.selected.has(item.id)) updateVideoPlayhead(item);
+    if (v.paused) return;
     if (v._kraftedSuppressTrimLoop) return;
     const ts = item.trimStart || 0;
     const te = item.trimEnd || v.duration;
@@ -16178,8 +16251,6 @@ function setupVideoTrim(item) {
     if (v.currentTime < ts - 0.05) {
       v.currentTime = ts;
     }
-    // Only update playhead UI if this item is currently selected
-    if (state.selected.has(item.id)) updateVideoPlayhead(item);
   });
   // Seek to trimStart when playing
   v.addEventListener('play', () => {
@@ -21384,6 +21455,8 @@ function showCtx(x, y) {
     if (hasVideos) {
       html += `<div class="ctx-item" onclick="setTrimFromPlayhead('in');hideCtx()" title="Start looping here — the clip will only play from this point">✂ Set Trim In <kbd>I</kbd></div>`;
       html += `<div class="ctx-item" onclick="setTrimFromPlayhead('out');hideCtx()" title="Stop here and jump back to the trim in point">✂ Set Trim Out <kbd>O</kbd></div>`;
+      html += `<div class="ctx-item" onclick="clearTrimMark('in');hideCtx()" title="Drop the in point — the clip starts at 0:00 again">⊣ Clear In Point <kbd>⇧I</kbd></div>`;
+      html += `<div class="ctx-item" onclick="clearTrimMark('out');hideCtx()" title="Drop the out point — the clip runs to the end again">⊢ Clear Out Point <kbd>⇧O</kbd></div>`;
       html += `<div class="ctx-item" onclick="clearTrimSelected();hideCtx()" title="Play the whole clip again">↺ Clear Trim</div>`;
       html += `<div class="ctx-item" onclick="openContactSheetDialog();hideCtx()" title="Build a filmstrip of stills from this clip">🎞 Contact Sheet…</div>`;
     }
@@ -24413,6 +24486,8 @@ function _dispatchShortcut(e) {
     case 'media-trim-i':           setTrimFromPlayhead('in');  return true;
     case 'media-trim-o':           setTrimFromPlayhead('out'); return true;
     case 'media-trim-clear':       clearTrimSelected(); return true;
+    case 'media-trim-clear-in':    clearTrimMark('in');  return true;
+    case 'media-trim-clear-out':   clearTrimMark('out'); return true;
     case 'media-contact-sheet':    openContactSheetDialog(); return true;
     // v7.0.40: named views
     case 'view-save':              saveViewFromSelection(); return true;
@@ -24809,14 +24884,25 @@ document.addEventListener('keydown', e => {
   // v7.0.42: the mark itself moved into trimHotkey(), next to the rest of the
   // trim code, so the menu and the hotkey cannot drift apart again. What
   // stays here is only the gate: not typing, and the press was consumed.
-  if ((e.key === 'i' || e.key === 'I' || e.key === 'o' || e.key === 'O')
+  // v7.0.44: Shift+I / Shift+O clear ONE mark. Premiere reaches these
+  // through Marker > Clear In and Marker > Clear Out; here there was no
+  // keyboard route at all, so undoing half a trim meant hunting for the
+  // reset glyph. Lowercasing covers both the 'i' and the Shift+'I' form.
+  var _ioKey = (e.key || '').toLowerCase();
+  if ((_ioKey === 'i' || _ioKey === 'o')
       && !e.ctrlKey && !e.metaKey && !e.altKey) {
     var aeIO = document.activeElement;
     var typingIO = !!(aeIO && (aeIO.tagName === 'INPUT' || aeIO.tagName === 'TEXTAREA' ||
                  (aeIO.getAttribute && aeIO.getAttribute('contenteditable') === 'true')));
-    if (!typingIO && trimHotkey((e.key === 'i' || e.key === 'I') ? 'in' : 'out')) {
-      e.preventDefault();
-      e.stopPropagation();
+    if (!typingIO) {
+      var _ioWhich = (_ioKey === 'i') ? 'in' : 'out';
+      // clearTrimMark returns false with no video selected, so the
+      // keystroke is left alone rather than swallowed next to a text box.
+      var _ioHit = e.shiftKey ? clearTrimMark(_ioWhich) : trimHotkey(_ioWhich);
+      if (_ioHit) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
     }
   }
 

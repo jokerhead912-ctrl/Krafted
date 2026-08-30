@@ -259,16 +259,23 @@ eq(api.TRIM_MIN_GAP, EXPECT_TRIM_MIN_GAP, 'TRIM_MIN_GAP equals the spec');
 // 4. applyTrimMark
 // ═══════════════════════════════════════════════════════════════════════
 {
+  // v7.0.44: marking no longer moves the playhead. It used to drag it
+  // forward onto a new in point, which parked the playhead exactly on the
+  // mark — so the very next press of the other key read that same time back
+  // and, once clamped, produced a segment one minimum-gap long. That is the
+  // "two handles stuck together" report. Premiere leaves the playhead alone:
+  // a mark is not a seek.
   const v = { currentTime: 2, duration: EXPECT_DUR };
   const it = { video: v, trimStart: 0, trimEnd: 0 };
   api.applyTrimMark(it, 'in', 30);
   eq(it.trimStart, 30, 'in: trimStart is written');
-  eq(v.currentTime, 30, 'in: the playhead is dragged forward to the new in point');
+  eq(v.currentTime, 2, 'in: the playhead is NOT dragged onto the new in point');
   eq(it.trimEnd, 0, 'in: trimEnd is untouched');
 
   const v2 = { currentTime: 50, duration: EXPECT_DUR };
   const it2 = { video: v2, trimStart: 0, trimEnd: 0 };
   api.applyTrimMark(it2, 'in', 30);
+  eq(it2.trimStart, 30, 'in: the mark still lands when the playhead is elsewhere');
   eq(v2.currentTime, 50, 'in: a playhead already inside the segment is left alone');
 
   const v3 = { currentTime: 50, duration: EXPECT_DUR };
@@ -351,7 +358,7 @@ eq(api.TRIM_MIN_GAP, EXPECT_TRIM_MIN_GAP, 'TRIM_MIN_GAP equals the spec');
   let handled = api.trimHotkey('in');
   ok(handled === true, 'press 1 on the seek bar is consumed');
   near(it.trimStart, 50, 1e-9, 'press 1: the mark lands at the cursor, not at the playhead');
-  eq(it.video.currentTime, 50, 'press 1: the playhead follows the new in point');
+  eq(it.video.currentTime, 10, 'press 1: marking from the cursor leaves the playhead where it was');
   eq(calls.undo, 1, 'press 1: one undo step for one moved mark');
   eq(calls.save, 1, 'press 1: the change is scheduled for autosave');
   ok(calls.toasts.length === 1 && calls.toasts[0].indexOf('at cursor') >= 0,
@@ -374,11 +381,19 @@ eq(api.TRIM_MIN_GAP, EXPECT_TRIM_MIN_GAP, 'TRIM_MIN_GAP equals the spec');
   const afterFirst = it2.trimStart;
   near(afterFirst, 50, 1e-9, '7b setup: first press on the seek bar marks at the cursor');
 
+  // v7.0.44: the no-op case is now "the playhead is already on the mark".
+  // It used to be reachable by accident, because marking dragged the
+  // playhead onto the mark and the next press read it straight back — which
+  // is exactly how "press i, then press o" collapsed the segment. Marking
+  // no longer moves the playhead, so park it by hand here: that is what the
+  // user does anyway, and with the cage lifted (see v7.0.44 in
+  // setupVideoTrim) they can park it anywhere, including outside the range.
   resetCalls();
-  pointAt(P2.wrap, 150, 150);               // cursor on the picture, playhead at 50
+  it2.video.currentTime = afterFirst;
+  pointAt(P2.wrap, 150, 150);               // cursor on the picture, playhead on the mark
   handled = api.trimHotkey('in');
   ok(handled === true, 'a press with the cursor on the picture is still a trim press');
-  eq(it2.trimStart, afterFirst, 'the mark does not move — the picture has no time axis');
+  eq(it2.trimStart, afterFirst, 'the mark does not move — the playhead is already there');
   eq(calls.undo, 0, 'a no-op press does NOT push an undo step');
   eq(calls.save, 0, 'a no-op press does not schedule an autosave');
   ok(calls.toasts.length === 1, 'a no-op press still reports back (it is not silent)');
@@ -493,8 +508,17 @@ eq(api.TRIM_MIN_GAP, EXPECT_TRIM_MIN_GAP, 'TRIM_MIN_GAP equals the spec');
   const hot = codeOnly(fnFull('trimHotkey', src));
   const menu = codeOnly(fnFull('setTrimFromPlayhead', src));
 
-  ok(hot.indexOf('applyTrimMark(') >= 0, 'the hotkey writes through the shared applyTrimMark');
-  ok(hot.indexOf('clampTrimMark(') >= 0, 'the hotkey bounds through the shared clampTrimMark');
+  // v7.0.44: the hotkey asks planTrimMark()/applyTrimPlan(), because a
+  // request can be a CONFLICT (a mark landing across the opposite one) and
+  // not a number to clamp at all. Assert the delegation layer rather than
+  // the hop the hotkey happens to make today — otherwise every change to
+  // the planner trips an assertion about the hotkey.
+  ok(hot.indexOf('applyTrimPlan(') >= 0, 'the hotkey writes through the shared applyTrimPlan');
+  ok(hot.indexOf('planTrimMark(') >= 0, 'the hotkey plans through the shared planTrimMark');
+  ok(codeOnly(fnFull('applyTrimPlan', src)).indexOf('applyTrimMark(') >= 0,
+     'applyTrimPlan is the layer that calls applyTrimMark');
+  ok(codeOnly(fnFull('planTrimMark', src)).indexOf('clampTrimMark(') >= 0,
+     'planTrimMark is the layer that calls clampTrimMark');
   ok(!/\.trimStart\s*=/.test(hot), 'the hotkey never assigns trimStart directly');
   ok(!/\.trimEnd\s*=/.test(hot), 'the hotkey never assigns trimEnd directly');
   ok(!/\.trimStart\s*=/.test(menu), 'the menu never assigns trimStart directly');
@@ -547,56 +571,55 @@ eq(api.TRIM_MIN_GAP, EXPECT_TRIM_MIN_GAP, 'TRIM_MIN_GAP equals the spec');
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 9b. Shrink-only detection (v7.0.42)
+// 9b. The v7.0.42 shrink-only workaround is retired (v7.0.44)
 // ═══════════════════════════════════════════════════════════════════════
+// v7.0.42 detected a playhead trapped inside [in, out] and told the user to
+// hover the seek bar to escape. It was treating a symptom: the timeupdate
+// loop snapped the playhead back into the range on EVERY seek, so no time
+// outside it was reachable and in/out could only move inward. v7.0.44 fixes
+// the cause — the loop only runs while the clip is playing — so the
+// workaround must not come back. Re-introducing it would mean shipping a
+// toast that tells users to work around a trap that no longer exists.
 {
   const th = fnFull('trimHotkey', src);
-  ok(th.length > 0, 'trimHotkey body extracted for shrink-only analysis');
+  ok(th.length > 0, 'trimHotkey body extracted');
+  ok(codeOnly(th).indexOf('isShrinkOnly') < 0,
+     'the shrink-only flag is gone — the trap it detected is fixed');
+  ok(codeOnly(th).indexOf('hover the seek bar') < 0,
+     'the "hover the seek bar to expand" guidance went with it');
+  ok(codeOnly(th).indexOf('to expand') < 0, 'no expand hint survives');
 
-  // The detection reads trimStart/trimEnd to know where the edges are.
-  ok(th.indexOf('trimStart') >= 0, 'shrink check reads trimStart');
-  ok(th.indexOf('trimEnd') >= 0, 'shrink check reads trimEnd');
+  // Conflict handling is what replaced clamping-on-collision.
+  ok(codeOnly(th).indexOf('plan.clearsOpp') >= 0,
+     'the hotkey handles a conflicting mark instead of clamping onto it');
 
-  // It only fires when there is no hover time (playhead fallback).
-  ok(th.indexOf('hoverT === null') >= 0, 'shrink-only is gated on no hover');
+  // The trap itself: the playback loop must leave a paused playhead alone.
+  const svt = fnFull('setupVideoTrim', src);
+  ok(svt.length > 0, 'setupVideoTrim body extracted');
+  const tu = svt.slice(svt.indexOf("addEventListener('timeupdate'"));
+  ok(tu.indexOf("addEventListener('timeupdate'") === 0, 'the timeupdate handler found');
+  ok(codeOnly(tu).indexOf('v.paused') >= 0, 'the loop checks whether the clip is playing');
 
-  // I pressed right of IN → shrink. O pressed left of OUT → shrink.
-  ok(th.indexOf("which === 'in' && t > ts") >= 0,
-     'detects I-press right of IN as shrink-only');
-  ok(th.indexOf("which === 'out' && t < te") >= 0,
-     'detects O-press left of OUT as shrink-only');
+  // Order matters: the UI refresh has to happen BEFORE the guard returns,
+  // or pausing mid-range stops the playhead from being painted at all.
+  ok(tu.indexOf('updateVideoPlayhead') < tu.indexOf('v.paused'),
+     'the playhead UI still refreshes on a paused clip');
 
-  // When shrinking from trapped playhead, flash the OTHER handle too so the
-  // user sees both boundaries are draggable.
-  ok(th.indexOf("flashTrimHandle(it, which === 'in' ? 'out' : 'in')") >= 0,
-     'flashes the opposite handle on shrink-only');
-
-  // The toast mentions hovering to expand.
-  ok(th.indexOf('hover the seek bar') >= 0,
-     'toast tells the user to hover the seek bar to expand');
-  ok(th.indexOf('to expand') >= 0, 'toast uses the word "expand"');
-
-  // The non-shrink case (hover or playhead at the expanding side) does NOT
-  // get the expand hint.
-  // We verify this structurally: the expand hint is inside the `isShrinkOnly`
-  // branch, not in the moved-or-not branches.
-  // The toast for a normal move (hover) says "(at cursor)" with no expand text.
-  // The toast for a hover no-op says "cursor is already there".
-  // Only the playhead-fallback paths mention "hover the seek bar ... to expand".
+  // Conflict behaviour itself is executed for real in test_v7044.
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 // 10. Version
 // ═══════════════════════════════════════════════════════════════════════
 {
-  ok(src.indexOf("var KRAFTED_VERSION = '7.0.43';") >= 0, 'KRAFTED_VERSION bumped');
-  ok(src.indexOf('<title>Krafted v7.0.43</title>') >= 0, 'title bumped');
+  ok(src.indexOf("var KRAFTED_VERSION = '7.0.44';") >= 0, 'KRAFTED_VERSION bumped');
+  ok(src.indexOf('<title>Krafted v7.0.44</title>') >= 0, 'title bumped');
   const swPath = process.env.KRAFTED_SW
     ? path.resolve(process.env.KRAFTED_SW)
     : path.resolve(__dirname, '../docs/sw.js');
   const sw = fs.readFileSync(swPath, 'utf8');
-  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.43-'") >= 0, 'sw CACHE_NAME bumped');
-  ok(sw.indexOf("const APP_VERSION = '7.0.43';") >= 0, 'sw APP_VERSION bumped');
+  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.44-'") >= 0, 'sw CACHE_NAME bumped');
+  ok(sw.indexOf("const APP_VERSION = '7.0.44';") >= 0, 'sw APP_VERSION bumped');
 }
 
 console.log('');
