@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.42</title>
+<title>Krafted v7.0.43</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4261,7 +4261,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.42';
+var KRAFTED_VERSION = '7.0.43';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4744,8 +4744,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   'use strict';
 
   var DB_NAME = 'KraftedDB';
-  var DB_VERSION = 1;
+  var DB_VERSION = 2;
   var STORE_NAME = 'KraftedStore';
+  var MEDIA_STORE_NAME = 'KraftedMediaStore';
   var SCHEMA_KEY = 'krafted_schema_version';
   var SCHEMA_VERSION = 1;
   var MAX_BACKUPS = 5;
@@ -4772,6 +4773,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         if (!d.objectStoreNames.contains(STORE_NAME)) {
           d.createObjectStore(STORE_NAME, { keyPath: 'key' });
           console.log('[KraftedStorage] Object store created');
+        }
+        // v7.0.43: dedicated blob store for autosave media persistence.
+        // Keyed by item ID (string or number), value is a Blob.
+        if (!d.objectStoreNames.contains(MEDIA_STORE_NAME)) {
+          d.createObjectStore(MEDIA_STORE_NAME, { keyPath: 'key' });
+          console.log('[KraftedStorage] Media blob store created');
         }
       };
       req.onsuccess = function(e) {
@@ -5146,6 +5153,66 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     checkQuota();
   }
 
+  // ── Media blob persistence (v7.0.43) ───────────────────────
+  // Autosave needs to persist actual media blobs so that Restore can
+  // re-create object URLs after a page reload. The string KV store cannot
+  // hold binary data, so blobs go into a dedicated IndexedDB object store.
+  function saveMediaBlob(key, blob) {
+    return new Promise(function(resolve, reject) {
+      if (dbError || !dbReady || !db) { reject(new Error('DB not ready')); return; }
+      try {
+        var tx = db.transaction(MEDIA_STORE_NAME, 'readwrite');
+        var store = tx.objectStore(MEDIA_STORE_NAME);
+        var req = store.put({ key: String(key), value: blob, saved: Date.now() });
+        req.onsuccess = function() { resolve(true); };
+        req.onerror = function(e) { reject(e.target.error); };
+      } catch(e) { reject(e); }
+    });
+  }
+
+  function getMediaBlob(key) {
+    return new Promise(function(resolve, reject) {
+      if (dbError || !dbReady || !db) { resolve(null); return; }
+      try {
+        var tx = db.transaction(MEDIA_STORE_NAME, 'readonly');
+        var store = tx.objectStore(MEDIA_STORE_NAME);
+        var req = store.get(String(key));
+        req.onsuccess = function() { resolve(req.result ? req.result.value : null); };
+        req.onerror = function(e) { resolve(null); };
+      } catch(e) { resolve(null); }
+    });
+  }
+
+  function removeMediaBlob(key) {
+    return new Promise(function(resolve) {
+      if (dbError || !dbReady || !db) { resolve(false); return; }
+      try {
+        var tx = db.transaction(MEDIA_STORE_NAME, 'readwrite');
+        var store = tx.objectStore(MEDIA_STORE_NAME);
+        var req = store.delete(String(key));
+        req.onsuccess = function() { resolve(true); };
+        req.onerror = function() { resolve(false); };
+      } catch(e) { resolve(false); }
+    });
+  }
+
+  // Every key currently holding a blob. persistAutosaveMedia() diffs this
+  // against the live item ids to garbage-collect blobs whose item was
+  // deleted — nothing else in the app knows an item id has gone away, so
+  // without this the media store only ever grows.
+  function listMediaKeys() {
+    return new Promise(function(resolve) {
+      if (dbError || !dbReady || !db) { resolve([]); return; }
+      try {
+        var tx = db.transaction(MEDIA_STORE_NAME, 'readonly');
+        var store = tx.objectStore(MEDIA_STORE_NAME);
+        var req = store.getAllKeys();
+        req.onsuccess = function() { resolve(req.result || []); };
+        req.onerror = function() { resolve([]); };
+      } catch(e) { resolve([]); }
+    });
+  }
+
   // ── Expose global API ──────────────────────────────────────
   window.KraftedStorage = {
     getItem: getItem,
@@ -5158,7 +5225,20 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     onSaveComplete: onSaveComplete,
     init: init,
     isReady: function() { return dbReady && !dbError; },
-    getDBError: function() { return dbError; }
+    getDBError: function() { return dbError; },
+    // v7.0.43: media blob persistence for autosave/restore
+    saveMediaBlob: saveMediaBlob,
+    getMediaBlob: getMediaBlob,
+    removeMediaBlob: removeMediaBlob,
+    listMediaKeys: listMediaKeys,
+    MEDIA_STORE_NAME: MEDIA_STORE_NAME,
+    // v7.0.43: resolves once IndexedDB is open (or has definitively failed)
+    // and never rejects. Restore MUST await this — reading before openDB()
+    // settles resolves every lookup to null and silently restores empty
+    // shells, which is the exact bug this version exists to fix.
+    ready: function() {
+      return openDB().catch(function() { return null; });
+    }
   };
 
   // Auto-init on load
@@ -35374,11 +35454,17 @@ async function loadBoardFile(event) {
   }
 }
 
+// v7.0.43: sentinel written in place of a blob: URL. The bytes themselves
+// are mirrored into IndexedDB by persistAutosaveMedia().
+const AUTOSAVE_MEDIA_PREFIX = 'autosave-media:';
+
 // Backwards-compatible sync serialize (used by autosave)
-// v5.5: Strip ALL media src (blob: and data:) from auto-save to prevent
-// localStorage QuotaExceededError. A single 2MB image as base64 is ~2.7MB
-// in JSON — 2 images already exceed the 5MB localStorage limit. Auto-save
-// only needs layout metadata; media is reloaded from original files/kpak.
+// v5.5 stripped ALL media src (blob: and data:) to dodge the localStorage
+// QuotaExceededError, on the assumption that "media is reloaded from
+// original files/kpak". Nothing on the autosave path ever did that reload,
+// so every restored item came back as an empty shell — the bug fixed here.
+// The JSON still carries layout only; the bytes now go to IndexedDB and
+// come back through the sentinel above.
 function serializeBoard() {
   return JSON.stringify({
     // v6.8.26: marker — texts store w/h/size in WORLD coords. Old files
@@ -35390,8 +35476,12 @@ function serializeBoard() {
         id: i.id,
         x: i.x, y: i.y, w: i.w, h: i.h, rot: i.rot, opacity: i.opacity,
         flipH: i.flipH, flipV: i.flipV, locked: i.locked, z: i.z,
-        // v5.5: Strip blob/data URLs — they're ephemeral and huge
-        src: (i.src && !i.src.startsWith('blob:') && !i.src.startsWith('data:')) ? i.src : '',
+        // v7.0.43: a blob: URL is a pointer into the document that minted
+        // it, so it is already dead by the time Restore is clicked. Write a
+        // sentinel; persistAutosaveMedia() puts the real bytes in IndexedDB
+        // and rehydrateAutosaveMedia() swaps it back for a fresh object URL.
+        // A data: URL is already inline in this JSON — leave it alone.
+        src: (i.src && i.src.indexOf('blob:') === 0) ? (AUTOSAVE_MEDIA_PREFIX + i.id) : (i.src || ''),
         natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, audioName: i.audioName || '',
         filename: i.filename || '',
         cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH,
@@ -35415,13 +35505,11 @@ function serializeBoard() {
           d.drawW = i.drawW; d.drawH = i.drawH;
         }
       }
-      // v5.5: Flag ephemeral media so restoreBoard knows src was stripped
-      if ((i.isVideo || i.isGif || i.isAudio) && i.src && (i.src.startsWith('blob:') || i.src.startsWith('data:'))) {
-        d.src = ''; d.videoLost = true;
-      }
-      if (!i.isVideo && !i.isGif && !i.isAudio && i.src && (i.src.startsWith('blob:') || i.src.startsWith('data:'))) {
-        d.src = ''; d.imageLost = true;
-      }
+      // v7.0.43: v5.5 used to clear d.src here and set videoLost/imageLost,
+      // which is precisely why Restore came back as empty shells. The
+      // sentinel written above now survives untouched. Nothing WRITES those
+      // flags any more; restoreBoard() still READS them so autosaves saved
+      // by older versions keep their old grey-placeholder behaviour.
       return d;
     }),
     texts: state.texts.map(t => {
@@ -36313,6 +36401,11 @@ function scheduleAutoSave() {
       }
       localStorage.setItem('krafted_autosave', val);
       if (window.KraftedStorage) window.KraftedStorage.setItem('krafted_autosave', val).catch(function(){});
+      // v7.0.43: the payload above is layout plus `autosave-media:<id>`
+      // sentinels. Mirror the actual bytes so Restore has something to
+      // point them at. Fire-and-forget — a failed mirror must never block
+      // or roll back the layout save that already succeeded.
+      persistAutosaveMedia();
     } catch(e) {
       console.warn('[AUTOSAVE] failed:', e.name, e.message);
       if (e.name === 'QuotaExceededError' && !state._autosaveQuotaWarned) {
@@ -36322,6 +36415,147 @@ function scheduleAutoSave() {
     }
   }, 5000);
 }
+// ── Autosave media persistence (v7.0.43) ───────────────────────────
+// A blob: URL is a handle into the document that created it. The moment the
+// tab is reloaded that handle is dangling, so an autosave that stores the
+// URL restores nothing — the item keeps its frame and loses its content.
+// IndexedDB stores Blobs natively and is not bound by the ~5MB localStorage
+// cap that forced v5.5 to clear src in the first place, so that is where
+// the bytes go. The JSON keeps a sentinel pointing at them.
+const AUTOSAVE_MAX_BLOB_BYTES = 512 * 1024 * 1024;
+
+// Items whose media has to be mirrored: only blob: URLs die on reload.
+function autosaveMediaItems() {
+  return (state.items || []).filter(function(it) {
+    return it && it.src && typeof it.src === 'string' && it.src.indexOf('blob:') === 0;
+  });
+}
+
+// Bytes gone — private-mode flush, storage evicted, or an autosave written
+// before v7.0.43 that never had them. restoreBoard() draws its usual grey
+// placeholder for these rather than a broken <img>/<video>.
+function markAutosaveMediaLost(d) {
+  if (!d || typeof d.src !== 'string') return;
+  if (d.src.indexOf(AUTOSAVE_MEDIA_PREFIX) !== 0) return;
+  d.src = '';
+  if (d.isVideo || d.isAudio) { d.videoLost = true; } else { d.imageLost = true; }
+}
+
+// Copy every blob: item's bytes into IndexedDB, then drop blobs whose item
+// no longer exists. Called (fire-and-forget) from scheduleAutoSave().
+function persistAutosaveMedia() {
+  var KS = window.KraftedStorage;
+  if (!KS || !KS.saveMediaBlob || !KS.isReady()) return Promise.resolve();
+
+  var live = {};
+  var work = autosaveMediaItems().map(function(it) {
+    live[String(it.id)] = true;
+    // A blob: URL is minted once per import and never changes, so a
+    // successful save for this exact URL means the bytes are already on
+    // disk. Re-reading a 2GB clip on every autosave would stall the tab.
+    if (it._asMediaSavedFor === it.src) return Promise.resolve();
+    // Pre-flight on the size we already know: fetch().blob() would buffer
+    // the whole file in RAM before we could refuse it.
+    if (it._fileSize && it._fileSize > AUTOSAVE_MAX_BLOB_BYTES) {
+      console.warn('[AUTOSAVE] media id=' + it.id + ' too large to mirror (' + formatBytes(it._fileSize) + ')');
+      return Promise.resolve();
+    }
+    return fetch(it.src)
+      .then(function(r) { return r.blob(); })
+      .then(function(b) {
+        if (b.size > AUTOSAVE_MAX_BLOB_BYTES) {
+          console.warn('[AUTOSAVE] media id=' + it.id + ' too large to mirror (' + formatBytes(b.size) + ')');
+          return;
+        }
+        return KS.saveMediaBlob(it.id, b).then(function() {
+          it._asMediaSavedFor = it.src;
+        });
+      })
+      .catch(function(e) {
+        console.warn('[AUTOSAVE] media mirror failed for id=' + it.id + ':', e && e.message);
+      });
+  });
+
+  return Promise.all(work).then(function() {
+    if (!KS.listMediaKeys) return;
+    // Diff the store against live ids. Deleting an item leaves its blob
+    // orphaned forever if nothing prunes it.
+    return KS.listMediaKeys().then(function(keys) {
+      return Promise.all((keys || []).filter(function(k) {
+        return !live[String(k)];
+      }).map(function(k) {
+        return KS.removeMediaBlob(k);
+      }));
+    });
+  }).catch(function(e) {
+    console.warn('[AUTOSAVE] media mirror pass failed:', e && e.message);
+  });
+}
+
+// Swap every sentinel back for a live object URL. restoreBoard() is
+// synchronous and reads d.src in a dozen places, so the async IndexedDB
+// reads have to happen out here in the loader, not inside the restore.
+function rehydrateAutosaveMedia(data) {
+  var KS = window.KraftedStorage;
+  var items = (data && data.items) || [];
+  var total = 0;
+  items.forEach(function(d) {
+    if (d && typeof d.src === 'string' && d.src.indexOf(AUTOSAVE_MEDIA_PREFIX) === 0) total++;
+  });
+  if (!KS || !KS.getMediaBlob) {
+    items.forEach(markAutosaveMediaLost);
+    return Promise.resolve({ lost: total });
+  }
+  return KS.ready().then(function() {
+    return Promise.all(items.map(function(d) {
+      if (!d || typeof d.src !== 'string' || d.src.indexOf(AUTOSAVE_MEDIA_PREFIX) !== 0) {
+        return Promise.resolve(false);
+      }
+      return KS.getMediaBlob(d.src.slice(AUTOSAVE_MEDIA_PREFIX.length))
+        .then(function(blob) {
+          if (blob) { d.src = URL.createObjectURL(blob); return true; }
+          markAutosaveMediaLost(d);
+          return false;
+        })
+        .catch(function() { markAutosaveMediaLost(d); return false; });
+    }));
+  }).then(function(hits) {
+    return { lost: total - hits.filter(Boolean).length };
+  }).catch(function(e) {
+    console.warn('[AUTOSAVE] media rehydrate failed:', e && e.message);
+    items.forEach(markAutosaveMediaLost);
+    return { lost: total };
+  });
+}
+
+// How much of this autosave can actually come back. Drives both the welcome
+// screen's offer and the restore toast, so the number under the button is
+// the number the user will really get.
+function probeAutosaveMedia(data) {
+  var KS = window.KraftedStorage;
+  var ids = [];
+  ((data && data.items) || []).forEach(function(d) {
+    if (d && typeof d.src === 'string' && d.src.indexOf(AUTOSAVE_MEDIA_PREFIX) === 0) {
+      ids.push(d.src.slice(AUTOSAVE_MEDIA_PREFIX.length));
+    }
+  });
+  if (!KS || !KS.getMediaBlob) {
+    return Promise.resolve({ sentinels: ids.length, found: 0, lost: ids.length });
+  }
+  return KS.ready().then(function() {
+    return Promise.all(ids.map(function(id) {
+      return KS.getMediaBlob(id)
+        .then(function(b) { return !!b; })
+        .catch(function() { return false; });
+    }));
+  }).then(function(hits) {
+    var found = hits.filter(Boolean).length;
+    return { sentinels: ids.length, found: found, lost: ids.length - found };
+  }).catch(function() {
+    return { sentinels: ids.length, found: 0, lost: ids.length };
+  });
+}
+
 // v7.0.37 — P2. scheduleAutoSave() has been WRITING 'krafted_autosave' all
 // along; this function was the only reader and v6.5.0 turned it into `return`.
 // The result was a silent lie: the app keeps autosaving, so a crash looks
@@ -36345,32 +36579,68 @@ function discardAutoSave() {
     if (window.KraftedStorage) window.KraftedStorage.removeItem(AUTOSAVE_KEY).catch(function(){});
   } catch (e) {}
 }
+// v7.0.43: async — the media bytes live in IndexedDB and have to be
+// re-attached before the synchronous restoreBoard() runs.
 function loadAutoSave() {
   const data = readAutoSave();
   if (!data) return;
   const n = (data.items || []).length;
   if (n === 0) { discardAutoSave(); return; }
-  try {
+  const btn = document.querySelector('#welcome-autosave button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Restoring…'; }
+  rehydrateAutosaveMedia(data).then(function(res) {
     restoreBoard(data, false);
     hideWelcome();
-    toast('Restored autosave · ' + n + ' items — save it to a .kpak now');
-  } catch (e) {
+    // v7.0.37 deliberately left the autosave in place so a failed .kpak
+    // save could be retried — but it also meant the welcome screen
+    // re-offered the same board on every single reload, forever. Now that
+    // the bytes really do come back, consuming it is the honest behaviour:
+    // the board is on the canvas, not pending in storage.
+    discardAutoSave();
+    toast('Restored autosave · ' + n + ' item' + (n === 1 ? '' : 's')
+      + (res.lost ? ' · ' + res.lost + ' file' + (res.lost === 1 ? '' : 's') + ' could not be recovered' : '')
+      + ' — save it to a .kpak now');
+  }).catch(function(e) {
     console.warn('[AUTOSAVE] restore failed:', e);
+    if (btn) { btn.disabled = false; btn.textContent = 'Restore'; }
     toast('Autosave could not be restored: ' + (e.message || 'unknown'));
-  }
+  });
 }
 // Called once at startup: if an autosave exists, put a Restore / Discard
 // choice on the welcome screen instead of silently throwing the work away.
+// v7.0.43: async. An autosave written before this version has no persisted
+// blobs, so every media item in it is an empty shell — offering a Restore
+// button for that is the exact complaint this version fixes. Probe the
+// media store first and only show the button when something can come back.
 function offerAutoSave() {
   const data = readAutoSave();
   if (!data) return;
   const n = (data.items || []).length;
-  if (n === 0) { discardAutoSave(); return; }
+  // v7.0.43: the old count looked at items only, so a board of nothing but
+  // text/todos/mindmaps reported 0 and got silently discarded.
+  const extra = (data.texts || []).length + (data.todos || []).length +
+                (data.mindmaps || []).length;
+  if (n === 0 && extra === 0) { discardAutoSave(); return; }
   const bar = document.getElementById('welcome-autosave');
   const label = document.getElementById('welcome-autosave-label');
   if (!bar || !label) return;
-  label.textContent = n + ' unsaved item' + (n === 1 ? '' : 's') + ' from your last session';
-  bar.style.display = 'flex';
+
+  probeAutosaveMedia(data).then(function(p) {
+    // Nothing recoverable: media sentinels whose bytes are all gone, and no
+    // text content either. That board is a page of empty rectangles —
+    // retire it rather than dangling a button that cannot deliver.
+    if (p.sentinels > 0 && p.found === 0 && extra === 0) {
+      discardAutoSave();
+      return;
+    }
+    const parts = [];
+    if (n) parts.push(n + ' item' + (n === 1 ? '' : 's'));
+    if (extra) parts.push(extra + ' text/note' + (extra === 1 ? '' : 's'));
+    if (p.found) parts.push(p.found + ' file' + (p.found === 1 ? '' : 's') + ' recovered');
+    if (p.lost) parts.push(p.lost + ' unrecoverable');
+    label.textContent = (parts.join(' · ') || 'unsaved work') + ' from your last session';
+    bar.style.display = 'flex';
+  });
 }
 
 

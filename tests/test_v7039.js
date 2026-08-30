@@ -244,11 +244,11 @@ const showCtxFn = slice('function showCtx(x, y) {', '\n// Keep the context menu 
 ok(showCtxFn.indexOf('positionCtxMenu(x, y)') >= 0, 'showCtx places the menu through positionCtxMenu');
 ok(showCtxFn.indexOf("ctxMenu.style.maxHeight = ''") >= 0, 'showCtx resets max-height before measuring');
 
-ok(src.indexOf("var KRAFTED_VERSION = '7.0.42';") >= 0, 'KRAFTED_VERSION bumped');
-ok(src.indexOf('<title>Krafted v7.0.42</title>') >= 0, 'title bumped');
+ok(src.indexOf("var KRAFTED_VERSION = '7.0.43';") >= 0, 'KRAFTED_VERSION bumped');
+ok(src.indexOf('<title>Krafted v7.0.43</title>') >= 0, 'title bumped');
 const sw = fs.readFileSync(path.resolve(__dirname, '../../Krafted/docs/sw.js'), 'utf8');
-ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.42-'") >= 0, 'sw CACHE_NAME bumped');
-ok(sw.indexOf("const APP_VERSION = '7.0.42';") >= 0, 'sw APP_VERSION bumped');
+ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.43-'") >= 0, 'sw CACHE_NAME bumped');
+ok(sw.indexOf("const APP_VERSION = '7.0.43';") >= 0, 'sw APP_VERSION bumped');
 
 console.log('');
 console.log(fail === 0 ? 'ALL PASS (' + pass + ' assertions)' : 'FAILURES: ' + fail + ' (passed ' + pass + ')');
