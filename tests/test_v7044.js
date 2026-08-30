@@ -522,10 +522,10 @@ function seg(it) { return (it.trimEnd || EXPECT_DUR) - (it.trimStart || 0); }
 // 7. Version
 // ═══════════════════════════════════════════════════════════════════════
 {
-  ok(src.indexOf("var KRAFTED_VERSION = '7.0.44';") >= 0, 'KRAFTED_VERSION bumped');
-  ok(src.indexOf('<title>Krafted v7.0.44</title>') >= 0, 'title bumped');
-  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.44-'") >= 0, 'sw CACHE_NAME bumped');
-  ok(sw.indexOf("const APP_VERSION = '7.0.44';") >= 0, 'sw APP_VERSION bumped');
+  ok(src.indexOf("var KRAFTED_VERSION = '7.0.45';") >= 0, 'KRAFTED_VERSION bumped');
+  ok(src.indexOf('<title>Krafted v7.0.45</title>') >= 0, 'title bumped');
+  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.45-'") >= 0, 'sw CACHE_NAME bumped');
+  ok(sw.indexOf("const APP_VERSION = '7.0.45';") >= 0, 'sw APP_VERSION bumped');
 }
 
 console.log('');

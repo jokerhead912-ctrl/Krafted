@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.44</title>
+<title>Krafted v7.0.45</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3549,6 +3549,77 @@ body.screen-share-mode #ss-fps {
   text-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
 
+/* v7.0.45 — a save that went wrong must not look like one that went right.
+   The only failure signal used to be a 2-second toast, which is exactly how
+   a 0-byte .kpak got written without anyone noticing. These two surfaces
+   stay on screen until the user dismisses them. */
+.krafted-save-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 999999998;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px; line-height: 1.45;
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.45);
+}
+.krafted-save-banner.is-fatal { background: #b3261e; }
+.krafted-save-banner.is-warn  { background: #8a6100; }
+.krafted-save-banner-icon { font-size: 14px; flex: 0 0 auto; }
+.krafted-save-banner-msg  { flex: 1 1 auto; }
+.krafted-save-banner-msg b { font-weight: 700; }
+.krafted-save-banner-x {
+  flex: 0 0 auto; background: rgba(255,255,255,0.14); border: 0; color: #fff;
+  font-size: 12px; line-height: 1; padding: 5px 8px; border-radius: 6px; cursor: pointer;
+}
+.krafted-save-banner-x:hover { background: rgba(255,255,255,0.26); }
+
+.krafted-save-alarm {
+  position: fixed; inset: 0; z-index: 1000000000;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(0,0,0,0.62); backdrop-filter: blur(3px);
+}
+.krafted-save-alarm-card {
+  width: 100%; max-width: 520px;
+  background: var(--panel-bg, #1b1b20);
+  border: 1px solid #b3261e; border-radius: 12px;
+  padding: 20px 22px 16px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--text, #e8e8ee);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.6);
+}
+.krafted-save-alarm-head {
+  font-size: 13px; font-weight: 700; letter-spacing: 0.6px;
+  color: #ff6b5e; margin-bottom: 10px;
+}
+.krafted-save-alarm-lead { font-size: 13px; line-height: 1.6; margin: 0 0 14px; }
+.krafted-save-alarm-lead b { color: #ff6b5e; font-weight: 700; }
+.krafted-save-alarm-facts {
+  border-top: 1px solid var(--border-subtle, #333);
+  border-bottom: 1px solid var(--border-subtle, #333);
+  padding: 10px 0; margin-bottom: 12px;
+}
+.krafted-save-alarm-row {
+  display: flex; justify-content: space-between; gap: 16px;
+  font-size: 12px; padding: 3px 0;
+}
+.krafted-save-alarm-row span { opacity: 0.62; flex: 0 0 auto; }
+.krafted-save-alarm-row b { font-weight: 600; text-align: right; word-break: break-all; }
+.krafted-save-alarm-detail {
+  font-size: 11px; opacity: 0.6; line-height: 1.5; margin-bottom: 12px; word-break: break-word;
+}
+.krafted-save-alarm-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.krafted-save-alarm-actions button {
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  padding: 8px 14px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--border-subtle, #3a3a44);
+  background: transparent; color: var(--text, #e8e8ee);
+}
+.krafted-save-alarm-actions button:hover { background: rgba(255,255,255,0.07); }
+.krafted-save-alarm-actions button.primary {
+  background: #b3261e; border-color: #b3261e; color: #fff; font-weight: 600;
+}
+.krafted-save-alarm-actions button.primary:hover { background: #c8392f; }
+
 </style>
 
 
@@ -4261,7 +4332,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.44';
+var KRAFTED_VERSION = '7.0.45';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4641,31 +4712,19 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return data;
   }
 
+  // v7.0.45: this used to be a complete SECOND save engine. Its own kpak
+  // builder, its own file write, its own download with a 5-second URL revoke
+  // — and it reported "Saved ✔" without verifying a single byte, so a
+  // truncated or empty file looked exactly like a good one.
+  //
+  // Nothing in the app calls it: v6.5.0 moved every save onto saveBoardV6 and
+  // the comment below says the legacy paths were removed. But the function was
+  // left exported on window, which means anything reaching in from outside
+  // would land on the one remaining path that can still write a broken file
+  // and call it saved. It now delegates, so there is exactly one way to save a
+  // board, and it is the one that verifies and alarms.
   window.saveBoardV5 = async function() {
-    var counts = countMediaItems();
-    var prog = document.createElement('div'); prog.className = 'save-progress'; prog.innerHTML = '<div class="pct">Preparing save...</div>'; document.body.appendChild(prog);
-    function updateProg(txt) { prog.innerHTML = '<div class="pct">' + txt + '</div>'; }
-    try {
-      var fname = 'krafted_' + new Date().toISOString().slice(0, 10) + '.kpak';
-      var fileHandle = null, handleName = null;
-      if (window.showSaveFilePicker) { updateProg('Choose where to save...'); var h = await KF.Writer.requestSaveHandle(fname); if (h.cancelled) { toast('Save cancelled'); return; } fileHandle = h.handle; handleName = h.name; }
-      var manifest = v4StateToManifest();
-      var mediaFetcher = async function(node) {
-        var item = (state.items || []).find(function(it) { return it.id === node.id; }); if (!item) return null;
-        if (item.src && (item.src.startsWith('blob:') || item.src.startsWith('data:'))) { try { var resp = await fetch(item.src); if (resp.ok) return await resp.blob(); } catch (e) {} }
-        var elSrc = (item.img && item.img.src) || (item.video && item.video.src) || null;
-        if (elSrc && (elSrc.startsWith('blob:') || elSrc.startsWith('data:'))) { try { var resp2 = await fetch(elSrc); if (resp2.ok) return await resp2.blob(); } catch (e) {} }
-        if (item._origBlob) return item._origBlob;
-        if (item.mediaData && typeof item.mediaData === 'string') { try { var arr = item.mediaData.split(','); var mime = (arr[0].match(/:(.*?);/) || [])[1] || 'application/octet-stream'; var bin = atob(arr[1] || arr[0]); var bytes = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); return new Blob([bytes], { type: mime }); } catch (e) {} }
-        return null;
-      };
-      var result = await KF.Writer.buildKpak(manifest, { mediaFetcher: mediaFetcher, compression: 'STORE', onProgress: function(evt) { updateProg(evt.message); } });
-      var zipBlob = result.zipBlob;
-      updateProg('Writing ' + KF.Writer.formatBytes(zipBlob.size) + '...'); await new Promise(function(r) { setTimeout(r, 0); });
-      if (fileHandle) { await KF.Writer.writeToHandle(fileHandle, zipBlob); toast('Saved \u2714 ' + handleName + ' (' + KF.Writer.formatBytes(zipBlob.size) + ')'); }
-      else { await KF.Writer.downloadBlob(zipBlob, fname); toast('Downloaded \u2192 ' + fname); }
-    } catch (err) { console.error('[KraftedBridge] Save failed:', err); updateProg('Error: ' + (err.message || 'unknown')); toast('Save failed: ' + (err.message || 'unknown error')); await new Promise(function(r) { setTimeout(r, 3000); }); }
-    finally { try { prog.remove(); } catch (e) {} }
+    return saveBoardV6({ forceNew: true });
   };
 
   window.loadBoardFileV5 = async function(event) {
@@ -34134,7 +34193,12 @@ function downloadBlob(blob, suggestedName) {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      // v7.0.45: same race as the main save path. Revoking the URL on a fixed
+      // 5 s timer cuts the legs out from under any download the browser has
+      // not finished draining, which truncates the file. Hold it until the
+      // next save instead of guessing at a timeout.
+      _releaseLastSaveObjectUrl();
+      _lastSaveObjectUrl = url;
       resolve(true);
     } catch (e) { reject(e); }
   });
@@ -34580,6 +34644,74 @@ async function readKpakV6Index(blob) {
   return { entries, manifest };
 }
 
+
+// ── v7.0.45: the ONE answer to "is this file a board?" ───────────────────
+// There used to be two hand-rolled copies of this check — one in the
+// stream-to-handle path, one in the blob-download fallback — and they did not
+// agree. The blob copy toasted when verification threw. The stream copy logged
+// the throw to the console and carried on, so a 0-byte file still ended with a
+// cheerful "Saved ✔". That is the reported bug exactly: the file is destroyed
+// and the user is told it is fine.
+//
+// Why "0 bytes" never even reached the old out-of-bounds counter, which was
+// the only thing that could raise an alarm: readKpakV6Index() reads the
+// 12-byte footer first, and an empty file has no footer, so it throws
+// 'bad magic' — which the stream path then swallowed. So emptiness has to be
+// checked BEFORE the index is opened, not inferred from it.
+//
+// A kpak is never legitimately empty and never legitimately tiny: the smallest
+// possible one still carries a manifest, an index, and the 12-byte footer.
+const KPAK_MIN_BYTES = 64;
+
+async function verifyKpakOutput(container) {
+  const v = { ok: false, reason: 'nothing was written', size: 0, entries: 0, bad: 0, manifest: null };
+  if (!container) return v;
+  const size = (typeof container.size === 'number') ? container.size : 0;
+  v.size = size;
+  if (size === 0) { v.reason = 'the file was written with 0 bytes — nothing was saved'; return v; }
+  if (size < KPAK_MIN_BYTES) { v.reason = 'only ' + size + ' bytes were written — the file is truncated'; return v; }
+  let parsed = null;
+  try {
+    parsed = await readKpakV6Index(container);
+  } catch (e) {
+    v.reason = (e && e.message) ? e.message : 'the file could not be read back after writing';
+    return v;
+  }
+  const entries = (parsed && parsed.entries) || [];
+  v.entries = entries.length;
+  v.manifest = parsed ? parsed.manifest : null;
+  if (entries.length === 0) { v.reason = 'the file contains nothing — not even the board itself'; return v; }
+  let bad = 0;
+  for (const e of entries) {
+    if (!(e.size > 0) || e.offset < 0 || (e.offset + e.size) > size) bad++;
+  }
+  v.bad = bad;
+  if (bad > 0) { v.reason = bad + ' of ' + entries.length + ' files point outside the file'; return v; }
+  v.ok = true;
+  v.reason = '';
+  return v;
+}
+
+// A package can be structurally perfect and still be missing half its videos,
+// and the container check above cannot see that — only the builder knows how
+// many bytes it meant to produce. So the expected count is handed in
+// separately and a materially short write is flagged here.
+//
+// The tolerance matters. buildKpakV6's streaming branch reports a COMPUTED
+// length (see its `return`), which can legitimately drift by a few bytes from
+// what actually lands on disk, so only a shortfall that is both large in
+// absolute terms and more than 1% counts. A half-written 2 GB board shows up;
+// accounting drift does not.
+function applyShortWriteCheck(v, expectedBytes) {
+  if (!v || !v.ok || !(expectedBytes > 0)) return v;
+  const shortBy = expectedBytes - v.size;
+  if (shortBy > 65536 && shortBy > expectedBytes * 0.01) {
+    v.ok = false;
+    v.reason = 'the write was cut short — ' + formatBytes(v.size) + ' of ' + formatBytes(expectedBytes);
+  }
+  return v;
+}
+
 // v6.8.15: Detect media mime from magic bytes to improve cross-browser
 // decode reliability for blob slices loaded from kpak.
 async function _detectKpakEntryMime(blob, entry) {
@@ -34869,6 +35001,189 @@ window.__kraftedRestoreEmergencyBackup = async function() {
   }
 };
 
+
+// ── v7.0.45: a failed save you cannot miss ───────────────────────────────
+// A 2-second toast is the wrong instrument for "the file you are relying on
+// is now 0 bytes". By the time it fades the user has moved on, believing the
+// board is safe. So a save now reports on surfaces that outlive the moment:
+//
+//   FATAL     the file is not a board. Blocking modal, because this is the
+//             one case where the user must not carry on assuming otherwise.
+//   DEGRADED  the file opens but media is missing. No modal — the board is
+//             still in memory and the file still loads — but the banner
+//             stays, because "Saved, but 3 items missing" in a toast is
+//             forgotten before it finishes animating.
+//
+// Either way the banner persists until the user dismisses it. That is the fix
+// for 「我都唔知原來文件已經損毁」: the state of "your last save is not
+// trustworthy" is on screen until someone deals with it.
+
+// The last save whose bytes came back verified, kept so a later alarm can hand
+// the user something real instead of only bad news. One blob, replaced on each
+// successful save — the previous one is then garbage.
+let _lastGoodSaveBlob = null;
+
+// The blob: URL behind the last download. Held open deliberately; see the
+// comment at the download site for why it is not revoked on a timer.
+let _lastSaveObjectUrl = null;
+function _releaseLastSaveObjectUrl() {
+  if (_lastSaveObjectUrl) { try { URL.revokeObjectURL(_lastSaveObjectUrl); } catch (e) {} }
+  _lastSaveObjectUrl = null;
+}
+
+let _saveBannerEl = null;
+function _clearSaveBanner() {
+  if (_saveBannerEl) { try { _saveBannerEl.remove(); } catch (e) {} }
+  _saveBannerEl = null;
+}
+
+function _showSaveBanner(level, html) {
+  _clearSaveBanner();
+  const el = document.createElement('div');
+  el.className = 'krafted-save-banner ' + (level === 'fatal' ? 'is-fatal' : 'is-warn');
+  el.innerHTML =
+    '<span class="krafted-save-banner-icon">' + (level === 'fatal' ? '\u26d4' : '\u26a0') + '</span>' +
+    '<span class="krafted-save-banner-msg">' + html + '</span>' +
+    '<button class="krafted-save-banner-x" type="button">\u2715</button>';
+  el.querySelector('.krafted-save-banner-x').addEventListener('click', function () { _clearSaveBanner(); });
+  document.body.appendChild(el);
+  _saveBannerEl = el;
+}
+
+// A blocking modal for the case where the bytes on disk are not a board.
+// It names the file, how many bytes actually landed, how big the file used to
+// be, and why — because "save failed" without numbers is not actionable, and
+// the user cannot check a file they have not been told is broken.
+function _showSaveAlarm(o) {
+  const zh = _isZhUI();
+  const wrote = formatBytes(o.bytes || 0);
+  let facts = '';
+  facts += '<div class="krafted-save-alarm-row"><span>' + (zh ? '\u6a94\u6848' : 'File') + '</span><b>' + escapeHtml(o.fname || '(unknown)') + '</b></div>';
+  facts += '<div class="krafted-save-alarm-row"><span>' + (zh ? '\u5be6\u969b\u5beb\u4e86' : 'Bytes written') + '</span><b>' + wrote + '</b></div>';
+  if (o.prevBytes > 0) {
+    facts += '<div class="krafted-save-alarm-row"><span>' + (zh ? '\u8986\u84cb\u4e4b\u524d\u4fc2' : 'It used to be') + '</span><b>' + formatBytes(o.prevBytes) + '</b></div>';
+  }
+  facts += '<div class="krafted-save-alarm-row"><span>' + (zh ? '\u539f\u56e0' : 'Reason') + '</span><b>' + escapeHtml(o.reason || 'unknown') + '</b></div>';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'krafted-save-alarm';
+  overlay.innerHTML =
+    '<div class="krafted-save-alarm-card" role="alertdialog" aria-modal="true">' +
+      '<div class="krafted-save-alarm-head">\u26d4 ' + (zh ? '\u4fdd\u5b58\u5931\u6557 \u2014\u2014 \u5440\u597d\u4fe1\u5462\u500b\u6a94\u6848' : 'SAVE FAILED \u2014 DO NOT TRUST THIS FILE') + '</div>' +
+      '<p class="krafted-save-alarm-lead">' + (zh
+        ? '\u4f60\u55bb board \u4ef2\u55ae\u8a18\u61b6\u9ad4\u5165\u9762\uff0c\u672a\u51b7\u3002\u4f46\u4fc2<b>\u786c\u789f\u4e0a\u55bb\u6a94\u6848\u5df2\u7d93\u5beb\u58de</b>\uff0c\u5440\u597d\u7576\u4f75\u4fc2\u5099\u4efd\u3002'
+        : 'Your board is still open in memory \u2014 nothing is lost yet. But <b>the file on disk is damaged</b>. Do not treat it as a backup.') + '</p>' +
+      '<div class="krafted-save-alarm-facts">' + facts + '</div>' +
+      (o.detail ? '<div class="krafted-save-alarm-detail">' + escapeHtml(o.detail) + '</div>' : '') +
+      '<div class="krafted-save-alarm-actions"></div>' +
+    '</div>';
+
+  const actions = overlay.querySelector('.krafted-save-alarm-actions');
+
+  // Recovery, best option first. "Save a copy" re-runs the save through the
+  // picker, which is the only path that can still produce a real file: the
+  // board is in memory, so a transient write failure is recoverable.
+  const btnCopy = document.createElement('button');
+  btnCopy.type = 'button';
+  btnCopy.className = 'primary';
+  btnCopy.textContent = zh ? '\u53e6\u5b58\u65b0\u6a94\u2026' : 'Save a copy\u2026';
+  btnCopy.addEventListener('click', function () {
+    try { overlay.remove(); } catch (e) {}
+    try { saveBoardV6({ forceNew: true }); } catch (e) {}
+  });
+  actions.appendChild(btnCopy);
+
+  // Only offered while holding bytes that were themselves verified — handing
+  // over an unverified blob would just relocate the problem.
+  if (_lastGoodSaveBlob && _lastGoodSaveBlob.blob && _lastGoodSaveBlob.blob.size > 0) {
+    const btnDl = document.createElement('button');
+    btnDl.type = 'button';
+    btnDl.textContent = zh ? '\u4e0b\u8f09\u4e0a\u4e00\u6b21\u6b63\u5e38\u55bb\u526f\u672c' : 'Download the last good copy';
+    btnDl.addEventListener('click', function () {
+      try {
+        const url = URL.createObjectURL(_lastGoodSaveBlob.blob);
+        _releaseLastSaveObjectUrl();
+        _lastSaveObjectUrl = url;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = _lastGoodSaveBlob.name || 'krafted.kpak';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { try { a.remove(); } catch (e) {} }, 10000);
+        toast(zh ? '\u526f\u672c\u5df2\u4e0b\u8f09' : 'Copy downloaded');
+      } catch (e) { toast(zh ? '\u4e0b\u8f09\u5931\u6557' : 'Download failed'); }
+    });
+    actions.appendChild(btnDl);
+  }
+
+  const btnOk = document.createElement('button');
+  btnOk.type = 'button';
+  btnOk.textContent = zh ? '\u6211\u77e5\u9053\u4e86' : 'I understand';
+  btnOk.addEventListener('click', function () { try { overlay.remove(); } catch (e) {} });
+  actions.appendChild(btnOk);
+
+  document.body.appendChild(overlay);
+
+  _showSaveBanner('fatal',
+    (zh ? '<b>\u4fdd\u5b58\u5931\u6557</b> \u2014\u2014 ' : '<b>SAVE FAILED</b> \u2014 ') +
+    escapeHtml(o.fname || '') + ' ' + (zh ? '\u5beb\u4e86 ' : 'wrote ') + wrote +
+    (zh ? '\uff0c\u6a94\u6848\u5df2\u7d93\u640d\u6bc0\u3002' : ', and the file is damaged.') +
+    ' ' + escapeHtml(o.reason || ''));
+  return overlay;
+}
+
+// v7.0.45: the single place a save is declared good or bad. Both write paths
+// end here, so they cannot disagree about what success means — and, the point
+// of the whole change, a file that did not verify can no longer produce a
+// success toast. It produces an alarm.
+//
+// o: {fname, verdict, expectedBytes, prevBytes, missingItems, manifestJson,
+//     elapsed, destWarning}
+async function _finishSave(o) {
+  const zh = _isZhUI();
+  const fname = o.fname || '(unknown)';
+  const v = applyShortWriteCheck(o.verdict, o.expectedBytes);
+  const missing = o.missingItems || [];
+
+  // The manifest backup runs on failure too, not only on success: a board with
+  // no media is still far more recoverable than no board at all, and the
+  // failure case is precisely when it is needed.
+  if (o.manifestJson) { try { await _writeEmergencyBackup(o.manifestJson); } catch (e) {} }
+
+  if (!v || !v.ok) {
+    console.error('[SAVE V6] VERIFY FAILED —', fname, (v && v.reason) || 'no verdict');
+    _showSaveAlarm({
+      fname: fname,
+      bytes: (v && v.size) || 0,
+      prevBytes: o.prevBytes || 0,
+      reason: (v && v.reason) || 'the file could not be read back after writing'
+    });
+    return false;
+  }
+
+  const okMsg = (zh ? '\u5df2\u4fdd\u5b58 \u2714 ' : 'Saved \u2714 ') + fname + ' (' + formatBytes(v.size) +
+                (o.elapsed != null ? ' \u00b7 ' + _fmtDurSec(o.elapsed) : '') + ')';
+
+  // Valid container, missing media. The file opens, which is why this is not a
+  // modal — but it is not the board the user thinks they saved, so it must not
+  // be a 2-second toast either.
+  const problems = [];
+  if (missing.length > 0) {
+    problems.push(zh
+      ? ('<b>' + missing.length + '</b> \u500b\u5a92\u9ad4\u6a94\u6848\u5beb\u5514\u5230\uff0c\u958b\u8fd4\u5462\u500b\u6a94\u6703\u5c11\u4e86\u4f75\u5730\u3002')
+      : ('<b>' + missing.length + '</b> media file(s) could not be written \u2014 they will be missing when you reopen this file.'));
+  }
+  if (o.destWarning) problems.push(escapeHtml(o.destWarning));
+
+  if (problems.length > 0) {
+    _showSaveBanner('warn', (zh ? '\u5df2\u4fdd\u5b58\uff0c\u4f46\u4fc2\uff1a' : 'Saved, but: ') + problems.join(' '));
+  } else {
+    _clearSaveBanner();
+    toast(okMsg);
+  }
+  return true;
+}
+
 // v6.5.0: Save using custom kpak container — single file, no OOM on load
 async function saveBoardV6(opts) {
   opts = opts || {};
@@ -35009,6 +35324,12 @@ async function saveBoardV6(opts) {
   try {
     // Try streaming first (Chrome/Edge with File System Access API) — only one entry in memory at a time
     let saved = false;
+    // v7.0.45: set when the streamed write went wrong. The destination is
+    // already committed by the time we find out, so even if the blob fallback
+    // below later succeeds, the file the user actually picked may have been
+    // damaged — and that has to be said, not hidden behind the fallback's
+    // success toast.
+    let streamDestWarning = null;
     // v7.0.4: use the handle acquired at the very top of this function
     // (while the user activation was still fresh) instead of re-requesting
     // showSaveFilePicker() here, which could be well past the activation
@@ -35016,49 +35337,44 @@ async function saveBoardV6(opts) {
     if (saveHandle) {
       let writable = null;
       try {
+        // v7.0.45: remember how big the destination was BEFORE writing. If
+        // this save goes wrong the old copy is gone, and the alarm is only
+        // honest if it can name what was lost, not just what replaced it.
+        let prevBytes = 0;
+        try { prevBytes = (await saveHandle.getFile()).size || 0; } catch (e) {}
         writable = await saveHandle.createWritable();
         const result = await buildKpakV6(updateProg, writable, estTotalBytes);
         await writable.close();
         saved = true;
         console.log('[SAVE V6] streamed to file');
-        // v7.0.7: SELF-VERIFY after a streaming save too. Previously only the
-        // blob-download fallback path (below) re-read its own index to check
-        // every media entry's byte range — the streaming path (File System
-        // Access API, the default on Chrome/Edge when the user picks a
-        // location) had NO post-write verification at all. Re-open the file
-        // we just wrote and confirm the index parses and every entry's
-        // range fits inside the actual on-disk size. This mirrors the fix
-        // below and catches a truncated/incomplete write immediately,
-        // instead of only surfacing as a `NotReadableError` on the NEXT
-        // load — which is confusing because the save itself reported
-        // success.
-        try {
-          updateProg(_isZhUI() ? '校验文件…' : 'Verifying...', { doneItems: 1, totalItems: 1 });
-          const writtenFile = await saveHandle.getFile();
-          const chk = await readKpakV6Index(writtenFile);
-          let bad = 0;
-          for (const e of (chk.entries || [])) {
-            if (e.offset < 0 || e.size <= 0 || (e.offset + e.size) > writtenFile.size) bad++;
-          }
-          const expected = (chk.entries || []).length;
-          if (bad > 0) {
-            console.error('[SAVE V6] STREAM VERIFY FAILED —', bad, 'of', expected, 'entries out of bounds');
-            toast('⚠ Save verify failed: ' + bad + '/' + expected + ' media entries corrupt. Please report this.');
-          } else {
-            console.log('[SAVE V6] stream verify OK —', expected, 'entries all in bounds,', formatBytes(writtenFile.size));
-          }
-        } catch (ve) {
-          console.error('[SAVE V6] stream verify threw:', ve.message);
-        }
+        updateProg(_isZhUI() ? '校验文件…' : 'Verifying...', { doneItems: 1, totalItems: 1 });
+        const writtenFile = await saveHandle.getFile();
+        // v7.0.45: verification decides what the user is told. The old code ran
+        // its own bounds check here and, when readKpakV6Index() threw — which
+        // it ALWAYS does on a 0-byte file, because an empty file has no KPAK
+        // footer to find — caught the throw, logged it to the console, and let
+        // the success toast fire anyway. That is the reported bug exactly: the
+        // file is destroyed and the app says "Saved ✔".
+        const verdict = await verifyKpakOutput(writtenFile);
         const _allFailed = [...(result.failedItems || []).map(f => f.itemId), ..._lazyMaterializeFailed];
         if (_allFailed.length > 0) {
           console.error('[SAVE V6] failed media items:', result.failedItems, 'materialize failed:', _lazyMaterializeFailed);
-          toast('⚠ Saved but ' + _allFailed.length + ' media item(s) could not be written. See Console for IDs.');
-        } else {
-          // v7.0.27: report real size + elapsed time so big saves feel accounted for
-          toast((_isZhUI() ? '已保存 ✔ ' : 'Saved ✔ ') + fname + ' (' + formatBytes(result.size || 0) + ' · ' + _fmtDurSec(progUI.elapsedSec()) + ')');
         }
-        if (result.manifestJson) _writeEmergencyBackup(result.manifestJson);
+        const streamGood = await _finishSave({
+          fname: fname,
+          verdict: verdict,
+          expectedBytes: result.size || 0,
+          prevBytes: prevBytes,
+          missingItems: _allFailed,
+          manifestJson: result.manifestJson,
+          elapsed: progUI.elapsedSec()
+        });
+        if (!streamGood) {
+          // The destination is committed and broken. Drop the quick-save handle
+          // so the next Ctrl+S asks where to go instead of silently aiming at
+          // the file we just damaged.
+          state._saveHandle = null;
+        }
       } catch (e) {
         // A failed writable stream may have truncated the selected file. Abort
         // it and do not mark the partial file as a successful save. The caller
@@ -35067,6 +35383,10 @@ async function saveBoardV6(opts) {
           console.warn('[SAVE V6] could not abort failed stream:', abortErr.name, abortErr.message);
         }
         console.warn('[SAVE V6] stream failed, falling back to blob:', e.name, e.message);
+        state._saveHandle = null;
+        streamDestWarning = (_isZhUI() ? '寫入 ' : 'Writing to ') + fname +
+          (_isZhUI() ? ' 失敗，你原本嗰個檔案可能已經被清空 —— 請檢查。下面另存嘅副本係好嘅。'
+                     : ' failed — your existing file may have been emptied. Please check it. The copy saved below is good.');
       }
     }
 
@@ -35075,53 +35395,72 @@ async function saveBoardV6(opts) {
       const result = await buildKpakV6(updateProg, null, estTotalBytes);
       const blob = result.blob;
 
-      // v6.8.1: SELF-VERIFY before download. Re-read the index we just wrote
-      // and confirm every media entry's byte range is actually inside the
-      // blob. Catches the macOS/Safari offset-shift class of bug at SAVE
-      // time instead of silently producing a file whose images vanish on
-      // load. Non-fatal: we warn and still let the user save, but they know.
-      try {
-        updateProg(_isZhUI() ? '校验文件…' : 'Verifying...', { doneItems: 1, totalItems: 1 });
-        const chk = await readKpakV6Index(blob);
-        let bad = 0;
-        for (const e of (chk.entries || [])) {
-          if (e.offset < 0 || e.size <= 0 || (e.offset + e.size) > blob.size) bad++;
-        }
-        const expected = (chk.entries || []).length;
-        if (bad > 0) {
-          console.error('[SAVE V6] VERIFY FAILED —', bad, 'of', expected, 'entries out of bounds');
-          toast('⚠ Save verify failed: ' + bad + '/' + expected + ' media entries corrupt. Please report this.');
-        } else {
-          console.log('[SAVE V6] verify OK —', expected, 'entries all in bounds');
-        }
-      } catch (ve) {
-        console.error('[SAVE V6] verify threw:', ve.message);
-        toast('⚠ Save verify error: ' + ve.message);
+      // v7.0.45: one verifier, and its answer decides everything downstream.
+      // The old inline copy reported "bad entry ranges" but still downloaded
+      // the file afterwards, on the theory that a damaged board beats no
+      // board. It does not: a file that will not open is worse than an honest
+      // failure, because the user finds out weeks later.
+      updateProg(_isZhUI() ? '校验文件…' : 'Verifying...', { doneItems: 1, totalItems: 1 });
+      const verdict = await verifyKpakOutput(blob);
+      const _allFailed = [...(result.failedItems || []).map(f => f.itemId), ..._lazyMaterializeFailed];
+      if (_allFailed.length > 0) {
+        console.error('[SAVE V6] failed media items:', result.failedItems, 'materialize failed:', _lazyMaterializeFailed);
       }
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fname;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
-      console.log('[SAVE V6] blob downloaded, size:', formatBytes(blob.size));
-      {
-        const _allFailed = [...(result.failedItems || []).map(f => f.itemId), ..._lazyMaterializeFailed];
-        if (_allFailed.length > 0) {
-          console.error('[SAVE V6] failed media items:', result.failedItems, 'materialize failed:', _lazyMaterializeFailed);
-          toast('⚠ Saved but ' + _allFailed.length + ' media item(s) could not be written. See Console for IDs.');
-        } else {
-          toast((_isZhUI() ? '已保存 ✔ ' : 'Saved ✔ ') + fname + ' (' + formatBytes(blob.size) + ' · ' + _fmtDurSec(progUI.elapsedSec()) + ')');
-        }
+      const good = await _finishSave({
+        fname: fname,
+        verdict: verdict,
+        expectedBytes: blob.size,
+        prevBytes: 0,
+        missingItems: _allFailed,
+        manifestJson: result.manifestJson,
+        elapsed: progUI.elapsedSec(),
+        destWarning: streamDestWarning
+      });
+
+      if (good) {
+        // Keep the verified bytes so a later alarm can offer a real recovery
+        // instead of only bad news.
+        _lastGoodSaveBlob = { blob: blob, name: fname, at: Date.now() };
+        // v7.0.45: do NOT revoke this URL on a short timer. Chrome reads the
+        // blob lazily while it streams the download to disk; revoking the URL
+        // out from under a multi-hundred-megabyte download truncates it, and a
+        // truncated download is exactly how a 0 KB ".kpak" appears in the
+        // Downloads folder while the app is already showing "Saved ✔". The
+        // old 2000 ms timeout raced every save too big for the disk to absorb
+        // in two seconds — which is to say, most real ones. The URL is now
+        // held until the next save replaces it.
+        const url = URL.createObjectURL(blob);
+        _releaseLastSaveObjectUrl();
+        _lastSaveObjectUrl = url;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fname;
+        document.body.appendChild(a);
+        a.click();
+        // Only the anchor is cleaned up here. The URL outlives it on purpose.
+        setTimeout(() => { try { a.remove(); } catch (e) {} }, 10000);
+        console.log('[SAVE V6] blob downloaded, size:', formatBytes(blob.size));
+      } else {
+        console.error('[SAVE V6] refusing to download a package that did not verify:', formatBytes(blob.size));
       }
-      if (result.manifestJson) _writeEmergencyBackup(result.manifestJson);
     }
+
   } catch (err) {
     console.error('[SAVE V6] FAILED:', err.name, err.message);
     updateProg('Error: ' + (err.message || 'unknown'));
-    toast('Save failed: ' + (err.message || 'unknown error'));
+    // v7.0.45: a thrown save is a save that did not happen, and a two-second
+    // "Save failed" toast leaves the board looking saved once it fades. This
+    // now goes through the same alarm as a file that failed verification —
+    // the user asked to be asked, not to be told in passing.
+    _showSaveAlarm({
+      fname: fname,
+      bytes: 0,
+      prevBytes: 0,
+      reason: (err && (err.name || err.message))
+        ? (String(err.name || '') + (err.message ? ': ' + err.message : ''))
+        : 'unknown error'
+    });
     await new Promise(r => setTimeout(r, 3000));
   } finally {
     // Resume paused videos
@@ -36960,7 +37299,13 @@ function triggerDownload(blob, filename) {
   a.download = filename;
   document.body.appendChild(a);
   a.click();
-  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  // v7.0.45: 1000 ms was a race, not a cleanup. The browser drains the blob
+  // lazily while it writes the file, so revoking the URL a second after the
+  // click truncates anything bigger than the disk absorbed in that second —
+  // the same failure class that was producing 0 KB files on the save path.
+  // Exports are usually small enough to have looked fine, which is why this
+  // survived; the HTML export and large captures are not.
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 60000);
 }
 
 // Round 28.7: kraftedSaveFile — unified "Save As" helper that gives the

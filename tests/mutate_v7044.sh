@@ -247,9 +247,11 @@ mutate "setTrimFromPlayhead stops applying through the shared applier" \
 
 # ── version ───────────────────────────────────────────────────────────────
 
+# v7.0.45: the anchor has to name the version the source now carries. Left at
+# 7.0.44 it silently matches 0 times and this mutation stops testing anything.
 mutate "KRAFTED_VERSION not bumped" \
-  "var KRAFTED_VERSION = '7.0.44';" \
-  "var KRAFTED_VERSION = '7.0.43';"
+  "var KRAFTED_VERSION = '7.0.45';" \
+  "var KRAFTED_VERSION = '7.0.44';"
 
 # ── done ──────────────────────────────────────────────────────────────────
 cp kraftpub-v6.8.0.html $TMP/mut.html
