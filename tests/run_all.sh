@@ -97,7 +97,9 @@ fi
 # as `\|`。
 if [ "$ONLY" = "all" ] || [ "$ONLY" = "--suites" ]; then
   print "── MEMORY BUDGETS ────────────────────────────────────"
-  $PY Krafted/tests/memory_guard.py
+  # --snapshot: memory/ 住喺工作区层，唔喺 Krafted/ 嘅 git repo 入面 —— 冇版本控制。
+  # 备份一只 1.9MB 嘅 html 好自然，备份 2.8KB 嘅记忆档好易唔记得，所以摆落脚本。
+  $PY Krafted/tests/memory_guard.py --snapshot
   MRC=$?
   print ""
 fi

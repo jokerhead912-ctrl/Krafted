@@ -30,11 +30,21 @@ memory_guard.py — 睇住 .workbuddy/memory/ 嘅体积同索引完整性。
 
 用法
 ----
-  python3 Krafted/tests/memory_guard.py          # 超预算 exit 1
+  python3 Krafted/tests/memory_guard.py             # 超预算 exit 1
+  python3 Krafted/tests/memory_guard.py --strict    # 日誌债都当致命
+  python3 Krafted/tests/memory_guard.py --snapshot  # 先备份去 backups/，再检查
+
+点解要 --snapshot
+----------------
+记忆档住喺工作区层（`.workbuddy/memory/`），**唔喺 `Krafted/` 嘅 git repo 入面** ——
+即係冇版本控制。而根目录嗰堆 .md 都一样。写烂咗冇得还原。
+rule 3 讲「改动前先备份」，但备份一只 1.9MB 嘅 html 好自然，备份 2.8KB 嘅记忆档
+好易唔记得 —— 所以摆落脚本，等 run_all.sh 每次 release 自动做。留最近 N 份。
 """
 
 import os
 import re
+import shutil
 import sys
 from datetime import date, datetime, timedelta
 
@@ -50,6 +60,30 @@ DAILY_MAX_LINES = 400
 DAILY_DISTILL_AFTER_DAYS = 30
 
 DAILY_RE = re.compile(r'^(\d{4})-(\d{2})-(\d{2})\.md$')
+
+SNAPSHOT_KEEP = 10
+
+
+def snapshot(workspace):
+    """把 memory/ 复制去 backups/memory-<时间戳>/，留最近 SNAPSHOT_KEEP 份。"""
+    backups = os.path.join(workspace, 'backups')
+    os.makedirs(backups, exist_ok=True)
+    stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    dest = os.path.join(backups, 'memory-' + stamp)
+    shutil.copytree(MEMDIR, dest)
+
+    # 只 prune 我哋自己产生嘅 memory-* 备份，唔好掂用户嘅 html 备份
+    old = sorted(p for p in os.listdir(backups)
+                 if p.startswith('memory-')
+                 and os.path.isdir(os.path.join(backups, p)))
+    dropped = 0
+    for p in old[:-SNAPSHOT_KEEP]:
+        shutil.rmtree(os.path.join(backups, p))
+        dropped += 1
+    print('memory_guard: snapshot -> backups/%s%s'
+          % (os.path.basename(dest),
+             '  (dropped %d older)' % dropped if dropped else ''))
+    return dest
 
 
 def read(path):
@@ -74,6 +108,9 @@ def main():
     if not os.path.isdir(MEMDIR):
         print('memory_guard: no memory dir at %s' % MEMDIR)
         return 0
+
+    if '--snapshot' in sys.argv:
+        snapshot(os.path.join(HERE, '..', '..'))
 
     names = sorted(n for n in os.listdir(MEMDIR) if n.endswith('.md'))
     index_path = os.path.join(MEMDIR, 'MEMORY.md')
