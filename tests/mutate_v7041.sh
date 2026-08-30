@@ -152,6 +152,32 @@ mutate "the palette entries go dead again" \
   "    case 'media-trim-i':           setTrimFromPlayhead('in');  return true;" \
   "    case 'media-trim-i':           return false;"
 
+# ── the ARGUMENTS, not just the call ──────────────────────────────────────
+# Every mutation above removes a line or swaps a call. These leave the call
+# standing and get its arguments wrong, which is the shape a real regression
+# takes: the repaint still runs, it just repaints nothing; the mark is still
+# applied, just to a copy that is thrown away. All four are invisible to an
+# assertion that only checks the call is THERE.
+
+mutate "the repaint gets an empty list (it runs, and does nothing)" \
+  "    refreshTrimUIFor([it]);" \
+  "    refreshTrimUIFor([]);"
+
+mutate "the plan is applied to a throwaway copy" \
+  "    applyTrimPlan(it, plan, v.duration);" \
+  "    applyTrimPlan(JSON.parse(JSON.stringify(it)), plan, v.duration);"
+
+mutate "the moved test silently always passes" \
+  "  const moved = plan.clearsOpp || Math.abs(plan.val - currentEdge) > 0.001;" \
+  "  const moved = plan.clearsOpp || true;"
+
+mutate "the hotkey stops persisting the mark" \
+  "    applyTrimPlan(it, plan, v.duration);
+    refreshTrimUIFor([it]);
+    try { scheduleAutoSave(); } catch (e) {}" \
+  "    applyTrimPlan(it, plan, v.duration);
+    refreshTrimUIFor([it]);"
+
 # ── version ───────────────────────────────────────────────────────────────
 
 mutate "the version bump is forgotten" \

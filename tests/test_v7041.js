@@ -130,8 +130,15 @@ const fakeDoc = {
 const block = slice('function selectedVideoItems() {', '//  CONTACT SHEET (v7.0.38)',
                     'trim module (selectedVideoItems .. I/O hotkey)');
 
-const calls = { undo: 0, save: 0, toasts: [], timeline: 0, refresh: 0 };
-function resetCalls() { calls.undo = 0; calls.save = 0; calls.toasts = []; calls.timeline = 0; calls.refresh = 0; }
+// v7.0.47: `timelineArgs` records WHAT the repaint was asked for, not just
+// that it happened. Inside this slice updateVideoTimeline() has exactly one
+// caller — refreshTrimUIFor(), which calls it once per item — so `timeline`
+// and `timelineArgs` ARE the repaint request. Counting the call alone cannot
+// see `refreshTrimUIFor([])`: that still runs, still returns, and repaints
+// nothing, which is precisely the regression this pair of counters exists to
+// catch. (The old `refresh: 0` counter was declared, reset, and never read.)
+const calls = { undo: 0, save: 0, toasts: [], timeline: 0, timelineArgs: [] };
+function resetCalls() { calls.undo = 0; calls.save = 0; calls.toasts = []; calls.timeline = 0; calls.timelineArgs = []; }
 
 const state = {
   items: [],
@@ -158,7 +165,7 @@ try {
           + ' refreshTrimUIFor: refreshTrimUIFor };'
   )(
     state, fakeDoc,
-    function () { calls.timeline++; },
+    function (it) { calls.timeline++; calls.timelineArgs.push(it); },
     function () { calls.undo++; },
     function () { calls.save++; },
     function (m) { calls.toasts.push(String(m)); },
@@ -171,8 +178,13 @@ try {
   fail++;
 }
 
-// Wrap refreshTrimUIFor so we can count it without losing the real behaviour.
-const realRefresh = api && api.refreshTrimUIFor;
+// v7.0.47: a `const realRefresh = api.refreshTrimUIFor;` used to sit here with
+// a comment claiming it wrapped the repaint so it could be counted. It never
+// wrapped anything, and wrapping could not have worked anyway: trimHotkey()
+// calls the refreshTrimUIFor DECLARED INSIDE this slice, so reassigning
+// api.refreshTrimUIFor from out here is invisible to it. The repaint is
+// observed through the updateVideoTimeline stub instead, which sees the call
+// however it is reached and records the item along with the count.
 
 function makeItem(over) {
   const p = buildPlayerEl();
@@ -365,6 +377,14 @@ eq(api.TRIM_MIN_GAP, EXPECT_TRIM_MIN_GAP, 'TRIM_MIN_GAP equals the spec');
      'press 1: the toast says the mark came from the cursor');
   eq(it.video.paused, true, 'the clip is paused so the playhead cannot drift mid-press');
 
+  // v7.0.47: the repaint has to be asked for THIS item. `refreshTrimUIFor([])`
+  // still runs and still returns; the UI just silently stops updating. An
+  // assertion that only checks the call is present stays green through it,
+  // which is why these two pin the argument rather than the call.
+  eq(calls.timeline, 1, 'press 1: the repaint ran for exactly one item');
+  ok(calls.timelineArgs.length === 1 && calls.timelineArgs[0] === it,
+     'press 1: the repaint was asked for the item just marked, not for an empty list');
+
   // THE BUG. Same clip, cursor moved along the same strip, press again.
   pointAt(P.seekBar, 250, 23);              // (250-102)/196 = 0.7551 -> 75.51s
   handled = api.trimHotkey('in');
@@ -396,6 +416,7 @@ eq(api.TRIM_MIN_GAP, EXPECT_TRIM_MIN_GAP, 'TRIM_MIN_GAP equals the spec');
   eq(it2.trimStart, afterFirst, 'the mark does not move — the playhead is already there');
   eq(calls.undo, 0, 'a no-op press does NOT push an undo step');
   eq(calls.save, 0, 'a no-op press does not schedule an autosave');
+  eq(calls.timeline, 0, 'a no-op press does not repaint — nothing changed, so nothing stale');
   ok(calls.toasts.length === 1, 'a no-op press still reports back (it is not silent)');
   ok(calls.toasts[0].indexOf('stays at') >= 0, 'the no-op toast says where the mark already is');
   ok(calls.toasts[0].indexOf('move the playhead') >= 0,
