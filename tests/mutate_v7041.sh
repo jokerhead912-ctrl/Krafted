@@ -150,8 +150,8 @@ mutate "the palette entries go dead again" \
 # ── version ───────────────────────────────────────────────────────────────
 
 mutate "the version bump is forgotten" \
-  "var KRAFTED_VERSION = '7.0.41';" \
-  "var KRAFTED_VERSION = '7.0.40';"
+  "var KRAFTED_VERSION = '7.0.47';" \
+  "var KRAFTED_VERSION = '7.0.46';"
 
 print ""
 print "restoring…"

@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+version_scan.py - scan and bump the Krafted version number.
+
+WHY THIS EXISTS
+    Bumping the version by hand needs two shell commands, and both of them have
+    a trap that has already bitten this project many times:
+
+      1. `grep -E 'a\\|b'`  - in this shell `\\|` is NOT alternation, only a bare
+         `|` under -E is. Every hand-typed alternation silently returns nothing.
+      2. `perl -i -pe 's/7\\.0\\.47/7.0.48/g'` - misses the ESCAPED form
+         `7\\.0\\.47` that suites carry in their regexes, and a global s/// on
+         the app file would also rewrite the ~400 historical `// v7.0.XX:`
+         comments that must stay where they are.
+
+    So: never hand-type the regex again. This script knows the difference.
+
+THE ONE RULE THAT MATTERS
+    A version string is either an IDENTITY or HISTORY:
+
+      IDENTITY - this position names the version the app currently IS. It must
+                 always equal the current version, or the anchor that uses it
+                 matches nothing and the mutation silently stops testing
+                 anything (which is worse than having no mutation at all).
+      HISTORY  - `// v7.0.33: ...` style comments recording which release
+                 introduced a piece of code. These never move.
+
+    Bumping rewrites IDENTITY positions only.
+
+USAGE
+    python3 Krafted/tests/version_scan.py                       # report, read-only
+    python3 Krafted/tests/version_scan.py --bump               # CURRENT -> CURRENT+1
+    python3 Krafted/tests/version_scan.py --bump --to 7.0.50
+    python3 Krafted/tests/version_scan.py --fix-stale --write  # repair anchors only
+    python3 Krafted/tests/version_scan.py --files              # also list every hit
+
+    Nothing is written unless --bump or --write is given.
+
+EXIT CODE
+    0  clean
+    1  STALE anchors found - mutations that no longer test anything
+    2  cannot determine the current version
+"""
+
+import argparse
+import os
+import re
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DEV_HTML = os.path.join(ROOT, 'kraftpub-v6.8.0.html')
+SW_JS = os.path.join(ROOT, 'Krafted', 'docs', 'sw.js')
+TESTS = os.path.join(ROOT, 'Krafted', 'tests')
+
+# Matches BOTH the plain form `7.0.47` and the escaped form `7\.0\.47`.
+VER = re.compile(r'(\d+(?:\\?\.\d+){2})')
+
+# Positions that name the version the app currently IS. `{}` is the version.
+# Order matters only for reporting.
+IDENTITY_TEMPLATES = [
+    "var KRAFTED_VERSION = '{}';",
+    "<title>Krafted v{}</title>",
+    "const APP_VERSION = '{}';",
+    "krafted-v{}-",
+]
+
+# This one names a version but lives on a comment line, so it must be matched
+# BEFORE the "it's a comment, leave it alone" rule and not be swallowed by it.
+COMMENT_IDENTITY_TEMPLATES = [
+    "// Krafted v{} Service Worker",
+]
+
+def _compile(templates):
+    out = []
+    for t in templates:
+        parts = t.split('{}')
+        out.append(re.compile(
+            r'(\d+(?:\\?\.\d+){2})'.join(re.escape(p) for p in parts)))
+    return out
+
+IDENTITY_RES = _compile(IDENTITY_TEMPLATES)
+COMMENT_IDENTITY_RES = _compile(COMMENT_IDENTITY_TEMPLATES)
+
+# `<!--` must be here: the app file carries `<!-- PRESENT HUD (v7.0.47) -->`
+# style banners, and a bare `//`-only list would read those as code.
+COMMENT_PREFIXES = ('//', '#', '/*', '*', '<!--')
+
+
+def vkey(v):
+    return tuple(int(x) for x in v.split('.'))
+
+
+def vstr(k):
+    return '.'.join(str(x) for x in k)
+
+
+def next_v(v):
+    a, b, c = vkey(v)
+    return vstr((a, b, c + 1))
+
+
+def prev_v(v):
+    a, b, c = vkey(v)
+    return vstr((a, b, max(0, c - 1)))
+
+
+def read_current(path=DEV_HTML):
+    with open(path, encoding='utf-8') as fh:
+        m = re.search(r"var KRAFTED_VERSION = '([^']+)';", fh.read())
+    if not m:
+        sys.exit('version_scan: cannot find KRAFTED_VERSION in ' + path)
+    return m.group(1)
+
+
+def target_files():
+    files = [DEV_HTML, SW_JS]
+    for name in sorted(os.listdir(TESTS)):
+        if name.endswith(('.js', '.sh')) and name != 'version_scan.py':
+            files.append(os.path.join(TESTS, name))
+    return files
+
+
+def own_version(path):
+    """The release a test file belongs to, from its name: test_v7047.js -> 7.0.47."""
+    m = re.search(r'_v(\d)(\d)(\d+)(?:_|\.)', os.path.basename(path))
+    return '%s.%s.%s' % m.groups() if m else None
+
+
+def identity_spans(line):
+    """Map start offset -> (end offset, survives_on_a_comment_line).
+
+    The second field separates `// Krafted v7.0.47 Service Worker` (an identity
+    that happens to be spelled as a comment) from an identity template that only
+    shows up inside a comment - the latter is history, not identity.
+    """
+    spans = {}
+    for rx in COMMENT_IDENTITY_RES:
+        for im in rx.finditer(line):
+            spans[im.start(1)] = (im.end(1), True)
+    for rx in IDENTITY_RES:
+        for im in rx.finditer(line):
+            spans[im.start(1)] = (im.end(1), False)
+    return spans
+
+
+def scan_file(path, current, nxt, mode='bump'):
+    """Return (findings, changes, newtext).
+
+    A change is (lineno, old, new, kind, snippet). Edits are collected first and
+    applied back-to-front, because replacing a version changes the length of the
+    line and every later offset with it.
+
+    mode 'bump'      - identity goes to `nxt`; a revert anchor goes to `current`
+                       (after the bump, `current` IS the previous version).
+    mode 'fix-stale' - the version does not move; every stale anchor is pulled
+                       to the value it should already have had. Use this when
+                       the scan reports stale anchors but there is no release
+                       to bump to yet.
+    """
+    own = own_version(path)
+    prev = prev_v(current)
+    findings, changes = [], []
+    with open(path, encoding='utf-8') as fh:
+        lines = fh.read().split('\n')
+
+    in_block = False        # inside a mutate/mutsw call
+    block_idn = 0           # which identity this is: 1st = old, 2nd = new
+
+    for n, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if re.match(r'^(mutate|mutsw)\s', stripped):
+            in_block, block_idn = True, 0
+
+        idn = identity_spans(line)
+        is_comment = stripped.startswith(COMMENT_PREFIXES)
+        edits = []
+
+        for m in VER.finditer(line):
+            raw = m.group(1)
+            ver = raw.replace('\\', '')
+            if not ver.startswith('7.0.'):
+                continue
+            new, want = None, ver
+            hit = idn.get(m.start())
+            if hit and (hit[1] or not is_comment):
+                block_idn += 1
+                if in_block and block_idn == 2:
+                    # The "new" side of a mutation: revert to the PREVIOUS
+                    # version. Before the bump that is `prev`; after it, the
+                    # outgoing current - which is what we must write.
+                    kind, want = 'identity-revert', prev
+                    new = prev if mode == 'fix-stale' else current
+                else:
+                    kind, want = 'identity', current
+                    new = current if mode == 'fix-stale' else nxt
+            elif is_comment:
+                kind = 'history'          # never touched
+            else:
+                kind = 'bare'
+                if mode != 'bump':
+                    pass              # fix-stale never touches loose versions
+                elif ver == current:
+                    new = nxt
+                elif ver == prev and own == current:
+                    # "the previous version is gone" assertions ride along,
+                    # but only in the suite that belongs to this release.
+                    new = current
+
+            findings.append({
+                'line': n, 'ver': ver, 'kind': kind, 'want': want,
+                'stale': kind in ('identity', 'identity-revert') and ver != want,
+                'text': stripped[:88],
+            })
+            if new and new != ver:
+                changes.append((n, ver, new, kind, stripped[:88]))
+                sep = '\\.' if '\\.' in raw else '.'
+                edits.append((m.start(), m.end(), sep.join(new.split('.'))))
+
+        for start, end, repl in reversed(edits):
+            line = line[:start] + repl + line[end:]
+
+        if in_block and not stripped.endswith('\\'):
+            in_block = False
+        lines[n - 1] = line
+
+    return findings, changes, '\n'.join(lines)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--bump', action='store_true',
+                    help='bump to the next version and WRITE (implies --write)')
+    ap.add_argument('--fix-stale', action='store_true',
+                    help='repair stale anchors instead of moving the version')
+    ap.add_argument('--write', action='store_true',
+                    help='actually write; without it everything is a dry run')
+    ap.add_argument('--to', help='explicit target version, e.g. 7.0.50')
+    ap.add_argument('--files', action='store_true', help='list every hit, not just problems')
+    args = ap.parse_args()
+
+    current = read_current()
+    mode = 'fix-stale' if args.fix_stale else 'bump'
+    nxt = args.to or (current if mode == 'fix-stale' else next_v(current))
+
+    if mode == 'fix-stale':
+        print('mode      FIX-STALE (the version stays at %s)' % current)
+    print('current %s   ->   %s   (previous: %s)' % (current, nxt, prev_v(nxt)))
+    print('')
+
+    total_stale = 0
+    total_change = 0
+    for path in target_files():
+        findings, changes, newtext = scan_file(path, current, nxt, mode)
+        rel = os.path.relpath(path, ROOT)
+        stales = [f for f in findings if f['stale']]
+        if not stales and not changes and not args.files:
+            continue
+        own = own_version(path)
+        head = '%s%s' % (rel, ('  [own %s]' % own) if own else '')
+        print(head)
+        for f in stales:
+            total_stale += 1
+            print('   STALE  line %-5d %-9s is %s, must be %s' %
+                  (f['line'], f['kind'], f['ver'], f['want']))
+            print('          %s' % f['text'])
+        for (ln, old, new, kind, text) in changes:
+            total_change += 1
+            print('   bump   line %-5d %-9s %s -> %s' % (ln, kind, old, new))
+            if args.files:
+                print('          %s' % text)
+        print('')
+
+    print('-' * 62)
+    print('%d identity anchor(s) stale, %d occurrence(s) to bump' % (total_stale, total_change))
+
+    write = args.write or args.bump
+    if write and total_change:
+        for path in target_files():
+            _, changes, newtext = scan_file(path, current, nxt, mode)
+            if changes:
+                with open(path, 'w', encoding='utf-8') as fh:
+                    fh.write(newtext)
+        print('written: %s -> %s' % (current, nxt))
+    elif write:
+        print('nothing to write')
+    else:
+        print('dry run - pass --write (or --bump) to write')
+
+    if total_stale:
+        print('')
+        print('A stale anchor matches 0 times, so that mutation tests nothing.')
+        print('Fix these before the bump, or the suite is lying to you.')
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
