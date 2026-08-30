@@ -72,7 +72,12 @@ function fnFull(name, s) {
 // enough: commenting a call out with /* ... */ leaves the text behind and a
 // bare indexOf still finds it — four mutations escaped test_v7043 that way.
 function codeOnly(s) {
-  return s.replace(/\/\*[\s\S]*?\*\//g, '')
+  // The cap matters. This file contains a string literal '/*' whose matching
+  // '*/' sits 270 KB further on, so an unbounded strip deletes 42% of the
+  // source — every assertion then runs against a file that has silently lost
+  // the code it is meant to be checking. Real comments here top out at 831
+  // characters; the three runaway spans are all 21 KB or more.
+  return s.replace(/\/\*[\s\S]{0,4000}?\*\//g, '')
           .split('\n').filter(function (l) { return l.trim().indexOf('//') !== 0; }).join('\n');
 }
 
@@ -522,10 +527,10 @@ function seg(it) { return (it.trimEnd || EXPECT_DUR) - (it.trimStart || 0); }
 // 7. Version
 // ═══════════════════════════════════════════════════════════════════════
 {
-  ok(src.indexOf("var KRAFTED_VERSION = '7.0.45';") >= 0, 'KRAFTED_VERSION bumped');
-  ok(src.indexOf('<title>Krafted v7.0.45</title>') >= 0, 'title bumped');
-  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.45-'") >= 0, 'sw CACHE_NAME bumped');
-  ok(sw.indexOf("const APP_VERSION = '7.0.45';") >= 0, 'sw APP_VERSION bumped');
+  ok(src.indexOf("var KRAFTED_VERSION = '7.0.46';") >= 0, 'KRAFTED_VERSION bumped');
+  ok(src.indexOf('<title>Krafted v7.0.46</title>') >= 0, 'title bumped');
+  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.46-'") >= 0, 'sw CACHE_NAME bumped');
+  ok(sw.indexOf("const APP_VERSION = '7.0.46';") >= 0, 'sw APP_VERSION bumped');
 }
 
 console.log('');

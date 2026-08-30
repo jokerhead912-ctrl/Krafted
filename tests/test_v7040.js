@@ -345,9 +345,14 @@ function buildViews() {
   };
   const doc = {
     getElementById: function (id) { return (id === 'views-panel' || id === 'views-list') ? el : null; },
+    // v7.0.46: a row being renamed is a real <input>, so the fake has to
+    // accept what the panel does to one — setAttribute, focus, select. It was
+    // the fake that was incomplete here, not the panel.
     createElement: function () {
       return { className: '', style: {}, disabled: false, appendChild: function () {},
                addEventListener: function () {},
+               setAttribute: function () {},
+               focus: function () {}, select: function () {}, scrollIntoView: function () {},
                classList: { add: function () {}, toggle: function () {} },
                set title(v) {}, set textContent(v) {} };
     },
@@ -597,7 +602,10 @@ function viewsTests() {
     eq(count(src, 'data.views = []'), 1, 'the manifest reader consumes views');
 
     const rb = around('if (!append) state.views = [];', 0, 1500, 'restoreBoard');
-    ok(rb.indexOf('ids: (vd.ids || []).map(_remapId)') >= 0,
+    // v7.0.46: the remap is now passed into the shared reader rather than
+    // spelled out here. That the remap actually runs is asserted behaviourally
+    // in test_v7046; this is the call site it happens at.
+    ok(rb.indexOf('deserializeView(vd, _remapId)') >= 0,
        'restore remaps view ids through the same remap as group members');
     ok(rb.indexOf('G.nextViewId = (!append') >= 0,
        'restore trusts the saved counter only on a full load, not on append');
@@ -768,10 +776,10 @@ function versionTests() {
     ? path.resolve(process.env.KRAFTED_SW)
     : path.resolve(__dirname, '../docs/sw.js');
   const sw = fs.readFileSync(swPath, 'utf8');
-  ok(src.indexOf("var KRAFTED_VERSION = '7.0.45';") >= 0, 'KRAFTED_VERSION bumped');
-  ok(src.indexOf('<title>Krafted v7.0.45</title>') >= 0, 'title bumped');
-  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.45-'") >= 0, 'sw CACHE_NAME bumped');
-  ok(sw.indexOf("const APP_VERSION = '7.0.45';") >= 0, 'sw APP_VERSION bumped');
+  ok(src.indexOf("var KRAFTED_VERSION = '7.0.46';") >= 0, 'KRAFTED_VERSION bumped');
+  ok(src.indexOf('<title>Krafted v7.0.46</title>') >= 0, 'title bumped');
+  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.46-'") >= 0, 'sw CACHE_NAME bumped');
+  ok(sw.indexOf("const APP_VERSION = '7.0.46';") >= 0, 'sw APP_VERSION bumped');
 }
 
 (async function () {

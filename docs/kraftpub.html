@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.45</title>
+<title>Krafted v7.0.46</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2564,7 +2564,16 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 .view-row:hover { background:rgba(255,255,255,0.04); }
 .view-row.current { background:rgba(0,229,255,0.10); }
 .view-row.active { background:rgba(0,229,255,0.22); box-shadow:inset 0 0 0 1px rgba(0,229,255,0.45); }
-.view-num { width:13px; text-align:center; font-size:9.5px; color:var(--text-subtle); font-family:'Inter',sans-serif; flex-shrink:0; }
+ .view-num { width:15px; height:15px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:9.5px; color:var(--text-subtle); font-family:'Inter',sans-serif; flex-shrink:0; cursor:pointer; border:1px solid transparent; user-select:none; transition:background 0.12s, border-color 0.12s; }
+ .view-num:hover { border-color:var(--border); background:var(--input-bg); }
+ .view-num.tinted { font-weight:600; }
+ .view-name-edit { flex:1; min-width:0; font-size:11.5px; font-family:'Inter',sans-serif; color:var(--text); background:var(--canvas-bg); border:1px solid var(--accent); border-radius:4px; padding:2px 5px; outline:none; }
+ .view-swatches { display:flex; flex-wrap:wrap; gap:4px; padding:5px 4px 7px 24px; }
+ .view-swatch { width:14px; height:14px; padding:0; border-radius:4px; border:1px solid rgba(255,255,255,0.2); cursor:pointer; flex-shrink:0; transition:transform 0.1s; }
+ .view-swatch:hover { transform:scale(1.2); }
+ .view-swatch.on { box-shadow:0 0 0 2px var(--accent); border-color:transparent; }
+ .view-swatch.none { background:transparent; border-style:dashed; position:relative; }
+ .view-swatch.none::after { content:''; position:absolute; left:2px; right:2px; top:50%; height:1px; background:var(--text-subtle); }
 .view-name { flex:1; font-size:11.5px; color:var(--text); font-family:'Inter',sans-serif; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
 .view-count { font-size:9.5px; color:var(--text-subtle); background:var(--input-bg); border-radius:4px; padding:1px 4px; flex-shrink:0; font-family:'Inter',sans-serif; }
 .view-count.stale { color:#ff6b6b; }
@@ -4032,13 +4041,13 @@ body.screen-share-mode #ss-fps {
   <div id="views-head">
     <div id="views-toggle" onclick="toggleViewsPanel()" title="Toggle views panel">◀</div>
     <h3 id="views-head-text">Views</h3>
-    <button id="views-save-btn" onclick="saveViewFromSelection()" title="Save the current selection as a view">＋</button>
+    <button id="views-save-btn" onclick="saveViewFromSelection()" title="Add the selected items to Present (P) — the name field opens ready to type">＋</button>
   </div>
   <div id="views-body">
     <div id="views-list"></div>
   </div>
   <div id="views-foot">
-    <button id="views-present-btn" onclick="startPresent()">▶ Present</button>
+    <button id="views-present-btn" onclick="startPresent()" title="Play the views in order (Shift+P)">▶ Present</button>
   </div>
 </div>
 
@@ -4332,7 +4341,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.45';
+var KRAFTED_VERSION = '7.0.46';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4658,7 +4667,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     // v7.0.40: named views. Written straight onto the manifest (not through
     // the schema validator's node table) because they are board metadata, not
     // nodes — an old Krafted reading this manifest simply ignores the key.
-    manifest.views = (state.views || []).map(function(v) { return { id: v.id, name: v.name || '', ids: (v.ids || []).slice(), panX: v.panX, panY: v.panY, zoom: v.zoom, createdAt: v.createdAt || '' }; });
+    manifest.views = (state.views || []).map(serializeView);
     manifest.counter = { nextId: (window.G && window.G.nextId) || 1, nextZ: (window.G && window.G.nextZ) || 1, nextStrokeId: (window.G && window.G.nextStrokeId) || 1, nextGroupId: (window.G && window.G.nextGroupId) || 1, nextViewId: (window.G && window.G.nextViewId) || 1 };
     // CRITICAL: serialize relations into the V5 manifest (save path)
     manifest.relations = (state.relations || []).map(function(r) {
@@ -6830,14 +6839,22 @@ const DEFAULT_SHORTCUTS = [
   // see the note above about the registry matching on ev.key.
   { id: 'media-trim-clear-in',  category: 'Media', label: 'Clear In Point',      keys: [] },
   { id: 'media-trim-clear-out', category: 'Media', label: 'Clear Out Point',     keys: [] },
-  // v7.0.40: named views. All palette-only on purpose: this registry matches
-  // on ev.key, and on macOS Option+<letter> emits the option layer (Alt+S is
+  // v7.0.40: named views. Note on Alt — this registry matches on ev.key, and
+  // on macOS Option+<letter> emits the OPTION LAYER of the keyboard (Alt+S is
   // 'ß'), so an Alt+letter binding here silently never fires on a Mac. The one
   // shortcut that IS bound — Alt+1..0 to jump to a view — lives in the views
   // module and matches ev.code instead.
-  { id: 'view-save',           category: 'View',  label: 'Save View From Selection', keys: [] },
+  //
+  // v7.0.46: P and Shift+P are bound. "Pick the thing I am looking at, drop it
+  // in Present, name it" is the entire point of the feature and it had no key
+  // at all, so every shot had to begin on a 236px rail. Bare P is safe: the
+  // global keydown handler returns before the registry is consulted whenever
+  // the caret sits in an input, a textarea or a contenteditable, so typing a
+  // word that contains a 'p' never fires this. P adds a shot, Shift+P plays
+  // the tape — one letter, both ends of the same job, both rebindable.
+  { id: 'view-save',           category: 'View',  label: 'Add Shot To Present',      keys: [{ key: 'p' }] },
   { id: 'view-update',         category: 'View',  label: 'Re-aim Current View',      keys: [] },
-  { id: 'view-present',        category: 'View',  label: 'Present Views',            keys: [] },
+  { id: 'view-present',        category: 'View',  label: 'Present Views',            keys: [{ key: 'p', shift: true }] },
   { id: 'view-toggle-panel',   category: 'View',  label: 'Toggle Views Panel',       keys: [] },
   // v7.0.40: A/B compare. Palette-only — it is modal, so the moment it is open
   // it owns the keyboard anyway and needs no shortcut of its own.
@@ -7409,6 +7426,58 @@ var PRESENT_DWELL_MS = 4000;  // how long a shot holds before advancing
 
 function _viewsList() { return Array.isArray(state.views) ? state.views : []; }
 
+// v7.0.46 — the view shape used to be spelled out by hand in six places
+// (three save paths, the undo snapshot, the undo restore and the .kpak
+// load). Adding one field meant finding six lines, and missing one meant a
+// view that silently lost it on reload. One writer and one reader, so the
+// shape can only ever be defined once.
+function serializeView(v) {
+  return {
+    id: v.id,
+    name: v.name || '',
+    ids: (v.ids || []).slice(),
+    panX: v.panX, panY: v.panY, zoom: v.zoom,
+    createdAt: v.createdAt || '',
+    // v7.0.46: re-aiming a view stamped updatedAt and every save path then
+    // dropped it, so the field only ever survived until the next reload.
+    updatedAt: v.updatedAt || '',
+    color: v.color || '',
+  };
+}
+
+// remap is the id translator for the load path (a .kpak renumbers every node
+// on import); everywhere else the identity is what you want.
+function deserializeView(vd, remap) {
+  const map = (typeof remap === 'function') ? remap : function (x) { return x; };
+  return {
+    id: vd.id,
+    name: vd.name || '',
+    ids: (vd.ids || []).map(map),
+    panX: vd.panX, panY: vd.panY, zoom: vd.zoom,
+    createdAt: vd.createdAt || '',
+    updatedAt: vd.updatedAt || '',
+    color: vd.color || '',
+  };
+}
+
+// Index 0 is "no colour" so a chip can always be cleared. The rest are the
+// same eight the relation menu offers, so one board does not end up speaking
+// two different colour languages.
+var VIEW_COLORS = ['', '#00e5ff', '#ffdd44', '#ff6b6b', '#51cf66', '#cc5de8', '#ff922b', '#74c0fc', '#ffffff'];
+
+function viewColor(v) {
+  const c = (v && v.color) ? v.color : '';
+  return (c && VIEW_COLORS.indexOf(c) >= 0) ? c : '';
+}
+
+// hex -> a wash dark enough that the number inside stays readable.
+function viewTint(hex) {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(String(hex || ''));
+  if (!m) return 'transparent';
+  const n = parseInt(m[1], 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',0.20)';
+}
+
 function nextViewId() {
   if (!Number.isFinite(G.nextViewId)) {
     G.nextViewId = _viewsList().reduce(function (m, v) {
@@ -7522,24 +7591,40 @@ function gotoView(index, opts) {
 function saveViewFromSelection(name) {
   const ids = [];
   state.selected.forEach(function (id) { ids.push(id); });
+  // v7.0.46: refuse outright while the tape is running. Dropping an unnamed
+  // view into the middle of a pitch is worse than the keypress doing nothing —
+  // the name field cannot open (there is no typing mid-pitch), so it would land
+  // as "View 7" and the running order would stay wrong for the whole meeting.
+  if (state._present) {
+    try { toast('Stop the presentation before adding a shot'); } catch (e) {}
+    return null;
+  }
   if (!ids.length) {
-    try { toast('Select the items this view should frame first'); } catch (e) {}
+    // Name the key. A nag that does not say which key to press just sends the
+    // user hunting through a 236px rail again, which is the thing being fixed.
+    try { toast('Select what this shot should frame, then press P'); } catch (e) {}
     return null;
   }
   try { pushUndo(); } catch (e) {}
   if (!Array.isArray(state.views)) state.views = [];
+  const suggested = String(name || suggestViewName(ids) || nextViewNameInSequence() ||
+                           ('View ' + (state.views.length + 1))).slice(0, 60) || 'View';
   const v = {
     id: nextViewId(),
-    name: String(name || ('View ' + (state.views.length + 1))).slice(0, 60) || 'View',
+    name: suggested,
     ids: ids,
     panX: state.pan.x, panY: state.pan.y, zoom: state.zoom,
     createdAt: new Date().toISOString(),
+    color: '',
   };
   state.views.push(v);
   state._activeViewIndex = state.views.length - 1;
   try { scheduleAutoSave(); } catch (e) {}
-  renderViewsPanel();
   try { toast('Saved "' + v.name + '" · ' + ids.length + ' item' + (ids.length === 1 ? '' : 's')); } catch (e) {}
+  // v7.0.46: the name field is already open with the suggestion selected, so
+  // naming a shot is one gesture — type, Enter — instead of a hunt through a
+  // menu. Skipped when the tape is running: there is no typing mid-pitch.
+  beginViewRename(state.views.length - 1);
   return v;
 }
 
@@ -7565,6 +7650,8 @@ function deleteView(index) {
   const v = list[index];
   if (!v) return false;
   try { pushUndo(); } catch (e) {}
+  if (state._viewEditingId === v.id) state._viewEditingId = 0;
+  if (state._viewSwatchId === v.id) state._viewSwatchId = 0;
   list.splice(index, 1);
   if (state._activeViewIndex === index) state._activeViewIndex = -1;
   else if (state._activeViewIndex > index) state._activeViewIndex--;
@@ -7574,16 +7661,106 @@ function deleteView(index) {
   return true;
 }
 
-function renameViewAt(index) {
+// A name you have to replace every single time is not a name, it is a tax.
+// If the selection contains words the user actually wrote, that is what the
+// shot is about — use them. Media filenames are deliberately NOT used: an
+// auto-name of "IMG_4821.HEIC" is worse than "View 4", because it looks like
+// information and is not.
+function suggestViewName(ids) {
+  const want = new Set(ids || []);
+  if (!want.size) return '';
+  let label = '';
+  (state.texts || []).forEach(function (t) {
+    if (label || !want.has(t.id)) return;
+    const raw = (t.el && t.el.textContent) ? String(t.el.textContent) : '';
+    const lines = raw.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim()) { label = lines[i].trim(); return; }
+    }
+  });
+  return label ? label.replace(/\s+/g, ' ').slice(0, 40) : '';
+}
+
+// "View 4" is not a name, it is a tax — and it is the complaint that started
+// this whole change: every view came out numbered, so every view had to be
+// renamed by hand. When the last view already ends in a number, that number is
+// a running order being typed out one keypress at a time, so carry it forward:
+// "CU 1" offers "CU 2", and the second shot costs what the twentieth costs.
+// Zero padding is preserved — "Beat 07" offers "Beat 08" — because a list that
+// starts padded sorts wrong everywhere else the moment one entry loses it.
+//
+// Only the LAST view is consulted. Walking back to find the nearest numbered
+// name would answer "CU 3" after an unrelated "Finale", which is surprising
+// rather than helpful.
+function nextViewNameInSequence() {
+  const list = _viewsList();
+  if (!list.length) return '';
+  const prev = String((list[list.length - 1] || {}).name || '').trim();
+  const m = /^(.*?)(\d+)\s*$/.exec(prev);
+  if (!m) return '';
+  const digits = m[2];
+  const n0 = parseInt(digits, 10);
+  if (!isFinite(n0)) return '';
+  const taken = {};
+  list.forEach(function (v) { taken[String((v && v.name) || '').trim()] = 1; });
+  let name = '';
+  for (let i = 0, n = n0 + 1; i < 1000; i++, n++) {
+    let out = String(n);
+    if (digits.length > 1 && digits.charAt(0) === '0') {
+      while (out.length < digits.length) out = '0' + out;
+    }
+    name = m[1] + out;
+    // Never offer a name the tape already has: Alt+1..0 jumps by position, so
+    // two rows reading the same name is a running order that contradicts itself.
+    if (!taken[name]) break;
+  }
+  return String(name || '').slice(0, 60);
+}
+
+// One editor for all three entry points (double-click, F2, and the moment a
+// view is created). It used to be window.prompt(): a native dialog that
+// cannot be styled, interrupts the flow, and on macOS reads as the app
+// having crashed. Editing is keyed on the view ID, not its index, so a
+// re-render mid-edit cannot silently retarget it at a different view.
+function beginViewRename(index) {
   const v = _viewsList()[index];
   if (!v) return false;
-  let name = null;
-  try { name = window.prompt('Name this view', v.name || ''); } catch (e) {}
-  if (name === null) return false;
-  name = String(name).trim().slice(0, 60);
-  if (!name) return false;
+  if (state._present) return false;          // never fight the tape
+  const panel = document.getElementById('views-panel');
+  if (panel) panel.classList.remove('collapsed');
+  state._viewSwatchId = 0;
+  state._viewEditingId = v.id;
+  renderViewsPanel();
+  return true;
+}
+
+function commitViewRename(id, value, cancelled) {
+  state._viewEditingId = 0;                  // cleared first: blur re-enters
+  const v = _viewsList().filter(function (x) { return x.id === id; })[0];
+  if (v && !cancelled) {
+    const next = String(value == null ? '' : value).trim().slice(0, 60);
+    if (next && next !== v.name) {
+      try { pushUndo(); } catch (e) {}
+      v.name = next;
+      try { scheduleAutoSave(); } catch (e) {}
+    }
+  }
+  renderViewsPanel();
+  return true;
+}
+
+// Kept under its old name because it is the documented "rename view" entry
+// point; it now opens the inline editor instead of a native dialog.
+function renameViewAt(index) { return beginViewRename(index); }
+
+function setViewColor(id, color) {
+  const v = _viewsList().filter(function (x) { return x.id === id; })[0];
+  if (!v) return false;
+  const c = (color && VIEW_COLORS.indexOf(color) >= 0) ? color : '';
+  state._viewSwatchId = 0;
+  if (viewColor(v) === c) { renderViewsPanel(); return false; }
   try { pushUndo(); } catch (e) {}
-  v.name = name;
+  v.color = c;
   try { scheduleAutoSave(); } catch (e) {}
   renderViewsPanel();
   return true;
@@ -7697,29 +7874,82 @@ function renderViewsPanel() {
   el.classList.toggle('presenting', !!state._present);
   const presentBtn = document.getElementById('views-present-btn');
   if (presentBtn) presentBtn.textContent = state._present ? '■ Stop' : '▶ Present';
+  const headText = document.getElementById('views-head-text');
+  if (headText) headText.textContent = list.length ? ('Views ' + list.length) : 'Views';
   if (!list.length) {
-    listEl.innerHTML = '<div class="views-empty">Select items on the board,<br>then press <b>＋</b> to save a view.</div>';
+    listEl.innerHTML = '<div class="views-empty">Select something on the board,<br>then press <b>P</b> to add it to Present.</div>';
     return;
   }
   listEl.innerHTML = '';
+  let toFocus = null, activeRow = null;
   list.forEach(function (v, i) {
     const row = document.createElement('div');
     row.className = 'view-row';
-    if (state._present && state._present.index === i) row.classList.add('active');
+    if (state._present && state._present.index === i) { row.classList.add('active'); activeRow = row; }
     else if (state._activeViewIndex === i) row.classList.add('current');
+    const col = viewColor(v);
+
+    // The number is also the colour chip. A 236px rail already carries a
+    // name, a count and four buttons — there is no room for a separate dot,
+    // and the shortcut hint and the colour want the same eyeball anyway.
     const num = document.createElement('span');
-    num.className = 'view-num';
-    // Alt+1..9 / Alt+0 address the first ten views; later ones show a dot.
+    num.className = 'view-num' + (col ? ' tinted' : '');
     num.textContent = (i < 9) ? String(i + 1) : (i === 9 ? '0' : '·');
-    num.title = (i < 10) ? ('Alt+' + ((i + 1) % 10)) : 'No shortcut (past the first 10)';
+    num.title = (i < 10 ? ('Alt+' + ((i + 1) % 10) + ' · ') : '') + 'Click for a colour';
+    if (col) {
+      num.style.color = col;
+      num.style.borderColor = col;
+      num.style.background = viewTint(col);
+    }
+    num.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      state._viewSwatchId = (state._viewSwatchId === v.id) ? 0 : v.id;
+      renderViewsPanel();
+    });
     row.appendChild(num);
-    const name = document.createElement('span');
-    name.className = 'view-name';
-    name.textContent = v.name || ('View ' + (i + 1));
-    name.title = 'Click to fly here · double-click to rename';
-    name.addEventListener('click', function (ev) { ev.stopPropagation(); gotoView(i); });
-    name.addEventListener('dblclick', function (ev) { ev.stopPropagation(); renameViewAt(i); });
-    row.appendChild(name);
+
+    if (state._viewEditingId === v.id) {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'view-name-edit';
+      input.value = v.name || '';
+      input.maxLength = 60;
+      input.setAttribute('aria-label', 'View name');
+      const finish = function (save) { commitViewRename(v.id, input.value, !save); };
+      input.addEventListener('keydown', function (ev) {
+        ev.stopPropagation();
+        if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
+        else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+        // Tab walks the tape's names, so a whole running order can be typed
+        // without ever touching the mouse.
+        else if (ev.key === 'Tab') {
+          ev.preventDefault();
+          const next = i + (ev.shiftKey ? -1 : 1);
+          finish(true);
+          if (next >= 0 && next < list.length) beginViewRename(next);
+        }
+      });
+      input.addEventListener('blur', function () {
+        if (state._viewEditingId !== v.id) return;   // Enter already finished
+        finish(true);
+      });
+      input.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+      row.appendChild(input);
+      toFocus = input;
+    } else {
+      const name = document.createElement('span');
+      name.className = 'view-name';
+      name.textContent = v.name || ('View ' + (i + 1));
+      name.title = 'Click to fly here · double-click or F2 to rename';
+      name.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        state._viewSwatchId = 0;
+        gotoView(i);
+      });
+      name.addEventListener('dblclick', function (ev) { ev.stopPropagation(); beginViewRename(i); });
+      row.appendChild(name);
+    }
+
     const cnt = document.createElement('span');
     cnt.className = 'view-count';
     const live = viewLiveIds(v).length;
@@ -7741,7 +7971,34 @@ function renderViewsPanel() {
     row.appendChild(mk('↻', 'Re-aim at the current selection / camera', function () { updateViewFromCurrent(i); }));
     row.appendChild(mk('×', 'Delete this view', function () { deleteView(i); }));
     listEl.appendChild(row);
+
+    if (state._viewSwatchId === v.id) {
+      const strip = document.createElement('div');
+      strip.className = 'view-swatches';
+      VIEW_COLORS.forEach(function (c) {
+        const sw = document.createElement('button');
+        sw.className = 'view-swatch' + ((col || '') === c ? ' on' : '') + (c ? '' : ' none');
+        if (c) sw.style.background = c;
+        sw.title = c ? ('Colour ' + c) : 'No colour';
+        sw.addEventListener('click', function (ev) { ev.stopPropagation(); setViewColor(v.id, c); });
+        strip.appendChild(sw);
+      });
+      listEl.appendChild(strip);
+    }
   });
+
+  // Focus has to wait for the element to be in the document, and the field
+  // opens pre-selected so typing replaces the suggestion outright.
+  if (toFocus) {
+    const inp = toFocus;
+    requestAnimationFrame(function () {
+      try { inp.focus(); inp.select(); inp.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+    });
+  } else if (activeRow) {
+    // A tape of twenty views is taller than the rail; without this the shot
+    // being presented walks out of sight.
+    try { activeRow.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+  }
 }
 
 // Alt+1..9, Alt+0 — jump straight to a view. These are the keys that make
@@ -7751,6 +8008,22 @@ function renderViewsPanel() {
 // `ev.key >= '0' && ev.key <= '9'` test never fires on a Mac, which is exactly
 // where this shortcut matters most. ev.code reports the physical key
 // ('Digit1') regardless of what the modifier layer produced.
+// F2 — rename the view you are on. Alt+digit gets you there; F2 is the one
+// that fixes the name when you arrive, without aiming at a row.
+document.addEventListener('keydown', function (ev) {
+  if (ev.key !== 'F2' || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  const tgt = ev.target;
+  if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return;
+  const vlist = _viewsList();
+  if (!vlist.length) return;
+  ev.preventDefault();
+  let i = state._activeViewIndex;
+  if (!(i >= 0 && i < vlist.length)) {
+    i = (state._present && state._present.index >= 0) ? state._present.index : 0;
+  }
+  beginViewRename(i);
+}, true);
+
 document.addEventListener('keydown', function (ev) {
   if (!ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
   const code = ev.code || '';
@@ -7916,10 +8189,7 @@ function captureSnapshot() {
     })),
     // v7.0.40: named views round-trip through undo. They carry no media, just
     // names and id lists, so they cost a few hundred bytes per view.
-    views: (state.views || []).map(v => ({
-      id: v.id, name: v.name || '', ids: (v.ids || []).slice(),
-      panX: v.panX, panY: v.panY, zoom: v.zoom, createdAt: v.createdAt || '',
-    })),
+    views: (state.views || []).map(serializeView),
     drawStrokes: G.drawStrokes,
     relations: (state.relations || []).map(function(r) { return { id: r.id, fromId: r.fromId, toId: r.toId, fromAnchor: r.fromAnchor, toAnchor: r.toAnchor, label: r.label || '', style: r.style || 'orthogonal', color: r.color || '#00e5ff', lineWidth: r.lineWidth || 6, labelSize: r.labelSize || 16 }; }),
     nextZ: G.nextZ, nextId: G.nextId, nextGroupId: G.nextGroupId, nextViewId: G.nextViewId, nextStrokeId: G.nextStrokeId,
@@ -8325,12 +8595,7 @@ function applySnapshot(snap) {
   // but the panel has to be redrawn or the list keeps showing the pre-undo
   // rows, which is exactly the "I deleted a view and it came back" confusion
   // in reverse.
-  state.views = (snap.views || []).map(function (v) {
-    return {
-      id: v.id, name: v.name || '', ids: (v.ids || []).slice(),
-      panX: v.panX, panY: v.panY, zoom: v.zoom, createdAt: v.createdAt || '',
-    };
-  });
+  state.views = (snap.views || []).map(function (v) { return deserializeView(v); });
   G.nextViewId = Number.isFinite(snap.nextViewId) ? snap.nextViewId : undefined;
   if (state._activeViewIndex >= state.views.length) state._activeViewIndex = -1;
   try { renderViewsPanel(); } catch (e) {}
@@ -21762,16 +22027,19 @@ function _guideHTML() {
     '<h3 style="color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Named views &amp; presenting</h3>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">' +
       '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
-        '<tr><td style="padding:4px 0;color:#888;">＋ in the Views rail</td><td style="padding:4px 0;">Save the selection as a view</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;"><b>P</b></td><td style="padding:4px 0;">Add what is selected to Present — the name field opens ready to type</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;"><b>Shift+P</b></td><td style="padding:4px 0;">Play the views in order</td></tr>' +
         '<tr><td style="padding:4px 0;color:#888;">Alt+1 … Alt+0</td><td style="padding:4px 0;">Fly to the 1st–10th view</td></tr>' +
-        '<tr><td style="padding:4px 0;color:#888;">▶ Present</td><td style="padding:4px 0;">Play the views in order</td></tr>' +
-        '<tr><td style="padding:4px 0;color:#888;">Click a view</td><td style="padding:4px 0;">Fly there · double-click to rename</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Click a view</td><td style="padding:4px 0;">Fly there · double-click or <b>F2</b> to rename</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">A name ending in a number</td><td style="padding:4px 0;">The next shot offers the one after it — "CU 1" then "CU 2"</td></tr>' +
       '</table>' +
       '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
         '<tr><td style="padding:4px 0;color:#888;">Space / →</td><td style="padding:4px 0;">Next view while presenting</td></tr>' +
         '<tr><td style="padding:4px 0;color:#888;">←</td><td style="padding:4px 0;">Previous view</td></tr>' +
         '<tr><td style="padding:4px 0;color:#888;">Esc</td><td style="padding:4px 0;">Stop presenting</td></tr>' +
         '<tr><td style="padding:4px 0;color:#888;">↻ on a row</td><td style="padding:4px 0;">Re-aim that view at what is selected now</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Click the number</td><td style="padding:4px 0;">Colour-code a view so it is findable at a glance</td></tr>' +
+        '<tr><td style="padding:4px 0;color:#888;">Tab while naming</td><td style="padding:4px 0;">Commit and step to the next name</td></tr>' +
       '</table>' +
     '</div>' +
     '<p style="margin:10px 0 0;font-size:11px;color:#7a7a8a;line-height:1.5;">A view remembers <b>which items</b> it frames, not a frozen rectangle — move or tidy them and the view re-fits to where they ended up. Views save with the .kpak, so whoever opens the board later sees your running order. Touching the board (wheel or click) stops the tape; it assumes you are taking over.</p>' +
@@ -33998,7 +34266,7 @@ function buildManifest() {
     groups: state.groups.map(g => ({ id: g.id, color: g.color, memberIds: [...g.memberIds] })),
     // v7.0.40: named views persist in .kpak, so the running order survives
     // the meeting — whoever opens the board later sees the same tape.
-    views: (state.views || []).map(v => ({ id: v.id, name: v.name || '', ids: (v.ids || []).slice(), panX: v.panX, panY: v.panY, zoom: v.zoom, createdAt: v.createdAt || '' })),
+    views: (state.views || []).map(serializeView),
     nextViewId: G.nextViewId,
     nextGroupId: G.nextGroupId,
     nextId: G.nextId, nextZ: G.nextZ, nextStrokeId: G.nextStrokeId,
@@ -35968,7 +36236,7 @@ function serializeBoard() {
     })),
     drawStrokes: G.drawStrokes,
     groups: state.groups.map(g => ({ id: g.id, color: g.color, memberIds: [...g.memberIds] })),
-    views: (state.views || []).map(v => ({ id: v.id, name: v.name || '', ids: (v.ids || []).slice(), panX: v.panX, panY: v.panY, zoom: v.zoom, createdAt: v.createdAt || '' })),
+    views: (state.views || []).map(serializeView),
     nextViewId: G.nextViewId,
     nextGroupId: G.nextGroupId,
     nextId: G.nextId, nextZ: G.nextZ, nextStrokeId: G.nextStrokeId,
@@ -36713,13 +36981,7 @@ function restoreBoard(data, append) {
   if (!append) state.views = [];
   if (data.views && data.views.length) {
     data.views.forEach(function (vd) {
-      state.views.push({
-        id: vd.id,
-        name: vd.name || '',
-        ids: (vd.ids || []).map(_remapId),
-        panX: vd.panX, panY: vd.panY, zoom: vd.zoom,
-        createdAt: vd.createdAt || '',
-      });
+      state.views.push(deserializeView(vd, _remapId));
     });
     // Full load: trust the saved counter. Append: the two boards' counters
     // may collide, so drop it and let nextViewId() re-derive from the merged

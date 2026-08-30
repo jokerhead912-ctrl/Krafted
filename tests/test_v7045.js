@@ -1,4 +1,4 @@
-// v7.0.45 regression suite — a 0 KB save is impossible to report as success
+// v7.0.46 regression suite — a 0 KB save is impossible to report as success
 //
 //   "Sometimes when I save it's unstable and it writes a 0 KB file. First get
 //    rid of that. Then, if a save really does fail, make it raise an alarm and
@@ -42,7 +42,7 @@ const SWJS = process.env.KRAFTED_SW
 const src = fs.readFileSync(HTML, 'utf8');
 const sw = fs.readFileSync(SWJS, 'utf8');
 
-const EXPECT_VERSION = '7.0.45';
+const EXPECT_VERSION = '7.0.46';
 
 let pass = 0, fail = 0;
 function ok(cond, label) {
@@ -119,7 +119,12 @@ function fnTop(header, s) {
 // enough: commenting a call out with /* ... */ leaves the text behind and a
 // bare indexOf still finds it — four mutations escaped test_v7043 that way.
 function codeOnly(s) {
-  return s.replace(/\/\*[\s\S]*?\*\//g, '')
+  // The cap matters. This file contains a string literal '/*' whose matching
+  // '*/' sits 270 KB further on, so an unbounded strip deletes 42% of the
+  // source — every assertion then runs against a file that has silently lost
+  // the code it is meant to be checking. Real comments here top out at 831
+  // characters; the three runaway spans are all 21 KB or more.
+  return s.replace(/\/\*[\s\S]{0,4000}?\*\//g, '')
           .split('\n').filter(function (l) { return l.trim().indexOf('//') !== 0; }).join('\n');
 }
 

@@ -51,7 +51,7 @@ PY
 
 NOTCAUGHT=0
 ANCHORFAIL=0
-print "mutation check: v7.0.45 suite (a 0 KB save can no longer report success)"
+print "mutation check: v7.0.46 suite (a 0 KB save can no longer report success)"
 
 # ── THE REPORTED BUG, reintroduced five different ways ──────────────────
 
@@ -321,7 +321,7 @@ mutate "the legacy V5 engine comes back" \
 # Left at the previous version this anchor matches 0 times and the mutation
 # stops testing anything, which is worse than no mutation at all.
 mutate "KRAFTED_VERSION not bumped" \
-  "var KRAFTED_VERSION = '7.0.45';" \
+  "var KRAFTED_VERSION = '7.0.46';" \
   "var KRAFTED_VERSION = '7.0.44';"
 
 # ── done ────────────────────────────────────────────────────────────────
