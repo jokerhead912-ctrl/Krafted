@@ -17,8 +17,10 @@
 #   zsh Krafted/tests/run_all.sh --muts     # mutation scripts only (slow)
 #
 # EXIT CODE
-#   0  every suite passed and every mutation was caught, with no skips
-#   1  something failed, was not caught, or was skipped
+#   0  every suite passed, every mutation was caught with no skips, every
+#      version anchor is current, and every memory file is inside budget
+#   1  something failed, was not caught, was skipped, went stale, or grew too
+#      big to be injected whole
 
 set -u
 cd /Users/kincheung/WorkBuddy/2026-07-25-10-53-37 || exit 1
@@ -86,12 +88,27 @@ if [ "$ONLY" = "all" ] || [ "$ONLY" = "--suites" ]; then
   print ""
 fi
 
+# ── memory budgets ────────────────────────────────────────────────────────
+# WHY: MEMORY.md 係唯一会自动注入嘅记忆档。佢一胀大，注入嘅就会变成一份旧快照
+# （或者被截断）—— 无论边个，结果都係**当下嘅规则冇入到 context**，而且系静默嘅：
+# 冇报错、冇警告，净係个 agent 唔知嗰啲规则存在。2026-08-31 发现 MEMORY.md 已经
+# 174 行，而注入嗰份仲停喺 .41 嗰代。
+# 所以预算要写喺呢支会跑嘅脚本度，唔好写喺一份会胀大嘅记忆档度 —— 同一条教训
+# as `\|`。
+if [ "$ONLY" = "all" ] || [ "$ONLY" = "--suites" ]; then
+  print "── MEMORY BUDGETS ────────────────────────────────────"
+  $PY Krafted/tests/memory_guard.py
+  MRC=$?
+  print ""
+fi
+
 print "══════════════════════════════════════════════════════"
 print "suites      $PASS passed, $FAIL failed"
 print "mutations   $MUT_OK clean, $MUT_BAD with problems"
 print "            $TOTAL_SKIPS skipped anchor(s), $TOTAL_NOTCAUGHT not caught"
 
-if [ "$FAIL" -eq 0 ] && [ "$MUT_BAD" -eq 0 ] && [ "${VRC:-0}" -eq 0 ]; then
+if [ "$FAIL" -eq 0 ] && [ "$MUT_BAD" -eq 0 ] && [ "${VRC:-0}" -eq 0 ] \
+   && [ "${MRC:-0}" -eq 0 ]; then
   print ""
   print "ALL GREEN"
   exit 0
