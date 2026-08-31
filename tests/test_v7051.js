@@ -137,9 +137,17 @@ const rlp = fnFull('renderLibraryPanel', SRC);
 has("it.type === 'draw' || it.isDraw", 'renderLibraryPanel skips draw items', rlp);
 has("var q = ((document.getElementById('library-search').value) || '').toLowerCase().trim();",
     'renderLibraryPanel reads the live search query', rlp);
+// v7.0.53: the filter now DELEGATES to libMatches so the minimap can tint the
+// same set of items. Re-pointed, not relaxed: the list must call the shared
+// predicate, and the shared predicate must still match all three fields.
+has('return libMatches(it, q);',
+    'renderLibraryPanel filters through the shared libMatches predicate', rlp);
+const lm = fnFull('libMatches', SRC);
+ok(lm.length > 0, 'libMatches exists (shared by the list and the minimap)');
 has("var hay = [it.name, it.note, (it.tags || []).join(' ')].join(' ').toLowerCase();",
-    'renderLibraryPanel matches name + note + tags', rlp);
-has("hay.indexOf(q) >= 0", 'renderLibraryPanel uses a substring match, not an exact equal', rlp);
+    'libMatches searches name + note + tags', lm);
+has("hay.indexOf(q) >= 0", 'libMatches uses a substring match, not an exact equal', lm);
+has('if (!q) return true;', 'libMatches treats an empty query as "everything matches"', lm);
 has('selectOnly(it.id)', 'clicking a row selects only that item', rlp);
 has('revealItem(it)', 'clicking a row flies to / reveals the item', rlp);
 
@@ -169,7 +177,7 @@ has("case 'library-toggle-panel':   toggleLibraryPanel(); return true;",
     'the Library toggle is dispatched through the registry');
 
 // ═══ report ═══════════════════════════════════════════════════════
-console.log(`\ntest_v7051.js — Reference metadata + Library (v7.0.52)`);
+console.log(`\ntest_v7051.js — Reference metadata + Library (v7.0.53)`);
 console.log(`${'-'.repeat(46)}`);
 if (fails.length) {
   fails.forEach(f => console.log(`  FAIL  ${f}`));

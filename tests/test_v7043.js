@@ -46,7 +46,7 @@ const EXPECT_PREFIX    = 'autosave-media:';   // sentinel written in place of a 
 const EXPECT_MAX_BLOB  = 512 * 1024 * 1024;   // refuse to mirror anything larger
 const EXPECT_STORE     = 'KraftedMediaStore'; // IndexedDB object store for the bytes
 const EXPECT_DB_VER    = 2;                   // v1 had no media store
-const EXPECT_VERSION   = '7.0.52';
+const EXPECT_VERSION   = '7.0.53';
 
 // Extract a whole function body by brace matching. None of the functions
 // under test contains a brace inside a string literal, so a plain counter

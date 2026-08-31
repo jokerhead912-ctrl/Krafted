@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.52</title>
+<title>Krafted v7.0.53</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2628,6 +2628,26 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 .lib-tags { font-size:9.5px; color:var(--text-subtle); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lib-more { padding:6px 6px 4px; font-size:9.5px; color:var(--text-subtle); text-align:center; font-family:'Inter',sans-serif; }
 body.presenting #library-panel { display:none; }
+/* MINIMAP (v7.0.53) — bottom-right, opposite corner from the Library so the two
+   never fight for space. Rendered on ONE canvas, not one node per item: this
+   redraws on every pan tick, 60-120 times a second, and 300 layout boxes would
+   stall the gesture it is meant to help. */
+#minimap-panel { position:fixed; bottom:12px; right:12px; width:236px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:0; z-index:9999998; display:flex; flex-direction:column; box-shadow:var(--shadow-medium); transition:width 0.2s ease, opacity 0.2s ease; }
+#minimap-panel.collapsed #minimap-body { display:none; }
+#minimap-panel.collapsed #minimap-head { border-bottom:none; border-radius:12px; padding:8px; }
+#minimap-panel.collapsed #minimap-toggle { transform:rotate(180deg); }
+#minimap-head { display:flex; align-items:center; gap:6px; padding:8px 10px; border-bottom:1px solid var(--border-subtle); background:rgba(255,255,255,0.015); border-radius:12px 12px 0 0; user-select:none; flex-shrink:0; }
+#minimap-head h3 { font-size:10px; text-transform:uppercase; color:var(--text-subtle); margin:0; letter-spacing:1.5px; font-weight:500; font-family:'Inter',sans-serif; flex:1; }
+#minimap-toggle { width:20px; height:20px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; background:var(--input-bg); border:1px solid var(--border); color:var(--text-dim); font-size:9px; line-height:1; flex-shrink:0; transition:all 0.15s; padding:0; }
+#minimap-toggle:hover { background:var(--btn-hover); color:var(--text); }
+#minimap-body { padding:8px; }
+#minimap-canvas { display:block; width:220px; height:145px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--border-subtle); cursor:crosshair; touch-action:none; }
+#minimap-hint { font-size:9px; color:var(--text-subtle); text-align:center; padding:5px 0 1px; font-family:'Inter',sans-serif; }
+body.presenting #minimap-panel { display:none; }
+/* Below the tablet breakpoint the board is already fully visible; a map of it
+   would only cover content. */
+@media (max-width: 720px) { #minimap-panel { display:none; } }
+
 .prop-row.note-row { align-items:flex-start; }
 .prop-row.note-row textarea { flex:1; min-width:0; font-size:11px; font-family:'Inter',sans-serif; color:var(--text); background:var(--input-bg); border:1px solid var(--border); border-radius:6px; padding:4px 6px; resize:vertical; outline:none; }
 .prop-hint { font-size:9px; color:var(--text-subtle); }
@@ -4133,6 +4153,18 @@ body.screen-share-mode #ss-fps {
     </div>
   </div>
 
+<!-- MINIMAP (v7.0.53) -->
+<div id="minimap-panel" class="collapsed">
+  <div id="minimap-head">
+    <div id="minimap-toggle" onclick="toggleMinimapPanel()" title="Toggle minimap">▾</div>
+    <h3 id="minimap-head-text">Minimap</h3>
+  </div>
+  <div id="minimap-body">
+    <canvas id="minimap-canvas" width="220" height="145"></canvas>
+    <div id="minimap-hint">drag to pan / click to jump</div>
+  </div>
+</div>
+
 <!-- PRESENT HUD (v7.0.48)
      Bottom-centre, so it sits under the shot instead of across it. Only
      visible while the tape is running. The buttons use inline handlers like
@@ -4437,7 +4469,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.52';
+var KRAFTED_VERSION = '7.0.53';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6957,6 +6989,7 @@ const DEFAULT_SHORTCUTS = [
   { id: 'view-present',        category: 'View',  label: 'Present Views',            keys: [{ key: 'p', shift: true }] },
   { id: 'view-toggle-panel',   category: 'View',  label: 'Toggle Views Panel',       keys: [] },
   { id: 'library-toggle-panel', category: 'View',  label: 'Toggle Library Panel',     keys: [] },
+  { id: 'minimap-toggle-panel', category: 'View',  label: 'Toggle Minimap',           keys: [] },
   // v7.0.40: A/B compare. Palette-only — it is modal, so the moment it is open
   // it owns the keyboard anyway and needs no shortcut of its own.
   { id: 'view-ab-compare',     category: 'View',  label: 'A/B Compare Two Items',    keys: [] },
@@ -7081,6 +7114,9 @@ function updateCanvas() {
   const OFF = 50000;
   canvas.style.transform = `translate(${state.pan.x + OFF - OFF * state.zoom}px, ${state.pan.y + OFF - OFF * state.zoom}px) scale(${state.zoom})`;
   if (state.reframing && state.reframing._tb) rfPositionToolbar();
+  // v7.0.53: the map's viewport box is a view of the camera, so every camera
+  // tick is a repaint. Coalesced to one paint per frame inside the callee.
+  try { requestMinimapRefresh(); } catch (e) {}
   // v7.0.33: assigning canvas.width/height ALWAYS reallocates and wipes the
   // backing store, even when the value is identical — ~24 MB per call at
   // dpr 2 on a 1512x982 screen. updateCanvas() runs on every pan/zoom tick
@@ -7514,6 +7550,15 @@ function splitTags(s) {
   if (!s) return [];
   return String(s).split(',').map(function (t) { return t.trim(); }).filter(function (t) { return t.length; });
 }
+// ONE definition of "does this item match the Library search", shared by the
+// Library list and the minimap highlight. Two hand-written copies of the same
+// filter is the oldest root cause on this project - they always drift, and one
+// of them always ends up deciding something different from the other.
+function libMatches(it, q) {
+  if (!q) return true;
+  var hay = [it.name, it.note, (it.tags || []).join(' ')].join(' ').toLowerCase();
+  return hay.indexOf(q) >= 0;
+}
 function setItemMeta(field, value) {
   var sel = (typeof getSelectedItems === 'function') ? getSelectedItems() : [];
   if (!sel.length) return;
@@ -7616,10 +7661,10 @@ function renderLibraryPanel() {
   var q = ((document.getElementById('library-search').value) || '').toLowerCase().trim();
   var items = (state.items || []).filter(function (it) {
     if (it.type === 'draw' || it.isDraw) return false;
-    if (!q) return true;
-    var hay = [it.name, it.note, (it.tags || []).join(' ')].join(' ').toLowerCase();
-    return hay.indexOf(q) >= 0;
+    return libMatches(it, q);
   });
+  // The minimap tints search hits, so a new query is also a new map.
+  try { requestMinimapRefresh(); } catch (e) {}
   var head = document.getElementById('library-head-text');
   if (head) head.textContent = items.length ? ('Library ' + items.length) : 'Library';
   listEl.innerHTML = '';
@@ -7666,6 +7711,272 @@ function renderLibraryPanel() {
     listEl.appendChild(more);
   }
 }
+
+// ============================================================
+//  MINIMAP   (v7.0.53)
+// ============================================================
+// A board holding ~300 references cannot be navigated by panning alone - you
+// lose the shape of the thing long before you lose the position. The minimap
+// draws every object as a rectangle at board scale, plus a box for the current
+// viewport that can be GRABBED and dragged to pan. Clicking anywhere else
+// jumps the camera there.
+//
+// WHY A CANVAS, NOT DOM NODES. The Library already priced one element per
+// item: 300 <img> nodes holding full-resolution data URLs made every keystroke
+// stutter. Here it is worse - this repaints on every pan tick, 60-120 times a
+// second during a trackpad swipe. One canvas, one pass, no layout.
+//
+// WHY THE FIT IS A UNION OF CONTENT AND VIEWPORT. Fitting content alone leaves
+// the viewport box outside the map the moment you pan past the edge, so there
+// is nothing left to grab - the control would abandon you exactly when you are
+// lost. Including the viewport guarantees the box is always on-screen and
+// always draggable.
+//
+// WHY THE MAPPING FREEZES DURING A DRAG. Because the fit depends on the
+// viewport, panning can change it. Recomputing mid-gesture would slide the map
+// out from under the cursor, which moves the world point under the cursor,
+// which pans again - a feedback loop. The map is frozen at pointerdown and
+// recomputed once on release.
+var MINIMAP_W = 220, MINIMAP_H = 145;
+var _miniMap = null;      // last world -> canvas mapping
+var _miniView = null;     // last drawn viewport box, in canvas px
+var _miniDrag = null;     // live gesture: { wx, wy, cx, cy, map, moved }
+var _miniRaf = false;
+var _miniBound = false;
+
+function toggleMinimapPanel() {
+  var p = document.getElementById('minimap-panel');
+  if (!p) return;
+  p.classList.toggle('collapsed');
+  try { localStorage.setItem('krafted_minimap_collapsed', p.classList.contains('collapsed') ? '1' : '0'); } catch (e) {}
+  if (!p.classList.contains('collapsed')) { miniBindInput(); drawMinimap(); }
+}
+
+// Same shape as the Library's refresh: coalesce to one paint per frame, and do
+// nothing at all while the panel is shut.
+function requestMinimapRefresh() {
+  var p = document.getElementById('minimap-panel');
+  if (!p || p.classList.contains('collapsed')) return;
+  if (_miniRaf) return;
+  _miniRaf = true;
+  var run = function () { _miniRaf = false; drawMinimap(); };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+  else setTimeout(run, 60);
+}
+
+// Every rectangle worth showing: board items, plus text and to-dos so a
+// text-heavy board is not a blank map.
+function miniRects() {
+  var out = [];
+  (state.items || []).forEach(function (it) {
+    if (!(it.w > 0) || !(it.h > 0)) return;
+    out.push({ id: it.id, x: it.x, y: it.y, w: it.w, h: it.h });
+  });
+  [state.texts, state.todos].forEach(function (list) {
+    (list || []).forEach(function (t) {
+      if (!(t.w > 0) || !(t.h > 0)) return;
+      out.push({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h });
+    });
+  });
+  return out;
+}
+
+// The visible world rectangle. screen = pan + zoom * world (see updateCanvas),
+// so world = (screen - pan) / zoom.
+function miniViewportRect() {
+  var z = state.zoom || 1;
+  var sw = window.innerWidth || 0, sh = window.innerHeight || 0;
+  return {
+    x0: (0 - state.pan.x) / z, y0: (0 - state.pan.y) / z,
+    x1: (sw - state.pan.x) / z, y1: (sh - state.pan.y) / z
+  };
+}
+
+function miniComputeMap(W, H) {
+  W = W || MINIMAP_W; H = H || MINIMAP_H;
+  var bb = (typeof worldBBoxOf === 'function') ? worldBBoxOf(null) : null;
+  var v = miniViewportRect();
+  if ((!bb || !bb.count) && !isFinite(v.x0)) return null;
+  var minX, minY, maxX, maxY;
+  if (bb && bb.count) {
+    minX = Math.min(bb.minX, v.x0); minY = Math.min(bb.minY, v.y0);
+    maxX = Math.max(bb.maxX, v.x1); maxY = Math.max(bb.maxY, v.y1);
+  } else {
+    minX = v.x0; minY = v.y0; maxX = v.x1; maxY = v.y1;
+  }
+  var bw = maxX - minX, bh = maxY - minY;
+  var padX = bw > 0 ? bw * 0.06 : 10, padY = bh > 0 ? bh * 0.06 : 10;
+  minX -= padX; maxX += padX; minY -= padY; maxY += padY;
+  bw = Math.max(1, maxX - minX); bh = Math.max(1, maxY - minY);
+  var s = Math.min(W / bw, H / bh);
+  return { minX: minX, minY: minY, s: s, ox: (W - bw * s) / 2, oy: (H - bh * s) / 2 };
+}
+
+function miniToWorld(px, py) {
+  var m = (_miniDrag && _miniDrag.map) ? _miniDrag.map : _miniMap;
+  if (!m || !(m.s > 0)) return null;
+  return { x: (px - m.ox) / m.s + m.minX, y: (py - m.oy) / m.s + m.minY };
+}
+
+// Ids matching the Library search, or null when there is no search. The
+// predicate itself lives next to splitTags - one definition, two readers.
+function libMatchIds() {
+  var el = document.getElementById('library-search');
+  var q = (el && (el.value || '').toLowerCase().trim()) || '';
+  if (!q) return null;
+  var out = (typeof Set !== 'undefined') ? new Set() : null;
+  (state.items || []).forEach(function (it) {
+    if (!libMatches(it, q)) return;
+    if (out) out.add(String(it.id));
+  });
+  return out;
+}
+
+function miniPaint(ctx, m, W, H) {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Search hits are tinted, everything else dimmed - "where are the things I
+  // just searched for" is the question a big board actually asks.
+  var hits = libMatchIds();
+  var sel = (typeof getSelectedItems === 'function') ? getSelectedItems() : [];
+  var selId = sel.length ? String(sel[0].id) : null;
+  var rects = miniRects();
+  for (var i = 0; i < rects.length; i++) {
+    var r = rects[i];
+    var x = m.ox + (r.x - m.minX) * m.s;
+    var y = m.oy + (r.y - m.minY) * m.s;
+    var w = Math.max(1.5, r.w * m.s);
+    var h = Math.max(1.5, r.h * m.s);
+    var id = String(r.id);
+    if (hits && !hits.has(id)) ctx.fillStyle = 'rgba(125,135,150,0.16)';
+    else if (id === selId) ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    else if (hits) ctx.fillStyle = 'rgba(0,229,255,0.9)';
+    else ctx.fillStyle = 'rgba(150,175,200,0.55)';
+    ctx.fillRect(x, y, w, h);
+  }
+
+  // The viewport box is recomputed here rather than carried on the mapping, so
+  // that it still moves while the mapping is frozen mid-drag.
+  var v = miniViewportRect();
+  var vx = m.ox + (v.x0 - m.minX) * m.s, vy = m.oy + (v.y0 - m.minY) * m.s;
+  var vw = (v.x1 - v.x0) * m.s, vh = (v.y1 - v.y0) * m.s;
+  _miniView = { x: vx, y: vy, w: vw, h: vh };
+  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  ctx.fillRect(vx, vy, vw, vh);
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(vx + 0.5, vy + 0.5, Math.max(2, vw - 1), Math.max(2, vh - 1));
+}
+
+function drawMinimap() {
+  var p = document.getElementById('minimap-panel');
+  if (!p || p.classList.contains('collapsed')) return;
+  var cv = document.getElementById('minimap-canvas');
+  if (!cv || !cv.getContext) return;
+  var ctx = cv.getContext('2d');
+  if (!ctx) return;
+  var W = cv.width || MINIMAP_W, H = cv.height || MINIMAP_H;
+  var m = (_miniDrag && _miniDrag.map) ? _miniDrag.map : miniComputeMap(W, H);
+  if (!m) {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0, 0, W, H);
+    _miniMap = null;
+    return;
+  }
+  _miniMap = m;
+  miniPaint(ctx, m, W, H);
+}
+
+function miniPoint(ev) {
+  var cv = document.getElementById('minimap-canvas');
+  if (!cv || !cv.getBoundingClientRect) return null;
+  var r = cv.getBoundingClientRect();
+  if (!r.width || !r.height) return null;
+  return {
+    x: (ev.clientX - r.left) * (cv.width / r.width),
+    y: (ev.clientY - r.top) * (cv.height / r.height)
+  };
+}
+
+function miniCenterOn(wx, wy) {
+  var z = state.zoom || 1;
+  state.pan.x = (window.innerWidth || 0) / 2 - z * wx;
+  state.pan.y = (window.innerHeight || 0) / 2 - z * wy;
+  updateCanvas();
+}
+
+function miniOnDown(ev) {
+  var m = _miniMap || miniComputeMap();
+  if (!m) return;
+  _miniMap = m;
+  var p = miniPoint(ev);
+  if (!p) return;
+  var w = miniToWorld(p.x, p.y);
+  if (!w) return;
+  var z = state.zoom || 1;
+  var cx = ((window.innerWidth || 0) / 2 - state.pan.x) / z;
+  var cy = ((window.innerHeight || 0) / 2 - state.pan.y) / z;
+  var v = _miniView;
+  var inside = !!(v && p.x >= v.x && p.x <= v.x + v.w && p.y >= v.y && p.y <= v.y + v.h);
+  // Freeze the mapping for the whole gesture (see the header comment).
+  _miniDrag = { wx: w.x, wy: w.y, cx: cx, cy: cy, map: m, moved: false };
+  // Grabbing inside the box pans; clicking outside it jumps first, then pans.
+  if (!inside) miniCenterOn(w.x, w.y);
+  try { ev.preventDefault(); } catch (e) {}
+  try { ev.stopPropagation(); } catch (e) {}
+  document.addEventListener('pointermove', miniOnMove);
+  document.addEventListener('pointerup', miniOnUp);
+  document.addEventListener('pointercancel', miniOnUp);
+}
+
+function miniOnMove(ev) {
+  if (!_miniDrag) return;
+  var p = miniPoint(ev);
+  if (!p) return;
+  var w = miniToWorld(p.x, p.y);
+  if (!w) return;
+  _miniDrag.moved = true;
+  miniCenterOn(_miniDrag.cx + (w.x - _miniDrag.wx), _miniDrag.cy + (w.y - _miniDrag.wy));
+}
+
+function miniOnUp() {
+  _miniDrag = null;
+  document.removeEventListener('pointermove', miniOnMove);
+  document.removeEventListener('pointerup', miniOnUp);
+  document.removeEventListener('pointercancel', miniOnUp);
+  // The fit is a union with the viewport, so the gesture will have changed it.
+  requestMinimapRefresh();
+}
+
+// Bound lazily: the canvas is in the markup, but sizing its backing store to
+// the device pixel ratio has to wait for a real element.
+function miniBindInput() {
+  if (_miniBound) return;
+  var cv = document.getElementById('minimap-canvas');
+  if (!cv) return;
+  var dpr = window.devicePixelRatio || 1;
+  var bw = Math.round(MINIMAP_W * dpr), bh = Math.round(MINIMAP_H * dpr);
+  if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+  cv.addEventListener('pointerdown', miniOnDown);
+  _miniBound = true;
+}
+
+(function initMinimapPanel() {
+  var apply = function () {
+    var p = document.getElementById('minimap-panel');
+    if (!p) return;
+    var collapsed = true;
+    try { collapsed = localStorage.getItem('krafted_minimap_collapsed') !== '0'; } catch (e) {}
+    p.classList.toggle('collapsed', collapsed);
+    miniBindInput();
+    drawMinimap();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+  else apply();
+})();
 
 // ============================================================
 //  NAMED VIEWS + PRESENT   (v7.0.40, batch-5 proposal G)
@@ -9313,6 +9624,8 @@ function refreshSelection() {
   // v7.0.52: keep the Library highlight on the current selection. Cheap on
   // purpose - it flips classes, it never rebuilds the list.
   try { libSyncActive(); } catch (e) {}
+  // v7.0.53: the map tints the selected item too.
+  try { requestMinimapRefresh(); } catch (e) {}
 }
 function addHandles(item) {
   const handles = [
@@ -25289,6 +25602,7 @@ function _dispatchShortcut(e) {
     case 'view-present':           startPresent(); return true;
     case 'view-toggle-panel':      toggleViewsPanel(); return true;
     case 'library-toggle-panel':   toggleLibraryPanel(); return true;
+    case 'minimap-toggle-panel':   toggleMinimapPanel(); return true;
     case 'view-ab-compare':        openABCompare(); return true;
     case 'edit-reframe':           enterReframe(getSelectedImages()); return true;
     default: return false;
@@ -38013,6 +38327,7 @@ function scheduleAutoSave() {
   // search / toggle / row click, so the list silently went stale - deleted
   // items stayed in it and clicking one flew the camera at a dead object.
   try { requestLibraryRefresh(); } catch (e) {}
+  try { requestMinimapRefresh(); } catch (e) {}
   // v6.8.27: longer debounce (5s) for large boards — serializing a board with
   // many base64/blob URLs every 2s creates GC pressure and can OOM.
   state.autoSaveTimer = setTimeout(() => {

@@ -263,12 +263,17 @@ attempt('executable: the row cap and its footer', () => {
     for (let i = 0; i < n; i++) a.push({ id: 'i' + i, name: 'Item ' + i, type: 'image', tags: [], note: '' });
     return a;
   };
+  // v7.0.53: the filter is no longer inline - it delegates to libMatches. Pull
+  // the REAL predicate into the sandbox rather than stubbing it, so this block
+  // exercises the shipped matching rule instead of a stand-in.
+  const realLibMatches = instantiate(fnFull('libMatches', SRC), '', { __ret: 'libMatches' });
   const render = instantiate(rlp, 'var LIB_ROW_CAP = 150; var _libActiveId = null;', {
     __ret: 'renderLibraryPanel',
     document: doc,
     state: { items: mkItems(200) },
     getSelectedItems: () => [],
-    libThumbSrc: () => null
+    libThumbSrc: () => null,
+    libMatches: realLibMatches
   });
 
   render();
@@ -356,7 +361,7 @@ has("case 'library-toggle-panel':   toggleLibraryPanel(); return true;",
     'the shortcut still dispatches', SRC);
 
 // ═══ report ═══════════════════════════════════════════════════════════
-console.log(`test_v7052.js  (v7.0.52 Library keeps up with the board)`);
+console.log(`test_v7052.js  (v7.0.53 Library keeps up with the board)`);
 if (fails.length) {
   console.log(`  ${pass} passed, ${fails.length} FAILED`);
   fails.forEach(f => console.log('    FAIL  ' + f));
