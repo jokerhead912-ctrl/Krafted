@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.47</title>
+<title>Krafted v7.0.48</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2586,7 +2586,7 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #views-present-btn:hover { background:var(--btn-hover); border-color:var(--accent); }
 #views-panel.presenting #views-present-btn { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
 
-/* PRESENT HUD (v7.0.47)
+/* PRESENT HUD (v7.0.48)
    Bottom-centre under the shot, hidden until the tape starts. Tabular
    numerals so "3 / 12" does not jitter as the count changes mid-pitch. */
 #present-hud { position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(8px); display:none; align-items:center; gap:10px; padding:8px 14px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:999px; box-shadow:var(--shadow-medium); z-index:9999997; font-family:'Inter',sans-serif; opacity:0; transition:opacity 0.18s ease, transform 0.18s ease; }
@@ -2633,6 +2633,12 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #ab-hint { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); font-size:11px; color:#9a9aa8; background:rgba(0,0,0,0.55); padding:6px 13px; border-radius:6px; font-family:'Inter',sans-serif; pointer-events:none; z-index:4; max-width:80%; text-align:center; }
 #ab-close { position:absolute; top:12px; right:12px; width:30px; height:30px; border-radius:50%; border:1px solid rgba(255,255,255,0.14); background:rgba(0,0,0,0.45); color:#d8d8e2; font-size:19px; cursor:pointer; line-height:1; z-index:5; padding:0; }
 #ab-close:hover { background:rgba(255,255,255,0.16); color:#fff; }
+.ab-lock { padding:5px 10px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#c8c8d4; border-radius:6px; cursor:pointer; font-size:12px; font-family:'Inter',sans-serif; transition:all 0.15s; display:flex; align-items:center; gap:4px; }
+.ab-lock:hover { background:rgba(255,255,255,0.11); color:#fff; }
+.ab-lock.active { background:rgba(0,229,255,0.15); color:#00e5ff; border-color:rgba(0,229,255,0.4); }
+/* When locked, isolate the compare overlay from any board interaction */
+#ab-compare.locked #ab-stage img { -webkit-user-drag:none; user-drag:none; pointer-events:none; }
+#ab-compare.locked #ab-stage { touch-action:none; }
 
 /* LASSO (POLYGON CUT) TOOL */
 #lasso-overlay { position:fixed; inset:0; z-index:9999997; display:none; pointer-events:none; }
@@ -4062,7 +4068,7 @@ body.screen-share-mode #ss-fps {
   </div>
 </div>
 
-<!-- PRESENT HUD (v7.0.47)
+<!-- PRESENT HUD (v7.0.48)
      Bottom-centre, so it sits under the shot instead of across it. Only
      visible while the tape is running. The buttons use inline handlers like
      the rest of the chrome — the app wires its panels that way throughout,
@@ -4366,7 +4372,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.47';
+var KRAFTED_VERSION = '7.0.48';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7448,7 +7454,7 @@ var VIEW_MAX_ZOOM = 1;        // never upscale — magnified pixels kill a pitch
 var VIEW_FIT_MARGIN = 64;     // breathing room, capped on small screens
 var VIEW_FLIGHT_MS = 620;     // camera move duration
 var PRESENT_DWELL_MS = 4000;  // auto-play only: how long a shot holds
-// v7.0.47: the tape is MANUAL by default. It used to advance on a fixed
+// v7.0.48: the tape is MANUAL by default. It used to advance on a fixed
 // 4.6-second clock no matter what the user was doing — including right
 // after they pressed "next" themselves, which simply restarted the same
 // clock. Presenting means talking about a shot for as long as it takes.
@@ -7824,17 +7830,17 @@ function startPresent() {
     try { toast('Save a view first — select items, then +'); } catch (e) {}
     return;
   }
-  // v7.0.47: auto starts OFF. See PRESENT_AUTO_DEFAULT.
+  // v7.0.48: auto starts OFF. See PRESENT_AUTO_DEFAULT.
   state._present = { index: -1, timer: null, auto: PRESENT_AUTO_DEFAULT };
   // Capture phase so a board hotkey cannot swallow the tape controls.
   _presentKeyHandler = function (ev) {
     if (!state._present) return;
-    // v7.0.47: never shadow the browser. Cmd/Ctrl+1 switches tab and Cmd+A
+    // v7.0.48: never shadow the browser. Cmd/Ctrl+1 switches tab and Cmd+A
     // selects all, and a pitch tool that eats those is worse than one that
     // misses a keypress. Alt is left out too — on macOS the Option layer
     // turns "1" into "¡", so ev.key is not even the character shown.
     if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
-    // v7.0.47: if a text field has the caret, every key belongs to it. The
+    // v7.0.48: if a text field has the caret, every key belongs to it. The
     // rename editor can still be open when a tape starts, and without this
     // the tape eats the typing — Space advanced the shot instead of typing
     // a space. Escape included: cancelling the rename is what was meant.
@@ -7871,7 +7877,7 @@ function startPresent() {
   setTimeout(function () {
     if (!state._present) return;
     _presentUserHandler = function (ev) {
-      // v7.0.47: the HUD's own buttons must not read as the user grabbing the
+      // v7.0.48: the HUD's own buttons must not read as the user grabbing the
       // board, or the first click on "next" would end the tape it advances.
       const hud = document.getElementById('present-hud');
       if (hud && ev.target && hud.contains(ev.target)) return;
@@ -7911,7 +7917,7 @@ function stopPresent() {
 // flight's completion callback. If the flight is cancelled (the user grabbed
 // the board mid-move) the callback never runs, and a tape that can silently
 // stall halfway through a pitch is worse than one whose timing is 600ms loose.
-// v7.0.47: that timer now exists ONLY while auto-play is on. It used to be
+// v7.0.48: that timer now exists ONLY while auto-play is on. It used to be
 // scheduled unconditionally, so pressing "next" by hand started a 4.6-second
 // clock that then took the shot away mid-sentence.
 function presentScheduleNext() {
@@ -7951,7 +7957,7 @@ function presentAdvance(dir) {
   if (p.auto) presentScheduleNext();
 }
 
-// v7.0.47 — auto-play is opt-in, not the default. Switching it on starts the
+// v7.0.48 — auto-play is opt-in, not the default. Switching it on starts the
 // clock from now; switching it off leaves the tape exactly where it is, so
 // "I want to talk about this one" never costs the user their place.
 function presentToggleAuto(on) {
@@ -7979,7 +7985,7 @@ function presentGoTo(i) {
   if (p.auto) presentScheduleNext();
 }
 
-// v7.0.47 — the HUD. Presenting from a board 100000px across, the two things
+// v7.0.48 — the HUD. Presenting from a board 100000px across, the two things
 // you cannot see are "where am I in the running order" and "what comes next",
 // so a pitch used to be paced from memory. The nodes are built once in the
 // markup and updated here by textContent only: a shot name is user text and
@@ -19630,6 +19636,22 @@ function openABCompare() {
   return true;
 }
 
+function abToggleLock() {
+  if (!_ab.el) return;
+  _ab.locked = !_ab.locked;
+  const btn = _ab.el.querySelector('#ab-lock');
+  const icon = btn ? btn.querySelector('.ab-lock-icon') : null;
+  if (_ab.locked) {
+    _ab.el.classList.add('locked');
+    if (btn) btn.classList.add('active');
+    if (icon) icon.textContent = '🔒';
+  } else {
+    _ab.el.classList.remove('locked');
+    if (btn) btn.classList.remove('active');
+    if (icon) icon.textContent = '🔓';
+  }
+}
+
 function closeABCompare() {
   if (!_ab.el) return;
   _ab.el.classList.remove('open', 'holding');
@@ -19712,6 +19734,7 @@ function _abEnsureEl() {
       '<button class="ab-mode" data-mode="side" title="Side by side (2)">Side by side</button>' +
       '<button class="ab-mode" data-mode="hold" title="Hold to compare (3)">Hold</button>' +
       '<button class="ab-swap" title="Swap A and B (S)">⇄</button>' +
+      '<button class="ab-lock" id="ab-lock" title="Lock — prevent accidental board interaction (L)"><span class="ab-lock-icon">🔓</span></button>' +
     '</div>' +
     '<div id="ab-stage">' +
       '<div class="ab-pane" id="ab-pane-a"><div class="ab-frame" id="ab-frame-a"><img id="ab-img-a" alt="A"></div></div>' +
@@ -19729,6 +19752,7 @@ function _abEnsureEl() {
     btn.addEventListener('click', function (ev) { ev.stopPropagation(); abSetMode(btn.getAttribute('data-mode')); });
   });
   el.querySelector('.ab-swap').addEventListener('click', function (ev) { ev.stopPropagation(); abSwap(); });
+  el.querySelector('#ab-lock').addEventListener('click', function (ev) { ev.stopPropagation(); abToggleLock(); });
   el.addEventListener('click', function (ev) { if (ev.target === el) closeABCompare(); });
 
   const stage = el.querySelector('#ab-stage');
@@ -19761,6 +19785,10 @@ function _abEnsureEl() {
   stage.addEventListener('pointerdown', function (ev) {
     if (_ab.mode !== 'hold') return;
     if (ev.target && ev.target.closest && ev.target.closest('#ab-close')) return;
+    // Always stop propagation to prevent board underneath from receiving events.
+    // When locked, also preventDefault to block any browser drag/text-selection.
+    ev.stopPropagation();
+    if (_ab.locked) ev.preventDefault();
     _ab.holding = true;
     el.classList.add('holding');
   });
@@ -19786,6 +19814,7 @@ document.addEventListener('keydown', function (ev) {
   if (k === '2') { ev.preventDefault(); ev.stopPropagation(); abSetMode('side'); return; }
   if (k === '3') { ev.preventDefault(); ev.stopPropagation(); abSetMode('hold'); return; }
   if (k === 's' || k === 'S') { ev.preventDefault(); ev.stopPropagation(); abSwap(); return; }
+  if (k === 'l' || k === 'L') { ev.preventDefault(); ev.stopPropagation(); abToggleLock(); return; }
   // Hold B. The repeat guard stops auto-repeat from re-asserting the flag
   // after a keyup that arrived while the key was still down.
   if ((k === 'b' || k === 'B') && !ev.repeat) {
