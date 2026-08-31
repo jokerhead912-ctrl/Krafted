@@ -9,8 +9,8 @@ WHY THIS EXISTS
 
       1. `grep -E 'a\\|b'`  - in this shell `\\|` is NOT alternation, only a bare
          `|` under -E is. Every hand-typed alternation silently returns nothing.
-      2. `perl -i -pe 's/A\\.B\\.C/A.B.C/g'` - misses the ESCAPED form
-         `A\\.B\\.C` that suites carry in their regexes, and a global s/// on
+      2. `perl -i -pe 's/7\\.0\\.48/7.0.48/g'` - misses the ESCAPED form
+         `7\\.0\\.48` that suites carry in their regexes, and a global s/// on
          the app file would also rewrite the ~400 historical `// v7.0.XX:`
          comments that must stay where they are.
 
@@ -53,12 +53,7 @@ DEV_HTML = os.path.join(ROOT, 'kraftpub-v6.8.0.html')
 SW_JS = os.path.join(ROOT, 'Krafted', 'docs', 'sw.js')
 TESTS = os.path.join(ROOT, 'Krafted', 'tests')
 
-# Matches BOTH the plain form `X.Y.Z` and the escaped form `X\.Y\.Z`
-# that suites carry inside their regexes. Written without a literal
-# version on purpose: this file is itself a bump target, so any
-# example number here gets rewritten at the next release and turns
-# into a lie (this docstring once claimed a _v7047 file mapped to the
-# release after it, which its own regex can never produce).
+# Matches BOTH the plain form `7.0.48` and the escaped form `7\.0\.47`.
 VER = re.compile(r'(\d+(?:\\?\.\d+){2})')
 
 # Positions that name the version the app currently IS. `{}` is the version.
@@ -87,7 +82,7 @@ def _compile(templates):
 IDENTITY_RES = _compile(IDENTITY_TEMPLATES)
 COMMENT_IDENTITY_RES = _compile(COMMENT_IDENTITY_TEMPLATES)
 
-# `<!--` must be here: the app file carries `<!-- PRESENT HUD (vX.Y.Z) -->`
+# `<!--` must be here: the app file carries `<!-- PRESENT HUD (v7.0.48) -->`
 # style banners, and a bare `//`-only list would read those as code.
 COMMENT_PREFIXES = ('//', '#', '/*', '*', '<!--')
 
@@ -127,7 +122,7 @@ def target_files():
 
 
 def own_version(path):
-    """The release a test file belongs to, from its name: test_v70NN.js -> 7.0.NN."""
+    """The release a test file belongs to, from its name: test_v7047.js -> 7.0.48."""
     m = re.search(r'_v(\d)(\d)(\d+)(?:_|\.)', os.path.basename(path))
     return '%s.%s.%s' % m.groups() if m else None
 
@@ -135,7 +130,7 @@ def own_version(path):
 def identity_spans(line):
     """Map start offset -> (end offset, survives_on_a_comment_line).
 
-    The second field separates `// Krafted vX.Y.Z Service Worker` (an identity
+    The second field separates `// Krafted v7.0.48 Service Worker` (an identity
     that happens to be spelled as a comment) from an identity template that only
     shows up inside a comment - the latter is history, not identity.
     """

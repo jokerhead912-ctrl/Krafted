@@ -19558,7 +19558,7 @@ async function snapSingleTranslate(id, _explicitItem) {
 // bitten this project was two code paths painting the SAME pixels and drifting
 // apart; nothing is painted here, so there is nothing to drift.
 
-var _ab = { a: null, b: null, mode: 'wipe', pos: 50, el: null, holding: false, dragging: false };
+var _ab = { a: null, b: null, mode: 'wipe', pos: 50, el: null, holding: false, dragging: false, locked: true };
 
 function _abItemComparable(item) {
   return !!(item && ((item.img && item.img.src) || (item.video && item.video.videoWidth)));
@@ -19629,6 +19629,7 @@ function openABCompare() {
   el.querySelector('#ab-tag-b').textContent = 'B · ' + b.name;
   el.querySelector('#ab-title').textContent = a.name + '  ↔  ' + b.name;
   el.classList.add('open');
+  abSyncLockUI();
   try { document.body.style.overflow = 'hidden'; } catch (e) {}
   abSetMode(_ab.mode || 'wipe');
   abSetPos(_ab.pos);
@@ -19636,20 +19637,26 @@ function openABCompare() {
   return true;
 }
 
+// Single source of truth for the lock's visual state. openABCompare calls
+// this too, so the button can never drift out of sync with _ab.locked.
+function abSyncLockUI() {
+  if (!_ab.el) return;
+  const locked = !!_ab.locked;
+  _ab.el.classList.toggle('locked', locked);
+  const btn = _ab.el.querySelector('#ab-lock');
+  if (!btn) return;
+  btn.classList.toggle('active', locked);
+  const icon = btn.querySelector('.ab-lock-icon');
+  if (icon) icon.textContent = locked ? '\uD83D\udd12' : '\uD83D\udd13';
+  btn.title = locked
+    ? 'Locked - board interaction blocked. Click or press L to unlock.'
+    : 'Unlocked - dragging may reach the board. Click or press L to lock.';
+}
+
 function abToggleLock() {
   if (!_ab.el) return;
   _ab.locked = !_ab.locked;
-  const btn = _ab.el.querySelector('#ab-lock');
-  const icon = btn ? btn.querySelector('.ab-lock-icon') : null;
-  if (_ab.locked) {
-    _ab.el.classList.add('locked');
-    if (btn) btn.classList.add('active');
-    if (icon) icon.textContent = '🔒';
-  } else {
-    _ab.el.classList.remove('locked');
-    if (btn) btn.classList.remove('active');
-    if (icon) icon.textContent = '🔓';
-  }
+  abSyncLockUI();
 }
 
 function closeABCompare() {
@@ -19727,6 +19734,8 @@ function _abEnsureEl() {
   const el = document.createElement('div');
   el.id = 'ab-compare';
   el.setAttribute('data-mode', 'wipe');
+  // v7.0.48: locked by default — holding to compare must not reach the board.
+  el.classList.add('locked');
   el.innerHTML =
     '<div id="ab-bar">' +
       '<span id="ab-title"></span>' +
@@ -19734,7 +19743,7 @@ function _abEnsureEl() {
       '<button class="ab-mode" data-mode="side" title="Side by side (2)">Side by side</button>' +
       '<button class="ab-mode" data-mode="hold" title="Hold to compare (3)">Hold</button>' +
       '<button class="ab-swap" title="Swap A and B (S)">⇄</button>' +
-      '<button class="ab-lock" id="ab-lock" title="Lock — prevent accidental board interaction (L)"><span class="ab-lock-icon">🔓</span></button>' +
+      '<button class="ab-lock active" id="ab-lock" title="Locked — board interaction blocked. Click or press L to unlock."><span class="ab-lock-icon">🔒</span></button>' +
     '</div>' +
     '<div id="ab-stage">' +
       '<div class="ab-pane" id="ab-pane-a"><div class="ab-frame" id="ab-frame-a"><img id="ab-img-a" alt="A"></div></div>' +

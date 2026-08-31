@@ -130,7 +130,7 @@ const fakeDoc = {
 const block = slice('function selectedVideoItems() {', '//  CONTACT SHEET (v7.0.38)',
                     'trim module (selectedVideoItems .. I/O hotkey)');
 
-// v7.0.47: `timelineArgs` records WHAT the repaint was asked for, not just
+// v7.0.48: `timelineArgs` records WHAT the repaint was asked for, not just
 // that it happened. Inside this slice updateVideoTimeline() has exactly one
 // caller — refreshTrimUIFor(), which calls it once per item — so `timeline`
 // and `timelineArgs` ARE the repaint request. Counting the call alone cannot
@@ -178,7 +178,7 @@ try {
   fail++;
 }
 
-// v7.0.47: a `const realRefresh = api.refreshTrimUIFor;` used to sit here with
+// v7.0.48: a `const realRefresh = api.refreshTrimUIFor;` used to sit here with
 // a comment claiming it wrapped the repaint so it could be counted. It never
 // wrapped anything, and wrapping could not have worked anyway: trimHotkey()
 // calls the refreshTrimUIFor DECLARED INSIDE this slice, so reassigning
@@ -377,7 +377,7 @@ eq(api.TRIM_MIN_GAP, EXPECT_TRIM_MIN_GAP, 'TRIM_MIN_GAP equals the spec');
      'press 1: the toast says the mark came from the cursor');
   eq(it.video.paused, true, 'the clip is paused so the playhead cannot drift mid-press');
 
-  // v7.0.47: the repaint has to be asked for THIS item. `refreshTrimUIFor([])`
+  // v7.0.48: the repaint has to be asked for THIS item. `refreshTrimUIFor([])`
   // still runs and still returns; the UI just silently stops updating. An
   // assertion that only checks the call is present stays green through it,
   // which is why these two pin the argument rather than the call.
@@ -633,14 +633,14 @@ eq(api.TRIM_MIN_GAP, EXPECT_TRIM_MIN_GAP, 'TRIM_MIN_GAP equals the spec');
 // 10. Version
 // ═══════════════════════════════════════════════════════════════════════
 {
-  ok(src.indexOf("var KRAFTED_VERSION = '7.0.47';") >= 0, 'KRAFTED_VERSION bumped');
-  ok(src.indexOf('<title>Krafted v7.0.47</title>') >= 0, 'title bumped');
+  ok(src.indexOf("var KRAFTED_VERSION = '7.0.48';") >= 0, 'KRAFTED_VERSION bumped');
+  ok(src.indexOf('<title>Krafted v7.0.48</title>') >= 0, 'title bumped');
   const swPath = process.env.KRAFTED_SW
     ? path.resolve(process.env.KRAFTED_SW)
     : path.resolve(__dirname, '../docs/sw.js');
   const sw = fs.readFileSync(swPath, 'utf8');
-  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.47-'") >= 0, 'sw CACHE_NAME bumped');
-  ok(sw.indexOf("const APP_VERSION = '7.0.47';") >= 0, 'sw APP_VERSION bumped');
+  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.0.48-'") >= 0, 'sw CACHE_NAME bumped');
+  ok(sw.indexOf("const APP_VERSION = '7.0.48';") >= 0, 'sw APP_VERSION bumped');
 }
 
 console.log('');

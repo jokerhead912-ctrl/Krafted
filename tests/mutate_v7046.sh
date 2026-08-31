@@ -345,7 +345,7 @@ mutate "the help panel stops naming Shift+P" \
   "'<tr><td style=\"padding:4px 0;color:#888;\"><b>Shift+P</b></td>" \
   "'<tr><td style=\"padding:4px 0;color:#888;\">▶ Present</td>"
 
-# v7.0.47 rewrote this tooltip — the tape no longer plays itself, so the
+# v7.0.48 rewrote this tooltip — the tape no longer plays itself, so the
 # button now says you drive it. Anchor on the wording as it is today, and
 # strip the key from it rather than the whole sentence.
 mutate "the Present button stops naming its key" \
@@ -360,8 +360,8 @@ mutate "a refused save stops saying which key to press" \
 # v7.0.46: the anchor has to name the version the source now carries. Left at
 # 7.0.45 it silently matches 0 times and this mutation stops testing anything.
 mutate "KRAFTED_VERSION not bumped" \
-  "var KRAFTED_VERSION = '7.0.47';" \
-  "var KRAFTED_VERSION = '7.0.46';"
+  "var KRAFTED_VERSION = '7.0.48';" \
+  "var KRAFTED_VERSION = '7.0.47';"
 
 print ""
 if [ $ANCHORFAIL -ne 0 ]; then

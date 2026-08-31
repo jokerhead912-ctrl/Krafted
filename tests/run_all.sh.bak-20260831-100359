@@ -15,13 +15,6 @@
 #   zsh Krafted/tests/run_all.sh            # everything
 #   zsh Krafted/tests/run_all.sh --suites   # suites only (fast)
 #   zsh Krafted/tests/run_all.sh --muts     # mutation scripts only (slow)
-#   zsh Krafted/tests/run_all.sh --bump     # bump version anchors, then everything
-#
-# UNKNOWN FLAGS ARE REJECTED ON PURPOSE. Until 2026-08-31 an unrecognised
-# argument matched none of the mode tests, so every block was skipped and the
-# script fell through to the summary with FAIL=0 / MUT_BAD=0 / VRC and MRC
-# unset - printing a confident ALL GREEN having run nothing at all. A typo in
-# the flag was indistinguishable from a clean run.
 #
 # EXIT CODE
 #   0  every suite passed, every mutation was caught with no skips, every
@@ -35,29 +28,6 @@ NODE=/Users/kincheung/.workbuddy/binaries/node/versions/22.12.0/bin/node
 PY=/Users/kincheung/.workbuddy/binaries/python/versions/3.13.12/bin/python3
 
 ONLY=${1:-all}
-
-# Reject anything we do not implement. Without this, a typo silently skips
-# every block and the summary below still prints ALL GREEN (see UNKNOWN FLAGS
-# note at the top of this file). Failing loudly is the whole point of a gate.
-case "$ONLY" in
-  all|--suites|--muts|--bump) ;;
-  *)
-    print "run_all.sh: unknown mode '$ONLY'" >&2
-    print "usage: run_all.sh [all|--suites|--muts|--bump]" >&2
-    exit 2
-    ;;
-esac
-
-# --bump: rewrite the version anchors first, then run the whole net against
-# the bumped sources. version_scan.py does the rewrite; it is called with no
-# arguments everywhere else, which is a dry run by design.
-if [ "$ONLY" = "--bump" ]; then
-  print "── BUMP ──────────────────────────────────────────────"
-  /Users/kincheung/.workbuddy/binaries/python/versions/3.13.12/bin/python3 \
-    Krafted/tests/version_scan.py --bump
-  print ""
-  ONLY=all
-fi
 
 PASS=0
 FAIL=0

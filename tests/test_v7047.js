@@ -1,4 +1,4 @@
-// v7.0.47 regression suite — the tape waits for you
+// v7.0.48 regression suite — the tape waits for you
 //
 //   "I collect a lot of reference images and clips and organise them into a
 //    rough script, then I need it to be easy when a vendor sends a work-in-
@@ -37,7 +37,7 @@ const SWJS = process.env.KRAFTED_SW
 const src = fs.readFileSync(HTML, 'utf8');
 const sw = fs.readFileSync(SWJS, 'utf8');
 
-const EXPECT_VERSION = '7.0.47';
+const EXPECT_VERSION = '7.0.48';
 
 // The spec. These are what the behaviour is asserted against; the app's own
 // constants are pinned to them separately, so a change to the app shows up as

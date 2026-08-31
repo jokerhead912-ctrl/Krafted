@@ -86,7 +86,7 @@ mutate "an unset out edge reads as 0 instead of the whole clip" \
   "  return (typeof it.trimEnd === 'number' && it.trimEnd > 0) ? it.trimEnd : dur;" \
   "  return (typeof it.trimEnd === 'number') ? it.trimEnd : dur;"
 
-# v7.0.47: REMOVED - v7.0.44 reversed this behaviour on purpose. The old code
+# v7.0.48: REMOVED - v7.0.44 reversed this behaviour on purpose. The old code
 # dragged the playhead onto a new in point, which parked it exactly on the mark,
 # so the very next press of the other key read that same time back and produced
 # a segment one minimum-gap long with both handles glued together. Premiere
@@ -141,7 +141,7 @@ mutate "the menu starts reading the cursor (the two paths diverge)" \
   "    const t = Math.max(0, Math.min(v.duration, v.currentTime || 0));" \
   "    const t = (trimTimeAtPointer(it) != null) ? trimTimeAtPointer(it) : Math.max(0, Math.min(v.duration, v.currentTime || 0));"
 
-# v7.0.47: REMOVED as a duplicate. v7.0.44 rewrote the dispatcher as an
+# v7.0.48: REMOVED as a duplicate. v7.0.44 rewrote the dispatcher as an
 # `if (!typingIO) {` guard wrapping
 #   var _ioHit = e.shiftKey ? clearTrimMark(_ioWhich) : trimHotkey(_ioWhich);
 # and mutate_v7044.sh pins that exact line twice: "Shift+I / Shift+O stop
@@ -181,8 +181,8 @@ mutate "the hotkey stops persisting the mark" \
 # ── version ───────────────────────────────────────────────────────────────
 
 mutate "the version bump is forgotten" \
-  "var KRAFTED_VERSION = '7.0.47';" \
-  "var KRAFTED_VERSION = '7.0.46';"
+  "var KRAFTED_VERSION = '7.0.48';" \
+  "var KRAFTED_VERSION = '7.0.47';"
 
 print ""
 print "restoring…"

@@ -1,4 +1,4 @@
-// v7.0.47 regression suite — naming a view, and one view shape instead of six
+// v7.0.48 regression suite — naming a view, and one view shape instead of six
 //
 //   "The Present stuff from the last couple of times: renaming is really
 //    inconvenient, right now they're all called View 1 2 3 4 and I have to
@@ -47,7 +47,7 @@ const SWJS = process.env.KRAFTED_SW
 const src = fs.readFileSync(HTML, 'utf8');
 const sw = fs.readFileSync(SWJS, 'utf8');
 
-const EXPECT_VERSION = '7.0.47';
+const EXPECT_VERSION = '7.0.48';
 
 let pass = 0, fail = 0;
 function ok(cond, label) {
@@ -891,7 +891,7 @@ has(codeOnly(fnFull('saveViewFromSelection', src)), 'beginViewRename(',
     'saving a view opens the editor');
 has(codeOnly(fnFull('saveViewFromSelection', src)), 'suggestViewName(ids)',
     'saving a view asks for a suggested name before falling back to View N');
-// v7.0.47: the guard moved from "skip the rename" to "refuse the whole save".
+// v7.0.48: the guard moved from "skip the rename" to "refuse the whole save".
 // Half-refusing it built an unnamed row into a live running order, which is
 // worse than the keypress doing nothing. Asserted here as a shape and above,
 // in section 3, as behaviour.
@@ -957,7 +957,7 @@ eq(occs(panelCode, 'finish('), 4,
   has(h, 'Colour', 'the help mentions colour-coding');
   has(h, 'Tab while naming', 'the help mentions Tab walking the names');
   has(h, 'ready to type', 'the help says the name field opens ready to type');
-  // The bare "<b>P</b>" is no longer a test. v7.0.47 added a second row that
+  // The bare "<b>P</b>" is no longer a test. v7.0.48 added a second row that
   // names P as the previous-shot key while a tape runs, so asserting on the
   // tag alone stays green even with the row that teaches ADDING a shot
   // deleted. The mutation check proved it: it went green on that deletion.
@@ -1060,7 +1060,7 @@ eq(occs(panelCode, 'finish('), 4,
       'the ＋ button names the key, so the rail teaches the shortcut');
   has(src, 'then press <b>P</b> to add it to Present',
       'an empty rail tells you the key instead of pointing at the ＋ button');
-  // v7.0.47 rewrote this tooltip: the tape no longer plays itself, so the
+  // v7.0.48 rewrote this tooltip: the tape no longer plays itself, so the
   // button has to say that you drive it. Assert the part that teaches the
   // shortcut, not the whole sentence — the wording will change again.
   has(src, 'title="Present the views', 'the Present button still describes itself');
