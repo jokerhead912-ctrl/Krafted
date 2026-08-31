@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Krafted 週末更新 · 功能總覽 + 測試清單 (v7.0.38 - v7.0.47)</title>
+<style>
+  :root{
+    --bg:#12141a; --panel:#1a1d26; --panel2:#20242f; --line:#2c313f;
+    --txt:#e6e9f0; --dim:#98a0b3; --accent:#6ea8fe; --ok:#5ddc8a;
+    --warn:#ffb454; --chip:#2a3040;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--txt);
+    font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;
+  }
+  .wrap{max-width:940px; margin:0 auto; padding:0 20px 100px}
+  header{padding:38px 0 22px; border-bottom:1px solid var(--line); margin-bottom:26px}
+  h1{margin:0 0 8px; font-size:26px; letter-spacing:.2px}
+  .sub{color:var(--dim); font-size:14px}
+  .sub code{background:var(--chip); padding:2px 7px; border-radius:4px; color:var(--accent); font-size:13px}
+
+  .bar{
+    position:sticky; top:0; z-index:9; background:rgba(18,20,26,.94);
+    backdrop-filter:blur(8px); border-bottom:1px solid var(--line);
+    padding:11px 0; margin-bottom:24px; font-size:13px; display:flex;
+    gap:16px; align-items:center; flex-wrap:wrap;
+  }
+  .bar .grow{flex:1}
+  .track{height:6px; background:var(--line); border-radius:99px; overflow:hidden; width:190px}
+  .track i{display:block; height:100%; width:0; background:var(--ok); transition:width .25s}
+  button.mini{
+    background:var(--panel2); color:var(--dim); border:1px solid var(--line);
+    border-radius:6px; padding:5px 11px; font-size:12px; cursor:pointer;
+  }
+  button.mini:hover{color:var(--txt); border-color:#3d445a}
+
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:11px;
+    padding:18px 20px; margin-bottom:16px;
+  }
+  .card h2{margin:0 0 4px; font-size:17px; display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+  .ver{
+    font:600 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+    background:var(--accent); color:#0d1017; padding:5px 8px; border-radius:5px;
+  }
+  .when{color:var(--dim); font-size:12px}
+  .what{color:var(--dim); font-size:14px; margin:10px 0 14px; padding-left:12px; border-left:2px solid var(--line)}
+  .what b{color:var(--txt); font-weight:600}
+
+  ol.steps{margin:0; padding-left:0; list-style:none; counter-reset:s}
+  ol.steps li{
+    counter-increment:s; position:relative; padding:9px 0 9px 42px;
+    border-top:1px solid var(--line); cursor:pointer; user-select:none; font-size:14px;
+  }
+  ol.steps li:first-child{border-top:0}
+  ol.steps li::before{
+    content:counter(s); position:absolute; left:9px; top:10px; width:20px; height:20px;
+    border:1.5px solid var(--line); border-radius:5px; font:600 11px/18px ui-monospace,monospace;
+    text-align:center; color:var(--dim); background:var(--panel2);
+  }
+  ol.steps li.done{color:var(--dim); text-decoration:line-through; text-decoration-color:#4a5165}
+  ol.steps li.done::before{content:"\2713"; background:var(--ok); border-color:var(--ok); color:#0d1017}
+  .exp{display:block; color:var(--warn); font-size:12.5px; font-style:normal; text-decoration:none; margin-top:3px}
+  li.done .exp{opacity:.45}
+
+  .note{background:var(--panel2); border-left:3px solid var(--warn); border-radius:0 7px 7px 0;
+    padding:12px 15px; margin:14px 0 0; font-size:13.5px; color:var(--dim)}
+  .note b{color:var(--warn)}
+  .note.info{border-left-color:var(--accent)} .note.info b{color:var(--accent)}
+
+  .kv{display:grid; grid-template-columns:auto 1fr; gap:6px 14px; font-size:14px; margin:12px 0 0}
+  .kv dt{color:var(--dim)} .kv dd{margin:0}
+  .kv dd code{background:var(--chip); padding:2px 6px; border-radius:4px; font-size:13px; color:var(--accent)}
+
+  footer{margin-top:34px; padding-top:20px; border-top:1px solid var(--line); color:var(--dim); font-size:13px}
+  @media(max-width:640px){ .wrap{padding:0 14px 80px} h1{font-size:21px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Krafted 週末更新 · 功能總覽 + 測試清單</h1>
+  <div class="sub">
+    v7.0.38 &rarr; v7.0.47　·　2026-08-29 深夜 &rarr; 08-31 清晨　·　10 個版本，app 源碼一行未倒退<br>
+    呢份清單會記住你剔過嘅格（存喺瀏覽器 localStorage），唔使一次過試完。
+  </div>
+</header>
+
+<div class="bar">
+  <span id="count">0 / 0</span>
+  <span class="track"><i id="fill"></i></span>
+  <span class="grow"></span>
+  <button class="mini" id="reset">全部重設</button>
+</div>
+
+<!-- ============ 點樣開 ============ -->
+<div class="card">
+  <h2><span class="ver">WIN</span> 喺 Windows 點開嚟試</h2>
+  <dl class="kv">
+    <dt>網址</dt><dd><code>https://jokerhead912-ctrl.github.io/Krafted/</code>　（會自動跳去 <code>kraftpub.html</code>）</dd>
+    <dt>瀏覽器</dt><dd><b>Chrome 或 Edge</b>。原因：存檔用嘅 File System Access API（<code>showSaveFilePicker</code>）只有 Chromium 系有；Firefox 會跌落舊嘅下載流程，v7.0.45 嘅 0 KB 防護就試唔到真嘅路徑。</dd>
+    <dt>第一次開</dt><dd>Service Worker 已經喺 <code>v7.0.47</code>，但請 <b>開完再 reload 一次</b>（Ctrl+R），確保新 cache 生效。</dd>
+    <dt>PWA</dt><dd>地址列右邊有安裝圖示，裝落去會當獨立 app 開，離線都用得。</dd>
+    <dt>版本確認</dt><dd>網頁標題會寫 <code>Krafted v7.0.47</code>。見到舊版 = cache 未清，撳 Ctrl+Shift+R。</dd>
+  </dl>
+  <div class="note info"><b>線上同本地逐 byte 相同</b>：我啱啱 curl 落嚟同開發檔 <code>cmp</code> 過，完全一致；<code>sw.js</code> 亦都喺 7.0.47。所以網上試到嘅就係最新嗰份。</div>
+</div>
+
+<!-- ============ v7.0.38 ============ -->
+<div class="card">
+  <h2><span class="ver">v7.0.38</span> 影片排版 / 播放器三密度 / Contact Sheet <span class="when">08-29 深夜</span></h2>
+  <div class="what">
+    <b>做咗乜：</b>你之前「Tidy 完影片太細要去手動拉」——量過先知 <code>.media-controls-row</code> 最闊要 <b>643px</b>，而 Tidy 嘅欄闊永遠係 280px，<b>冇任何影片尺寸可以裝得落</b>。你手動拉大係繞過一個排版 bug，唔係尺寸偏好。加咗三級密度（full / compact &lt;660 / micro &lt;440）、Contact Sheet（4/6/9/12/24 格）、同 trim 嘅前門（右鍵選單 + palette）。
+  </div>
+  <ol class="steps">
+    <li>放幾段片落板，執行 Tidy　<span class="exp">→ 播放器掣應該完整顯示，唔使手動拉闊</span></li>
+    <li>將一段片慢慢拉窄，穿過 660px 同 440px　<span class="exp">→ 掣應該分兩級收，micro 收起音量 slider 但<b>保留靜音掣</b></span></li>
+    <li>右鍵一段片 → Contact Sheet　<span class="exp">→ 出 4/6/9/12/24 格縮圖，格闊 320px</span></li>
+    <li>Contact Sheet 揀幾格 → Send to Board　<span class="exp">→ 應該真係落板，唔係得個對話框</span></li>
+  </ol>
+</div>
+
+<!-- ============ v7.0.39 ============ -->
+<div class="card">
+  <h2><span class="ver">v7.0.39</span> 復原已刪除影片 + 右鍵選單唔再飛出畫面 <span class="when">08-30 00:00</span></h2>
+  <div class="what">
+    <b>做咗乜：</b>兩個靜默 bug。① 影片 delete 咗再 undo，圖會變黑——<code>blob:</code> URL 係「簽發佢嗰份文件」嘅把手，revoke 早咗就係死指標。呢個係 v7.0.43 空殼 bug 嘅同一家族。② 右鍵選單貼住遊標但<b>冇邊界檢查</b>，又冇 <code>max-height</code>，近畫面邊緣會飛出去、長選單會出界。而家：量度 → 翻轉 → <b>無條件 clamp</b>（陷阱：翻轉之後遠邊會啱啱壓喺遊標上面，所以 clamp 要喺翻轉之後再行一次）→ 加 <code>max-height</code> + 捲軸。
+  </div>
+  <ol class="steps">
+    <li>加一段片 → Delete → Ctrl+Z　<span class="exp">→ 影片要<b>播得返</b>，唔係黑框</span></li>
+    <li>喺畫面<b>最右下角</b>右鍵一張圖　<span class="exp">→ 選單要翻轉去左上方，完整喺畫面內</span></li>
+    <li>喺<b>最左邊、最上面</b>各右鍵一次　<span class="exp">→ 同樣唔可以出界</span></li>
+    <li>右鍵一張有好多項嘅嘢（例如影片）　<span class="exp">→ 選單要有高度上限 + 可以捲，唔可以長到出畫面</span></li>
+  </ol>
+  <div class="note"><b>Windows 專登試：</b>如果你用雙螢幕，喺<b>副螢幕</b>嘅右邊緣右鍵一次。Mac 修呢個嗰陣淨係有內建螢幕嘅假設。</div>
+</div>
+
+<!-- ============ v7.0.40 ============ -->
+<div class="card">
+  <h2><span class="ver">v7.0.40</span> Frame comment 每幀一張圖 + Named views + A/B compare <span class="when">08-30 01:45</span></h2>
+  <div class="what">
+    <b>做咗乜：</b>三件。① Frame comment 終於每幀 capture 一張圖（之前導出淨得一張）。② <b>Named views</b>（提案 G）：一個 view 存嘅係 <b>item id，唔係座標</b>——你每日都會 Tidy，凍結嘅矩形一郁就指住空氣。③ <b>A/B compare</b>（提案 E）：兩張 <code>&lt;img&gt;</code> + 一個 <code>clip-path</code>，<b>唔係新嘅 renderer</b>——呢個 project 最常踩嘅就係兩條路徑畫同一批像素然後走歪，呢度一件都冇畫。
+  </div>
+  <ol class="steps">
+    <li>開段片，喺三個唔同時間點各加一個 frame comment　<span class="exp">→ 三個 comment 要係<b>三張唔同嘅圖</b></span></li>
+    <li>導出 frame comment　<span class="exp">→ 三張圖全部喺入面，唔係淨得第一張</span></li>
+    <li>框選幾件嘢 → 存一個 named view → 然後<b>郁開、甚至 Tidy</b> → 叫返個 view　<span class="exp">→ 要重新框住嗰幾件嘢（唔係飛去一個空位）</span></li>
+    <li>view 放大倍數　<span class="exp">→ 最大 1.0，<b>永遠唔會放大過 100%</b>（放大嘅像素會毀咗個 pitch）</span></li>
+    <li>先揀 A 再揀 B（注意次序）→ 開 A/B compare　<span class="exp">→ A 係<b>先揀</b>嗰張，唔係板上排先嗰張</span></li>
+    <li>A/B 開住嗰陣拉 wipe　<span class="exp">→ 兩邊要對齊：共用由 <b>A</b> 嘅長寬比推導出嚟嘅單一畫框。16:9 對 1:1 都要對得埋</span></li>
+  </ol>
+</div>
+
+<!-- ============ v7.0.41 ============ -->
+<div class="card">
+  <h2><span class="ver">v7.0.41</span> I / O trim 熱鍵：第二次按終於有反應 <span class="when">08-30 08:21</span></h2>
+  <div class="what">
+    <b>做咗乜：</b>「第一次掂、之後死咗」，兩個原因都係靜默嘅。① <b>keyboard event 唔可靠咁帶 <code>clientX/clientY</code></b>，<code>elementFromPoint</code> 跌咗落 <code>&lt;html&gt;</code>，判定失敗 → 跌落 playhead → playhead 冇郁過 → 寫返同一個值。第一次「掂」只係因為 playhead 啱啱好喺你上次拖嘅位。而家遊標由 <code>state.mouse</code> 攞。② <b>圖片冇時間軸</b>，以前對住圖撳會寫返一個冇變嘅值然後彈「成功」——而家會直接話你知係 no-op 同點樣郁 playhead。
+  </div>
+  <ol class="steps">
+    <li>開段片，撳 <code>I</code> 設 In point　<span class="exp">→ 出 trim 手柄</span></li>
+    <li>拖去另一個時間，<b>再撳 <code>O</code></b>　<span class="exp">→ 要出 Out point。呢個就係以前死咗嗰吓</span></li>
+    <li>連續撳多幾次 I / O，每次拖去新位　<span class="exp">→ <b>每一次都要有反應</b>，唔係淨第一次</span></li>
+    <li>對住一張<b>圖片</b>（唔係片）撳 <code>I</code>　<span class="exp">→ 要彈提示話你知做唔到、同點樣先做到，<b>唔可以詐扮成功</b></span></li>
+    <li>用右鍵選單設 In / Out，比較熱鍵嘅結果　<span class="exp">→ 兩條路線要一致：最小間距都係 0.05s，兩邊都有 undo。以前熱鍵<b>完全冇 undo step</b></span></li>
+    <li>設完 trim 撳 Ctrl+Z　<span class="exp">→ 要退得返；再 Ctrl+Shift+Z 要返得嚟</span></li>
+  </ol>
+</div>
+
+<!-- ============ v7.0.42 ============ -->
+<div class="card">
+  <h2><span class="ver">v7.0.42</span> Trim 範圍擴展（第一步：認咗個籠） <span class="when">08-30 08:30</span></h2>
+  <div class="what">
+    <b>做咗乜：</b>呢版<b>搵到</b>咗個「籠」——暫停緊嗰陣 playhead 被困喺 trim 範圍入面，搞到揀唔到新範圍。.42 淨係<b>偵測到並話你知</b>，要你自己 workaround；<b>.44 先至真正拆咗個籠</b>，並加咗斷言釘住「workaround 要永遠消失」。
+  </div>
+  <ol class="steps">
+    <li>設好一段 trim，暫停，將 playhead 拖去 <b>trim 範圍外面</b>　<span class="exp">→ 要停喺你放低佢嘅位，<b>唔可以彈返入 trimStart</b></span></li>
+    <li>喺範圍外撳 <code>I</code>　<span class="exp">→ 新 In point 要落喺你要嘅位，唔係被夾返入舊範圍</span></li>
+  </ol>
+</div>
+
+<!-- ============ v7.0.43 ============ -->
+<div class="card">
+  <h2><span class="ver">v7.0.43</span> Autosave / Restore：媒體真係返得嚟（「空殼」bug） <span class="when">08-30 08:56</span></h2>
+  <div class="what">
+    <b>做咗乜：</b>Restore 出嚟係一排位啱、Size 啱、但<b>入面空晒</b>嘅框。因為 <code>serializeBoard()</code> 會清走所有 <code>blob:</code>/<code>data:</code> src，仲有句註釋話「media is reloaded from original files/kpak」——<b>autosave 路徑上根本冇呢個 reload</b>。而家：<code>serializeBoard()</code> 寫哨兵 <code>autosave-media:&lt;id&gt;</code>，真 bytes 落專用 IndexedDB store（<code>KraftedMediaStore</code>），loader 喺 restore <b>之前</b>換返新嘅 object URL。
+  </div>
+  <ol class="steps">
+    <li>加幾張圖 + 兩段片，等 5 秒（autosave 週期）</li>
+    <li><b>成個瀏覽器 reload</b>（Ctrl+Shift+R）</li>
+    <li>歡迎畫面應該問你要唔要 restore → 撳 Restore　<span class="exp">→ <b>圖同片都要真係出返嚟、片要播得</b>，唔係灰色空框</span></li>
+    <li>restore 完<b>再 reload 一次</b>　<span class="exp">→ <b>唔可以再問你同一份</b>（以前會永遠問落去）</span></li>
+    <li>restore 完刪一段片，等 autosave，再 reload restore　<span class="exp">→ 刪咗嗰段<b>唔可以復活</b>（IndexedDB 有 GC）</span></li>
+    <li>加一段 <b>512MB 以上</b>嘅片　<span class="exp">→ 應該<b>事前</b>拒絕（pre-flight on <code>_fileSize</code>），唔係讀咗入 RAM 先話唔得</span></li>
+  </ol>
+  <div class="note"><b>更深一層：</b>呢個 bug 嘅正身係「<b>凡係註釋同行為之間做決定，一律信 code</b>」。嗰句註釋曾經令我信錯。</div>
+</div>
+
+<!-- ============ v7.0.44 ============ -->
+<div class="card">
+  <h2><span class="ver">v7.0.44</span> Trim 真正可以擴闊 + ↺ 掣終於入 undo <span class="when">08-30 09:53</span></h2>
+  <div class="what">
+    <b>做咗乜：</b>① 拆籠：<code>timeupdate</code> 係<b>播放</b>迴路，要「先刷新 UI，再 <code>if (v.paused) return</code>」。暫停時 playhead 留喺你放低佢嘅位——呢個先至令「揀一個新範圍」呢件事有可能。② 對面嗰個 mark 嘅請求係<b>衝突，唔係一個要夾嘅值</b>：<code>planTrimMark()</code> 會清晒對面嗰個陳舊 mark，新 mark 落喺你要嘅位，<b>一個 undo step 還原兩邊</b>。③ 設 mark <b>唔可以</b>郁 playhead（一個 mark 唔係一次 seek——以前拖 playhead 去新 In point，會搞到下一吓撳 O 讀返同一個時間，必然摺埋）。④ <b>↺ reset 掣以前冇 <code>pushUndo()</code> 又冇 <code>scheduleAutoSave()</code></b>——唯一用嚟 undo trim 實驗嘅掣，佢自己 undo 唔到，reload 之後靜默還原返舊 trim。
+  </div>
+  <ol class="steps">
+    <li>設好 In/Out，暫停，拖 playhead 去 <b>Out 之後</b>，撳 <code>O</code>　<span class="exp">→ Out 要<b>擴闊</b>到新位</span></li>
+    <li>喺 <b>In 之前</b>撳 <code>I</code>　<span class="exp">→ In 要向前擴闊</span></li>
+    <li>喺 <b>Out 嘅右邊</b>撳 <code>I</code>（即係新 In 會喺 Out 之後）　<span class="exp">→ 要當<b>衝突</b>處理：清走舊 Out（去片尾），新 In 落喺你要嘅位，並彈提示話你清晗咗乜。<b>唔可以靜默夾返轉頭</b></span></li>
+    <li>上一步之後撳 Ctrl+Z　<span class="exp">→ <b>一次</b>要還原晒兩邊（mark + 被清走嗰個）</span></li>
+    <li>設 In point 嗰陣留意 playhead　<span class="exp">→ <b>唔可以郁</b>。郁咗就係 bug</span></li>
+    <li>撳 ↺ reset（清除 trim）→ 撳 Ctrl+Z　<span class="exp">→ 要還原返舊 trim。呢個掣以前完全 undo 唔到</span></li>
+    <li>用 Shift+I / Shift+O 分別淨清 In / 淨清 Out　<span class="exp">→ 兩個要獨立，唔好一齊清</span></li>
+    <li>拖 trim 手柄去好貼另一個手柄　<span class="exp">→ 最小間距 0.05s，同熱鍵一致（以前拖=0.1s、撳=0.05s，兩邊講唔同嘢）</span></li>
+    <li>淨揀住圖片（唔係片）撳 Shift+I　<span class="exp">→ 要放行個掣，<b>唔好吞咗個 keystroke</b></span></li>
+  </ol>
+</div>
+
+<!-- ============ v7.0.45 ============ -->
+<div class="card">
+  <h2><span class="ver">v7.0.45</span> 0 KB 檔案唔可以再詐扮「Saved ✔」 <span class="when">08-30 10:37</span></h2>
+  <div class="what">
+    <b>做咗乜：</b>你報嘅「保存有陣時唔穩定會寫 0 KB，但用戶唔知」。bug <b>唔係一個 byte，係一句 msg</b>：0-byte 檔冇 KPAK footer → index 讀取例牌 throw <code>bad magic</code> → stream 路徑 catch 咗、<code>console.log</code> 一句，然後照樣行去成功 toast。<b>三條路徑都做得出呢件事。</b>而家：<b>開 index 之前先查空</b>（由 throw 推斷只會得出「冇 footer」，永遠推唔出可以行動嘅「0 bytes」）。第二個 0 KB 來源係 <code>revokeObjectURL</code> 競賽——瀏覽器寫碟嗰陣係 lazy 咁排走個 blob，太早 revoke 會截斷檔案。
+  </div>
+  <ol class="steps">
+    <li>正常存一次 .kpak　<span class="exp">→ 「Saved ✔」，檔案 size &gt; 0</span></li>
+    <li>存去一個<b>唯讀 / 冇權限</b>嘅資料夾　<span class="exp">→ 要<b>彈窗報警</b>，<b>絕對唔可以</b>出現 Saved ✔</span></li>
+    <li>存檔中途撳取消　<span class="exp">→ 要報警或靜默取消，<b>唔可以</b>話 saved</span></li>
+    <li>存完之後開個檔案管理器睇 size　<span class="exp">→ 唔可以係 0 KB。係 0 KB 就係 regression，即刻話我知</span></li>
+    <li>存一次 → 即刻 reload → load 返嗰個 .kpak　<span class="exp">→ 圖同片都要喺（revoke 競賽嘅驗屍）</span></li>
+  </ol>
+  <div class="note"><b>呢個係你嘅 #1 痛點</b>，請認真試。尤其第 2 同第 3 項——以前呢兩個 case 都係<b>靜默詐扮成功</b>。</div>
+</div>
+
+<!-- ============ v7.0.46 ============ -->
+<div class="card">
+  <h2><span class="ver">v7.0.46</span> Named view：改名 / 顏色 / 快捷鍵 <span class="when">08-31 01:02</span></h2>
+  <div class="what">
+    <b>做咗乜：</b>你嘅原話——「改個名好唔方便…全部都係 View 1 2 3 4，我每次都要重新改」。① 改名變 <b>inline editor</b>（double-click / <b>F2</b> / 新建後自動開），四條出路共用一個 <code>finish()</code>：Enter 提交、Esc 取消、<b>Tab 提交並跳下一個名</b>、blur 提交。② <b>P = 加 shot 並開改名框；Shift+P = 播。</b>③ 序號承接：上一個叫「CU 1」→ 下一個「CU 2」；<b>保留 zero padding</b>（「Beat 07」→「Beat 08」，否則排序會散）。④ 顏色（9 色 + 清除）做號碼徽章兼 chip，唔加闊度。
+  </div>
+  <ol class="steps">
+    <li>框選 → 撳 <code>P</code>　<span class="exp">→ 要即刻彈出改名框，可以直接打字（<b>唔使再 double-click</b>）</span></li>
+    <li>打完名撳 <code>Tab</code>　<span class="exp">→ 提交，並<b>自動開下一個</b> view 嘅改名框（可以連續改）</span></li>
+    <li>改名途中撳 <code>Esc</code>　<span class="exp">→ 取消，名變返原狀</span></li>
+    <li>改名途中撳 <code>F2</code> 或者 double-click 另一個 view　<span class="exp">→ 直接改名，唔使再入編輯模式</span></li>
+    <li>加兩個 view，第一個改名做「CU 1」　<span class="exp">→ 第二個要自動叫「CU 2」</span></li>
+    <li>改名做「Beat 07」，再加一個　<span class="exp">→ 要係「<b>Beat 08</b>」，<b>保留兩位數 padding</b></span></li>
+    <li>幫一個 view 上色　<span class="exp">→ 號碼徽章要有色，底色係淡（0.20 alpha），<b>唔可以吞咗入面個數字</b></span></li>
+    <li>上完色撳 Ctrl+Z　<span class="exp">→ 要退得返（上色入 undo + autosave）</span></li>
+    <li><b>放映緊</b>嗰陣撳 <code>P</code>　<span class="exp">→ 要<b>直接拒絕</b>。以前淨係唔開改名框，結果一個冇名嘅「View 7」落咗落 live running order</span></li>
+    <li>喺板上一個文字框入面打字，打「P」　<span class="exp">→ 要出「P」字，<b>唔可以</b>觸發加 shot</span></li>
+    <li>撳 <code>Alt+1</code> … <code>Alt+9</code>　<span class="exp">→ 跳去對應 view。<b>Windows 呢個一定要試</b>（用 <code>ev.code</code>，Mac 嘅 Option 層會出 ™ ¡ ß）</span></li>
+  </ol>
+</div>
+
+<!-- ============ v7.0.47 ============ -->
+<div class="card">
+  <h2><span class="ver">v7.0.47</span> Present 手動主導 —— 走帶等你 <span class="when">08-31 今日最新</span></h2>
+  <div class="what">
+    <b>做咗乜：</b>你嘅原話——「Q2 係一路講一路自己撳『下一個』」。所以改成<b>手動主導</b>：<code>PRESENT_AUTO_DEFAULT = false</code>，排程淨喺 <code>presentScheduleNext()</code> 做，auto 關就 return。<b>手動撳「下一個」行同一條 <code>presentAdvance()</code></b>——以前佢會重啟個鐘，即係你一撳就打亂自己個節奏。走帶尾：<b>手動會 Hold 住</b>（撳多一下唔會結束 pitch），<b>淨係 auto 先至結束</b>——呢個唔對稱係刻意嘅。
+  </div>
+  <ol class="steps">
+    <li>加 3-4 個 view，開 Present（Shift+P）</li>
+    <li>唔好撳任何嘢，等 10 秒　<span class="exp">→ 要<b>停喺第一個 shot 唔郁</b>（以前 4.6 秒就自己跳）。呢個係成個改動嘅核心</span></li>
+    <li>撳 <code>Space</code> / <code>→</code> / <code>N</code> / <code>PageDown</code>　<span class="exp">→ 逐個向前，每個都 work</span></li>
+    <li>撳 <code>←</code> / <code>P</code> / <code>PageUp</code>　<span class="exp">→ 向後</span></li>
+    <li>去到<b>最後一個</b> shot 再撳 Space　<span class="exp">→ 要<b>Hold 住</b>，<b>唔可以</b>結束走帶</span></li>
+    <li>撳 <code>A</code> 開 auto　<span class="exp">→ 開始自動走；走到尾<b>先至</b>結束</span></li>
+    <li>auto 行緊嗰陣再撳 <code>A</code>　<span class="exp">→ 關 auto，要<b>停喺原位</b>（唔跳走、唔結束）</span></li>
+    <li>撳數字鍵 <code>1</code>–<code>9</code>、<code>0</code>　<span class="exp">→ 跳去第 1–10 個 shot</span></li>
+    <li>撳 <code>Home</code> / <code>End</code>　<span class="exp">→ 第一個 / 最後一個</span></li>
+    <li>睇底部 HUD　<span class="exp">→ 要顯示「3 / 12」+ 當前名（帶 view 色）+ 下一張名</span></li>
+    <li>用 HUD 上面嘅「下一個」掣　<span class="exp">→ 要向前，<b>唔可以結束自己條走帶</b>（<code>_presentUserHandler</code> 要豁免 HUD）</span></li>
+    <li>改名框仲開住嗰陣撳 <code>Space</code>　<span class="exp">→ 要打出空格，<b>唔可以</b>跳 shot</span></li>
+    <li>撳 <code>Ctrl+1</code>（轉 tab）/ <code>Ctrl+A</code>（全選）　<span class="exp">→ 要行瀏覽器本身嘅功能，<b>唔可以俾 Present 食咗</b></span></li>
+    <li><b>實體簡報筆</b>（如果有）撳 PageUp / PageDown　<span class="exp">→ 要向前 / 向後。呢個就係點解特別加呢兩個鍵</span></li>
+  </ol>
+  <div class="note info"><b>呢版係直接回應你「一路講一路撳」嘅工作方式。</b>如果試落覺得節奏唔啱（例如想 auto 預設開、或者想要逐 shot 停留時間），話我知，改一個常數嘅事。</div>
+</div>
+
+<!-- ============ Windows 專區 ============ -->
+<div class="card">
+  <h2><span class="ver">WIN</span> Windows 專登要試（Mac 修過嘅嘢，Windows 冇人驗證過）</h2>
+  <ol class="steps">
+    <li><code>Alt+1</code> … <code>Alt+9</code>　<span class="exp">→ 跳 view。程式用 <code>ev.code</code> 所以理論上兩邊都 work，但 Windows 未實測過</span></li>
+    <li>所有 <code>Ctrl</code> 快捷鍵（Ctrl+C / V / Z / A / S）　<span class="exp">→ 要對應 Windows 習慣。程式嘅守衛係 <code>ev.ctrlKey || ev.metaKey</code>，但實際手感要你試</span></li>
+    <li><b>滾輪 / 觸控板縮放同平移</b>　<span class="exp">→ 呢個之前係 <b>Mac 專修</b>（wheel routing），Windows 嘅 <code>deltaMode</code> 唔同，<b>最有可能出事</b></span></li>
+    <li>右鍵選單（單鍵、觸控板兩指按）　<span class="exp">→ 要出，而且要喺邊緣 clamp 啱</span></li>
+    <li><b>存檔對話框</b>（Ctrl+S）　<span class="exp">→ Chrome/Edge 會出原生檔案選擇器，可以揀資料夾同改名。呢個係 v7.0.45 嘅主戰場</span></li>
+    <li>拖檔案落板（由檔案總管拖）　<span class="exp">→ 圖、片、音訊都要食到</span></li>
+    <li>由網頁拖圖落板　<span class="exp">→ 要行 <code>allorigins</code> 抽 <code>og:image</code>（<code>weserv</code> 淨係做圖片代理，攞 HTML 會 4xx）</span></li>
+    <li>雙螢幕：將視窗拖去副螢幕再右鍵 / 開 Present　<span class="exp">→ 位置計算要啱</span></li>
+  </ol>
+</div>
+
+<!-- ============ 已知未做 ============ -->
+<div class="card">
+  <h2><span class="ver">WIP</span> 已知未做 / 試嗰陣唔好當 bug</h2>
+  <ul style="margin:0; padding-left:20px; color:var(--dim); font-size:14px">
+    <li><b>冇 search、冇 tag、冇多板。</b> 全 app 唯一嘅分類原語係<b>顏色</b>（Group 有顏色、冇名）——呢個解釋咗你點解會問我要顏色：你要嘅係個名，顏色只係唯一攞到嘅嘢。</li>
+    <li><b>Present 冇 pause 掣</b>（有 hold：手動即係唔郁）。要 pause/resume 掣嘅話講一聲。</li>
+    <li><b>冇 minimap、冇視口剔除</b>（item 係真 DOM 全部常駐）→ 規模風險，但<b>未 measure，冇數字我唔做效能優化</b>。如果你板上幾百件嘢覺得慢，話我知，我先量。</li>
+    <li><b>次序鐵律：metadata（item 名/註/標籤）→ Library（可搜尋）→ 先至輪到 minimap。</b> 冇 name/tag 之前起 minimap，只係幫你喺一個搵唔到嘢嘅空間行快啲——解決導航，但痛點係檢索。</li>
+    <li><b>測試層：</b><code>mutate_v7041.sh</code> 有 6 個 trim 錨點由 v7.0.44 起重構後 SKIPPED。淨係影響測試覆蓋，<b>唔影響功能</b>——但要補，已報告。</li>
+  </ul>
+</div>
+
+<footer>
+  清單由 git 歷史（79 個 commit）+ 記憶層主題檔自動核對生成，唔係靠回憶。
+  線上檔案同本地開發檔 <code>cmp</code> 一致，<code>sw.js</code> 亦喺 7.0.47。<br>
+  剔格記喺你部機嘅 localStorage —— 換部機 / 換瀏覽器會由零開始，正常。
+</footer>
+
+</div>
+
+<script>
+(function(){
+  var KEY = 'krafted-weekend-test-v7047';
+  var items = [];
+  document.querySelectorAll('ol.steps li').forEach(function(li, i){
+    li.dataset.idx = i;
+    items.push(li);
+    li.addEventListener('click', function(){ li.classList.toggle('done'); save(); });
+  });
+  var fill = document.getElementById('fill');
+  var count = document.getElementById('count');
+
+  function save(){
+    var st = items.map(function(li){ return li.classList.contains('done') ? 1 : 0; });
+    try { localStorage.setItem(KEY, st.join('')); } catch(e){}
+    paint();
+  }
+  function paint(){
+    var d = items.filter(function(li){ return li.classList.contains('done'); }).length;
+    count.textContent = d + ' / ' + items.length;
+    fill.style.width = (items.length ? (d / items.length * 100) : 0) + '%';
+  }
+  function load(){
+    var st;
+    try { st = localStorage.getItem(KEY); } catch(e){ return; }
+    if(!st) return;
+    items.forEach(function(li, i){ if(st[i] === '1') li.classList.add('done'); });
+  }
+  document.getElementById('reset').addEventListener('click', function(){
+    items.forEach(function(li){ li.classList.remove('done'); });
+    save();
+  });
+  load(); paint();
+})();
+</script>
+</body>
+</html>
