@@ -30,6 +30,17 @@
 #      big to be injected whole
 
 set -u
+
+# Re-exec under zsh if we were started by another shell. `bash run_all.sh`
+# ignores the shebang: the zsh-only `print` builtin is not found, so every
+# summary line vanishes, no suite block ever runs, and bash still exits 0 -
+# a silent pass that verified nothing. Exact same failure shape as the
+# unknown-flag bug documented above, so it gets the same treatment: detect it
+# and refuse to limp along.
+if [ -z "${ZSH_VERSION:-}" ]; then
+  exec /bin/zsh "$0" "$@"
+fi
+
 cd /Users/kincheung/WorkBuddy/2026-07-25-10-53-37 || exit 1
 NODE=/Users/kincheung/.workbuddy/binaries/node/versions/22.12.0/bin/node
 PY=/Users/kincheung/.workbuddy/binaries/python/versions/3.13.12/bin/python3
