@@ -179,9 +179,9 @@ muts = [
     # ── 7. the chrome ─────────────────────────────────────────────────
     ('the frame stops clipping its image',
      ".item.framed { overflow:hidden; }", "/* mutated */"),
-    ('the toolbar moves outside the frame, where overflow:hidden eats it',
-     ".rf-toolbar { position:absolute; left:50%; bottom:6px;",
-     ".rf-toolbar { position:absolute; left:50%; bottom:-42px;"),
+    ('the toolbar goes back inside .item, where overflow:hidden clips it (Safari bug returns)',
+     "  document.body.appendChild(tb);",
+     "  el.appendChild(tb);"),
     ('a press on the toolbar starts a board drag again',
      "    if (e.target && e.target.closest && e.target.closest('.rf-toolbar')) return;",
      "    // mutated"),

@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.49</title>
+<title>Krafted v7.0.50</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -80,7 +80,7 @@ body { overflow:hidden; background:var(--bg); color:var(--text); font-family:'In
 .rf-guides .rf-line { position:absolute; background:rgba(255,255,255,0.38); }
 .rf-guides .rf-line.h { left:0; right:0; height:1px; }
 .rf-guides .rf-line.v { top:0; bottom:0; width:1px; }
-.rf-toolbar { position:absolute; left:50%; bottom:6px; transform:translateX(-50%); display:flex; align-items:center; gap:6px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:8px; padding:5px 7px; z-index:6; box-shadow:var(--shadow-medium); white-space:nowrap; font-family:'Inter',sans-serif; }
+.rf-toolbar { position:fixed; display:flex; align-items:center; gap:6px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:8px; padding:5px 7px; z-index:10000; box-shadow:var(--shadow-medium); white-space:nowrap; font-family:'Inter',sans-serif; max-width:calc(100vw - 16px); pointer-events:auto; }
 .rf-toolbar button { background:transparent; border:1px solid transparent; color:var(--text-dim); padding:3px 8px; border-radius:6px; cursor:pointer; font-size:10.5px; font-family:'Inter',sans-serif; transition:all 0.15s; }
 .rf-toolbar button:hover { background:var(--btn-hover); color:var(--text); }
 .rf-toolbar button.primary { border-color:var(--accent); color:var(--accent); }
@@ -4389,7 +4389,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.49';
+var KRAFTED_VERSION = '7.0.50';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7031,6 +7031,7 @@ function updateCanvas() {
   // canvas-local (50000, 50000) — always inside the canvas box.
   const OFF = 50000;
   canvas.style.transform = `translate(${state.pan.x + OFF - OFF * state.zoom}px, ${state.pan.y + OFF - OFF * state.zoom}px) scale(${state.zoom})`;
+  if (state.reframing && state.reframing._tb) rfPositionToolbar();
   // v7.0.33: assigning canvas.width/height ALWAYS reallocates and wipes the
   // backing store, even when the value is identical — ~24 MB per call at
   // dpr 2 on a 1512x982 screen. updateCanvas() runs on every pan/zoom tick
@@ -32591,11 +32592,20 @@ function rfLabel(en, zh) {
 }
 
 function rfBuildToolbar(rf) {
-  var el = rf.item.el;
-  var old = el.querySelector('.rf-toolbar');
+  // The toolbar is a FIXED overlay on <body>, NOT a child of .item. Reason:
+  // .item sits inside the scaled canvas and turns on overflow:hidden while
+  // reframing. Safari does not repaint / clips an absolutely-positioned
+  // descendant of a transformed + overflow:hidden ancestor (Chrome is fine),
+  // so on macOS the whole control strip silently vanishes and leaves a blank
+  // gap at the frame bottom. Parking it on body, positioned in viewport
+  // coordinates from the frame's getBoundingClientRect, makes it visible and
+  // clickable on every browser, and it can never be clipped by the frame.
+  var old = document.querySelector('.rf-toolbar');
   if (old) old.parentNode.removeChild(old);
   var tb = document.createElement('div');
   tb.className = 'rf-toolbar';
+  tb.style.left = '-9999px';
+  tb.style.top = '-9999px';
   tb.innerHTML =
     '<label data-role="zoomLabel"></label>' +
     '<input type="range" data-role="zoom" min="100" max="800" step="1">' +
@@ -32675,14 +32685,34 @@ function rfBuildToolbar(rf) {
   q('cancel').addEventListener('click', function () { exitReframe(false); });
   q('apply').addEventListener('click', function () { exitReframe(true); });
 
-  el.appendChild(tb);
+  document.body.appendChild(tb);
+  rf._tb = tb;
+  rfPositionToolbar();
   return tb;
+}
+
+function rfPositionToolbar() {
+  var rf = state.reframing;
+  if (!rf || !rf._tb) return;
+  var tb = rf._tb;
+  var r = rf.item.el.getBoundingClientRect();
+  var tw = tb.offsetWidth || 320, th = tb.offsetHeight || 40;
+  var vw = window.innerWidth, vh = window.innerHeight;
+  var cx = r.left + r.width / 2;
+  var halfW = tw / 2 + 8;
+  cx = Math.max(halfW, Math.min(vw - halfW, cx));
+  var top = r.bottom - 6;
+  top = Math.min(top, vh - 8);
+  top = Math.max(th + 8, top);
+  tb.style.left = cx + 'px';
+  tb.style.top = top + 'px';
+  tb.style.transform = 'translate(-50%, -100%)';
 }
 
 function rfSyncUI() {
   var rf = state.reframing;
   if (!rf) return;
-  var tb = rf.item.el.querySelector('.rf-toolbar');
+  var tb = rf._tb;
   if (!tb) return;
   var q = function (role) { return tb.querySelector('[data-role="' + role + '"]'); };
   var z = Math.round((rf.item.frameZ || 1) * 100);
@@ -32691,6 +32721,7 @@ function rfSyncUI() {
   var rot = q('rot');
   if (document.activeElement !== rot) rot.value = (Math.round((rf.item.frameRot || 0) * 10) / 10).toFixed(1);
   q('guides').value = rf.guides;
+  rfPositionToolbar();
 }
 
 function rfSetZoom(item, z) {
@@ -32809,10 +32840,9 @@ function exitReframe(apply) {
     it.el.classList.remove('reframing', 'rotating');
     var g = it.el.querySelector('.rf-guides');
     if (g) g.parentNode.removeChild(g);
-    var tb = it.el.querySelector('.rf-toolbar');
-    if (tb) tb.parentNode.removeChild(tb);
     applyImageFraming(it);
   });
+  if (rf._tb) { if (rf._tb.parentNode) rf._tb.parentNode.removeChild(rf._tb); rf._tb = null; }
   rf.items.forEach(function (it) { updateItemStyle(it); });
   refreshSelection();
   scheduleAutoSave();

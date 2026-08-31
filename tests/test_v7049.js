@@ -345,12 +345,23 @@ ok(SRC.indexOf(pdAnchor) >= 0, 'the reframe pointerdown block is locatable');
 has("e.target.closest('.rf-toolbar')", 'a press on the toolbar never starts a board drag', pdBlock);
 has('rf.mode = e.altKey ?', 'one gesture carries one meaning: Alt selects rotate, plain drag pans', pdBlock);
 
-// ═══ 10. the CSS that clips, and the toolbar that lives inside ═════════
+// ═══ 10. the toolbar is a FIXED overlay on body — never clipped ═════════
 has('.item.framed { overflow:hidden; }', 'a framed item clips its image');
-// The toolbar is inside .item, which has overflow:hidden while reframing, so
-// it must be pinned INSIDE the frame or it would be clipped away entirely.
-has('.rf-toolbar { position:absolute; left:50%; bottom:6px;',
-    'the toolbar sits inside the frame so overflow:hidden cannot clip it');
+// v7.0.50: the reframe toolbar used to be position:absolute INSIDE .item,
+// which has overflow:hidden while reframing and is itself inside a transformed
+// canvas. Safari does not repaint / clips an absolutely-positioned descendant
+// of a transformed + overflow:hidden ancestor, so on macOS the whole control
+// strip vanished and left a blank gap at the frame bottom (Chrome was fine).
+// Lock the fix: the toolbar is now position:fixed on <body>, positioned from
+// the frame's getBoundingClientRect, so it cannot be clipped by .item.
+has('.rf-toolbar { position:fixed;', 'the reframe toolbar is a fixed body overlay, not clipped by .item');
+hasNot('.rf-toolbar { position:absolute;', 'the clipped-inside-.item layout is gone (Safari fix)');
+has('document.body.appendChild(tb)', 'the toolbar is parked on body, not inside the clipped frame', fnFull('rfBuildToolbar', SRC));
+hasNot('el.appendChild(tb)', 'reframe no longer appends the toolbar to .item', fnFull('rfBuildToolbar', SRC));
+has('rfPositionToolbar()', 'the toolbar is positioned from the frame via rfPositionToolbar', fnFull('rfBuildToolbar', SRC));
+ok(fnFull('rfPositionToolbar', SRC).length > 0, 'rfPositionToolbar exists');
+has('if (state.reframing && state.reframing._tb) rfPositionToolbar()',
+    'the toolbar tracks the frame when the board is panned/zoomed', fnFull('updateCanvas', SRC));
 
 // ═══ 10b. ONE writer of the framing fields ════════════════════════════
 // "Write the framing back onto an item" was spelled out by hand four times:
@@ -395,7 +406,7 @@ has('cssText = ITEM_IMG_BASE_CSS', 'the reset restores the default styling rathe
 hasNot("objectFit = ''", 'the reset no longer clears object-fit (that is what stretched the image)', clearSrc);
 
 // ═══ report ═══════════════════════════════════════════════════════════
-console.log(`\ntest_v7049.js — Reframe (v7.0.49)`);
+console.log(`\ntest_v7049.js — Reframe (v7.0.50)`);
 console.log(`${'-'.repeat(46)}`);
 if (fails.length) {
   fails.forEach(f => console.log(`  FAIL  ${f}`));
