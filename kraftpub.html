@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.50</title>
+<title>Krafted v7.0.51</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2603,6 +2603,33 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #views-present-btn:hover { background:var(--btn-hover); border-color:var(--accent); }
 #views-panel.presenting #views-present-btn { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
 
+/* LIBRARY (P1-1) — mirrors the views panel but sits top-right so the two
+   never overlap. Same collapsed-handle behaviour. */
+#library-panel { position:fixed; top:12px; right:12px; width:248px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:0; z-index:9999998; max-height:calc(100vh - 130px); display:flex; flex-direction:column; box-shadow:var(--shadow-medium); transition:width 0.2s ease, opacity 0.2s ease; }
+#library-panel.collapsed #library-body { display:none; }
+#library-panel.collapsed #library-head { border-bottom:none; border-radius:12px; padding:8px; }
+#library-panel.collapsed #library-toggle { transform:rotate(180deg); }
+#library-head { display:flex; align-items:center; gap:6px; padding:9px 10px; border-bottom:1px solid var(--border-subtle); background:rgba(255,255,255,0.015); border-radius:12px 12px 0 0; user-select:none; flex-shrink:0; }
+#library-head h3 { font-size:10px; text-transform:uppercase; color:var(--text-subtle); margin:0; letter-spacing:1.5px; font-weight:500; font-family:'Inter',sans-serif; flex:1; }
+#library-toggle { width:20px; height:20px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; background:var(--input-bg); border:1px solid var(--border); color:var(--text-dim); font-size:9px; line-height:1; flex-shrink:0; transition:all 0.15s; padding:0; }
+#library-toggle:hover { background:var(--btn-hover); color:var(--text); }
+#library-body { overflow-y:auto; flex:1; min-height:0; }
+#library-search-wrap { padding:8px; border-bottom:1px solid var(--border-subtle); flex-shrink:0; }
+#library-search { width:100%; box-sizing:border-box; font-size:11px; font-family:'Inter',sans-serif; color:var(--text); background:var(--input-bg); border:1px solid var(--border); border-radius:6px; padding:6px 8px; outline:none; }
+#library-search:focus { border-color:var(--accent); }
+#library-list { padding:4px; }
+.lib-row { display:flex; align-items:center; gap:6px; padding:4px; border-radius:6px; cursor:pointer; }
+.lib-row:hover { background:rgba(255,255,255,0.06); }
+.lib-row.active { background:rgba(0,229,255,0.14); }
+.lib-thumb { width:34px; height:34px; border-radius:5px; overflow:hidden; flex-shrink:0; background:var(--input-bg); display:flex; align-items:center; justify-content:center; color:var(--text-subtle); font-size:13px; border:1px solid var(--border-subtle); }
+.lib-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.lib-meta { flex:1; min-width:0; }
+.lib-name { font-size:11.5px; color:var(--text); font-family:'Inter',sans-serif; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lib-tags { font-size:9.5px; color:var(--text-subtle); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.prop-row.note-row { align-items:flex-start; }
+.prop-row.note-row textarea { flex:1; min-width:0; font-size:11px; font-family:'Inter',sans-serif; color:var(--text); background:var(--input-bg); border:1px solid var(--border); border-radius:6px; padding:4px 6px; resize:vertical; outline:none; }
+.prop-hint { font-size:9px; color:var(--text-subtle); }
+
 /* PRESENT HUD (v7.0.48)
    Bottom-centre under the shot, hidden until the tape starts. Tabular
    numerals so "3 / 12" does not jitter as the count changes mid-pitch. */
@@ -3736,7 +3763,14 @@ body.screen-share-mode #ss-fps {
 <div id="props">
   <div id="props-toggle" onclick="toggleProps()" title="Toggle Panel">◀</div>
   <div class="props-empty" id="props-empty">Select an item to see properties</div>
-  <div id="props-content" style="display:none;">
+    <div id="props-content" style="display:none;">
+    <!-- REFERENCE (P0-2: metadata that feeds the Library and the script export) -->
+    <div class="section-header" onclick="togglePropSection(this)">Reference</div>
+    <div class="prop-section">
+      <div class="prop-row"><label>Name</label><input type="text" id="prop-name" maxlength="120" placeholder="reference name" oninput="setItemMeta('name', this.value)"></div>
+      <div class="prop-row note-row"><label>Note</label><textarea id="prop-note" rows="2" maxlength="600" placeholder="notes / source" oninput="setItemMeta('note', this.value)"></textarea></div>
+      <div class="prop-row"><label>Tags</label><input type="text" id="prop-tags" maxlength="200" placeholder="comma, separated" oninput="setItemMeta('tags', this.value)"><span class="prop-hint">comma-separated</span></div>
+    </div>
     <!-- TRANSFORM -->
     <div class="section-header" onclick="togglePropSection(this)">Transform</div>
     <div class="prop-section">
@@ -4081,9 +4115,21 @@ body.screen-share-mode #ss-fps {
     <div id="views-list"></div>
   </div>
   <div id="views-foot">
-    <button id="views-present-btn" onclick="startPresent()" title="Present the views — you advance it, Space or → for the next shot (Shift+P)">▶ Present</button>
+      <button id="views-present-btn" onclick="startPresent()" title="Present the views — you advance it, Space or → for the next shot (Shift+P)">▶ Present</button>
+    </div>
   </div>
-</div>
+
+  <!-- LIBRARY (P1-1: searchable index of every item on the board) -->
+  <div id="library-panel" class="collapsed">
+    <div id="library-head">
+      <div id="library-toggle" onclick="toggleLibraryPanel()" title="Toggle library panel">◀</div>
+      <h3 id="library-head-text">Library</h3>
+    </div>
+    <div id="library-body">
+      <div id="library-search-wrap"><input type="text" id="library-search" placeholder="search name / note / tag" oninput="renderLibraryPanel()"></div>
+      <div id="library-list"></div>
+    </div>
+  </div>
 
 <!-- PRESENT HUD (v7.0.48)
      Bottom-centre, so it sits under the shot instead of across it. Only
@@ -4389,7 +4435,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.50';
+var KRAFTED_VERSION = '7.0.51';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4682,7 +4728,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var items = state.items || [];
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
-      var node = { id: it.id || 'item_' + i, x: it.x, y: it.y, w: it.w, h: it.h, rot: it.rot || 0, natW: it.natW, natH: it.natH, cropX: it.cropX, cropY: it.cropY, cropW: it.cropW, cropH: it.cropH, frameOn: it.frameOn, frameZ: it.frameZ, frameRot: it.frameRot, frameX: it.frameX, frameY: it.frameY, opacity: it.opacity !== undefined ? it.opacity : 1, zIndex: it.z || 0, locked: it.locked || false, flipH: it.flipH || false, flipV: it.flipV || false, visible: true, filename: it.filename || '', trimStart: it.trimStart || 0, trimEnd: it.trimEnd || 0, playbackRate: it.playbackRate || 1, fps: (it.video && it.video._kraftedFps) ? it.video._kraftedFps : null, fpsManual: !!(it.video && it.video._kraftedFpsManual), isGif: it.isGif || false, adjustments: { brightness: it.brightness !== undefined ? it.brightness : 100, contrast: it.contrast !== undefined ? it.contrast : 100, saturate: it.saturate !== undefined ? it.saturate : 100, hueRotate: it.hueRotate || 0, blur: it.blur || 0, sepia: it.sepia || 0, grayscale: it.grayscale || 0, temp: it.temp || 0, vignette: it.vignette || 0, shadow: it.shadow || 0, highlight: it.highlight || 0, grain: it.grain || 0 } };
+      var node = { id: it.id || 'item_' + i, x: it.x, y: it.y, w: it.w, h: it.h, rot: it.rot || 0, natW: it.natW, natH: it.natH, cropX: it.cropX, cropY: it.cropY, cropW: it.cropW, cropH: it.cropH, frameOn: it.frameOn, frameZ: it.frameZ, frameRot: it.frameRot, frameX: it.frameX, frameY: it.frameY, name: it.name || '', note: it.note || '', tags: it.tags ? it.tags.slice() : [], opacity: it.opacity !== undefined ? it.opacity : 1, zIndex: it.z || 0, locked: it.locked || false, flipH: it.flipH || false, flipV: it.flipV || false, visible: true, filename: it.filename || '', trimStart: it.trimStart || 0, trimEnd: it.trimEnd || 0, playbackRate: it.playbackRate || 1, fps: (it.video && it.video._kraftedFps) ? it.video._kraftedFps : null, fpsManual: !!(it.video && it.video._kraftedFpsManual), isGif: it.isGif || false, adjustments: { brightness: it.brightness !== undefined ? it.brightness : 100, contrast: it.contrast !== undefined ? it.contrast : 100, saturate: it.saturate !== undefined ? it.saturate : 100, hueRotate: it.hueRotate || 0, blur: it.blur || 0, sepia: it.sepia || 0, grayscale: it.grayscale || 0, temp: it.temp || 0, vignette: it.vignette || 0, shadow: it.shadow || 0, highlight: it.highlight || 0, grain: it.grain || 0 } };
       if (it.masks && it.masks.length) { node.masks = it.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }); }
       if (it.anno) { node.anno = { comments: (it.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text, translation: c.translation, translationDir: c.translationDir, originalText: c.originalText, snapshot: c.snapshot, annoStrokes: c.annoStrokes }; }) }; }
       if (it.isVideo && it.el && it.el._annoDrawState) { var sbf = it.el._annoDrawState.strokesByFrame; if (sbf) { node._annoStrokesByFrame = {}; Object.keys(sbf).forEach(function(f) { if (sbf[f] && sbf[f].length) { node._annoStrokesByFrame[f] = sbf[f].map(function(s) { return { type: s.type, color: s.color, size: s.size, points: (s.points || []).map(function(p) { return [p[0], p[1]]; }), text: s.text || '' }; }); } }); } }
@@ -4742,7 +4788,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if (!resolvedSrc && n.mediaData) { try { var arr = n.mediaData.split(','); var mime = (arr[0].match(/:(.*?);/) || [])[1] || 'application/octet-stream'; var bin = atob(arr[1] || arr[0]); var bytes = new Uint8Array(bin.length); for (var k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k); resolvedSrc = URL.createObjectURL(new Blob([bytes], { type: mime })); } catch (e) {} }
       var savedW = n.w > 0 ? n.w : (n.natW || 100);
       var savedH = n.h > 0 ? n.h : (n.natH || 100);
-      var item = { id: n.id, x: n.x || 0, y: n.y || 0, w: savedW, h: savedH, natW: n.natW, natH: n.natH, cropX: n.cropX, cropY: n.cropY, cropW: n.cropW, cropH: n.cropH, frameOn: n.frameOn || false, frameZ: n.frameZ || 1, frameRot: n.frameRot || 0, frameX: n.frameX || 0, frameY: n.frameY || 0, rot: n.rot || 0, opacity: n.opacity !== undefined ? n.opacity : 1, z: n.zIndex || 0, locked: n.locked || false, flipH: n.flipH || false, flipV: n.flipV || false, trimStart: n.trimStart || 0, trimEnd: n.trimEnd || 0, playbackRate: n.playbackRate || 1, fps: n.fps || null, fpsManual: n.fpsManual || false, isGif: n.isGif || false, brightness: (n.adjustments || {}).brightness, contrast: (n.adjustments || {}).contrast, saturate: (n.adjustments || {}).saturate, hueRotate: (n.adjustments || {}).hueRotate, blur: (n.adjustments || {}).blur, sepia: (n.adjustments || {}).sepia, grayscale: (n.adjustments || {}).grayscale, temp: (n.adjustments || {}).temp, vignette: (n.adjustments || {}).vignette, shadow: (n.adjustments || {}).shadow, highlight: (n.adjustments || {}).highlight, grain: (n.adjustments || {}).grain, filename: n.filename || n.audioName || '', isVideo: n.type === 'video', isAudio: n.type === 'audio', audioName: n.audioName || n.filename || '', isLink: n.type === 'link', linkUrl: n.linkUrl || '', linkTitle: n.linkTitle || '', linkDesc: n.linkDesc || '', anno: n.anno ? { comments: (n.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text || '', translation: c.translation || '', translationDir: c.translationDir || '', originalText: c.originalText || '', snapshot: c.snapshot || '', annoStrokes: Array.isArray(c.annoStrokes) ? c.annoStrokes.filter(Boolean).map(function(s) { return { type: s.type, color: s.color, size: s.size, points: Array.isArray(s.points) ? s.points.map(function(p) { return [p[0], p[1]]; }) : [], text: s.text || '' }; }) : [] }; }) } : undefined, _annoStrokesByFrame: n._annoStrokesByFrame || undefined, masks: n.masks ? n.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }) : undefined, type: n.type === 'draw' ? 'draw' : undefined, strokeId: n.strokeId, drawMode: n.drawMode, drawColor: n.drawColor, drawSize: n.drawSize, drawOpacity: n.drawOpacity, drawArrowHead: n.drawArrowHead, src: resolvedSrc };
+      var item = { id: n.id, x: n.x || 0, y: n.y || 0, w: savedW, h: savedH, natW: n.natW, natH: n.natH, cropX: n.cropX, cropY: n.cropY, cropW: n.cropW, cropH: n.cropH, frameOn: n.frameOn || false, frameZ: n.frameZ || 1, frameRot: n.frameRot || 0, frameX: n.frameX || 0, frameY: n.frameY || 0, name: n.name || '', note: n.note || '', tags: n.tags ? n.tags.slice() : [], rot: n.rot || 0, opacity: n.opacity !== undefined ? n.opacity : 1, z: n.zIndex || 0, locked: n.locked || false, flipH: n.flipH || false, flipV: n.flipV || false, trimStart: n.trimStart || 0, trimEnd: n.trimEnd || 0, playbackRate: n.playbackRate || 1, fps: n.fps || null, fpsManual: n.fpsManual || false, isGif: n.isGif || false, brightness: (n.adjustments || {}).brightness, contrast: (n.adjustments || {}).contrast, saturate: (n.adjustments || {}).saturate, hueRotate: (n.adjustments || {}).hueRotate, blur: (n.adjustments || {}).blur, sepia: (n.adjustments || {}).sepia, grayscale: (n.adjustments || {}).grayscale, temp: (n.adjustments || {}).temp, vignette: (n.adjustments || {}).vignette, shadow: (n.adjustments || {}).shadow, highlight: (n.adjustments || {}).highlight, grain: (n.adjustments || {}).grain, filename: n.filename || n.audioName || '', isVideo: n.type === 'video', isAudio: n.type === 'audio', audioName: n.audioName || n.filename || '', isLink: n.type === 'link', linkUrl: n.linkUrl || '', linkTitle: n.linkTitle || '', linkDesc: n.linkDesc || '', anno: n.anno ? { comments: (n.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text || '', translation: c.translation || '', translationDir: c.translationDir || '', originalText: c.originalText || '', snapshot: c.snapshot || '', annoStrokes: Array.isArray(c.annoStrokes) ? c.annoStrokes.filter(Boolean).map(function(s) { return { type: s.type, color: s.color, size: s.size, points: Array.isArray(s.points) ? s.points.map(function(p) { return [p[0], p[1]]; }) : [], text: s.text || '' }; }) : [] }; }) } : undefined, _annoStrokesByFrame: n._annoStrokesByFrame || undefined, masks: n.masks ? n.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }) : undefined, type: n.type === 'draw' ? 'draw' : undefined, strokeId: n.strokeId, drawMode: n.drawMode, drawColor: n.drawColor, drawSize: n.drawSize, drawOpacity: n.drawOpacity, drawArrowHead: n.drawArrowHead, src: resolvedSrc };
       data.items.push(item);
     }
     var texts = manifest.texts || [];
@@ -6908,6 +6954,7 @@ const DEFAULT_SHORTCUTS = [
   { id: 'view-update',         category: 'View',  label: 'Re-aim Current View',      keys: [] },
   { id: 'view-present',        category: 'View',  label: 'Present Views',            keys: [{ key: 'p', shift: true }] },
   { id: 'view-toggle-panel',   category: 'View',  label: 'Toggle Views Panel',       keys: [] },
+  { id: 'library-toggle-panel', category: 'View',  label: 'Toggle Library Panel',     keys: [] },
   // v7.0.40: A/B compare. Palette-only — it is modal, so the moment it is open
   // it owns the keyboard anyway and needs no shortcut of its own.
   { id: 'view-ab-compare',     category: 'View',  label: 'A/B Compare Two Items',    keys: [] },
@@ -7451,6 +7498,98 @@ function zoomToFit() {
   state.pan.y = sh / 2 - ((bb.minY + bb.maxY) / 2) * z;
   updateCanvas();
   try { toast('Fit · ' + Math.round(state.zoom * 100) + '% · ' + bb.count + ' items'); } catch (e) {}
+}
+
+// ============================================================
+//  ITEM METADATA + LIBRARY   (v7.0.51, P0-2 + P1-1)
+// ============================================================
+// P0-2: every item gains name / note / tags so the board can be searched and
+// the script export (P1-4) has something to print. They are written through
+// ONE function, setItemMeta, so there is exactly one place a metadata field is
+// assigned - the same 'one writer' discipline that killed the reframe field
+// drift. The Properties Reference section and the Library both read these.
+function splitTags(s) {
+  if (!s) return [];
+  return String(s).split(',').map(function (t) { return t.trim(); }).filter(function (t) { return t.length; });
+}
+function setItemMeta(field, value) {
+  var sel = (typeof getSelectedItems === 'function') ? getSelectedItems() : [];
+  if (!sel.length) return;
+  sel.forEach(function (it) {
+    if (field === 'name') it.name = value || '';
+    else if (field === 'note') it.note = value || '';
+    else if (field === 'tags') it.tags = splitTags(value);
+  });
+  try { scheduleAutoSave(); } catch (e) {}
+  var lib = document.getElementById('library-panel');
+  if (lib && !lib.classList.contains('collapsed')) renderLibraryPanel();
+}
+
+function toggleLibraryPanel() {
+  var p = document.getElementById('library-panel');
+  if (!p) return;
+  p.classList.toggle('collapsed');
+  renderLibraryPanel();
+  try { localStorage.setItem('krafted_library_collapsed', p.classList.contains('collapsed') ? '1' : '0'); } catch (e) {}
+}
+
+function libThumbSrc(it) {
+  if (!it) return null;
+  if (it.isVideo) { if (it.img && it.img.poster) return it.img.poster; return null; }
+  if (it.img && it.img.src) return it.img.src;
+  if (it.src) return it.src;
+  return null;
+}
+
+// P1-1: a searchable index of the whole board. 300 images are impossible to
+// find by panning, so this is the navigation entry point. Each row flies the
+// camera to the item (revealItem) and selects it. Search covers name, note and
+// tags - the three fields P0-2 just added.
+function renderLibraryPanel() {
+  var p = document.getElementById('library-panel');
+  if (!p || p.classList.contains('collapsed')) return;
+  var listEl = document.getElementById('library-list');
+  if (!listEl) return;
+  var q = ((document.getElementById('library-search').value) || '').toLowerCase().trim();
+  var items = (state.items || []).filter(function (it) {
+    if (it.type === 'draw' || it.isDraw) return false;
+    if (!q) return true;
+    var hay = [it.name, it.note, (it.tags || []).join(' ')].join(' ').toLowerCase();
+    return hay.indexOf(q) >= 0;
+  });
+  var head = document.getElementById('library-head-text');
+  if (head) head.textContent = items.length ? ('Library ' + items.length) : 'Library';
+  listEl.innerHTML = '';
+  if (!items.length) { listEl.innerHTML = '<div class="views-empty">No items match.</div>'; return; }
+  var sel0 = (typeof getSelectedItems === 'function') ? getSelectedItems() : [];
+  var activeId = sel0.length ? sel0[0].id : null;
+  items.forEach(function (it) {
+    var row = document.createElement('div');
+    row.className = 'lib-row' + (it.id === activeId ? ' active' : '');
+    var thumb = document.createElement('div');
+    thumb.className = 'lib-thumb';
+    var src = libThumbSrc(it);
+    if (src) { var im = document.createElement('img'); im.src = src; im.draggable = false; thumb.appendChild(im); }
+    else { thumb.textContent = it.type === 'video' ? '\u25B6' : it.type === 'audio' ? '\u266A' : it.type === 'link' ? '\uD83D\uDD17' : '\u25A2'; }
+    row.appendChild(thumb);
+    var meta = document.createElement('div');
+    meta.className = 'lib-meta';
+    var nm = document.createElement('div');
+    nm.className = 'lib-name';
+    nm.textContent = it.name || it.filename || (it.src ? String(it.src).split('/').pop().split('?')[0] : 'Unnamed');
+    meta.appendChild(nm);
+    var tg = document.createElement('div');
+    tg.className = 'lib-tags';
+    tg.textContent = (it.tags || []).join('  ');
+    meta.appendChild(tg);
+    row.appendChild(meta);
+    row.addEventListener('click', function () {
+      selectOnly(it.id);
+      revealItem(it);
+      renderLibraryPanel();
+    });
+    listEl.appendChild(row);
+  });
 }
 
 // ============================================================
@@ -8293,7 +8432,7 @@ function captureSnapshot() {
       // export to name the output file and to display in the exported
       // header. Empty when not available.
       filename: i.filename || '',
-      cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH, frameOn: i.frameOn || false, frameZ: i.frameZ || 1, frameRot: i.frameRot || 0, frameX: i.frameX || 0, frameY: i.frameY || 0,
+      cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH, frameOn: i.frameOn || false, frameZ: i.frameZ || 1, frameRot: i.frameRot || 0, frameX: i.frameX || 0, frameY: i.frameY || 0, name: i.name || '', note: i.note || '', tags: i.tags ? i.tags.slice() : [],
       brightness: i.brightness, contrast: i.contrast, saturate: i.saturate,
       hueRotate: i.hueRotate, blur: i.blur, sepia: i.sepia, grayscale: i.grayscale,
       temp: i.temp, vignette: i.vignette, shadow: i.shadow, highlight: i.highlight, grain: i.grain,
@@ -21079,6 +21218,9 @@ function updatePropsPanel() {
   empty.style.display = 'none';
   content.style.display = 'block';
   const item = sel[0];
+  var pn = document.getElementById('prop-name'); if (pn) pn.value = item.name || '';
+  var pnote = document.getElementById('prop-note'); if (pnote) pnote.value = item.note || '';
+  var ptags = document.getElementById('prop-tags'); if (ptags) ptags.value = (item.tags && item.tags.length) ? item.tags.join(', ') : '';
   if (item.opacity !== undefined) {
     document.getElementById('prop-opacity').value = Math.round(item.opacity * 100);
     document.getElementById('prop-opacity-val').textContent = Math.round(item.opacity * 100) + '%';
@@ -25064,6 +25206,7 @@ function _dispatchShortcut(e) {
     case 'view-update':            updateViewFromCurrent(state._activeViewIndex); return true;
     case 'view-present':           startPresent(); return true;
     case 'view-toggle-panel':      toggleViewsPanel(); return true;
+    case 'library-toggle-panel':   toggleLibraryPanel(); return true;
     case 'view-ab-compare':        openABCompare(); return true;
     case 'edit-reframe':           enterReframe(getSelectedImages()); return true;
     default: return false;
@@ -34901,7 +35044,7 @@ function buildManifest() {
       natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false,
       audioName: i.audioName || i.filename || '',
       filename: i.filename || i.audioName || '',
-      cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH, frameOn: i.frameOn || false, frameZ: i.frameZ || 1, frameRot: i.frameRot || 0, frameX: i.frameX || 0, frameY: i.frameY || 0,
+      cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH, frameOn: i.frameOn || false, frameZ: i.frameZ || 1, frameRot: i.frameRot || 0, frameX: i.frameX || 0, frameY: i.frameY || 0, name: i.name || '', note: i.note || '', tags: i.tags ? i.tags.slice() : [],
       brightness: i.brightness, contrast: i.contrast, saturate: i.saturate,
       hueRotate: i.hueRotate, blur: i.blur, sepia: i.sepia, grayscale: i.grayscale,
       temp: i.temp, vignette: i.vignette, shadow: i.shadow, highlight: i.highlight, grain: i.grain,
@@ -36889,7 +37032,7 @@ function serializeBoard() {
         src: (i.src && i.src.indexOf('blob:') === 0) ? (AUTOSAVE_MEDIA_PREFIX + i.id) : (i.src || ''),
         natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, audioName: i.audioName || '',
         filename: i.filename || '',
-        cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH, frameOn: i.frameOn || false, frameZ: i.frameZ || 1, frameRot: i.frameRot || 0, frameX: i.frameX || 0, frameY: i.frameY || 0,
+        cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH, frameOn: i.frameOn || false, frameZ: i.frameZ || 1, frameRot: i.frameRot || 0, frameX: i.frameX || 0, frameY: i.frameY || 0, name: i.name || '', note: i.note || '', tags: i.tags ? i.tags.slice() : [],
         brightness: i.brightness, contrast: i.contrast, saturate: i.saturate,
         hueRotate: i.hueRotate, blur: i.blur, sepia: i.sepia, grayscale: i.grayscale,
         temp: i.temp, vignette: i.vignette, shadow: i.shadow, highlight: i.highlight, grain: i.grain,

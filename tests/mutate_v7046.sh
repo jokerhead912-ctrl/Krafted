@@ -360,8 +360,8 @@ mutate "a refused save stops saying which key to press" \
 # v7.0.46: the anchor has to name the version the source now carries. Left at
 # 7.0.45 it silently matches 0 times and this mutation stops testing anything.
 mutate "KRAFTED_VERSION not bumped" \
-  "var KRAFTED_VERSION = '7.0.50';" \
-  "var KRAFTED_VERSION = '7.0.49';"
+  "var KRAFTED_VERSION = '7.0.51';" \
+  "var KRAFTED_VERSION = '7.0.50';"
 
 print ""
 if [ $ANCHORFAIL -ne 0 ]; then
