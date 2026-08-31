@@ -321,8 +321,8 @@ mutate "the legacy V5 engine comes back" \
 # Left at the previous version this anchor matches 0 times and the mutation
 # stops testing anything, which is worse than no mutation at all.
 mutate "KRAFTED_VERSION not bumped" \
-  "var KRAFTED_VERSION = '7.0.48';" \
-  "var KRAFTED_VERSION = '7.0.47';"
+  "var KRAFTED_VERSION = '7.0.49';" \
+  "var KRAFTED_VERSION = '7.0.48';"
 
 # ── done ────────────────────────────────────────────────────────────────
 cp kraftpub-v6.8.0.html $TMP/mut.html

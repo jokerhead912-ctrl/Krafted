@@ -37,7 +37,7 @@ const SWJS = process.env.KRAFTED_SW
 const src = fs.readFileSync(HTML, 'utf8');
 const sw = fs.readFileSync(SWJS, 'utf8');
 
-const EXPECT_VERSION = '7.0.48';
+const EXPECT_VERSION = '7.0.49';
 
 // The spec. These are what the behaviour is asserted against; the app's own
 // constants are pinned to them separately, so a change to the app shows up as
@@ -710,7 +710,12 @@ has(src, 'title="Previous shot (← / Page Up)"', 'the HUD previous button names
   eq(occs(sw, EXPECT_VERSION), 3,
      'sw.js carries the version in 3 places (header, cache name, APP_VERSION)');
   has(sw, "CACHE_NAME = 'krafted-v" + EXPECT_VERSION + "-'", 'the cache name is bumped');
-  hasnt(sw, '7.0.46', 'the previous version is gone from sw.js');
+  // Derived, not hard-coded. A literal here passes forever once the release
+  // moves past it - it reads as "we checked" in the log while checking
+  // nothing, which is worse than having no assertion at all. This one was
+  // pinned to 7.0.46 for four releases before anyone noticed.
+  const prevVersion = EXPECT_VERSION.replace(/\d+$/, d => String(Math.max(0, Number(d) - 1)));
+  hasnt(sw, prevVersion, 'the previous version (' + prevVersion + ') is gone from sw.js');
 }
 
 console.log('');

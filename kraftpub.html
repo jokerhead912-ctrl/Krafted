@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.48</title>
+<title>Krafted v7.0.49</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -70,10 +70,27 @@ body { overflow:hidden; background:var(--bg); color:var(--text); font-family:'In
 .item img { display:block; width:100%; height:100%; pointer-events:none; -webkit-user-drag:none; }
 .item video { display:block; width:100%; height:100%; pointer-events:none; background:#000; }
 .item.locked { cursor:default; }
-/* Reframe mode */
+/* Reframe mode (v7.0.49) */
+.item.framed { overflow:hidden; }
 .item.reframing { overflow:hidden !important; outline:2.5px dashed var(--accent); outline-offset:-2.5px; z-index:9999 !important; }
-.item.reframing img, .item.reframing video { width:auto !important; height:auto !important; max-width:none !important; max-height:none !important; pointer-events:auto !important; cursor:move !important; }
-.item.reframing::after { content:''; position:absolute; inset:0; border:2px solid rgba(255,255,255,0.3); pointer-events:none; }
+.item.reframing img { pointer-events:auto !important; cursor:move !important; }
+.item.reframing.rotating img { cursor:grabbing !important; }
+.item.reframing::after { content:''; position:absolute; inset:0; border:2px solid rgba(255,255,255,0.3); pointer-events:none; z-index:3; }
+.rf-guides { position:absolute; inset:0; pointer-events:none; z-index:2; }
+.rf-guides .rf-line { position:absolute; background:rgba(255,255,255,0.38); }
+.rf-guides .rf-line.h { left:0; right:0; height:1px; }
+.rf-guides .rf-line.v { top:0; bottom:0; width:1px; }
+.rf-toolbar { position:absolute; left:50%; bottom:6px; transform:translateX(-50%); display:flex; align-items:center; gap:6px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:8px; padding:5px 7px; z-index:6; box-shadow:var(--shadow-medium); white-space:nowrap; font-family:'Inter',sans-serif; }
+.rf-toolbar button { background:transparent; border:1px solid transparent; color:var(--text-dim); padding:3px 8px; border-radius:6px; cursor:pointer; font-size:10.5px; font-family:'Inter',sans-serif; transition:all 0.15s; }
+.rf-toolbar button:hover { background:var(--btn-hover); color:var(--text); }
+.rf-toolbar button.primary { border-color:var(--accent); color:var(--accent); }
+.rf-toolbar button.on { background:var(--btn-hover); color:var(--accent); }
+.rf-toolbar .sep { width:1px; height:16px; background:var(--border-subtle); }
+.rf-toolbar label { font-size:10.5px; color:var(--text-dim); }
+.rf-toolbar input[type=range] { width:88px; accent-color:var(--accent); }
+.rf-toolbar input[type=number] { width:54px; background:var(--bg); border:1px solid var(--border-subtle); color:var(--text); border-radius:5px; padding:2px 4px; font-size:10.5px; font-family:'Inter',sans-serif; }
+.rf-toolbar select { background:var(--bg); border:1px solid var(--border-subtle); color:var(--text); border-radius:5px; padding:2px 4px; font-size:10.5px; font-family:'Inter',sans-serif; }
+.rf-readout { font-size:10.5px; color:var(--accent); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; min-width:38px; }
 /* Crop mode (Photoshop-style) */
 .item.cropping { z-index:999999 !important; }
 .item.cropping .item-handle, .item.cropping .item-rot { display:none !important; }
@@ -4372,7 +4389,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.48';
+var KRAFTED_VERSION = '7.0.49';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4665,7 +4682,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var items = state.items || [];
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
-      var node = { id: it.id || 'item_' + i, x: it.x, y: it.y, w: it.w, h: it.h, rot: it.rot || 0, natW: it.natW, natH: it.natH, cropX: it.cropX, cropY: it.cropY, cropW: it.cropW, cropH: it.cropH, opacity: it.opacity !== undefined ? it.opacity : 1, zIndex: it.z || 0, locked: it.locked || false, flipH: it.flipH || false, flipV: it.flipV || false, visible: true, filename: it.filename || '', trimStart: it.trimStart || 0, trimEnd: it.trimEnd || 0, playbackRate: it.playbackRate || 1, fps: (it.video && it.video._kraftedFps) ? it.video._kraftedFps : null, fpsManual: !!(it.video && it.video._kraftedFpsManual), isGif: it.isGif || false, adjustments: { brightness: it.brightness !== undefined ? it.brightness : 100, contrast: it.contrast !== undefined ? it.contrast : 100, saturate: it.saturate !== undefined ? it.saturate : 100, hueRotate: it.hueRotate || 0, blur: it.blur || 0, sepia: it.sepia || 0, grayscale: it.grayscale || 0, temp: it.temp || 0, vignette: it.vignette || 0, shadow: it.shadow || 0, highlight: it.highlight || 0, grain: it.grain || 0 } };
+      var node = { id: it.id || 'item_' + i, x: it.x, y: it.y, w: it.w, h: it.h, rot: it.rot || 0, natW: it.natW, natH: it.natH, cropX: it.cropX, cropY: it.cropY, cropW: it.cropW, cropH: it.cropH, frameOn: it.frameOn, frameZ: it.frameZ, frameRot: it.frameRot, frameX: it.frameX, frameY: it.frameY, opacity: it.opacity !== undefined ? it.opacity : 1, zIndex: it.z || 0, locked: it.locked || false, flipH: it.flipH || false, flipV: it.flipV || false, visible: true, filename: it.filename || '', trimStart: it.trimStart || 0, trimEnd: it.trimEnd || 0, playbackRate: it.playbackRate || 1, fps: (it.video && it.video._kraftedFps) ? it.video._kraftedFps : null, fpsManual: !!(it.video && it.video._kraftedFpsManual), isGif: it.isGif || false, adjustments: { brightness: it.brightness !== undefined ? it.brightness : 100, contrast: it.contrast !== undefined ? it.contrast : 100, saturate: it.saturate !== undefined ? it.saturate : 100, hueRotate: it.hueRotate || 0, blur: it.blur || 0, sepia: it.sepia || 0, grayscale: it.grayscale || 0, temp: it.temp || 0, vignette: it.vignette || 0, shadow: it.shadow || 0, highlight: it.highlight || 0, grain: it.grain || 0 } };
       if (it.masks && it.masks.length) { node.masks = it.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }); }
       if (it.anno) { node.anno = { comments: (it.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text, translation: c.translation, translationDir: c.translationDir, originalText: c.originalText, snapshot: c.snapshot, annoStrokes: c.annoStrokes }; }) }; }
       if (it.isVideo && it.el && it.el._annoDrawState) { var sbf = it.el._annoDrawState.strokesByFrame; if (sbf) { node._annoStrokesByFrame = {}; Object.keys(sbf).forEach(function(f) { if (sbf[f] && sbf[f].length) { node._annoStrokesByFrame[f] = sbf[f].map(function(s) { return { type: s.type, color: s.color, size: s.size, points: (s.points || []).map(function(p) { return [p[0], p[1]]; }), text: s.text || '' }; }); } }); } }
@@ -4725,7 +4742,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if (!resolvedSrc && n.mediaData) { try { var arr = n.mediaData.split(','); var mime = (arr[0].match(/:(.*?);/) || [])[1] || 'application/octet-stream'; var bin = atob(arr[1] || arr[0]); var bytes = new Uint8Array(bin.length); for (var k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k); resolvedSrc = URL.createObjectURL(new Blob([bytes], { type: mime })); } catch (e) {} }
       var savedW = n.w > 0 ? n.w : (n.natW || 100);
       var savedH = n.h > 0 ? n.h : (n.natH || 100);
-      var item = { id: n.id, x: n.x || 0, y: n.y || 0, w: savedW, h: savedH, natW: n.natW, natH: n.natH, cropX: n.cropX, cropY: n.cropY, cropW: n.cropW, cropH: n.cropH, rot: n.rot || 0, opacity: n.opacity !== undefined ? n.opacity : 1, z: n.zIndex || 0, locked: n.locked || false, flipH: n.flipH || false, flipV: n.flipV || false, trimStart: n.trimStart || 0, trimEnd: n.trimEnd || 0, playbackRate: n.playbackRate || 1, fps: n.fps || null, fpsManual: n.fpsManual || false, isGif: n.isGif || false, brightness: (n.adjustments || {}).brightness, contrast: (n.adjustments || {}).contrast, saturate: (n.adjustments || {}).saturate, hueRotate: (n.adjustments || {}).hueRotate, blur: (n.adjustments || {}).blur, sepia: (n.adjustments || {}).sepia, grayscale: (n.adjustments || {}).grayscale, temp: (n.adjustments || {}).temp, vignette: (n.adjustments || {}).vignette, shadow: (n.adjustments || {}).shadow, highlight: (n.adjustments || {}).highlight, grain: (n.adjustments || {}).grain, filename: n.filename || n.audioName || '', isVideo: n.type === 'video', isAudio: n.type === 'audio', audioName: n.audioName || n.filename || '', isLink: n.type === 'link', linkUrl: n.linkUrl || '', linkTitle: n.linkTitle || '', linkDesc: n.linkDesc || '', anno: n.anno ? { comments: (n.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text || '', translation: c.translation || '', translationDir: c.translationDir || '', originalText: c.originalText || '', snapshot: c.snapshot || '', annoStrokes: Array.isArray(c.annoStrokes) ? c.annoStrokes.filter(Boolean).map(function(s) { return { type: s.type, color: s.color, size: s.size, points: Array.isArray(s.points) ? s.points.map(function(p) { return [p[0], p[1]]; }) : [], text: s.text || '' }; }) : [] }; }) } : undefined, _annoStrokesByFrame: n._annoStrokesByFrame || undefined, masks: n.masks ? n.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }) : undefined, type: n.type === 'draw' ? 'draw' : undefined, strokeId: n.strokeId, drawMode: n.drawMode, drawColor: n.drawColor, drawSize: n.drawSize, drawOpacity: n.drawOpacity, drawArrowHead: n.drawArrowHead, src: resolvedSrc };
+      var item = { id: n.id, x: n.x || 0, y: n.y || 0, w: savedW, h: savedH, natW: n.natW, natH: n.natH, cropX: n.cropX, cropY: n.cropY, cropW: n.cropW, cropH: n.cropH, frameOn: n.frameOn || false, frameZ: n.frameZ || 1, frameRot: n.frameRot || 0, frameX: n.frameX || 0, frameY: n.frameY || 0, rot: n.rot || 0, opacity: n.opacity !== undefined ? n.opacity : 1, z: n.zIndex || 0, locked: n.locked || false, flipH: n.flipH || false, flipV: n.flipV || false, trimStart: n.trimStart || 0, trimEnd: n.trimEnd || 0, playbackRate: n.playbackRate || 1, fps: n.fps || null, fpsManual: n.fpsManual || false, isGif: n.isGif || false, brightness: (n.adjustments || {}).brightness, contrast: (n.adjustments || {}).contrast, saturate: (n.adjustments || {}).saturate, hueRotate: (n.adjustments || {}).hueRotate, blur: (n.adjustments || {}).blur, sepia: (n.adjustments || {}).sepia, grayscale: (n.adjustments || {}).grayscale, temp: (n.adjustments || {}).temp, vignette: (n.adjustments || {}).vignette, shadow: (n.adjustments || {}).shadow, highlight: (n.adjustments || {}).highlight, grain: (n.adjustments || {}).grain, filename: n.filename || n.audioName || '', isVideo: n.type === 'video', isAudio: n.type === 'audio', audioName: n.audioName || n.filename || '', isLink: n.type === 'link', linkUrl: n.linkUrl || '', linkTitle: n.linkTitle || '', linkDesc: n.linkDesc || '', anno: n.anno ? { comments: (n.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text || '', translation: c.translation || '', translationDir: c.translationDir || '', originalText: c.originalText || '', snapshot: c.snapshot || '', annoStrokes: Array.isArray(c.annoStrokes) ? c.annoStrokes.filter(Boolean).map(function(s) { return { type: s.type, color: s.color, size: s.size, points: Array.isArray(s.points) ? s.points.map(function(p) { return [p[0], p[1]]; }) : [], text: s.text || '' }; }) : [] }; }) } : undefined, _annoStrokesByFrame: n._annoStrokesByFrame || undefined, masks: n.masks ? n.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }) : undefined, type: n.type === 'draw' ? 'draw' : undefined, strokeId: n.strokeId, drawMode: n.drawMode, drawColor: n.drawColor, drawSize: n.drawSize, drawOpacity: n.drawOpacity, drawArrowHead: n.drawArrowHead, src: resolvedSrc };
       data.items.push(item);
     }
     var texts = manifest.texts || [];
@@ -5539,7 +5556,7 @@ const state = {
   _deferredUndo: null,
   groups: [],  // [{id, color, memberIds:Set, borderEl}]
   mouse: { x: 0, y: 0 }, // last known mouse position (screen coords)
-  reframing: null, // { item, origCropX, origCropY }
+  reframing: null, // { items, item, snap, mode, guides } — see reframe-crop.js
   cropping: null, // { item, x, y, w, h, aspect, origSrc, origNatW, origNatH, origW, origH, origCropX, origCropY }
   // Alt+Left-Click pans the canvas — primarily for MacBook trackpads (no middle button).
   // Auto-enabled on Mac; off by default on Windows/Linux to avoid clashing with system Alt+Click.
@@ -6807,6 +6824,10 @@ const DEFAULT_SHORTCUTS = [
   { id: 'tool-lasso',      category: 'Tools', label: 'Lasso Cut',                keys: [{ key: 'l' }] },
   { id: 'tool-mindmap',    category: 'Tools', label: 'Mind Map',                 keys: [{ key: 'm' }] },
   { id: 'tool-relation',   category: 'Tools', label: 'Relation Line',            keys: [{ key: 'r' }] },
+  // v7.0.49: Reframe. Bare r is Relation Line, so this rides on Shift+R.
+  // Registered rather than hand-rolled so it shows in the palette and can be
+  // rebound — a feature you cannot find is a feature you do not have.
+  { id: 'edit-reframe',    category: 'Edit',  label: 'Reframe Image',              keys: [{ key: 'r', shift: true }] },
   { id: 'tool-link',       category: 'Tools', label: 'Add Link Card',            keys: [{ key: 'l', ctrl: true }], macKeys: [{ key: 'l', meta: true }] },
   { id: 'tool-grid',       category: 'Tools', label: 'Toggle Grid',              keys: [{ key: 'g' }] },
   { id: 'tool-fullscreen', category: 'Tools', label: 'Fullscreen',               keys: [{ key: 'f', shift: true }] },
@@ -8271,7 +8292,7 @@ function captureSnapshot() {
       // export to name the output file and to display in the exported
       // header. Empty when not available.
       filename: i.filename || '',
-      cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH,
+      cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH, frameOn: i.frameOn || false, frameZ: i.frameZ || 1, frameRot: i.frameRot || 0, frameX: i.frameX || 0, frameY: i.frameY || 0,
       brightness: i.brightness, contrast: i.contrast, saturate: i.saturate,
       hueRotate: i.hueRotate, blur: i.blur, sepia: i.sepia, grayscale: i.grayscale,
       temp: i.temp, vignette: i.vignette, shadow: i.shadow, highlight: i.highlight, grain: i.grain,
@@ -10756,7 +10777,7 @@ function applyLinkCover(el, item, placeholder, coverUrl, title, imgW, imgH, url,
     const mediaEl = document.createElement('img');
     mediaEl.src = coverUrl;
     mediaEl.referrerPolicy = 'no-referrer';
-    mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;object-fit:cover;';
+    mediaEl.style.cssText = ITEM_IMG_BASE_CSS;
     mediaEl.draggable = false;
     el.insertBefore(mediaEl, el.firstChild);
     item.img = mediaEl;
@@ -10786,7 +10807,7 @@ function applyLinkCover(el, item, placeholder, coverUrl, title, imgW, imgH, url,
       if (placeholder && placeholder.parentNode) placeholder.remove();
       const mediaEl = document.createElement('img');
       mediaEl.src = proxiedCoverUrl;
-      mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;object-fit:cover;';
+      mediaEl.style.cssText = ITEM_IMG_BASE_CSS;
       mediaEl.draggable = false;
       el.insertBefore(mediaEl, el.firstChild);
       item.img = mediaEl;
@@ -10875,7 +10896,7 @@ function rebuildLinkCard(item) {
     const mediaEl = document.createElement('img');
     mediaEl.src = item.src;
     mediaEl.referrerPolicy = 'no-referrer';
-    mediaEl.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;object-fit:cover;';
+    mediaEl.style.cssText = ITEM_IMG_BASE_CSS;
     mediaEl.draggable = false;
     el.appendChild(mediaEl);
     item.img = mediaEl;
@@ -11199,6 +11220,12 @@ function updateItemStyle(item, lightweight) {
   el.style.opacity = item.opacity !== undefined ? item.opacity : 1;
   el.style.zIndex = item.z || 1;
   if (item.locked) el.classList.add('locked'); else el.classList.remove('locked');
+  // v7.0.49: framing (zoom / pan / rotate) depends on the frame size, so it has
+  // to be re-applied whenever that changes or the crop window drifts out of
+  // step with the frame. This call is also what makes a reframe survive a
+  // reload — before it, the transform was only ever written by exitReframe, so
+  // every reframe silently vanished the moment you reopened the board.
+  if (!item.isVideo && item.img) applyImageFraming(item);
   // Sync text handle container position (sibling of text-item) — must run during drag too
   if (isTextItem) {
     const hCont = el.parentElement.querySelector('.text-handles[data-owner="' + item.id + '"]');
@@ -21989,7 +22016,10 @@ function showCtx(x, y) {
     }
     html += `<div class="ctx-item" onclick="exportMediaSelected();hideCtx()">Download Source File</div>`;
     if (hasImages) html += `<div class="ctx-item" onclick="enterCrop(getSelectedImages()[0]);hideCtx()">Crop Image <kbd>C</kbd></div>`;
-    if (hasImages) html += `<div class="ctx-item" onclick="enterReframe(getSelectedImages()[0]);hideCtx()">Reframe Image <kbd>Enter</kbd></div>`;
+    // v7.0.49: pass every selected image, not just the first — silently
+    // dropping the rest of a selection is how people lose work. The old kbd
+    // hint said Enter, which is the CONFIRM key, not the key that opens this.
+    if (hasImages) html += `<div class="ctx-item" onclick="enterReframe(getSelectedImages());hideCtx()" title="Re-compose without touching the original pixels">Reframe Image <kbd>⇧R</kbd></div>`;
     html += `<div class="ctx-item" onclick="toggleLock();hideCtx()">Lock/Unlock</div>`;
     html += `<div class="ctx-item" onclick="flipH();hideCtx()">Flip H</div>`;
     html += `<div class="ctx-item" onclick="flipV();hideCtx()">Flip V</div>`;
@@ -23288,6 +23318,19 @@ viewport.addEventListener('wheel', e => {
   // Round 35: during item drag, suppress wheel events (accidental
   // trackpad touches while clicking).
   if (state.dragging && state.dragging.type === 'move') return;
+
+  // v7.0.49: reframe zoom, before the canvas-zoom branches. Otherwise a scroll
+  // meant to punch into a still zooms the whole board instead — the wheel has
+  // one obvious meaning while you are recomposing one picture.
+  if (state.reframing) {
+    e.preventDefault();
+    const rf = state.reframing;
+    const step = e.shiftKey ? 0.02 : 0.08;
+    const dir = (e.deltaY > 0) ? -1 : 1;
+    rf.items.forEach(function (it) { rfSetZoom(it, (it.frameZ || 1) * (1 + dir * step)); });
+    rfSyncUI();
+    return;
+  }
 
   // v6.8.4: classify the input device on EVERY wheel event, before any
   // branching, so the rolling-window heuristic sees the full stream.
@@ -25021,6 +25064,7 @@ function _dispatchShortcut(e) {
     case 'view-present':           startPresent(); return true;
     case 'view-toggle-panel':      toggleViewsPanel(); return true;
     case 'view-ab-compare':        openABCompare(); return true;
+    case 'edit-reframe':           enterReframe(getSelectedImages()); return true;
     default: return false;
   }
 }
@@ -25157,6 +25201,22 @@ document.addEventListener('keydown', e => {
   if (state.reframing) {
     if (e.key === 'Enter') { e.preventDefault(); exitReframe(true); return; }
     if (e.key === 'Escape') { e.preventDefault(); exitReframe(false); return; }
+    // Brackets are what every NLE and Photoshop uses for this, and 0.1 deg is
+    // the step that actually matters when levelling a horizon. Shift widens it
+    // to whole degrees for a deliberate dutch angle.
+    if (e.key === '[' || e.key === ']') {
+      e.preventDefault();
+      const step = (e.shiftKey ? 1 : 0.1) * (e.key === '[' ? -1 : 1);
+      state.reframing.items.forEach(function (it) { rfSetRotation(it, (it.frameRot || 0) + step); });
+      rfSyncUI();
+      return;
+    }
+    if (e.key === '0') {
+      e.preventDefault();
+      state.reframing.items.forEach(function (it) { rfSetRotation(it, 0); });
+      rfSyncUI();
+      return;
+    }
     return;
   }
 
@@ -26032,23 +26092,29 @@ viewport.addEventListener('mousedown', e => {
     return;
   }
 
-  // REFRAME MODE — drag image within frame
+  // REFRAME MODE — drag pans, Alt+drag rotates
   if (state.reframing) {
-    const reframeItem = state.reframing.item;
-    const reframeEl = reframeItem.el;
-    const imgEl = reframeItem.img;
-    // Check if clicking inside the reframing item
-    if (reframeEl.contains(e.target) || e.target === imgEl) {
+    const rf = state.reframing;
+    // A press on the toolbar belongs to the toolbar. Without this the drag
+    // below would start on every slider grab and throw the framing about.
+    if (e.target && e.target.closest && e.target.closest('.rf-toolbar')) return;
+    const inside = rf.items.some(it => it.el && it.el.contains(e.target));
+    if (inside) {
       e.preventDefault();
-      state.reframing.dragStartX = e.clientX;
-      state.reframing.dragStartY = e.clientY;
-      state.reframing.dragCropX = reframeItem.cropX || 0;
-      state.reframing.dragCropY = reframeItem.cropY || 0;
-      state.dragging = { type: 'reframe', item: reframeItem };
+      // One gesture, one meaning. The combined pan+rotate gesture is the same
+      // mistake the video zoom/pan split was made to undo.
+      rf.mode = e.altKey ? 'rotate' : 'pan';
+      rf.startX = e.clientX;
+      rf.startY = e.clientY;
+      rf.startRot = rf.item.frameRot || 0;
+      rf.startFrameX = rf.item.frameX || 0;
+      rf.startFrameY = rf.item.frameY || 0;
+      state.dragging = { type: 'reframe', item: rf.item };
       document.body.classList.add('is-dragging');
+      if (rf.mode === 'rotate') rf.items.forEach(it => it.el.classList.add('rotating'));
       return;
     }
-    // Clicked outside — cancel reframe
+    // Clicked outside — apply and leave
     exitReframe(true);
     return;
   }
@@ -26251,17 +26317,33 @@ document.addEventListener('mousemove', e => {
   state.mouse.x = e.clientX;
   state.mouse.y = e.clientY;
 
-  // REFRAME DRAG — move image within frame
+  // REFRAME DRAG — pan or rotate the framing
   if (state.dragging && state.dragging.type === 'reframe' && state.reframing) {
     const rf = state.reframing;
-    const dx = e.clientX - rf.dragStartX;
-    const dy = e.clientY - rf.dragStartY;
-    const item = rf.item;
-    item.cropX = Math.max(0, Math.min(item.natW - item.w, rf.dragCropX - dx));
-    item.cropY = Math.max(0, Math.min(item.natH - item.h, rf.dragCropY - dy));
-    if (item.img) {
-      item.img.style.transform = 'translate(' + (-(item.cropX || 0)) + 'px, ' + (-(item.cropY || 0)) + 'px)';
+    if (rf.mode === 'rotate') {
+      // Horizontal only, 0.25 deg per screen px.
+      let deg = rf.startRot + (e.clientX - rf.startX) * 0.25;
+      // Snap to level inside half a degree. Levelling a horizon is the one
+      // rotation people do constantly, and "almost level" reads as a mistake.
+      if (Math.abs(deg) < 0.5) deg = 0;
+      deg = Math.max(-180, Math.min(180, deg));
+      rf.items.forEach(it => rfSetRotation(it, deg));
+      rfSyncUI();
+      return;
     }
+    // Pan. Screen px -> world px: the canvas is scaled by state.zoom and the
+    // old code ignored that, so at 50% board zoom the image lagged the cursor
+    // by half and felt like it was stuck in mud. Dragging right moves the view
+    // left, so the picture follows the hand — hence the minus.
+    const z = state.zoom || 1;
+    const dx = (e.clientX - rf.startX) / z;
+    const dy = (e.clientY - rf.startY) / z;
+    const nx = rf.startFrameX - dx;
+    const ny = rf.startFrameY - dy;
+    // Same delta to every item, clamped per item inside rfSetPan: a batch of
+    // stills keeps its relative framing instead of all slamming into the edge
+    // of whichever one runs out of room first.
+    rf.items.forEach(it => rfSetPan(it, nx, ny));
     return;
   }
 
@@ -32274,66 +32356,467 @@ function toggleRelations() {
 // ==== reframe-crop.js ====
 
 // ============================================================
-//  REFRAME — reposition image within its frame (crop)
+//  IMAGE FRAMING — non-destructive zoom / pan / rotate
 // ============================================================
-function enterReframe(item) {
-  if (!item || !item.src || item.isVideo) return;
-  // Exit any existing reframe first
-  if (state.reframing) exitReframe(false);
-  pushUndo();
-  state.reframing = {
-    item,
-    origCropX: item.cropX || 0,
-    origCropY: item.cropY || 0,
-    dragStartX: 0,
-    dragStartY: 0,
-    dragCropX: 0,
-    dragCropY: 0,
+// Stored on the item (and in .kpak):
+//   frameOn   bool    once true, this item is rendered through the framing
+//                     transform instead of the plain stretched <img>.
+//   frameZ    number  zoom. 1 = the smallest zoom that still fills the frame.
+//                     Never below 1, so "the frame went blank" is not a state
+//                     this code can produce.
+//   frameRot  number  degrees, clockwise.
+//   frameX    number  pan offset from image centre, in NATURAL image px.
+//   frameY    number  ditto.
+//
+// WHY ONE FUNCTION
+//   Before v7.0.49 the preview, the drag and the applied result each wrote
+//   their own transform in a different coordinate system. The preview blew the
+//   <img> up to natural size and translated it in natural px; the result
+//   switched to object-fit:cover (which rescales the image) and then applied
+//   the SAME natural-px number as object-position without multiplying by that
+//   scale. Dragging 300px previewed source 300-1020 and produced 800-1920, and
+//   past 720 the frame went blank. Three hand-written copies of one behaviour
+//   is the recurring root cause in this file, so the fix is the standard one:
+//   one implementation, every caller delegates. Preview and result are then
+//   identical because they ARE the same code.
+//
+// THE MATHS, STATED ONCE
+//   Frame W x H centred; image, scaled by s, is natW*s x natH*s, also centred,
+//   then rotated by r, then translated by (tx, ty).
+//   "The frame must stay covered" is easier to solve by rotating the FRAME by
+//   -r instead: the rotated frame's axis-aligned bounding box has half-extents
+//       Ax = A*|cos r| + B*|sin r|
+//       By = A*|sin r| + B*|cos r|          (A = W/2, B = H/2)
+//   The image then has to be an axis-aligned rect covering that box, giving an
+//   exact minimum scale and an exact pan budget:
+//       s      >= max( 2*Ax/natW, 2*By/natH )
+//       |tx|   <= natW*s/2 - Ax
+//       |ty|   <= natH*s/2 - By
+//   These are exact, not fudge factors — which is what makes the blank frame
+//   unrepresentable rather than merely unlikely.
+
+function framingBounds(item, rot) {
+  var natW = item.natW || 1, natH = item.natH || 1;
+  var W = item.w || 1, H = item.h || 1;
+  var rad = (rot || 0) * Math.PI / 180;
+  var c = Math.abs(Math.cos(rad)), sn = Math.abs(Math.sin(rad));
+  var A = W / 2, B = H / 2;
+  var Ax = A * c + B * sn;
+  var By = A * sn + B * c;
+  var sMin = Math.max(2 * Ax / natW, 2 * By / natH);
+  return { natW: natW, natH: natH, W: W, H: H, Ax: Ax, By: By, sMin: sMin };
+}
+
+// The classic object-fit:cover scale — the zoom-1 baseline at zero rotation.
+function framingBaseScale(b) {
+  return Math.max(b.W / b.natW, b.H / b.natH);
+}
+
+function framingMinZoom() { return 1; }
+function framingMaxZoom() { return 8; }
+
+// Scale and budgets for one framing. Depends on zoom and rotation only, never
+// on the pan — which is what lets the clamp below be a pure function of these.
+function framingGeom(item) {
+  var rot = item.frameRot || 0;
+  var b = framingBounds(item, rot);
+  var z = Math.max(framingMinZoom(), Math.min(framingMaxZoom(), item.frameZ || 1));
+  var s = Math.max(b.sMin, framingBaseScale(b) * z);
+  var rad = rot * Math.PI / 180;
+  return {
+    b: b, s: s, z: z, rot: rot,
+    c: Math.cos(rad), sn: Math.sin(rad),
+    budgetX: Math.max(0, b.natW * s / 2 - b.Ax),
+    budgetY: Math.max(0, b.natH * s / 2 - b.By),
   };
-  const el = item.el;
-  el.classList.add('reframing');
-  // Position img at its natural size within the container
-  const imgEl = item.img;
-  if (imgEl) {
-    imgEl.style.width = item.natW + 'px';
-    imgEl.style.height = 'auto';
-    imgEl.style.transform = 'translate(' + (-(item.cropX || 0)) + 'px, ' + (-(item.cropY || 0)) + 'px)';
+}
+
+// Clamp a pan, expressed in natural image px in the FRAME's coordinate space,
+// into the region that keeps the frame covered.
+//
+// THE SUBTLETY, BECAUSE THE FIRST VERSION GOT IT WRONG
+//   The coverage condition is not "|tx| <= budgetX" in the frame's own space.
+//   Working it through: a frame corner q (relative to the frame centre) is
+//   inside the image iff R(-r)*(q - t) lies within the image's half-extents
+//   (a, b). Substituting tau = R(-r)*t and u = R(-r)*q, the corners u form the
+//   rotated frame whose axis-aligned bounding box is exactly (Ax, By) — so the
+//   condition is |tau_x| <= a - Ax and |tau_y| <= b - By.
+//   The budget is therefore axis-aligned in the ROTATED space. Clamping t
+//   directly (as v7.0.49's first cut did) sweeps a rotated rectangle as if it
+//   were an axis-aligned one, and lets the image slide out from under the
+//   frame: 4356 of ~12000 swept combinations ended up uncovered.
+//   So: rotate the candidate into the space where the budget IS axis-aligned,
+//   clamp each axis, rotate back.
+function framingClampPan(item, x, y) {
+  var g = framingGeom(item);
+  // candidate translate in frame px
+  var txs = -(x || 0) * g.s, tys = -(y || 0) * g.s;
+  // into the rotated space (tau = R(-r) * t)
+  var ux = g.c * txs + g.sn * tys;
+  var uy = -g.sn * txs + g.c * tys;
+  ux = Math.max(-g.budgetX, Math.min(g.budgetX, ux));
+  uy = Math.max(-g.budgetY, Math.min(g.budgetY, uy));
+  // back to the frame's space (t = R(r) * tau)
+  var tx = g.c * ux - g.sn * uy;
+  var ty = g.sn * ux + g.c * uy;
+  return { x: -tx / g.s, y: -ty / g.s, budgetX: g.budgetX, budgetY: g.budgetY };
+}
+
+// Turn the stored framing into the numbers actually used to paint. Every clamp
+// that matters is applied HERE, so a stale, imported or hand-edited value can
+// never render a gap.
+function framingResolve(item) {
+  var g = framingGeom(item);
+  var p = framingClampPan(item, item.frameX, item.frameY);
+  return {
+    s: g.s, z: g.z, rot: g.rot,
+    tx: -p.x * g.s, ty: -p.y * g.s,
+    panMaxX: g.budgetX, panMaxY: g.budgetY, b: g.b,
+  };
+}
+
+function itemHasFraming(item) {
+  return !!item.frameOn;
+}
+
+// The inline styling every image element is born with. Named once because
+// two things depend on it and they used to disagree: the three creators
+// write object-fit:cover into cssText, while the reset used to blank
+// objectFit to ''. Blank is NOT the default - with object-fit gone the image
+// stretches to the item box instead of cropping to fill it, so cancelling a
+// reframe on an image that had never been framed left it visibly distorted.
+var ITEM_IMG_BASE_CSS = 'display:block;width:100%;height:100%;pointer-events:none;object-fit:cover;';
+
+function clearFramingStyles(item) {
+  if (!item || !item.img) return;
+  // Restore the default, do not blank it.
+  item.img.style.cssText = ITEM_IMG_BASE_CSS;
+  if (item.el) item.el.classList.remove('framed');
+}
+
+// THE single applier. Preview, drag, apply, load and export all come here.
+// There is deliberately no other place that turns framing into pixels.
+function applyImageFraming(item) {
+  if (!item || !item.img || item.isVideo) return;
+  if (!itemHasFraming(item)) {
+    // Once per item. Covers kpak, JSON and autosave restores alike — the
+    // alternative is finding every loader, and loaders are added over time.
+    if (!item._cropMigrated) { item._cropMigrated = true; migrateLegacyCrop(item); }
+    if (!itemHasFraming(item)) { clearFramingStyles(item); return; }
   }
-  // Remove selection handles during reframe
-  document.querySelectorAll('.item-handle, .item-rot').forEach(el => el.remove());
-      // Round 67 — also wipe the empty union multi-select container left
-      // behind after the 8 child handles were just removed. The container
-      // is empty (no styles, no children) but we drop it anyway to keep
-      // the DOM tidy across long sessions of reselecting.
-      document.querySelectorAll('.multi-sel-handles').forEach(el => el.remove());
-  toast('Drag to reframe — Enter to apply, Esc to cancel');
+  var r = framingResolve(item);
+  var img = item.img;
+  // Lay the image out at natural size, centred on the frame centre, then let
+  // one transform do scale -> rotate -> translate. transform-origin is the
+  // element centre, which is the frame centre, so rotate and scale are about
+  // the frame centre exactly as the maths above assumes.
+  img.style.position = 'absolute';
+  img.style.left = '50%';
+  img.style.top = '50%';
+  img.style.width = r.b.natW + 'px';
+  img.style.height = r.b.natH + 'px';
+  img.style.marginLeft = (-r.b.natW / 2) + 'px';
+  img.style.marginTop = (-r.b.natH / 2) + 'px';
+  img.style.transformOrigin = '50% 50%';
+  img.style.transform = 'translate(' + r.tx + 'px, ' + r.ty + 'px) rotate(' + r.rot + 'deg) scale(' + r.s + ')';
+  img.style.objectFit = '';
+  img.style.objectPosition = '';
+  if (item.el) item.el.classList.add('framed');
+}
+
+// Boards saved before v7.0.49 stored a pan as cropX/cropY — the top-left
+// corner of the visible window, in natural image px — and then applied it with
+// object-fit:cover while forgetting that cover RESCALES the image. That is how
+// a reframe landed on a blank frame. There is no faithful reading of those
+// numbers, so convert what is recoverable and let applyImageFraming clamp the
+// rest: the worst case becomes a usable framing instead of an empty box.
+function migrateLegacyCrop(item) {
+  if (!item || item.frameOn) return;
+  if (!item.cropX && !item.cropY) return;
+  var b = framingBaseScale(framingBounds(item, 0));
+  if (!b) return;
+  item.frameOn = true;
+  item.frameZ = 1;
+  item.frameRot = 0;
+  // cropX was the window's left edge. Convert edge -> centre, then centre ->
+  // offset from the image centre, which is what frameX means.
+  item.frameX = (item.cropX || 0) + (item.w || 0) / (2 * b) - (item.natW || 0) / 2;
+  item.frameY = (item.cropY || 0) + (item.h || 0) / (2 * b) - (item.natH || 0) / 2;
+}
+
+// ============================================================
+//  REFRAME — non-destructive recompose (zoom / pan / rotate)
+// ============================================================
+// state.reframing: {
+//   items   [item...]        every selected image, edited together
+//   item    primary          the one carrying the toolbar
+//   snap    [{on,z,rot,x,y}] for Esc / Reset
+//   mode    'pan' | 'rotate'
+//   startX, startY, startRot, startFrameX, startFrameY
+//   guides  'none'|'thirds'|'grid'|'cross'|'golden'
+// }
+
+function rfGuideFractions(kind) {
+  if (kind === 'thirds') return { h: [1 / 3, 2 / 3], v: [1 / 3, 2 / 3] };
+  if (kind === 'grid')   return { h: [0.25, 0.5, 0.75], v: [0.25, 0.5, 0.75] };
+  if (kind === 'cross')  return { h: [0.5], v: [0.5] };
+  if (kind === 'golden') return { h: [0.382, 0.618], v: [0.382, 0.618] };
+  return { h: [], v: [] };
+}
+
+function rfBuildGuides(el, kind) {
+  var old = el.querySelector('.rf-guides');
+  if (old) old.parentNode.removeChild(old);
+  if (!kind || kind === 'none') return;
+  var box = document.createElement('div');
+  box.className = 'rf-guides';
+  var f = rfGuideFractions(kind);
+  f.h.forEach(function (p) {
+    var d = document.createElement('div');
+    d.className = 'rf-line h';
+    d.style.top = (p * 100) + '%';
+    box.appendChild(d);
+  });
+  f.v.forEach(function (p) {
+    var d = document.createElement('div');
+    d.className = 'rf-line v';
+    d.style.left = (p * 100) + '%';
+    box.appendChild(d);
+  });
+  el.appendChild(box);
+}
+
+function rfLabel(en, zh) {
+  return (typeof _isZhUI === 'function' && _isZhUI()) ? zh : en;
+}
+
+function rfBuildToolbar(rf) {
+  var el = rf.item.el;
+  var old = el.querySelector('.rf-toolbar');
+  if (old) old.parentNode.removeChild(old);
+  var tb = document.createElement('div');
+  tb.className = 'rf-toolbar';
+  tb.innerHTML =
+    '<label data-role="zoomLabel"></label>' +
+    '<input type="range" data-role="zoom" min="100" max="800" step="1">' +
+    '<span class="rf-readout" data-role="zoomOut"></span>' +
+    '<div class="sep"></div>' +
+    '<label data-role="rotLabel"></label>' +
+    '<input type="number" data-role="rot" step="0.1">' +
+    '<button data-role="level"></button>' +
+    '<div class="sep"></div>' +
+    '<select data-role="guides">' +
+      '<option value="none"></option>' +
+      '<option value="thirds"></option>' +
+      '<option value="grid"></option>' +
+      '<option value="cross"></option>' +
+      '<option value="golden"></option>' +
+    '</select>' +
+    '<div class="sep"></div>' +
+    '<button data-role="orig"></button>' +
+    '<button data-role="reset"></button>' +
+    '<div class="sep"></div>' +
+    '<button data-role="cancel"></button>' +
+    '<button data-role="apply" class="primary"></button>';
+
+  var q = function (role) { return tb.querySelector('[data-role="' + role + '"]'); };
+  q('zoomLabel').textContent = rfLabel('Zoom', '缩放');
+  q('rotLabel').textContent  = rfLabel('Rotate', '旋转');
+  q('level').textContent     = rfLabel('Level', '归零');
+  q('orig').textContent      = rfLabel('Hold: original', '按住睇原图');
+  q('orig').title            = rfLabel('Hold to compare against the framing you started from', '按住睇返未改之前嘅构图');
+  q('reset').textContent     = rfLabel('Reset', '重置');
+  q('cancel').textContent    = rfLabel('Cancel', '取消');
+  q('apply').textContent     = rfLabel('Apply', '套用');
+  q('cancel').title          = rfLabel('Cancel (Esc)', '取消 (Esc)');
+  q('apply').title           = rfLabel('Apply (Enter)', '套用 (Enter)');
+  var guideNames = { none: rfLabel('None', '无'), thirds: rfLabel('Thirds', '三分线'),
+                     grid: rfLabel('Grid', '网格'), cross: rfLabel('Cross', '中心十字'),
+                     golden: rfLabel('Golden', '黄金分割') };
+  Array.prototype.forEach.call(tb.querySelectorAll('select[data-role="guides"] option'), function (o) {
+    o.textContent = guideNames[o.value] || o.value;
+  });
+
+  // The toolbar lives inside .item, which is inside the scaled canvas and has
+  // overflow:hidden while reframing. Swallow the events that would otherwise
+  // reach the board (or start a pan drag) from a control.
+  ['pointerdown', 'mousedown', 'wheel', 'keydown', 'dblclick', 'contextmenu'].forEach(function (evt) {
+    tb.addEventListener(evt, function (ev) { ev.stopPropagation(); }, { passive: true });
+  });
+
+  q('zoom').addEventListener('input', function () {
+    rf.items.forEach(function (it) { rfSetZoom(it, parseInt(this.value, 10) / 100); }, this);
+    rfSyncUI();
+  });
+  q('rot').addEventListener('change', function () {
+    var v = parseFloat(this.value);
+    if (isNaN(v)) { rfSyncUI(); return; }
+    rf.items.forEach(function (it) { rfSetRotation(it, v); });
+    rfSyncUI();
+  });
+  q('level').addEventListener('click', function () {
+    rf.items.forEach(function (it) { rfSetRotation(it, 0); });
+    rfSyncUI();
+  });
+  q('guides').addEventListener('change', function () {
+    rfSetGuides(this.value);
+  });
+  var origBtn = q('orig');
+  origBtn.addEventListener('pointerdown', function () { rfShowOriginal(true); origBtn.classList.add('on'); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (evt) {
+    origBtn.addEventListener(evt, function () { rfShowOriginal(false); origBtn.classList.remove('on'); });
+  });
+  q('reset').addEventListener('click', function () {
+    rf.items.forEach(function (it, i) {
+      rfSetFrameFields(it, rf.snap[i]);
+    });
+    rfSyncUI();
+  });
+  q('cancel').addEventListener('click', function () { exitReframe(false); });
+  q('apply').addEventListener('click', function () { exitReframe(true); });
+
+  el.appendChild(tb);
+  return tb;
+}
+
+function rfSyncUI() {
+  var rf = state.reframing;
+  if (!rf) return;
+  var tb = rf.item.el.querySelector('.rf-toolbar');
+  if (!tb) return;
+  var q = function (role) { return tb.querySelector('[data-role="' + role + '"]'); };
+  var z = Math.round((rf.item.frameZ || 1) * 100);
+  q('zoom').value = z;
+  q('zoomOut').textContent = z + '%';
+  var rot = q('rot');
+  if (document.activeElement !== rot) rot.value = (Math.round((rf.item.frameRot || 0) * 10) / 10).toFixed(1);
+  q('guides').value = rf.guides;
+}
+
+function rfSetZoom(item, z) {
+  item.frameZ = Math.max(framingMinZoom(), Math.min(framingMaxZoom(), z || 1));
+  item.frameOn = true;
+  applyImageFraming(item);
+}
+
+function rfSetRotation(item, deg) {
+  item.frameRot = deg || 0;
+  item.frameOn = true;
+  applyImageFraming(item);
+}
+
+function rfSetPan(item, x, y) {
+  var p = framingClampPan(item, x, y);
+  item.frameX = p.x;
+  item.frameY = p.y;
+  item.frameOn = true;
+  applyImageFraming(item);
+}
+
+function rfSetGuides(kind) {
+  var rf = state.reframing;
+  if (!rf) return;
+  rf.guides = kind;
+  rf.items.forEach(function (it) { rfBuildGuides(it.el, kind); });
+  rfSyncUI();
+}
+
+// Hold-to-compare against the framing you walked in with.
+function rfShowOriginal(on) {
+  var rf = state.reframing;
+  if (!rf) return;
+  if (on) {
+    // `on` is captured too, so releasing puts back the exact state holding
+    // it changed - including whether the item was framed at all, which is
+    // what makes Hold:original show the board as it looked BEFORE reframe.
+    rf._live = rf.items.map(function (it) {
+      return { on: !!it.frameOn, z: it.frameZ, rot: it.frameRot, x: it.frameX, y: it.frameY };
+    });
+    rf.items.forEach(function (it, i) {
+      rfSetFrameFields(it, rf.snap[i]);
+    });
+  } else if (rf._live) {
+    rf.items.forEach(function (it, i) {
+      rfSetFrameFields(it, rf._live[i]);
+    });
+    rf._live = null;
+  }
+}
+
+// THE single writer of framing fields onto an item.
+//   Four places used to spell these assignments out by hand: exitReframe
+//   (cancel), the toolbar Reset, and both halves of Hold:original. A sixth
+//   framing field would then have to be added in four places, and the copy
+//   that got missed is exactly how the old cancel ended up restoring
+//   cropX/cropY and nothing else - "Esc" silently kept half the edit.
+//   `f.on` is optional: Hold:original swaps the LIVE framing back in, and
+//   that record carries no frameOn of its own.
+function rfSetFrameFields(it, f) {
+  if (!it || !f) return;
+  if (f.on !== undefined) it.frameOn = !!f.on;
+  it.frameZ = f.z || 1;
+  it.frameRot = f.rot || 0;
+  it.frameX = f.x || 0;
+  it.frameY = f.y || 0;
+  applyImageFraming(it);
+}
+
+function enterReframe(itemOrItems) {
+  var list = Array.isArray(itemOrItems) ? itemOrItems : [itemOrItems];
+  list = (list || []).filter(function (it) { return it && it.src && !it.isVideo && !it.isAudio && it.img; });
+  if (!list.length) { toast(rfLabel('Select a static image to reframe', '拣一张静态图片先')); return; }
+  if (state.reframing) exitReframe(false);
+  if (state.cropping) exitCrop(false);
+  pushUndo();
+
+  var rf = {
+    items: list,
+    item: list[0],
+    snap: list.map(function (it) {
+      return { on: !!it.frameOn, z: it.frameZ || 1, rot: it.frameRot || 0, x: it.frameX || 0, y: it.frameY || 0 };
+    }),
+    mode: 'pan',
+    startX: 0, startY: 0, startRot: 0, startFrameX: 0, startFrameY: 0,
+    guides: 'thirds',
+    _live: null,
+  };
+  state.reframing = rf;
+
+  list.forEach(function (it) {
+    if (!it.frameZ) it.frameZ = 1;
+    it.frameOn = true;
+    it.el.classList.add('reframing');
+    applyImageFraming(it);
+    rfBuildGuides(it.el, rf.guides);
+  });
+
+  document.querySelectorAll('.item-handle, .item-rot, .multi-sel-handles').forEach(function (n) { n.remove(); });
+  rfBuildToolbar(rf);
+  rfSyncUI();
+  toast(rfLabel('Drag to pan · Wheel to zoom · Alt+drag to rotate · Enter to apply · Esc to cancel',
+                '拖动平移 · 滚轮缩放 · Alt+拖动旋转 · Enter 套用 · Esc 取消'));
 }
 
 function exitReframe(apply) {
-  if (!state.reframing) return;
-  const { item, origCropX, origCropY } = state.reframing;
+  var rf = state.reframing;
+  if (!rf) return;
   state.reframing = null;
-  const el = item.el;
-  el.classList.remove('reframing');
-  const imgEl = item.img;
-  if (!apply) {
-    // Revert to original crop
-    item.cropX = origCropX;
-    item.cropY = origCropY;
-  }
-  if (imgEl) {
-    // Restore normal display: fill the frame with the crop offset
-    imgEl.style.width = '100%';
-    imgEl.style.height = '100%';
-    imgEl.style.transform = '';
-    // Use object-fit to show the cropped area filling the frame
-    imgEl.style.objectFit = 'cover';
-    imgEl.style.objectPosition = (-(item.cropX || 0)) + 'px ' + (-(item.cropY || 0)) + 'px';
-  }
-  updateItemStyle(item);
+  rf.items.forEach(function (it, i) {
+    if (!apply) {
+      var s = rf.snap[i];
+      rfSetFrameFields(it, s);
+    }
+    it.el.classList.remove('reframing', 'rotating');
+    var g = it.el.querySelector('.rf-guides');
+    if (g) g.parentNode.removeChild(g);
+    var tb = it.el.querySelector('.rf-toolbar');
+    if (tb) tb.parentNode.removeChild(tb);
+    applyImageFraming(it);
+  });
+  rf.items.forEach(function (it) { updateItemStyle(it); });
   refreshSelection();
   scheduleAutoSave();
-  toast(apply ? 'Reframe applied' : 'Reframe cancelled');
+  toast(apply ? rfLabel('Reframe applied', '重构已套用') : rfLabel('Reframe cancelled', '已取消重构'));
 }
 
 // ============================================================
@@ -34388,7 +34871,7 @@ function buildManifest() {
       natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false,
       audioName: i.audioName || i.filename || '',
       filename: i.filename || i.audioName || '',
-      cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH,
+      cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH, frameOn: i.frameOn || false, frameZ: i.frameZ || 1, frameRot: i.frameRot || 0, frameX: i.frameX || 0, frameY: i.frameY || 0,
       brightness: i.brightness, contrast: i.contrast, saturate: i.saturate,
       hueRotate: i.hueRotate, blur: i.blur, sepia: i.sepia, grayscale: i.grayscale,
       temp: i.temp, vignette: i.vignette, shadow: i.shadow, highlight: i.highlight, grain: i.grain,
@@ -36376,7 +36859,7 @@ function serializeBoard() {
         src: (i.src && i.src.indexOf('blob:') === 0) ? (AUTOSAVE_MEDIA_PREFIX + i.id) : (i.src || ''),
         natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, audioName: i.audioName || '',
         filename: i.filename || '',
-        cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH,
+        cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH, frameOn: i.frameOn || false, frameZ: i.frameZ || 1, frameRot: i.frameRot || 0, frameX: i.frameX || 0, frameY: i.frameY || 0,
         brightness: i.brightness, contrast: i.contrast, saturate: i.saturate,
         hueRotate: i.hueRotate, blur: i.blur, sepia: i.sepia, grayscale: i.grayscale,
         temp: i.temp, vignette: i.vignette, shadow: i.shadow, highlight: i.highlight, grain: i.grain,
