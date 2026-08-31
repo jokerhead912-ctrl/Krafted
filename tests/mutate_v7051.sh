@@ -94,12 +94,13 @@ muts = [
      "var hay = [it.name].join(' ').toLowerCase();"),
 
     # ── 9. a Library row click no longer flies to the item ──────────
+    # v7.0.52: the row click no longer calls renderLibraryPanel() itself -
+    # the highlight is now moved by libSyncActive(), which refreshSelection()
+    # drives. The anchor follows the new shape.
     ('clicking a Library row selects but never reveals the item',
      "      selectOnly(it.id);\n"
-     "      revealItem(it);\n"
-     "      renderLibraryPanel();",
-     "      selectOnly(it.id);\n"
-     "      renderLibraryPanel();"),
+     "      revealItem(it);",
+     "      selectOnly(it.id);"),
 
     # ── 10. one save path drops name / note / tags ──────────────────
     ('one of the three save paths drops the metadata fields',
@@ -127,7 +128,10 @@ for label, old, new in muts:
     open(SRC, 'w', encoding='utf-8').write(orig.replace(old, new, 1))
     r = subprocess.run([NODE, SUITE, SRC], capture_output=True, text=True)
     if r.returncode != 0:
-        n = len([l for l in r.stdout.split('\n') if l.startswith('  FAIL')])
+        # NB: strip first. The suite indents FAIL lines by four spaces, so a
+        # startswith('  FAIL') test matches nothing and reports "0 assertions"
+        # for a mutation that actually tripped several.
+        n = len([l for l in r.stdout.split('\n') if l.strip().startswith('FAIL')])
         print('caught             %-64s %d assertion(s)' % (label, n))
         caught += 1
     else:

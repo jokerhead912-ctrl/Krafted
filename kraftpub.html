@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.0.51</title>
+<title>Krafted v7.0.52</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2626,6 +2626,8 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 .lib-meta { flex:1; min-width:0; }
 .lib-name { font-size:11.5px; color:var(--text); font-family:'Inter',sans-serif; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lib-tags { font-size:9.5px; color:var(--text-subtle); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lib-more { padding:6px 6px 4px; font-size:9.5px; color:var(--text-subtle); text-align:center; font-family:'Inter',sans-serif; }
+body.presenting #library-panel { display:none; }
 .prop-row.note-row { align-items:flex-start; }
 .prop-row.note-row textarea { flex:1; min-width:0; font-size:11px; font-family:'Inter',sans-serif; color:var(--text); background:var(--input-bg); border:1px solid var(--border); border-radius:6px; padding:4px 6px; resize:vertical; outline:none; }
 .prop-hint { font-size:9px; color:var(--text-subtle); }
@@ -4435,7 +4437,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.0.51';
+var KRAFTED_VERSION = '7.0.52';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7533,6 +7535,67 @@ function toggleLibraryPanel() {
   try { localStorage.setItem('krafted_library_collapsed', p.classList.contains('collapsed') ? '1' : '0'); } catch (e) {}
 }
 
+// v7.0.52: two different jobs, deliberately kept apart.
+//
+// requestLibraryRefresh() = 'the CONTENTS changed' (an item was added, deleted,
+// imported, pasted, undone or loaded). It rebuilds the list, and it is
+// debounced to one rebuild per frame because scheduleAutoSave() - the single
+// funnel every board mutation already passes through - can fire dozens of
+// times in a row.
+//
+// libSyncActive() = 'the SELECTION changed'. It never rebuilds anything; it
+// only moves the .active class onto the row for the selected item and scrolls
+// it into view. Runs on every pointermove of a marquee select, so it must stay
+// O(rows) with an early-out when the id has not moved.
+var LIB_ROW_CAP = 150;
+var _libActiveId = null;
+var _libRefreshPending = false;
+
+function requestLibraryRefresh() {
+  var p = document.getElementById('library-panel');
+  if (!p || p.classList.contains('collapsed')) return;
+  if (_libRefreshPending) return;
+  _libRefreshPending = true;
+  var run = function () { _libRefreshPending = false; renderLibraryPanel(); };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+  else setTimeout(run, 60);
+}
+
+function libSyncActive() {
+  var p = document.getElementById('library-panel');
+  if (!p || p.classList.contains('collapsed')) return;
+  var rows = p.querySelectorAll('.lib-row[data-id]');
+  if (!rows.length) return;
+  var sel = (typeof getSelectedItems === 'function') ? getSelectedItems() : [];
+  var id = sel.length ? String(sel[0].id) : null;
+  if (id === _libActiveId) return;
+  _libActiveId = id;
+  var found = null;
+  for (var i = 0; i < rows.length; i++) {
+    var on = rows[i].getAttribute('data-id') === id;
+    if (on) rows[i].classList.add('active');
+    else rows[i].classList.remove('active');
+    if (on) found = rows[i];
+  }
+  if (found && found.scrollIntoView) { try { found.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+}
+
+// Restored on boot, the same way the views and properties panels already are.
+// v7.0.51 wrote this key but never read it back, so the panel forgot whether
+// the user had opened it on every single reload.
+(function initLibraryPanel() {
+  var apply = function () {
+    var p = document.getElementById('library-panel');
+    if (!p) return;
+    var collapsed = true;
+    try { collapsed = localStorage.getItem('krafted_library_collapsed') !== '0'; } catch (e) {}
+    p.classList.toggle('collapsed', collapsed);
+    renderLibraryPanel();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+  else apply();
+})();
+
 function libThumbSrc(it) {
   if (!it) return null;
   if (it.isVideo) { if (it.img && it.img.poster) return it.img.poster; return null; }
@@ -7563,9 +7626,16 @@ function renderLibraryPanel() {
   if (!items.length) { listEl.innerHTML = '<div class="views-empty">No items match.</div>'; return; }
   var sel0 = (typeof getSelectedItems === 'function') ? getSelectedItems() : [];
   var activeId = sel0.length ? sel0[0].id : null;
-  items.forEach(function (it) {
+  _libActiveId = activeId ? String(activeId) : null;
+  // v7.0.52: cap the rows. A 300-item board was building 300 <img> nodes whose
+  // src is a full-resolution data URL, on every keystroke - the list stuttered
+  // and kept the decoded bitmaps alive. 150 rows is more than a screenful, and
+  // past that the search box is the faster tool anyway.
+  var shown = items.length > LIB_ROW_CAP ? items.slice(0, LIB_ROW_CAP) : items;
+  shown.forEach(function (it) {
     var row = document.createElement('div');
     row.className = 'lib-row' + (it.id === activeId ? ' active' : '');
+    row.setAttribute('data-id', String(it.id));
     var thumb = document.createElement('div');
     thumb.className = 'lib-thumb';
     var src = libThumbSrc(it);
@@ -7586,10 +7656,15 @@ function renderLibraryPanel() {
     row.addEventListener('click', function () {
       selectOnly(it.id);
       revealItem(it);
-      renderLibraryPanel();
     });
     listEl.appendChild(row);
   });
+  if (items.length > shown.length) {
+    var more = document.createElement('div');
+    more.className = 'lib-more';
+    more.textContent = '+ ' + (items.length - shown.length) + ' more - refine the search';
+    listEl.appendChild(more);
+  }
 }
 
 // ============================================================
@@ -7993,6 +8068,9 @@ function startPresent() {
   }
   // v7.0.48: auto starts OFF. See PRESENT_AUTO_DEFAULT.
   state._present = { index: -1, timer: null, auto: PRESENT_AUTO_DEFAULT };
+  // v7.0.52: a list of everything on the board has no business being on
+  // screen while the board is being pitched. body.presenting hides it.
+  try { document.body.classList.add('presenting'); } catch (e) {}
   // Capture phase so a board hotkey cannot swallow the tape controls.
   _presentKeyHandler = function (ev) {
     if (!state._present) return;
@@ -8063,6 +8141,7 @@ function startPresent() {
 function stopPresent() {
   if (state._present && state._present.timer) clearTimeout(state._present.timer);
   state._present = null;
+  try { document.body.classList.remove('presenting'); } catch (e) {}
   if (_presentKeyHandler) { document.removeEventListener('keydown', _presentKeyHandler, true); _presentKeyHandler = null; }
   if (_presentUserHandler) {
     document.removeEventListener('wheel', _presentUserHandler, true);
@@ -9231,6 +9310,9 @@ function refreshSelection() {
   });
   updatePropsPanel();
   updateStatus();
+  // v7.0.52: keep the Library highlight on the current selection. Cheap on
+  // purpose - it flips classes, it never rebuilds the list.
+  try { libSyncActive(); } catch (e) {}
 }
 function addHandles(item) {
   const handles = [
@@ -37925,6 +38007,12 @@ function restoreBoard(data, append) {
 // ============================================================
 function scheduleAutoSave() {
   clearTimeout(state.autoSaveTimer);
+  // v7.0.52: every data mutation funnels through here, so this is the one place
+  // that can notice 'the board changed' without hunting down the import,
+  // delete, paste, undo and load paths one by one. v7.0.51 only refreshed on
+  // search / toggle / row click, so the list silently went stale - deleted
+  // items stayed in it and clicking one flew the camera at a dead object.
+  try { requestLibraryRefresh(); } catch (e) {}
   // v6.8.27: longer debounce (5s) for large boards — serializing a board with
   // many base64/blob URLs every 2s creates GC pressure and can OOM.
   state.autoSaveTimer = setTimeout(() => {
