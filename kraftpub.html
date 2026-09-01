@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.2.0</title>
+<title>Krafted v7.2.1</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4510,7 +4510,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.2.0';
+var KRAFTED_VERSION = '7.2.1';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -24240,6 +24240,34 @@ function _collectDroppedFiles(dt) {
 // tab (Pinterest). Round-tripping each image through IndexedDB returns a
 // Blob backed by the browser's blob store (disk for anything non-trivial)
 // instead of our heap, so long drag sessions cost almost no RAM.
+
+// v7.2.1: strict serialization for cross-site image drags. Each drop used
+// to decode independently, so dragging several images quickly held every
+// full-resolution bitmap at once -- a 4000x3000 source is ~48 MB of RGBA
+// before the 1280 cap ever runs, and a handful of drags killed the tab.
+// One decode at a time, with a yield between them so the IndexedDB write
+// and GC can settle. Declared at module scope on purpose: a queue created
+// inside the drop handler would be a fresh empty one on every drop, which
+// is exactly the same as having no queue at all.
+var _webDragQueue = { busy: false, pending: [] };
+function _drainWebDragQueue() {
+  if (_webDragQueue.busy) return;
+  var job = _webDragQueue.pending.shift();
+  if (!job) return;
+  _webDragQueue.busy = true;
+  Promise.resolve()
+    .then(job)
+    .catch(function (e) { console.warn('[FileDrop] queued import failed:', e && e.message); })
+    .then(function () {
+      _webDragQueue.busy = false;
+      setTimeout(_drainWebDragQueue, 50);
+    });
+}
+function _enqueueWebDrag(job) {
+  _webDragQueue.pending.push(job);
+  _drainWebDragQueue();
+}
+
 var _dragImgStore = {
   _dbPromise: null,
   _open: function() {
@@ -24453,39 +24481,73 @@ window.addEventListener('drop', function(e){
   const _dropX = (_sx - state.pan.x) / state.zoom;
   const _dropY = (_sy - state.pan.y) / state.zoom;
   function _importImageBlob(blob) {
-    // v7.0.22: DISK-BACKED import — same end state as a screenshot paste
+    // v7.0.22: DISK-BACKED import -- same end state as a screenshot paste
     // (item.src = blob: URL + item._sourceBlob = stable Blob), but the
     // Blob is round-tripped through IndexedDB so it is backed by the
     // browser's blob store instead of the renderer JS heap, and the undo
     // snapshots only carry the ~60-char blob: URL instead of a multi-MB
     // data URL string. This is what makes effectively-unlimited dragging
     // possible without the source tab (Pinterest) getting OOM-killed.
-    const tmpUrl = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = function() {
-      let effW = img.naturalWidth, effH = img.naturalHeight;
-      // v7.0.37 — P2: the resize / re-encode maths moved into
-      // normalizeImageBlob() so the file-drop and paste paths use the very
-      // same rule. What stays here is the disk-backed storage step: a web
-      // image has no file behind it, so the blob is round-tripped through
-      // IndexedDB to keep it off the renderer heap.
-      function _finish(outBlob, outW, outH) {
-        _dragImgStore.putAndGet(outBlob).then(function(diskBlob) {
-          const finalUrl = URL.createObjectURL(diskBlob);
-          const dw = Math.round(Math.min(outW / 2, 360));
-          const dh = Math.round(outH * (dw / outW));
-          addImage(finalUrl, dw, dh, _dropX, _dropY, false, undefined, diskBlob.size, false, diskBlob);
-          try { URL.revokeObjectURL(tmpUrl); } catch (e) {}
-          toast('Pasted image');
+    //
+    // v7.2.1: decode with createImageBitmap and close it explicitly, the way
+    // the local file-drop path (24912) already did. The old code decoded into
+    // an <img> and never released it, so N quick drags held N full-resolution
+    // bitmaps at once. Returns a promise so the caller's queue can wait for
+    // the whole thing, not just the first tick of it.
+    return new Promise(function (resolve) {
+      var _tmpUrl = null;
+      function _release(u) { try { URL.revokeObjectURL(u); } catch (e) {} }
+      function _viaBitmap() {
+        if (typeof createImageBitmap !== 'function') return Promise.reject(new Error('no createImageBitmap'));
+        return createImageBitmap(blob).then(function (bmp) {
+          return { source: bmp, w: bmp.width, h: bmp.height,
+                   release: function () { try { bmp.close(); } catch (e) {} } };
         });
       }
-      normalizeImageBlob(blob, img, effW, effH, false, _finish);
-    };
-    img.onerror = function() {
-      try { URL.revokeObjectURL(tmpUrl); } catch (e) {}
-      toast('Failed to decode image');
-    };
-    img.src = tmpUrl;
+      // Some formats (notably SVG) have no createImageBitmap path. Keep the
+      // <img> route strictly as a fallback, and release it too.
+      function _viaImg() {
+        return new Promise(function (res, rej) {
+          _tmpUrl = URL.createObjectURL(blob);
+          var img = new Image();
+          img.onload = function () {
+            res({ source: img, w: img.naturalWidth, h: img.naturalHeight,
+                  release: function () { try { img.src = ''; } catch (e) {} } });
+          };
+          img.onerror = function () { rej(new Error('image decode failed')); };
+          img.src = _tmpUrl;
+        });
+      }
+      _viaBitmap().catch(_viaImg).then(function (decoded) {
+        // v7.0.37 -- P2: the resize / re-encode maths moved into
+        // normalizeImageBlob() so the file-drop and paste paths use the very
+        // same rule. What stays here is the disk-backed storage step: a web
+        // image has no file behind it, so the blob is round-tripped through
+        // IndexedDB to keep it off the renderer heap.
+        function _finish(outBlob, outW, outH) {
+          // Hand back the full-resolution bitmap BEFORE the IndexedDB round
+          // trip: from here on the re-encoded blob is all that matters, and
+          // holding the source bitmap across an async disk write is exactly
+          // how the peak used to build up.
+          try { decoded.release(); } catch (e) {}
+          if (_tmpUrl) { _release(_tmpUrl); _tmpUrl = null; }
+          _dragImgStore.putAndGet(outBlob).then(function (diskBlob) {
+            const finalUrl = URL.createObjectURL(diskBlob);
+            const dw = Math.round(Math.min(outW / 2, 360));
+            const dh = Math.round(outH * (dw / outW));
+            addImage(finalUrl, dw, dh, _dropX, _dropY, false, undefined, diskBlob.size, false, diskBlob);
+            toast('Pasted image');
+            resolve();
+          });
+        }
+        normalizeImageBlob(blob, decoded.source, decoded.w, decoded.h, false, _finish);
+      }).catch(function (e) {
+        console.warn('[FileDrop] image decode failed:', e && e.message);
+        if (_tmpUrl) { _release(_tmpUrl); _tmpUrl = null; }
+        toast('Failed to decode image');
+        resolve();
+      });
+    });
   }
   function _acceptImageResponse(res) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -24576,7 +24638,11 @@ window.addEventListener('drop', function(e){
   }
   console.log('[FileDrop] cross-site drag candidates:', _candidates);
   toast('Fetching image…');
-  _tryAcquire(0)
+  // v7.2.1: the WHOLE acquire+decode chain goes through the queue, not just
+  // the decode. Parallel fetches each hold their own response blob, so
+  // serialising only the import would still let N blobs pile up.
+  _enqueueWebDrag(function () {
+    return _tryAcquire(0)
     .then(_importImageBlob)
     .catch(err => {
       console.log('[FileDrop] all fetch paths failed:', err && err.message);
@@ -24594,6 +24660,7 @@ window.addEventListener('drop', function(e){
       img.onerror = () => toast('Site blocked the image — screenshot it, then Cmd+V to paste');
       img.src = _candidates[0];
     });
+  });
   }, 0);
 }, true);
 
@@ -36851,6 +36918,11 @@ async function saveBoardV6(opts) {
   let estTotalBytes = 0;
   for (const it of state.items) {
     if (it._fileSize) { estTotalBytes += it._fileSize; }
+    // v7.2.1: a board loaded from a .kpak carries a stable Blob but had no
+    // _fileSize, so every item fell through to the 5 MB guess below -- a
+    // 151 image board reported ~755 MB while actually writing 3.8 MB. The
+    // Blob we are about to write IS the answer; prefer it over guessing.
+    else if (it._sourceBlob && it._sourceBlob.size) { estTotalBytes += it._sourceBlob.size; }
     else if (it.src && it.src.startsWith('data:')) {
       const b64Len = it.src.indexOf(';base64,') >= 0 ? it.src.split(',')[1]?.length || 0 : 0;
       estTotalBytes += Math.round(b64Len * 0.75);
@@ -37204,6 +37276,7 @@ async function loadBoardFile(event) {
           // file.
           const stableMediaBlob = await extractKpakV6EntryBlob(file, entry);
           dataItem._sourceBlob = stableMediaBlob;
+          dataItem._fileSize = stableMediaBlob.size;
           dataItem.src = URL.createObjectURL(stableMediaBlob);
           remappedCount++;
           loadedBytes += entry.size || 0;
@@ -37254,6 +37327,7 @@ async function loadBoardFile(event) {
             ? item._sourceBlob
             : await extractKpakV6EntryBlob(item._kpakBlob, item._kpakEntry);
           item._sourceBlob = stableBlob;
+          item._fileSize = stableBlob.size;
           const blobUrl = URL.createObjectURL(stableBlob);
           item.video.src = blobUrl;
           item.src = blobUrl;
@@ -37351,6 +37425,7 @@ async function loadBoardFile(event) {
             // recreated object URL on a later save can produce network error /
             // ERR_UPLOAD_FILE_CHANGED in Chrome.
             dataItem._sourceBlob = blob;
+            dataItem._fileSize = blob.size;
             dataItem.src = URL.createObjectURL(blob);
             remappedIds.add(dataItem.id);
             restoredCount++;
@@ -37415,6 +37490,7 @@ async function loadBoardFile(event) {
           if (blob && blob.size > 0) {
             var blobUrl = URL.createObjectURL(blob);
             item._sourceBlob = blob;
+            item._fileSize = blob.size;
             item.video.src = blobUrl;
             item.src = blobUrl;
             item.video.preload = 'auto';

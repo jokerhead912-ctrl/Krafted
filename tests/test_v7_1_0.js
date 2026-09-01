@@ -87,7 +87,6 @@ fs.mkdirSync(FIXDIR, { recursive: true });
 // test that cannot fail for the right reason.
 const V_PREV = STATE.prev;
 const V_CUR = STATE.current;
-const ARITH_PREV = V_CUR.replace(/\d+$/, (d) => String(Math.max(0, Number(d) - 1)));
 
 // Every version literal in this suite is built, never written out. version_scan
 // rewrites any bare MAJOR.MINOR.PATCH it finds in the suite that owns the
@@ -97,20 +96,22 @@ const ARITH_PREV = V_CUR.replace(/\d+$/, (d) => String(Math.max(0, Number(d) - 1
 // to the scanner and stays exactly what was written.
 const V = (a, b, c) => `${a}.${b}.${c}`;
 
-function fixture(name, revertSlot) {
+function fixture(name, revertSlot, cur, prev) {
+  cur = cur || V_CUR;
+  prev = prev || V_PREV;
   const p = path.resolve(FIXDIR, name);
   fs.writeFileSync(p, [
-    `// Krafted v${V_CUR} Service Worker`,
-    `const APP_VERSION = '${V_CUR}';`,
-    `var KRAFTED_VERSION = '${V_CUR}';`,
-    `<title>Krafted v${V_CUR}</title>`,
-    `const CACHE = 'krafted-v${V_CUR}-' + Date.now();`,
+    `// Krafted v${cur} Service Worker`,
+    `const APP_VERSION = '${cur}';`,
+    `var KRAFTED_VERSION = '${cur}';`,
+    `<title>Krafted v${cur}</title>`,
+    `const CACHE = 'krafted-v${cur}-' + Date.now();`,
     '',
-    `// v${V_PREV}: provenance comment - history, must never move`,
+    `// v${prev}: provenance comment - history, must never move`,
     '// v7.0.33: an even older provenance comment',
     `var KRAFTED_VERSION = '6.0.2';`,
     `mutate 'bump guard' \\`,
-    `  "var KRAFTED_VERSION = '${V_CUR}';" \\`,
+    `  "var KRAFTED_VERSION = '${cur}';" \\`,
     `  "var KRAFTED_VERSION = '${revertSlot}';"`,
     '',
   ].join('\n'));
@@ -193,18 +194,33 @@ has('return vstr((a + 1, 0, 0))', 'a major writes two literal 0s', VSCAN);
 has('PATCH_MAX = 9', 'the cap is a named constant, not a magic number', VSCAN);
 
 // ═══ 3. THE PREVIOUS VERSION IS RECORDED, NEVER COMPUTED ══════════════
-// `patch - 1` is what test_v7047.js used. One minor bump later it produced the
-// current version and asserted that sw.js must not contain it.
+// `patch - 1` is what test_v7047.js used. After a minor bump it produced the
+// CURRENT version (the clamp keeps the digit at 0) and asserted that sw.js
+// must not contain it.
+//
+// This scenario is built from a SYNTHETIC fresh-minor state, not from the
+// live .version_state. `current patch - 1` is only wrong when the current
+// release reset the patch digit; after a PATCH bump (e.g. 7.2.0 -> 7.2.1)
+// the arithmetic is accidentally correct, ARITH comes out equal to prev, and
+// a live-state fixture rots: the "rejection" has nothing left to reject.
+// Building a minor-shaped state makes the divergence structural, so the test
+// holds no matter how the real last bump happened. (Memory rule 14a: the
+// behaviour was still there; the premise had rotted.)
 attempt('an arithmetically derived predecessor is rejected', () => {
-  ok(ARITH_PREV !== V_PREV,
-    `arithmetic gives ${ARITH_PREV} but the real previous release is ${V_PREV}`, null);
-  const r = probe('scan', fixture('vscan_fixture_arith.html', ARITH_PREV),
-    V_CUR, NXT_PATCH, 'bump', V_CUR.split('.')[0], V_PREV);
+  const [maj, min] = V_CUR.split('.').map(Number);
+  const S_CUR = V(maj, min + 1, 0);              // a fresh minor: patch was reset
+  const S_PREV = V(maj, min, 0);                 // the release it replaced
+  const S_ARITH = S_CUR.replace(/\d+$/, (d) => String(Math.max(0, Number(d) - 1)));
+  ok(S_ARITH !== S_PREV,
+    `arithmetic gives ${S_ARITH} but the real previous release is ${S_PREV}`, null);
+  const S_NEXT = probe('next', S_CUR, 'patch').next;
+  const r = probe('scan', fixture('vscan_fixture_arith.html', S_ARITH, S_CUR, S_PREV),
+    S_CUR, S_NEXT, 'bump', String(maj), S_PREV);
   const stale = r.findings.filter((f) => f.stale);
   eq(stale.length, 1, 'exactly the revert anchor is flagged');
   eq(stale[0].kind, 'identity-revert', 'the flagged anchor is the revert one');
-  eq(stale[0].ver, ARITH_PREV, 'the flagged anchor holds the bogus arithmetic value');
-  eq(stale[0].want, V_PREV, 'and it is told what the real previous version is');
+  eq(stale[0].ver, S_ARITH, 'the flagged anchor holds the bogus arithmetic value');
+  eq(stale[0].want, S_PREV, 'and it is told what the real previous version is');
 });
 
 has("prev = args.prev or load_prev()",
