@@ -19,3 +19,11 @@ tests/*.pyc
 *.orig
 *.mutbak
 *.pyc
+
+# Timestamped scratch backups of files this repo ALREADY tracks (e.g.
+# tests/run_all.sh.bak-20260831-100359). Git history is the backup for a
+# tracked file; committing a second full copy of it just plants a stale
+# duplicate next to the real one, and a stale copy of version_scan.py is a
+# copy that still contains the bug you just fixed. Backups of tracked files
+# belong in ../backups/, which this repo does not track at all.
+*.bak-*
