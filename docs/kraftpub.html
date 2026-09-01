@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.1.0</title>
+<title>Krafted v7.2.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2435,7 +2435,7 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #toolbar .tb-label { font-size:11px; font-weight:500; }
 
 /* PROPERTIES PANEL */
-#props { position:fixed; top:12px; right:12px; width:250px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:0; z-index:9999999; max-height:calc(100vh - 80px); overflow-y:auto; box-shadow:var(--shadow-medium); transition:width 0.2s ease, min-width 0.2s ease, opacity 0.2s ease; }
+#props { position:fixed; top:calc(12px + var(--right-top, 0px)); right:12px; width:250px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:0; z-index:9999999; max-height:calc(100vh - 24px - var(--right-top, 0px) - var(--minimap-h, 0px) - var(--rail-bottom, 0px)); overflow-y:auto; box-shadow:var(--shadow-medium); transition:top 0.18s ease, width 0.2s ease, min-width 0.2s ease, opacity 0.2s ease; }
 #props.collapsed { width:36px; min-width:36px; overflow:hidden; }
 #props.collapsed .prop-section,
 #props.collapsed .props-empty,
@@ -2605,7 +2605,7 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 
 /* LIBRARY (P1-1) — mirrors the views panel but sits top-right so the two
    never overlap. Same collapsed-handle behaviour. */
-#library-panel { position:fixed; top:12px; right:12px; width:248px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:0; z-index:9999998; max-height:calc(100vh - 130px); display:flex; flex-direction:column; box-shadow:var(--shadow-medium); transition:width 0.2s ease, opacity 0.2s ease; }
+#library-panel { position:fixed; top:12px; right:12px; width:248px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:0; z-index:9999998; max-height:calc((100vh - 24px) * 0.55); display:flex; flex-direction:column; box-shadow:var(--shadow-medium); transition:width 0.2s ease, opacity 0.2s ease; }
 #library-panel.collapsed #library-body { display:none; }
 #library-panel.collapsed #library-head { border-bottom:none; border-radius:12px; padding:8px; }
 #library-panel.collapsed #library-toggle { transform:rotate(180deg); }
@@ -2632,7 +2632,7 @@ body.presenting #library-panel { display:none; }
    never fight for space. Rendered on ONE canvas, not one node per item: this
    redraws on every pan tick, 60-120 times a second, and 300 layout boxes would
    stall the gesture it is meant to help. */
-#minimap-panel { position:fixed; bottom:12px; right:12px; width:236px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:0; z-index:9999998; display:flex; flex-direction:column; box-shadow:var(--shadow-medium); transition:width 0.2s ease, opacity 0.2s ease; }
+#minimap-panel { position:fixed; bottom:calc(12px + var(--rail-bottom, 0px)); right:12px; width:236px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:0; z-index:9999998; display:flex; flex-direction:column; box-shadow:var(--shadow-medium); transition:width 0.2s ease, opacity 0.2s ease, bottom 0.18s ease; }
 #minimap-panel.collapsed #minimap-body { display:none; }
 #minimap-panel.collapsed #minimap-head { border-bottom:none; border-radius:12px; padding:8px; }
 #minimap-panel.collapsed #minimap-toggle { transform:rotate(180deg); }
@@ -2888,29 +2888,30 @@ body.presenting #minimap-panel { display:none; }
 
 
 /* STATUS BAR */
-#status { position:fixed; bottom:42px; right:12px; font-size:10px; color:var(--text-dim); background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:6px; padding:5px 10px; z-index:9999998; font-family:'Inter',sans-serif; letter-spacing:0.3px; transition: bottom 0.18s ease; }
+/* Bottom-left status strip (v7.1.1). The canvas readout and the zoom/wheel
+   controls used to be two independent fixed widgets: #status pinned itself to
+   bottom-right, where it landed *inside* the minimap, and #zoom-step-widget
+   pinned itself bottom-left, where the media-bar covered it. They are one flex
+   strip now, positioned once, riding the same --rail-bottom as the minimap.
+   The readout goes first because it is the thing you scan for. */
+#view-status-bar { position:fixed; bottom:calc(12px + var(--rail-bottom, 0px)); left:12px; display:flex; align-items:center; gap:8px; z-index:9999998; transition:bottom 0.18s ease; }
+#status { font-size:10px; color:var(--text-dim); background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:6px; padding:5px 10px; font-family:'Inter',sans-serif; letter-spacing:0.3px; white-space:nowrap; }
 
-/* ZOOM STEP WIDGET (Round 32) — sits just above the status bar at the
-   bottom-right corner. Slightly more prominent than the status because
-   it is interactive (slider), but still discreet enough not to block
-   the canvas. The label, slider, and value are all inline-flex so the
-   widget stays a single thin row. The slider is intentionally narrow
-   (110px) so the whole widget fits in ~250px. */
+/* ZOOM STEP WIDGET (Round 32, moved in v7.2.0) — the wheel-step slider,
+   Frame button and Natural scroll toggle. It used to live at the bottom-right
+   "just above the status bar"; both were independent fixed widgets, so the
+   status pill ended up inside the minimap and this one ended up under the
+   media bar. Both are children of #view-status-bar now (bottom-left, one
+   strip, one position). The slider is intentionally narrow (110px). */
 #zoom-step-widget {
-  position: fixed; bottom: 14px; left: 12px;
   display: flex; align-items: center; gap: 8px;
   font-size: 10px; color: var(--text-dim);
   background: var(--panel-bg);
   border: 1px solid var(--border-subtle);
   border-radius: 6px; padding: 5px 10px;
-  z-index: 9999999;
   font-family: 'Inter', sans-serif; letter-spacing: 0.3px;
   user-select: none;
-  /* Round 95: bottom is adjusted dynamically by _syncBottomBarOffsets()
-     whenever #media-bar (Play All/Pause All) shows up, so this widget
-     never sits underneath/overlapping it. Smooth transition so the
-     shift when a video/GIF is added or removed doesn't feel like a jump. */
-  transition: bottom 0.18s ease;
+  white-space: nowrap;
 }
 #zoom-step-widget .zs-label { white-space: nowrap; cursor: help; }
 #zoom-step-slider {
@@ -3002,6 +3003,22 @@ body.presenting #minimap-panel { display:none; }
 }
 
 /* MEDIA CONTROL BAR */
+/* ── CHROME INSETS (v7.1.1) ─────────────────────────────────────────────────
+   Every floating panel used to hardcode its own position:fixed coordinates,
+   so each panel added later collided with whatever already owned that corner:
+   #props covered #library outright (same top/right, higher z-index), #media-bar
+   sat on the minimap's lower third, and #status landed inside the minimap.
+   These four variables are now the single authority on how much of each edge
+   is taken. _syncBottomBarOffsets() maintains them from measured heights, so a
+   panel that appears, grows or collapses moves its neighbours instead of
+   covering them. Adding a panel: read the variable. Do not add another
+   hardcoded number -- that is exactly how the collisions started.
+     --rail-bottom  height #media-bar currently occupies (0 when hidden)
+     --minimap-h    current minimap height (head only when collapsed)
+     --right-top    height the Library occupies, plus the gap below it
+     --status-h     height of the bottom-left status strip                   */
+:root { --rail-bottom: 0px; --minimap-h: 0px; --right-top: 0px; --status-h: 0px; }
+
 #media-bar { position:fixed; bottom:0; left:0; right:0; background:var(--panel-bg); border-top:1px solid var(--border-subtle); padding:7px 18px; z-index:9999998; display:none; align-items:center; gap:8px; box-shadow:0 -2px 16px rgba(0,0,0,0.2); }
 #media-bar.active { display:flex; }
 /* Hide ALL media UI during capture — the toolbar should never bleed into the captured image */
@@ -3013,7 +3030,15 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
 #media-bar button:hover { background:var(--btn-hover); color:var(--text); border-color:var(--border-light); }
 #media-bar button.playing { background:var(--btn-active-bg); color:var(--btn-active-text); border-color:var(--btn-active-border); }
 #media-bar .media-sep { width:1px; height:20px; background:var(--border-subtle); }
-#media-bar .media-list { display:flex; gap:4px; overflow-x:auto; flex:1; padding:2px 0; }
+#media-bar .media-list { display:flex; gap:4px; overflow-x:auto; flex:0 1 auto; max-width:55%; padding:2px 0; }
+/* Collapsed: keep the title and the toggle, drop everything else. The bar's
+   height then shrinks, --rail-bottom follows it through the ResizeObserver,
+   and the minimap descends into the space this bar was holding. */
+#media-bar.collapsed .media-bar-ctrls,
+#media-bar.collapsed .media-sep,
+#media-bar.collapsed .media-list { display:none; }
+#media-bar .media-bar-ctrls { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+#media-bar-toggle { padding:2px 7px !important; font-size:10px; line-height:1; flex-shrink:0; }
 #media-bar .media-item { display:flex; align-items:center; gap:4px; background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:6px; padding:3px 9px; font-size:10px; color:var(--text-dim); cursor:pointer; white-space:nowrap; font-family:'Inter',sans-serif; transition:all 0.12s; }
 #media-bar .media-item:hover { background:rgba(255,255,255,0.06); }
 #media-bar .media-item.is-playing { border-color:var(--accent); color:var(--accent); }
@@ -3243,7 +3268,7 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
 #tool-badge .tb-icon { display:flex; align-items:center; }
 
 /* CAPTURE RESULT PANEL */
-#capture-result { position:fixed; bottom:20px; left:20px; background:var(--panel-bg); border:1px solid var(--border); border-radius:12px; padding:14px; z-index:1000000; display:none; max-width:360px; box-shadow:0 8px 32px rgba(0,0,0,0.5); }
+#capture-result { position:fixed; bottom:calc(20px + var(--rail-bottom, 0px) + var(--status-h, 0px)); left:20px; background:var(--panel-bg); border:1px solid var(--border); border-radius:12px; padding:14px; z-index:1000000; display:none; max-width:360px; box-shadow:0 8px 32px rgba(0,0,0,0.5); }
 #capture-result.show { display:block; animation:crSlide .25s ease; }
 @keyframes crSlide { from { transform:translateY(20px); opacity:0; } to { transform:translateY(0); opacity:1; } }
 #capture-result .cr-preview { width:100%; max-height:160px; object-fit:contain; border-radius:8px; margin-bottom:10px; background:var(--bg); border:1px solid var(--border); }
@@ -3437,6 +3462,16 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
     padding: 10px 14px !important;
     font-size: 13px !important;
   }
+
+  /* Bottom-left status strip (v7.1.1) — the canvas readout plus the wheel and
+     zoom controls is wider than a phone. Cap it to the viewport and let it wrap
+     rather than letting it run off the right edge. */
+  #view-status-bar {
+    right: 12px !important;
+    max-width: calc(100vw - 24px) !important;
+    flex-wrap: wrap !important;
+  }
+  #zoom-step-widget { flex-wrap: wrap !important; }
 
   /* Welcome screen — full-width */
   .welcome-card {
@@ -4385,23 +4420,28 @@ body.screen-share-mode #ss-fps {
 
 <!-- MEDIA CONTROL BAR -->
 <div id="media-bar">
+  <button id="media-bar-toggle" onclick="toggleMediaBar()" title="Collapse this bar — minimap and the status strip move down into the space">▾</button>
   <span class="media-bar-title">Media</span>
+  <div class="media-bar-ctrls">
   <button onclick="playAllMedia()" id="btn-play-all" title="Play all GIF & Video">▶️ Play All</button>
   <button onclick="pauseAllMedia()" id="btn-pause-all" title="Pause all GIF & Video to save memory">⏸ Pause All</button>
+  </div>
   <div class="media-sep"></div>
   <div class="media-list" id="media-list"></div>
 </div>
 
-<!-- STATUS BAR -->
+<!-- VIEW STATUS STRIP (v7.1.1) — bottom-left.
+     These two used to be independent fixed widgets that each pinned
+     themselves to a corner: #status bottom-right (where it sat *inside* the
+     minimap) and #zoom-step-widget bottom-left (where the media-bar covered
+     it). They share one strip now so there is a single thing to position.
+     ZOOM STEP CONTROL (Round 32) — mouse-wheel zoom sensitivity on the fly.
+     Slider range: 1% (very gentle) to 15% per tick (practical cap), default
+     10% (the same as the old hardcoded step). Saves to localStorage so the
+     choice persists across reloads. The wheel handler reads `state.zoomStep`
+     directly, so changes apply on the next wheel event with no reload. -->
+<div id="view-status-bar">
 <div id="status">Zoom: 100% | Items: 0 | Undo: 0</div>
-
-<!-- ZOOM STEP CONTROL (Round 32) — small floating widget in the bottom-right
-     corner next to the status bar. Lets the user pick the mouse-wheel zoom
-     sensitivity on the fly. Slider range: 1% (very gentle) to 15% per tick
-     (practical cap), default 10% (the same as the old hardcoded step).
-     Saves to localStorage so the choice persists across reloads. The wheel
-     handler reads `state.zoomStep` directly, so changes apply on the next
-     wheel event with no reload needed. -->
 <div id="zoom-step-widget">
   <span class="zs-label" title="Mouse-wheel zoom step (1%–15% per tick)">🎚 Wheel step</span>
   <input id="zoom-step-slider" type="range" min="1" max="15" step="1" value="10" />
@@ -4410,6 +4450,7 @@ body.screen-share-mode #ss-fps {
   <label id="natural-scroll-label" title="Natural scroll: flip wheel-zoom direction (Mac default). Does not affect pinch-zoom.">
     <input id="natural-scroll-checkbox" type="checkbox" checked /> 🔄 Natural scroll
   </label>
+</div>
 </div>
 
 <!-- WELCOME -->
@@ -4469,7 +4510,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.1.0';
+var KRAFTED_VERSION = '7.2.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -15450,9 +15491,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     popover.style.height = height + 'px';
     popover.style.bottom = 'auto';
     popover.style.right = 'auto';
-    // Clamp vertical: keep popover within viewport, avoid the bottom media-bar
-    const mediaBar = document.getElementById('media-bar');
-    const barH = (mediaBar && mediaBar.classList.contains('active')) ? mediaBar.offsetHeight : 0;
+    // Clamp vertical: keep popover within viewport, avoid the bottom media-bar.
+    // This used to measure the media bar itself -- a third hand-written copy of
+    // a measurement _syncBottomBarOffsets() already publishes as --rail-bottom
+    // (the popover, the zoom widget and the minimap each kept their own, which
+    // is how two of them ended up buried under the bar). Read the variable so
+    // every panel clears the same number. Falls back to 0 if it is not set yet.
+    const barH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rail-bottom')) || 0;
     const maxBottom = window.innerHeight - barH - 8;
     const popBottom = top + height;
     if (popBottom > maxBottom) {
@@ -20662,38 +20707,82 @@ function updateMediaBar() {
   _syncBottomBarOffsets();
 }
 
-/* Round 95: the bottom-left #zoom-step-widget (Wheel step / Frame /
-   Natural scroll) and bottom-right #status pill are both `position:fixed`
-   at a hardcoded `bottom` value, with NO awareness of #media-bar (the
-   Play All/Pause All row that slides in from the bottom whenever a
-   video or GIF exists on the board). Whenever media-bar activates, it
-   sits on top of them (screenshot: Wheel step row half-buried under
-   Play All/Pause All). Fix: measure the real, current height of
-   #media-bar via getBoundingClientRect() (never hardcode — text can
-   wrap, DPI-scale can change padding) and push both widgets up by
-   exactly that height + a small gap, whenever it's active. Restore
-   the default 14px/42px the instant media-bar goes away. */
+/* Chrome insets (v7.1.1).
+   This function existed as a Round 95 fix for two widgets: it measured
+   #media-bar and hand-wrote `style.bottom` onto #zoom-step-widget and #status.
+   It fixed those two and nothing else -- the minimap (added later) still had
+   its bottom third buried under the media bar, and #status still sat inside
+   the minimap, because each panel kept its own private idea of where it goes.
+   There was also a third copy of the same measurement in the popover
+   positioner, computing barH by hand.
+   It now publishes CSS variables instead of writing inline styles, so every
+   panel reads one measurement rather than each keeping its own:
+     --rail-bottom  what #media-bar occupies  (0 when hidden or collapsed)
+     --minimap-h    what the minimap occupies (head only when collapsed)
+     --right-top    what the Library occupies, plus the gap under it
+     --status-h     what the bottom-left strip occupies
+   Measured with getBoundingClientRect, never hardcoded: text can wrap,
+   DPI scaling can change padding, and a collapsed bar is not a hidden one. */
 function _syncBottomBarOffsets() {
+  const root = document.documentElement;
   const bar = document.getElementById('media-bar');
-  const zw = document.getElementById('zoom-step-widget');
-  const st = document.getElementById('status');
-  if (!bar || !zw || !st) return;
+  if (!bar) return;
   const active = bar.classList.contains('active');
   const barH = active ? bar.getBoundingClientRect().height : 0;
   const gap = active ? 8 : 0;
-  zw.style.bottom = (14 + barH + gap) + 'px';
-  st.style.bottom = (42 + barH + gap) + 'px';
+  root.style.setProperty('--rail-bottom', (barH + gap) + 'px');
+
+  const mm = document.getElementById('minimap-panel');
+  if (mm) root.style.setProperty('--minimap-h', mm.getBoundingClientRect().height + 'px');
+
+  // Library drives props' top edge. Props must never drive the Library's
+  // height back, or the two would chase each other through the observer.
+  const lib = document.getElementById('library-panel');
+  if (lib) root.style.setProperty('--right-top', (lib.getBoundingClientRect().height + 10) + 'px');
+
+  const strip = document.getElementById('view-status-bar');
+  if (strip) root.style.setProperty('--status-h', strip.getBoundingClientRect().height + 'px');
 }
-// Keep the offsets correct if media-bar's own height changes (e.g. the
-// media-list wraps to two lines on a narrow window, or DPI-scale changes
-// its padding) without anyone explicitly calling updateMediaBar() again.
+
+// Collapsing the media bar is a preference, not a per-board state: it is about
+// how much screen you want back, and it should survive reloads and new boards.
+function toggleMediaBar() {
+  const bar = document.getElementById('media-bar');
+  if (!bar) return;
+  const collapsed = bar.classList.toggle('collapsed');
+  try { localStorage.setItem('kraftedMediaBarCollapsed', collapsed ? '1' : '0'); } catch (e) {}
+  const btn = document.getElementById('media-bar-toggle');
+  if (btn) {
+    btn.textContent = collapsed ? '\u25b8' : '\u25be';
+    btn.title = collapsed
+      ? 'Expand this bar'
+      : 'Collapse this bar — minimap and the status strip move down into the space';
+  }
+  _syncBottomBarOffsets();
+}
+
+// Keep the insets correct when any measured panel changes size on its own --
+// the media-bar wrapping to two lines on a narrow window, the Library growing
+// as items are added, the minimap collapsing. Every observer calls the same
+// function, so there is still only one place that decides the numbers.
 if (typeof ResizeObserver !== 'undefined') {
   document.addEventListener('DOMContentLoaded', function () {
+    const ro = new ResizeObserver(function () { _syncBottomBarOffsets(); });
+    ['media-bar', 'minimap-panel', 'library-panel', 'view-status-bar'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) ro.observe(el);
+    });
     const bar = document.getElementById('media-bar');
     if (bar) {
-      const _mediaBarRO = new ResizeObserver(function () { _syncBottomBarOffsets(); });
-      _mediaBarRO.observe(bar);
+      let stored = '0';
+      try { stored = localStorage.getItem('kraftedMediaBarCollapsed') || '0'; } catch (e) {}
+      if (stored === '1') {
+        bar.classList.add('collapsed');
+        const btn = document.getElementById('media-bar-toggle');
+        if (btn) btn.textContent = '\u25b8';
+      }
     }
+    _syncBottomBarOffsets();
   });
 }
 
