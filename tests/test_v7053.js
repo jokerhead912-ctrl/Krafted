@@ -33,7 +33,7 @@ const fs = require('fs');
 const path = require('path');
 
 const FILE = process.argv[2]
-  || path.resolve(__dirname, '../../kraftpub-v6.8.0.html');
+  || path.resolve(__dirname, '../../kraftpub-dev.html');
 const SRC = fs.readFileSync(FILE, 'utf8');
 
 let pass = 0;
@@ -387,7 +387,7 @@ has('id="minimap-canvas"', 'the canvas is in the markup', SRC);
 has('miniBindInput();', 'the pointer handlers are bound before the first paint', SRC);
 
 // ═══ report ═══════════════════════════════════════════════════════════
-console.log('test_v7053.js  (v7.0.53 Minimap - draggable board radar)');
+console.log('test_v7053.js  (v7.1.0 Minimap - draggable board radar)');
 if (fails.length) {
   console.log(`  ${pass} passed, ${fails.length} FAILED`);
   fails.forEach(f => console.log('    FAIL  ' + f));

@@ -7,3 +7,15 @@ node_modules/
 # But keep docs/ and .github/ for deploy
 !docs/
 !.github/
+
+# Generated on every test run. tests/fixtures/ is rebuilt from .version_state,
+# so committing it would only commit a copy that goes stale on the next bump.
+tests/fixtures/
+tests/__pycache__/
+tests/*.pyc
+
+# Mutation/patch scripts leave these next to the file they edit so they can
+# always restore it. They are scratch, not source.
+*.orig
+*.mutbak
+*.pyc

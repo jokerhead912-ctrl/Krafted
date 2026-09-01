@@ -30,7 +30,7 @@ mkdir -p $TMP
 
 # The suite reads the dev file by default; point it at the throwaway copy
 # through the optional argv[2] it already supports.
-cp kraftpub-v6.8.0.html $TMP/mut.html
+cp kraftpub-dev.html $TMP/mut.html
 
 $PY - "$TMP/mut.html" <<'PYEOF'
 import subprocess, sys, shutil

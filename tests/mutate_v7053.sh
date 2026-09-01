@@ -31,7 +31,7 @@ PY=/Users/kincheung/.workbuddy/binaries/python/versions/3.13.12/bin/python3
 TMP=/tmp/krafted-mutate53
 mkdir -p $TMP
 
-cp kraftpub-v6.8.0.html $TMP/mut.html
+cp kraftpub-dev.html $TMP/mut.html
 
 $PY - "$TMP/mut.html" <<'PYEOF'
 import subprocess, sys, shutil
@@ -45,6 +45,11 @@ SUITE = 'Krafted/tests/test_v7053.js'
 
 # The four refresh hooks share one line of code, so each anchor carries the
 # comment above it. An anchor with no context would hit the wrong one.
+#
+# The version in those comments is v7.0.53, not v7.1.0: the minimap SHIPPED in
+# v7.0.53 and the comment records that fact. v7.1.0 is only where the number
+# happens to sit now. Do not "correct" these to the current version - a
+# provenance comment that follows the version number is a comment that lies.
 UC_HOOK = ("  if (state.reframing && state.reframing._tb) rfPositionToolbar();\n"
            "  // v7.0.53: the map's viewport box is a view of the camera, so every camera\n"
            "  // tick is a repaint. Coalesced to one paint per frame inside the callee.\n"

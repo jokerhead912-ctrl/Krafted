@@ -25,7 +25,7 @@ const path = require('path');
 // deliberately broken COPY, so the real dev file is never touched.
 const HTML = process.env.KRAFTED_HTML
   ? path.resolve(process.env.KRAFTED_HTML)
-  : path.resolve(__dirname, '../../kraftpub-v6.8.0.html');
+  : path.resolve(__dirname, '../../kraftpub-dev.html');
 const SW = process.env.KRAFTED_SW
   ? path.resolve(process.env.KRAFTED_SW)
   : path.resolve(__dirname, '../../Krafted/docs/sw.js');
@@ -46,7 +46,7 @@ const EXPECT_PREFIX    = 'autosave-media:';   // sentinel written in place of a 
 const EXPECT_MAX_BLOB  = 512 * 1024 * 1024;   // refuse to mirror anything larger
 const EXPECT_STORE     = 'KraftedMediaStore'; // IndexedDB object store for the bytes
 const EXPECT_DB_VER    = 2;                   // v1 had no media store
-const EXPECT_VERSION   = '7.0.53';
+const EXPECT_VERSION   = '7.1.0';
 
 // Extract a whole function body by brace matching. None of the functions
 // under test contains a brace inside a string literal, so a plain counter

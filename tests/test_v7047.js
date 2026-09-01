@@ -30,14 +30,14 @@ const path = require('path');
 // deliberately broken COPY, so the real dev file is never touched.
 const HTML = process.env.KRAFTED_HTML
   ? path.resolve(process.env.KRAFTED_HTML)
-  : path.resolve(__dirname, '../../kraftpub-v6.8.0.html');
+  : path.resolve(__dirname, '../../kraftpub-dev.html');
 const SWJS = process.env.KRAFTED_SW
   ? path.resolve(process.env.KRAFTED_SW)
   : path.resolve(__dirname, '../docs/sw.js');
 const src = fs.readFileSync(HTML, 'utf8');
 const sw = fs.readFileSync(SWJS, 'utf8');
 
-const EXPECT_VERSION = '7.0.53';
+const EXPECT_VERSION = '7.1.0';
 
 // The spec. These are what the behaviour is asserted against; the app's own
 // constants are pinned to them separately, so a change to the app shows up as
@@ -714,8 +714,23 @@ has(src, 'title="Previous shot (← / Page Up)"', 'the HUD previous button names
   // moves past it - it reads as "we checked" in the log while checking
   // nothing, which is worse than having no assertion at all. This one was
   // pinned to 7.0.46 for four releases before anyone noticed.
-  const prevVersion = EXPECT_VERSION.replace(/\d+$/, d => String(Math.max(0, Number(d) - 1)));
-  hasnt(sw, prevVersion, 'the previous version (' + prevVersion + ') is gone from sw.js');
+  //
+  // But NOT derived by subtracting one, which is what it used to do. Under
+  // MAJOR.MINOR.PATCH the predecessor of 7.1.0 is 7.0.53, not "7.1 with the
+  // last digit minus one" - that sums to 7.1.0, the CURRENT version, and the
+  // assertion becomes "sw.js must not contain the version it is on". It went
+  // red the first time a minor bump happened, which is exactly when a version
+  // assertion should be trusted least.
+  //
+  // The only thing that knows the previous release is .version_state, written
+  // by version_scan.py at each bump. Read it from there so it cannot drift.
+  let prevVersion = null;
+  try {
+    prevVersion = JSON.parse(fs.readFileSync(path.resolve(__dirname, '.version_state'), 'utf8')).prev;
+  } catch (e) { /* reported by the assertion below, not swallowed */ }
+  ok(!!prevVersion, '.version_state is readable and names the previous version');
+  hasnt(sw, prevVersion || '<<previous version unknown>>',
+        'the previous version (' + prevVersion + ') is gone from sw.js');
 }
 
 console.log('');

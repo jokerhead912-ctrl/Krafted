@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 
 const FILE = process.argv[2]
-  || path.resolve(__dirname, '../../kraftpub-v6.8.0.html');
+  || path.resolve(__dirname, '../../kraftpub-dev.html');
 const src = fs.readFileSync(FILE, 'utf8');
 
 let pass = 0;
@@ -288,7 +288,7 @@ ok(/if \(cancelled\(\)\) return;/.test(renderBody),
 // ═══════════════════════════════════════════════════════════════════════
 // One place to edit per bump. Everything below compares against this,
 // never against a value read out of another version site.
-const EXPECT_VERSION = '7.0.53';
+const EXPECT_VERSION = '7.1.0';
 eq((src.match(/<title>Krafted v([\d.]+)<\/title>/) || [])[1], EXPECT_VERSION, 'title carries the version');
 eq((src.match(/var KRAFTED_VERSION = '([\d.]+)';/) || [])[1], EXPECT_VERSION, 'KRAFTED_VERSION is bumped');
 const swPath = path.resolve(__dirname, '../docs/sw.js');

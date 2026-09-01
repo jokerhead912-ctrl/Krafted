@@ -28,30 +28,66 @@ THE ONE RULE THAT MATTERS
 
     Bumping rewrites IDENTITY positions only.
 
+VERSION POLICY  (MAJOR.MINOR.PATCH)
+      major - breaks something a user relies on: the .kpak format, the
+              save/load contract, or an existing behaviour being reworked
+      minor - a new capability, or a visible change to how something works
+      patch - a bug fix, an internal change, or tests only
+
+      * patch RESETS TO 0 when minor or major moves.
+      * patch is CAPPED AT 9; the tenth fix rolls the minor.
+
+    The cap and the reset are the whole point. Before this policy the third
+    digit did all the work and never reset, so the version crept to 7.0.53 and
+    told you nothing: a rework, a new panel and a one-line fix all looked
+    identical. With a cap and a reset, `7.1.3` reads as "the first feature
+    batch after 7.0, plus three fixes" - and it can never grow into another
+    7.0.53.
+
+    The rules live here, in a file that runs, because a rule written in a doc
+    gets forgotten and a rule that blocks the release does not.
+
 USAGE
     python3 Krafted/tests/version_scan.py                       # report, read-only
-    python3 Krafted/tests/version_scan.py --bump               # CURRENT -> CURRENT+1
-    python3 Krafted/tests/version_scan.py --bump --to 7.0.50
+    python3 Krafted/tests/version_scan.py --bump               # patch (default)
+    python3 Krafted/tests/version_scan.py --bump minor         # 7.0.53 -> 7.1.0
+    python3 Krafted/tests/version_scan.py --bump major         # 7.1.0  -> 8.0.0
+    python3 Krafted/tests/version_scan.py --bump --to 7.1.0
+    python3 Krafted/tests/version_scan.py --bump --prev 7.0.53 # reseed the state file
     python3 Krafted/tests/version_scan.py --fix-stale --write  # repair anchors only
     python3 Krafted/tests/version_scan.py --files              # also list every hit
 
     Nothing is written unless --bump or --write is given.
 
+WHY THERE IS A STATE FILE
+    "The previous version" cannot be computed by subtracting one any more.
+    Before 7.1.0 the previous release was 7.0.53, not 7.0.9 - so `patch - 1`
+    produces a number that never existed, and every mutate script carrying an
+    identity-revert anchor reports a false STALE that blocks the bump. So the
+    previous version is recorded at each bump into .version_state. If that
+    file is missing the script refuses to guess; pass --prev once to reseed it.
+
 EXIT CODE
     0  clean
     1  STALE anchors found - mutations that no longer test anything
-    2  cannot determine the current version
+    2  cannot determine the current version, or the previous version
+    3  the requested bump breaks the version policy (patch cap)
 """
 
 import argparse
+import json
 import os
 import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEV_HTML = os.path.join(ROOT, 'kraftpub-v6.8.0.html')
+DEV_HTML = os.path.join(ROOT, 'kraftpub-dev.html')
 SW_JS = os.path.join(ROOT, 'Krafted', 'docs', 'sw.js')
 TESTS = os.path.join(ROOT, 'Krafted', 'tests')
+STATE_FILE = os.path.join(TESTS, '.version_state')
+
+# The tenth fix rolls the minor. See VERSION POLICY above.
+PATCH_MAX = 9
 
 # Matches BOTH the plain form `X.Y.Z` and the escaped form `X\.Y\.Z`
 # that suites carry inside their regexes. Written without a literal
@@ -76,6 +112,7 @@ COMMENT_IDENTITY_TEMPLATES = [
     "// Krafted v{} Service Worker",
 ]
 
+
 def _compile(templates):
     out = []
     for t in templates:
@@ -84,12 +121,22 @@ def _compile(templates):
             r'(\d+(?:\\?\.\d+){2})'.join(re.escape(p) for p in parts)))
     return out
 
+
 IDENTITY_RES = _compile(IDENTITY_TEMPLATES)
 COMMENT_IDENTITY_RES = _compile(COMMENT_IDENTITY_TEMPLATES)
 
 # `<!--` must be here: the app file carries `<!-- PRESENT HUD (vX.Y.Z) -->`
 # style banners, and a bare `//`-only list would read those as code.
 COMMENT_PREFIXES = ('//', '#', '/*', '*', '<!--')
+
+POLICY = """KRAFTED VERSION POLICY  (MAJOR.MINOR.PATCH)
+  major  breaks something a user relies on: .kpak format, save/load contract,
+         or an existing behaviour being reworked
+  minor  a new capability, or a visible change to how something works
+  patch  a bug fix, an internal change, or tests only
+
+  patch resets to 0 when minor or major moves
+  patch is capped at {cap}; the tenth fix rolls the minor"""
 
 
 def vkey(v):
@@ -100,14 +147,25 @@ def vstr(k):
     return '.'.join(str(x) for x in k)
 
 
-def next_v(v):
+def next_v(v, kind='patch'):
     a, b, c = vkey(v)
+    if kind == 'major':
+        return vstr((a + 1, 0, 0))
+    if kind == 'minor':
+        return vstr((a, b + 1, 0))
     return vstr((a, b, c + 1))
 
 
-def prev_v(v):
+def policy_error(v, kind):
+    """Return a message if this bump breaks the policy, else None."""
+    if kind not in ('patch', 'minor', 'major'):
+        return 'unknown bump kind %r' % kind
     a, b, c = vkey(v)
-    return vstr((a, b, max(0, c - 1)))
+    if kind == 'patch' and c + 1 > PATCH_MAX:
+        return ('patch would become %d but the cap is %d.\n'
+                '         Ten fixes is a minor: use --bump minor (-> %s)'
+                % (c + 1, PATCH_MAX, vstr((a, b + 1, 0))))
+    return None
 
 
 def read_current(path=DEV_HTML):
@@ -116,6 +174,21 @@ def read_current(path=DEV_HTML):
     if not m:
         sys.exit('version_scan: cannot find KRAFTED_VERSION in ' + path)
     return m.group(1)
+
+
+def load_prev():
+    """The previous released version, as recorded by the last bump."""
+    try:
+        with open(STATE_FILE, encoding='utf-8') as fh:
+            return json.load(fh).get('prev')
+    except (OSError, ValueError):
+        return None
+
+
+def save_state(current, prev):
+    with open(STATE_FILE, 'w', encoding='utf-8') as fh:
+        json.dump({'current': current, 'prev': prev}, fh, indent=2)
+        fh.write('\n')
 
 
 def target_files():
@@ -127,9 +200,23 @@ def target_files():
 
 
 def own_version(path):
-    """The release a test file belongs to, from its name: test_v70NN.js -> 7.0.NN."""
-    m = re.search(r'_v(\d)(\d)(\d+)(?:_|\.)', os.path.basename(path))
-    return '%s.%s.%s' % m.groups() if m else None
+    """The release a test file belongs to, from its name.
+
+    Two conventions, because renaming fifteen existing suites just to make the
+    parser tidy would be churn with no payoff:
+
+      new  test_v7_1_0.js      -> 7.1.0   (dots as underscores, any digit width)
+      old  test_v7053.js       -> 7.0.53  (runs of digits, single-digit minor)
+           test_v7038_tidy.js  -> 7.0.38
+    """
+    base = os.path.basename(path)
+    m = re.search(r'_v(\d+)_(\d+)_(\d+)(?:_|\.)', base)
+    if m:
+        return '%s.%s.%s' % m.groups()
+    m = re.search(r'_v(\d)(\d)(\d+)(?:_|\.)', base)
+    if m:
+        return '%s.%s.%s' % m.groups()
+    return None
 
 
 def identity_spans(line):
@@ -149,12 +236,12 @@ def identity_spans(line):
     return spans
 
 
-def scan_file(path, current, nxt, mode='bump'):
+def scan_file(path, current, nxt, mode='bump', cur_major=None, prev=None):
     """Return (findings, changes, newtext).
 
     A change is (lineno, old, new, kind, snippet). Edits are collected first and
-    applied back-to-front, because replacing a version changes the length of the
-    line and every later offset with it.
+    applied back-to-front, because replacing a version changes the length of
+    the line and every later offset with it.
 
     mode 'bump'      - identity goes to `nxt`; a revert anchor goes to `current`
                        (after the bump, `current` IS the previous version).
@@ -164,7 +251,6 @@ def scan_file(path, current, nxt, mode='bump'):
                        to bump to yet.
     """
     own = own_version(path)
-    prev = prev_v(current)
     findings, changes = [], []
     with open(path, encoding='utf-8') as fh:
         lines = fh.read().split('\n')
@@ -184,7 +270,21 @@ def scan_file(path, current, nxt, mode='bump'):
         for m in VER.finditer(line):
             raw = m.group(1)
             ver = raw.replace('\\', '')
-            if not ver.startswith('7.0.'):
+            # Which version numbers are even candidates. Derived from the
+            # current major rather than hard-coded:
+            #
+            #   THIS USED TO SAY `if not ver.startswith('7.0.'): continue`.
+            #   The day the version became 7.1.0 that line made the scanner
+            #   skip EVERY version in EVERY file - it printed "0 stale,
+            #   nothing to bump" and exited 0, so the stale-anchor guard
+            #   looked healthy while testing nothing at all. A version check
+            #   that silently narrows to the empty set is worse than no
+            #   check.
+            #
+            #   Matching the major alone also keeps us away from `6.0.2`,
+            #   which is a commented-out legacy declaration in the app file,
+            #   not a Krafted version.
+            if cur_major and ver.split('.')[0] != cur_major:
                 continue
             new, want = None, ver
             hit = idn.get(m.start())
@@ -207,7 +307,7 @@ def scan_file(path, current, nxt, mode='bump'):
                     pass              # fix-stale never touches loose versions
                 elif ver == current:
                     new = nxt
-                elif ver == prev and own == current:
+                elif prev and ver == prev and own == current:
                     # "the previous version is gone" assertions ride along,
                     # but only in the suite that belongs to this release.
                     new = current
@@ -234,29 +334,59 @@ def scan_file(path, current, nxt, mode='bump'):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--bump', action='store_true',
-                    help='bump to the next version and WRITE (implies --write)')
+    ap.add_argument('--bump', nargs='?', const='patch', default=None,
+                    choices=['patch', 'minor', 'major'],
+                    help='bump and WRITE. Optional kind, default patch.')
     ap.add_argument('--fix-stale', action='store_true',
                     help='repair stale anchors instead of moving the version')
     ap.add_argument('--write', action='store_true',
                     help='actually write; without it everything is a dry run')
-    ap.add_argument('--to', help='explicit target version, e.g. 7.0.50')
+    ap.add_argument('--to', help='explicit target version, e.g. 7.1.0')
+    ap.add_argument('--prev', help='explicit previous version; reseeds the state file')
     ap.add_argument('--files', action='store_true', help='list every hit, not just problems')
     args = ap.parse_args()
 
     current = read_current()
     mode = 'fix-stale' if args.fix_stale else 'bump'
-    nxt = args.to or (current if mode == 'fix-stale' else next_v(current))
+    kind = args.bump or 'patch'
 
-    if mode == 'fix-stale':
-        print('mode      FIX-STALE (the version stays at %s)' % current)
-    print('current %s   ->   %s   (previous: %s)' % (current, nxt, prev_v(nxt)))
+    print(POLICY.format(cap=PATCH_MAX))
+    print('')
+
+    if args.to:
+        try:
+            if len(vkey(args.to)) != 3:
+                raise ValueError
+        except ValueError:
+            sys.exit('version_scan: --to must be MAJOR.MINOR.PATCH, got %r' % args.to)
+        nxt = args.to
+    elif mode == 'fix-stale':
+        nxt = current
+    else:
+        bad = policy_error(current, kind)
+        if bad:
+            print('POLICY: %s --bump %s refused.' % (current, kind))
+            print('         %s' % bad)
+            return 3
+        nxt = next_v(current, kind)
+
+    cur_major = current.split('.')[0]
+    prev = args.prev or load_prev()
+    if not prev:
+        print('version_scan: cannot determine the previous version.')
+        print('  %s is missing or empty, and it cannot be computed:' % STATE_FILE)
+        print('  the predecessor of a new minor is the last patch of the old one.')
+        print('  Reseed it once with:  --bump minor --prev <the version live now>')
+        return 2
+
+    print('current %s   ->   %s   (kind: %s, previous: %s)' % (current, nxt, kind, prev))
     print('')
 
     total_stale = 0
     total_change = 0
     for path in target_files():
-        findings, changes, newtext = scan_file(path, current, nxt, mode)
+        findings, changes, newtext = scan_file(
+            path, current, nxt, mode, cur_major=cur_major, prev=prev)
         rel = os.path.relpath(path, ROOT)
         stales = [f for f in findings if f['stale']]
         if not stales and not changes and not args.files:
@@ -269,9 +399,9 @@ def main():
             print('   STALE  line %-5d %-9s is %s, must be %s' %
                   (f['line'], f['kind'], f['ver'], f['want']))
             print('          %s' % f['text'])
-        for (ln, old, new, kind, text) in changes:
+        for (ln, old, new, kind_s, text) in changes:
             total_change += 1
-            print('   bump   line %-5d %-9s %s -> %s' % (ln, kind, old, new))
+            print('   bump   line %-5d %-9s %s -> %s' % (ln, kind_s, old, new))
             if args.files:
                 print('          %s' % text)
         print('')
@@ -282,11 +412,15 @@ def main():
     write = args.write or args.bump
     if write and total_change:
         for path in target_files():
-            _, changes, newtext = scan_file(path, current, nxt, mode)
+            _, changes, newtext = scan_file(
+                path, current, nxt, mode, cur_major=cur_major, prev=prev)
             if changes:
                 with open(path, 'w', encoding='utf-8') as fh:
                     fh.write(newtext)
         print('written: %s -> %s' % (current, nxt))
+        if mode == 'bump':
+            save_state(nxt, current)
+            print('state:   .version_state now prev=%s' % current)
     elif write:
         print('nothing to write')
     else:

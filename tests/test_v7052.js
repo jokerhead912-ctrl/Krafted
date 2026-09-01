@@ -35,7 +35,7 @@ const fs = require('fs');
 const path = require('path');
 
 const FILE = process.argv[2]
-  || path.resolve(__dirname, '../../kraftpub-v6.8.0.html');
+  || path.resolve(__dirname, '../../kraftpub-dev.html');
 const SRC = fs.readFileSync(FILE, 'utf8');
 
 let pass = 0;
@@ -361,7 +361,7 @@ has("case 'library-toggle-panel':   toggleLibraryPanel(); return true;",
     'the shortcut still dispatches', SRC);
 
 // ═══ report ═══════════════════════════════════════════════════════════
-console.log(`test_v7052.js  (v7.0.53 Library keeps up with the board)`);
+console.log(`test_v7052.js  (v7.1.0 Library keeps up with the board)`);
 if (fails.length) {
   console.log(`  ${pass} passed, ${fails.length} FAILED`);
   fails.forEach(f => console.log('    FAIL  ' + f));

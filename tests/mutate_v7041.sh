@@ -8,7 +8,7 @@ NODE=/Users/kincheung/.workbuddy/binaries/node/versions/22.12.0/bin/node
 PY=/Users/kincheung/.workbuddy/binaries/python/versions/3.13.12/bin/python3
 TMP=/tmp/krafted-mutate41
 mkdir -p $TMP
-cp kraftpub-v6.8.0.html $TMP/mut.html
+cp kraftpub-dev.html $TMP/mut.html
 cp Krafted/docs/sw.js $TMP/sw.js
 
 run() {   # run(label)
@@ -22,7 +22,7 @@ run() {   # run(label)
 }
 
 mutate() { # mutate(label, python_old, python_new)
-  cp kraftpub-v6.8.0.html $TMP/mut.html
+  cp kraftpub-dev.html $TMP/mut.html
   $PY - "$2" "$3" <<'PY'
 import sys
 old, new = sys.argv[1], sys.argv[2]
@@ -181,11 +181,11 @@ mutate "the hotkey stops persisting the mark" \
 # ── version ───────────────────────────────────────────────────────────────
 
 mutate "the version bump is forgotten" \
-  "var KRAFTED_VERSION = '7.0.53';" \
-  "var KRAFTED_VERSION = '7.0.52';"
+  "var KRAFTED_VERSION = '7.1.0';" \
+  "var KRAFTED_VERSION = '7.0.53';"
 
 print ""
 print "restoring…"
-cp kraftpub-v6.8.0.html $TMP/mut.html
+cp kraftpub-dev.html $TMP/mut.html
 KRAFTED_HTML=$TMP/mut.html KRAFTED_SW=$TMP/sw.js $NODE Krafted/tests/test_v7041.js 2>&1 | tail -2
 rm -rf $TMP

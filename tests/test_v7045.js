@@ -35,14 +35,14 @@ const path = require('path');
 // deliberately broken COPY, so the real dev file is never touched.
 const HTML = process.env.KRAFTED_HTML
   ? path.resolve(process.env.KRAFTED_HTML)
-  : path.resolve(__dirname, '../../kraftpub-v6.8.0.html');
+  : path.resolve(__dirname, '../../kraftpub-dev.html');
 const SWJS = process.env.KRAFTED_SW
   ? path.resolve(process.env.KRAFTED_SW)
   : path.resolve(__dirname, '../docs/sw.js');
 const src = fs.readFileSync(HTML, 'utf8');
 const sw = fs.readFileSync(SWJS, 'utf8');
 
-const EXPECT_VERSION = '7.0.53';
+const EXPECT_VERSION = '7.1.0';
 
 let pass = 0, fail = 0;
 function ok(cond, label) {

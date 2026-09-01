@@ -36,7 +36,7 @@ const fs = require('fs');
 const path = require('path');
 
 const FILE = process.argv[2]
-  || path.resolve(__dirname, '../../kraftpub-v6.8.0.html');
+  || path.resolve(__dirname, '../../kraftpub-dev.html');
 const SRC = fs.readFileSync(FILE, 'utf8');
 
 let pass = 0;
@@ -406,7 +406,7 @@ has('cssText = ITEM_IMG_BASE_CSS', 'the reset restores the default styling rathe
 hasNot("objectFit = ''", 'the reset no longer clears object-fit (that is what stretched the image)', clearSrc);
 
 // ═══ report ═══════════════════════════════════════════════════════════
-console.log(`\ntest_v7049.js — Reframe (v7.0.53)`);
+console.log(`\ntest_v7049.js — Reframe (v7.1.0)`);
 console.log(`${'-'.repeat(46)}`);
 if (fails.length) {
   fails.forEach(f => console.log(`  FAIL  ${f}`));

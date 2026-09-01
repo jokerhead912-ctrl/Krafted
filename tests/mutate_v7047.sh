@@ -28,7 +28,7 @@ NODE=/Users/kincheung/.workbuddy/binaries/node/versions/22.12.0/bin/node
 PY=/Users/kincheung/.workbuddy/binaries/python/versions/3.13.12/bin/python3
 TMP=/tmp/krafted-mutate47
 mkdir -p $TMP
-cp kraftpub-v6.8.0.html $TMP/mut.html
+cp kraftpub-dev.html $TMP/mut.html
 cp Krafted/docs/sw.js $TMP/sw.js
 
 run() {   # run(label)
@@ -43,7 +43,7 @@ run() {   # run(label)
 }
 
 mutate() { # mutate(label, old, new, [count])
-  cp kraftpub-v6.8.0.html $TMP/mut.html
+  cp kraftpub-dev.html $TMP/mut.html
   $PY - "$2" "$3" "${4:-1}" <<'PY'
 import sys
 old, new, want = sys.argv[1], sys.argv[2], int(sys.argv[3])
@@ -76,7 +76,7 @@ PY
 
 NOTCAUGHT=0
 ANCHORFAIL=0
-print "mutation check: v7.0.53 suite (the tape waits for you)"
+print "mutation check: v7.1.0 suite (the tape waits for you)"
 
 # ── THE DEFAULT ────────────────────────────────────────────────────────
 # These four are the feature. If any survives, the tape runs away again.
@@ -343,16 +343,16 @@ mutate "an empty tape no longer says why it would not start" \
 # ── VERSION ────────────────────────────────────────────────────────────
 
 mutate "the app version does not move" \
-  "var KRAFTED_VERSION = '7.0.53';" \
-  "var KRAFTED_VERSION = '7.0.52';"
+  "var KRAFTED_VERSION = '7.1.0';" \
+  "var KRAFTED_VERSION = '7.0.53';"
 
 mutate "the title does not move" \
-  "<title>Krafted v7.0.53</title>" \
-  "<title>Krafted v7.0.52</title>"
+  "<title>Krafted v7.1.0</title>" \
+  "<title>Krafted v7.0.53</title>"
 
 mutsw "the service worker cache is not bumped" \
-  "krafted-v7.0.53-" \
-  "krafted-v7.0.52-"
+  "krafted-v7.1.0-" \
+  "krafted-v7.0.53-"
 
 print ""
 print "────────────────────────────────────────────"

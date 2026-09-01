@@ -15,7 +15,7 @@ set -u
 
 cd "$(dirname "$0")/../.." || exit 1
 NODE=/Users/kincheung/.workbuddy/binaries/node/versions/22.12.0/bin/node
-SRC=kraftpub-v6.8.0.html
+SRC=kraftpub-dev.html
 WORK=/tmp/krafted-mutate38
 rm -rf "$WORK"; mkdir -p "$WORK"
 MUT="$WORK/mut.html"

@@ -22,7 +22,7 @@ const fs = require('fs');
 const path = require('path');
 
 const FILE = process.argv[2]
-  || path.resolve(__dirname, '../../kraftpub-v6.8.0.html');
+  || path.resolve(__dirname, '../../kraftpub-dev.html');
 const SRC = fs.readFileSync(FILE, 'utf8');
 const ROOT = path.resolve(__dirname, '../..');
 

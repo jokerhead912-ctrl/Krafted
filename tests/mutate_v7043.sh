@@ -13,7 +13,7 @@ NODE=/Users/kincheung/.workbuddy/binaries/node/versions/22.12.0/bin/node
 PY=/Users/kincheung/.workbuddy/binaries/python/versions/3.13.12/bin/python3
 TMP=/tmp/krafted-mutate43
 mkdir -p $TMP
-cp kraftpub-v6.8.0.html $TMP/mut.html
+cp kraftpub-dev.html $TMP/mut.html
 cp Krafted/docs/sw.js $TMP/sw.js
 
 run() {   # run(label)
@@ -28,7 +28,7 @@ run() {   # run(label)
 }
 
 mutate() { # mutate(label, python_old, python_new)
-  cp kraftpub-v6.8.0.html $TMP/mut.html
+  cp kraftpub-dev.html $TMP/mut.html
   $PY - "$2" "$3" <<'PY'
 import sys
 old, new = sys.argv[1], sys.argv[2]
@@ -199,7 +199,7 @@ mutate "getMediaBlob exposed under the wrong name" \
   "    /* getMediaBlob: getMediaBlob, */"
 
 # ── restore control ───────────────────────────────────────────────────────
-cp kraftpub-v6.8.0.html $TMP/mut.html
+cp kraftpub-dev.html $TMP/mut.html
 print ""
 if [ $NOTCAUGHT -eq 0 ]; then
   print "ALL MUTATIONS CAUGHT"
