@@ -23,8 +23,17 @@ function near(a, b, tol, label) {
 }
 
 // ── spec constants (independent of the source) ───────────────────────────
-const EXPECT_MAX_ENTRIES = 64;
-const EXPECT_MAX_BYTES = 1024 * 1024 * 1024;
+// v7.5.0: both caps were deliberately halved (1 GB / 64 -> 512 MB / 96) as
+// part of the OOM work: this cache is the one place a Blob is kept alive
+// after every item referencing it is gone, so it is a leak with a ceiling
+// rather than a bounded structure. Behaviour under test is unchanged --
+// evict the cache, keep anything a live item still points at -- so the
+// spec moves and the assertions below stay exactly as they were.
+// NOTE: the byte cap went down while the entry cap went UP. The entry cap
+// is what protects "delete 30 images, then Ctrl+Z thirty times"; the byte
+// cap is what stops a handful of 200 MB clips filling the whole budget.
+const EXPECT_MAX_ENTRIES = 96;
+const EXPECT_MAX_BYTES = 512 * 1024 * 1024;
 const EXPECT_EDGE_MARGIN = 8;
 
 function slice(startMarker, endMarker, label) {
@@ -244,11 +253,11 @@ const showCtxFn = slice('function showCtx(x, y) {', '\n// Keep the context menu 
 ok(showCtxFn.indexOf('positionCtxMenu(x, y)') >= 0, 'showCtx places the menu through positionCtxMenu');
 ok(showCtxFn.indexOf("ctxMenu.style.maxHeight = ''") >= 0, 'showCtx resets max-height before measuring');
 
-ok(src.indexOf("var KRAFTED_VERSION = '7.4.0';") >= 0, 'KRAFTED_VERSION bumped');
-ok(src.indexOf('<title>Krafted v7.4.0</title>') >= 0, 'title bumped');
+ok(src.indexOf("var KRAFTED_VERSION = '7.5.0';") >= 0, 'KRAFTED_VERSION bumped');
+ok(src.indexOf('<title>Krafted v7.5.0</title>') >= 0, 'title bumped');
 const sw = fs.readFileSync(path.resolve(__dirname, '../../Krafted/docs/sw.js'), 'utf8');
-ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.4.0-'") >= 0, 'sw CACHE_NAME bumped');
-ok(sw.indexOf("const APP_VERSION = '7.4.0';") >= 0, 'sw APP_VERSION bumped');
+ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.5.0-'") >= 0, 'sw CACHE_NAME bumped');
+ok(sw.indexOf("const APP_VERSION = '7.5.0';") >= 0, 'sw APP_VERSION bumped');
 
 console.log('');
 console.log(fail === 0 ? 'ALL PASS (' + pass + ' assertions)' : 'FAILURES: ' + fail + ' (passed ' + pass + ')');

@@ -37,7 +37,7 @@ const SWJS = process.env.KRAFTED_SW
 const src = fs.readFileSync(HTML, 'utf8');
 const sw = fs.readFileSync(SWJS, 'utf8');
 
-const EXPECT_VERSION = '7.4.0';
+const EXPECT_VERSION = '7.5.0';
 
 // The spec. These are what the behaviour is asserted against; the app's own
 // constants are pinned to them separately, so a change to the app shows up as
@@ -236,6 +236,12 @@ try {
   P = new Function(
     'document', 'console', 'toast', 'gotoView', 'renderViewsPanel',
     'setTimeout', 'clearTimeout', 'state',
+    // v7.5.0: startPresent gained a call to _ensureAllImagesLive(). This
+    // harness compiles the real Present functions in isolation, so every
+    // global they reach for needs a stub. The stub is deliberately a
+    // recording no-op rather than `null`: a null turns "the global is not
+    // stubbed" into a crash that reads like a different bug entirely.
+    '_ensureAllImagesLive',
     presentBlock +
     '\nreturn { _viewsList: _viewsList, startPresent: startPresent, stopPresent: stopPresent,' +
     ' presentScheduleNext: presentScheduleNext, presentAdvance: presentAdvance,' +
@@ -265,13 +271,14 @@ function build(views) {
       if (i >= 0) a.splice(i, 1);
     }
   };
-  const calls = { goto: [], toast: [], renders: 0 };
+  const calls = { goto: [], toast: [], renders: 0, uncull: [] };
   const st = { views: views || [], _present: null, _activeViewIndex: -1 };
   const api = P(doc, console,
     function (m) { calls.toast.push(String(m)); },
     function (i) { calls.goto.push(i); },
     function () { calls.renders++; },
-    setTimeoutStub, clearTimeoutStub, st);
+    setTimeoutStub, clearTimeoutStub, st,
+    function () { calls.uncull.push(1); });
   return {
     st: st, doc: doc, calls: calls, api: api,
     n: function (id) { return NODES[id]; },
@@ -319,6 +326,7 @@ console.log('');
   eq(b.st._present.index, 0, 'it opens on the first shot');
   eq(b.calls.goto.length, 1, 'it flew to the first shot');
   eq(b.calls.goto[0], 0, 'it flew to shot 0');
+  eq(b.calls.uncull.length, 1, 'the tape un-culls before it flies the camera');
 
   // Advance by hand, the way the user described presenting.
   b.api.presentAdvance(1);

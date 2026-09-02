@@ -76,7 +76,7 @@ PY
 
 NOTCAUGHT=0
 ANCHORFAIL=0
-print "mutation check: v7.4.0 suite (the tape waits for you)"
+print "mutation check: v7.5.0 suite (the tape waits for you)"
 
 # ── THE DEFAULT ────────────────────────────────────────────────────────
 # These four are the feature. If any survives, the tape runs away again.
@@ -343,16 +343,16 @@ mutate "an empty tape no longer says why it would not start" \
 # ── VERSION ────────────────────────────────────────────────────────────
 
 mutate "the app version does not move" \
-  "var KRAFTED_VERSION = '7.4.0';" \
-  "var KRAFTED_VERSION = '7.3.0';"
+  "var KRAFTED_VERSION = '7.5.0';" \
+  "var KRAFTED_VERSION = '7.4.0';"
 
 mutate "the title does not move" \
-  "<title>Krafted v7.4.0</title>" \
-  "<title>Krafted v7.3.0</title>"
+  "<title>Krafted v7.5.0</title>" \
+  "<title>Krafted v7.4.0</title>"
 
 mutsw "the service worker cache is not bumped" \
-  "krafted-v7.4.0-" \
-  "krafted-v7.3.0-"
+  "krafted-v7.5.0-" \
+  "krafted-v7.4.0-"
 
 print ""
 print "────────────────────────────────────────────"
