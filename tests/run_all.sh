@@ -51,7 +51,7 @@ ONLY=${1:-all}
 # every block and the summary below still prints ALL GREEN (see UNKNOWN FLAGS
 # note at the top of this file). Failing loudly is the whole point of a gate.
 case "$ONLY" in
-  all|--suites|--muts|--bump) ;;
+  all|--suites|--muts|--bump|--smoke) ;;
   *)
     print "run_all.sh: unknown mode '$ONLY'" >&2
     print "usage: run_all.sh [all|--suites|--muts|--bump]" >&2
@@ -73,6 +73,7 @@ fi
 PASS=0
 FAIL=0
 FAILED_SUITES=""
+SMOKE_SKIP=0
 MUT_OK=0
 MUT_BAD=0
 BAD_MUTS=""
@@ -96,6 +97,37 @@ if [ "$ONLY" = "all" ] || [ "$ONLY" = "--suites" ]; then
       FAILED_SUITES="$FAILED_SUITES $(basename $f)"
     fi
   done
+  print ""
+fi
+
+# ── live browser smoke ────────────────────────────────────────────────────
+# WHY IT IS IN HERE AND NOT IN A FILE NOBODY OPENS
+#   The suites loop above is `test_v7*.js`, so a file named smoke_*.js is
+#   not picked up — which is precisely how a test rots. This one is the only
+#   check that dispatches a real DragEvent at a real DOM node and follows it
+#   all the way to items on the board. Every assertion in it depends on live
+#   internals (state.pan is a {x,y} object, the debounce is 220ms, the folder
+#   route ends in _handleFileDrop), so a source change can kill it silently
+#   exactly the way it killed mutate_v7041's anchors. It runs on `all` for
+#   that reason, not for convenience.
+if [ "$ONLY" = "all" ] || [ "$ONLY" = "--suites" ] || [ "$ONLY" = "--smoke" ]; then
+  print "── LIVE BROWSER SMOKE ────────────────────────────────"
+  OUT=$($NODE Krafted/tests/smoke_v7_5_0.js 2>&1)
+  SRC=$?
+  if print -r -- "$OUT" | grep -q "^SKIP "; then
+    # Not a pass and not a failure. Say so out loud: a silent skip is how a
+    # gate that is supposed to catch v7.4.0 becomes decoration.
+    print "   SKIP   smoke_v7_5_0.js — $(print -r -- "$OUT" | head -1)"
+    SMOKE_SKIP=1
+  elif [ $SRC -eq 0 ] && print -r -- "$OUT" | grep -qE "ALL PASS"; then
+    print "   pass   smoke_v7_5_0.js   $(print -r -- "$OUT" | grep -oE '[0-9]+ assertions' | head -1)"
+    PASS=$((PASS + 1))
+  else
+    print "   FAIL   smoke_v7_5_0.js"
+    print -r -- "$OUT" | grep -iE "FAIL|crash|Error" | head -8 | sed 's/^/           /'
+    FAIL=$((FAIL + 1))
+    FAILED_SUITES="$FAILED_SUITES smoke_v7_5_0.js"
+  fi
   print ""
 fi
 
@@ -147,13 +179,25 @@ fi
 
 print "══════════════════════════════════════════════════════"
 print "suites      $PASS passed, $FAIL failed"
+if [ "$SMOKE_SKIP" -ne 0 ]; then
+  print "            ^ the live browser smoke test was SKIPPED — the wiring is unchecked on this machine"
+fi
 print "mutations   $MUT_OK clean, $MUT_BAD with problems"
 print "            $TOTAL_SKIPS skipped anchor(s), $TOTAL_NOTCAUGHT not caught"
 
 if [ "$FAIL" -eq 0 ] && [ "$MUT_BAD" -eq 0 ] && [ "${VRC:-0}" -eq 0 ] \
    && [ "${MRC:-0}" -eq 0 ]; then
   print ""
-  print "ALL GREEN"
+  # A skipped smoke test must not read as an unqualified ALL GREEN. It is
+  # the only check that follows a drop through a real browser, so "green"
+  # without it means "narrower than it looks". Exit stays 0 — a machine with
+  # no Chrome cannot run any browser test and should not block a release —
+  # but the banner has to say what was not covered.
+  if [ "$SMOKE_SKIP" -ne 0 ]; then
+    print "ALL GREEN — but the browser wiring is UNCHECKED (smoke skipped)"
+  else
+    print "ALL GREEN"
+  fi
   exit 0
 fi
 print ""
