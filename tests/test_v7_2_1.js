@@ -39,12 +39,21 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const TESTS = __dirname;
 const ROOT = path.resolve(TESTS, '../..');
 const DEV = path.resolve(ROOT, 'kraftpub-dev.html');
 const STATE = JSON.parse(fs.readFileSync(path.resolve(TESTS, '.version_state'), 'utf8'));
 const HTML = fs.readFileSync(DEV, 'utf8');
+// The version policy lives in version_scan.py, so the suite drives the real
+// module through the probe rather than re-stating the rule in JavaScript.
+const PY = process.env.KRAFTED_PY
+  || '/Users/kincheung/.workbuddy/binaries/python/versions/3.13.12/bin/python3';
+const PROBE = path.resolve(TESTS, 'vscan_probe.py');
+function probe(...args) {
+  return JSON.parse(execFileSync(PY, [PROBE, ...args], { encoding: 'utf8' }));
+}
 
 let pass = 0;
 const fails = [];
@@ -199,23 +208,34 @@ function before(first, second, label) {
   eq(appv, STATE.current, 'the service worker matches the recorded current version');
   ok(/^\d+\.\d+\.\d+$/.test(STATE.current), 'the recorded version is MAJOR.MINOR.PATCH');
 
-  // PATCH under the policy: both fixes correct wrong behaviour. Nothing new
-  // became possible and nothing moved on screen, so this is not a minor.
+  // The bump KIND this release was, pinned through the real policy engine.
   //
-  // Derived, never hardcoded. version_scan rewrites bare version literals in
-  // this very file, so writing '7.2.1' here would be bumped to 7.2.2 the next
-  // time the version moved and the assertion would rot in place. Numbers are
-  // invisible to the scanner; assert the relationship instead of the string.
-  const cur = STATE.current.split('.').map(Number);
-  const prev = STATE.prev.split('.').map(Number);
-  ok(cur[0] === 7 && cur[1] === 2 && cur[2] === 1,
-    `this release is 7.2.1, a patch (got ${STATE.current})`);
-  ok(prev[0] === 7 && prev[1] === 2 && prev[2] === 0,
-    `this release follows 7.2.0 directly (got ${STATE.prev})`);
-  ok(cur[2] === prev[2] + 1,
-    'the patch number advanced by exactly one, so this is not a minor');
-  ok(cur[0] === prev[0] && cur[1] === prev[1],
-    'major and minor are unchanged, which is what makes this a patch');
+  // These four used to read STATE.current / STATE.prev and assert "the patch
+  // number advanced by exactly one". That is a fact about the LAST bump, not
+  // about this suite: as soon as 7.3.0 shipped as a minor, all four went red
+  // on a suite nobody had touched, while the thing they described (7.2.1 is
+  // a patch release under the SemVer policy) was still exactly true. Live
+  // state is a moving target - synthesise the state instead, and let the
+  // real module do the arithmetic.
+  //
+  // Built from parts, never as a dotted literal: version_scan rewrites bare
+  // MAJOR.MINOR.PATCH in every suite, which would turn these inputs into the
+  // thing being tested.
+  const V = (a, b, c) => `${a}.${b}.${c}`;
+  const OWN_PREV = V(7, 2, 0);
+  const OWN = V(7, 2, 1);
+  eq(probe('next', OWN_PREV, 'patch').next, OWN,
+    `a patch bump from ${OWN_PREV} produces ${OWN} - the release this suite documents`);
+  const minorFrom = probe('next', OWN_PREV, 'minor').next;
+  ok(minorFrom !== OWN,
+    `a minor bump from ${OWN_PREV} produces ${minorFrom}, not ${OWN}`);
+  eq(minorFrom, V(7, 3, 0),
+    `a minor bump from ${OWN_PREV} would have produced ${V(7, 3, 0)} instead`);
+  // Both fixes correct wrong behaviour; nothing new became possible and
+  // nothing moved on screen. The suite pins that as "patch", not "minor",
+  // through the policy above rather than by restating the judgement here.
+  ok(probe('policy', OWN_PREV, 'patch') === null || probe('policy', OWN_PREV, 'patch').error === null,
+    'a patch bump from the previous release is legal under the policy');
 })();
 
 // ═══ report ═══════════════════════════════════════════════════════════

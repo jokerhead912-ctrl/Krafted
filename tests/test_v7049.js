@@ -406,7 +406,7 @@ has('cssText = ITEM_IMG_BASE_CSS', 'the reset restores the default styling rathe
 hasNot("objectFit = ''", 'the reset no longer clears object-fit (that is what stretched the image)', clearSrc);
 
 // ═══ report ═══════════════════════════════════════════════════════════
-console.log(`\ntest_v7049.js — Reframe (v7.2.1)`);
+console.log(`\ntest_v7049.js — Reframe (v7.3.0)`);
 console.log(`${'-'.repeat(46)}`);
 if (fails.length) {
   fails.forEach(f => console.log(`  FAIL  ${f}`));

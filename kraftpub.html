@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.2.1</title>
+<title>Krafted v7.3.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4510,7 +4510,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.2.1';
+var KRAFTED_VERSION = '7.3.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7590,6 +7590,52 @@ function zoomToFit() {
 function splitTags(s) {
   if (!s) return [];
   return String(s).split(',').map(function (t) { return t.trim(); }).filter(function (t) { return t.length; });
+}
+// v7.3.0 — a dropped folder's name rides along with its files.
+// _handleEntryDrop() has stamped every dropped file with its folder path as
+// `file._kraftedPath` (e.g. "Refs/Head") since v5.5.1, and NOTHING ever read
+// it: a 200-image folder landed as 200 anonymous items that the Library could
+// not find. That path is dead weight no longer - but it is read in exactly one
+// place, and the metadata it produces is written in exactly one place.
+function folderTagsFromPath(path) {
+  if (!path) return [];
+  return String(path).split('/')
+    .map(function (s) { return s.trim().replace(/,/g, ' ').replace(/\s+/g, ' '); })
+    .filter(function (s) { return s.length && s !== '.' && s !== '..'; });
+}
+// Merge, never overwrite: an item may already carry tags, and a second import
+// into the same board must not wipe them. Case-insensitive so "Head" from one
+// drop and "head" from another do not both land on the same item.
+function mergeTags(existing, added) {
+  var out = (existing && existing.length) ? existing.slice() : [];
+  (added || []).forEach(function (t) {
+    var seen = false;
+    for (var i = 0; i < out.length; i++) {
+      if (String(out[i]).toLowerCase() === String(t).toLowerCase()) { seen = true; break; }
+    }
+    if (!seen) out.push(t);
+  });
+  return out;
+}
+// One writer for "what an import stamps onto an item". Every import path
+// (folder drop, plain file drop, paste; image, video, audio) funnels through
+// here, so the rule exists once instead of once per call site - one behaviour
+// with N hand-written copies is the oldest root cause on this project.
+// The comma -> space substitution in folderTagsFromPath is deliberate: the
+// Tags field is comma-separated, so a folder literally named "a,b" would
+// split into two tags the first time the user edited any tag on that item.
+function applyImportMeta(item, file) {
+  if (!item || !file) return item;
+  if (!item.filename && file.name) {
+    item.filename = file.name;
+    try { if (item.el && item.el._setFilenameBadge) item.el._setFilenameBadge(file.name); } catch (e) {}
+  }
+  var ftags = folderTagsFromPath(file._kraftedPath);
+  if (ftags.length) {
+    item.tags = mergeTags(item.tags, ftags);
+    try { scheduleAutoSave(); } catch (e) {}
+  }
+  return item;
 }
 // ONE definition of "does this item match the Library search", shared by the
 // Library list and the minimap highlight. Two hand-written copies of the same
@@ -21670,7 +21716,7 @@ function handleAudioUpload(event) {
     const at = cascade(280, 64);   // the audio card's own w/h (addAudioItem)
     // v6.2.1: use blob URL to avoid OOM on large WAVs
     const blobUrl = URL.createObjectURL(file);
-    addAudioItem(blobUrl, file.name, at.x, at.y, file.size, file);
+    applyImportMeta(addAudioItem(blobUrl, file.name, at.x, at.y, file.size, file), file);
   });
   event.target.value = ''; // Reset for re-upload
 }
@@ -24845,7 +24891,17 @@ function _finishFolderImport(e, allFiles) {
   var sorted = images.concat(videos).concat(audios);
   console.log('[FileDrop] Folder import: ' + sorted.length + ' files (' + images.length + ' images, ' + videos.length + ' videos, ' + audios.length + ' audio)');
   if (typeof window.toast === 'function') {
-    window.toast('📁 Importing ' + sorted.length + ' files from folder...');
+    var _fNames = [];
+    allFiles.forEach(function (f) {
+      var _segs = folderTagsFromPath(f._kraftedPath);
+      if (_segs.length && _fNames.indexOf(_segs[0]) < 0) _fNames.push(_segs[0]);
+    });
+    // One folder reads  "Head"   two read  "A", "B"   more read  "A", "B" +3
+    // so dropping thirty folders cannot produce an endless toast.
+    var _fShown = _fNames.slice(0, 2).join('", "');
+    var _fMore = _fNames.length > 2 ? (' +' + (_fNames.length - 2)) : '';
+    var _fLabel = _fNames.length ? (' "' + _fShown + '"' + _fMore) : '';
+    window.toast('📁 Importing ' + sorted.length + ' files from folder' + _fLabel + ' - folder name saved as tag');
   }
   _handleFileDrop(e, sorted);
 }
@@ -24985,12 +25041,12 @@ function _handleFileDrop(e, files) {
       if (isGif) {
         bitmap.close();
         const blobUrl = URL.createObjectURL(file);
-        addImage(blobUrl, w, h, at.x, at.y, false, isLast, file.size, true, file);
+        applyImportMeta(addImage(blobUrl, w, h, at.x, at.y, false, isLast, file.size, true, file), file);
       } else {
         normalizeImageBlob(file, bitmap, w, h, true, function (outBlob, ow, oh) {
           bitmap.close();  // release as soon as we are done drawing it
           const blobUrl = URL.createObjectURL(outBlob);
-          addImage(blobUrl, ow, oh, at.x, at.y, false, isLast, outBlob.size, false, outBlob);
+          applyImportMeta(addImage(blobUrl, ow, oh, at.x, at.y, false, isLast, outBlob.size, false, outBlob), file);
         });
       }
     } catch(e) {
@@ -25025,10 +25081,7 @@ function _handleFileDrop(e, files) {
     // 720p default covers most common video sources without looking wrong.
     const at = cascade(1280, 720);
     const newItem = addImage(blobUrl, 1280, 720, at.x, at.y, true, isLast, file.size, false, file);
-    if (newItem && file && file.name) {
-      newItem.filename = file.name;
-      try { if (newItem.el && newItem.el._setFilenameBadge) newItem.el._setFilenameBadge(file.name); } catch (e) {}
-    }
+    applyImportMeta(newItem, file);
     videoQueueIdx++;
     setTimeout(processNextVideo, 50);
   }
@@ -25040,7 +25093,7 @@ function _handleFileDrop(e, files) {
     // and readAsDataURL allocates a base64 string (~33% bigger) that OOMs the tab
     // and crashes JSON.stringify during pushUndo/captureSnapshot.
     const blobUrl = URL.createObjectURL(file);
-    addAudioItem(blobUrl, file.name, at.x, at.y, file.size, file);
+    applyImportMeta(addAudioItem(blobUrl, file.name, at.x, at.y, file.size, file), file);
   });
 }
 
@@ -25229,12 +25282,12 @@ document.addEventListener('paste', e => {
           if (isGif) {
             bitmap.close();
             const blobUrl = URL.createObjectURL(f);
-            addImage(blobUrl, w, h, at.x, at.y, false, isLast, f.size, true, f);
+            applyImportMeta(addImage(blobUrl, w, h, at.x, at.y, false, isLast, f.size, true, f), f);
           } else {
             normalizeImageBlob(f, bitmap, w, h, true, function (outBlob, ow, oh) {
               bitmap.close();
               const blobUrl = URL.createObjectURL(outBlob);
-              addImage(blobUrl, ow, oh, at.x, at.y, false, isLast, outBlob.size, false, outBlob);
+              applyImportMeta(addImage(blobUrl, ow, oh, at.x, at.y, false, isLast, outBlob.size, false, outBlob), f);
             });
           }
         } catch (e) {
@@ -25260,11 +25313,7 @@ document.addEventListener('paste', e => {
           // Capture the original file name so the export can use it
           const at = cascade(w, h);
           const newItem = addImage(blobUrl, w, h, at.x, at.y, true, isLast, f.size, false, f);
-          if (newItem && f && f.name) {
-            newItem.filename = f.name;
-            // Round 13: push the file name to the player badge
-            try { if (newItem.el && newItem.el._setFilenameBadge) newItem.el._setFilenameBadge(f.name); } catch (e) {}
-          }
+          applyImportMeta(newItem, f);
           vIdx++;
           setTimeout(processNextVideo, 100);
         };
@@ -25276,7 +25325,7 @@ document.addEventListener('paste', e => {
         const at = cascade(280, 64);   // the audio card's own w/h (addAudioItem)
         // v6.2.1: use blob URL to avoid OOM on large WAVs
         const blobUrl = URL.createObjectURL(f);
-        addAudioItem(blobUrl, f.name, at.x, at.y, f.size, f);
+        applyImportMeta(addAudioItem(blobUrl, f.name, at.x, at.y, f.size, f), f);
       });
       toast('Pasted ' + (imageFiles.length + videoFiles.length + audioFiles.length) + ' files');
       return;
