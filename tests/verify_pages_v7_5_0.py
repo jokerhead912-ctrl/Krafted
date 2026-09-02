@@ -38,6 +38,7 @@ FileSystemEntry mock 去钉，mutate_v7_5_0.sh 用 30 个变异去证明个网�
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -77,6 +78,25 @@ FORBIDDEN = [
     'pending = entries.length',
     'pending += batch.length',
 ]
+
+
+def code_only(text):
+    """剝走 JS 註釋，先好對 code 做斷言。
+
+    點解要呢個：v7.5.0 嘅源碼用註釋解釋舊 bug，而嗰段註釋**引用咗 FORBIDDEN 正在
+    搵嘅字串**（`pending = entries.length`）。對原文做斷言就會報「v7.4.0 個 bug
+    返咗嚟」，但同一時間伺服器嗰份同本地係 byte-identical，本地全套測試亦係綠燈。
+    同一個陷阱喺 CSS 斷言踩過（SKILL 6i 陷阱 2：斷言匹配到自己份 rationale 註釋）。
+
+    兩個要小心嘅位，都係踩過先識：
+      - block comment 嘅 match **要有上限**。源碼有個字串字面量 `'/*'`，佢嘅配對
+        喺 ~270KB 之外，無上限嘅 non-greedy match 會吞咗 42% 嘅源碼。
+      - `//` 淨係喺**唔係 URL 一部份**嗰陣先係註釋 —— `https://` 同埋引號包住嘅
+        `//` 都唔可以當註釋剝。
+    """
+    text = re.sub(r'/\*[\s\S]{0,4000}?\*/', '', text)
+    text = re.sub(r'(?<![:\\\'"])//[^\n]*', '', text)
+    return text
 
 
 def arg(name, default):
@@ -130,13 +150,15 @@ def attempt(version):
             hard.append('%s does not say %s' % (label, version))
 
     # ── 2. 行为 ────────────────────────────────────────────────────────────
-    missing = [b for b in BEHAVIOUR if b not in text]
+    # 对剥咗注释嘅 code 做断言，唔系对原文 —— 见 code_only() 嘅注释。
+    code = code_only(text)
+    missing = [b for b in BEHAVIOUR if b not in code]
     if missing:
         hard.append('%d v7.5.0 anchor(s) missing: %s' % (len(missing), ', '.join(missing)))
     else:
         msgs.append('  ok   %-18s %d/%d present' % ('behaviour', len(BEHAVIOUR), len(BEHAVIOUR)))
 
-    rolled_back = [f for f in FORBIDDEN if f in text]
+    rolled_back = [f for f in FORBIDDEN if f in code]
     if rolled_back:
         hard.append('v7.4.0 bug is back: %s' % ', '.join(rolled_back))
     else:
