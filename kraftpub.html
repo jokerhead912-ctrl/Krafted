@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.6.0</title>
+<title>Krafted v7.7.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4517,7 +4517,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.6.0';
+var KRAFTED_VERSION = '7.7.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -25124,6 +25124,10 @@ function _finishFolderImport(e, allFiles) {
     var _fBlockLabel = _fBlocks > 1 ? (' · ' + _fBlocks + ' blocks') : '';
     window.toast('📁 Importing ' + sorted.length + ' files from folder' + _fLabel + ' - folder name saved as tag' + _fBlockLabel);
   }
+  // v7.7.0 — auto-tidy the imported items so a multi-folder drop packs into
+  // a non-overlapping block instead of a badly-overlapping cascade. Only
+  // folder imports arm this; plain drops and pastes do not.
+  if (sorted.length) _armFolderTidy(sorted.length);
   _handleFileDrop(e, sorted);
 }
 
@@ -25213,6 +25217,34 @@ function normalizeImageBlob(file, source, w, h, local, cb) {
   }
 }
 
+// v7.7.0 — folder-drop auto-tidy. A multi-folder drop used to land as one
+// cascade stack with each item stepping by ~22% of its own size, so big
+// images overlapped almost completely. After a folder import we run
+// tidySelection() over the new items so they pack into a non-overlapping
+// block. Images/videos are added asynchronously, so we count completions
+// and only tidy once every expected item has actually been placed. Plain
+// (non-folder) drops and pastes never arm this — only _finishFolderImport.
+var _folderTidy = { active: false, ids: [], expected: 0, attempts: 0 };
+function _armFolderTidy(n) {
+  if (!_folderTidy.active) { _folderTidy.active = true; _folderTidy.ids = []; _folderTidy.attempts = 0; }
+  _folderTidy.expected += n;
+}
+function _maybeTidy(id) {
+  if (!_folderTidy.active) return;
+  if (id != null) _folderTidy.ids.push(id);
+  _folderTidy.attempts++;
+  if (_folderTidy.attempts >= _folderTidy.expected) {
+    _folderTidy.active = false;
+    var _ids = _folderTidy.ids;
+    _folderTidy.ids = []; _folderTidy.expected = 0; _folderTidy.attempts = 0;
+    if (_ids.length >= 2) {
+      state.selected.clear();
+      _ids.forEach(function (i) { state.selected.add(i); });
+      tidySelection();
+    }
+  }
+}
+
 function _handleFileDrop(e, files) {
   console.log('[FileDrop] _handleFileDrop called with', files.length, 'files');
   // v7.0.27: .kpak/.zip drop = OPEN the board package (was silently
@@ -25270,16 +25302,19 @@ function _handleFileDrop(e, files) {
       if (isGif) {
         bitmap.close();
         const blobUrl = URL.createObjectURL(file);
-        applyImportMeta(addImage(blobUrl, w, h, at.x, at.y, false, isLast, file.size, true, file), file);
+        const _it = applyImportMeta(addImage(blobUrl, w, h, at.x, at.y, false, isLast, file.size, true, file), file);
+        _maybeTidy(_it.id);
       } else {
         normalizeImageBlob(file, bitmap, w, h, true, function (outBlob, ow, oh) {
           bitmap.close();  // release as soon as we are done drawing it
           const blobUrl = URL.createObjectURL(outBlob);
-          applyImportMeta(addImage(blobUrl, ow, oh, at.x, at.y, false, isLast, outBlob.size, false, outBlob), file);
+          const _it = applyImportMeta(addImage(blobUrl, ow, oh, at.x, at.y, false, isLast, outBlob.size, false, outBlob), file);
+          _maybeTidy(_it.id);
         });
       }
     } catch(e) {
       console.warn('[FileDrop] Image decode failed:', file.name, e.message);
+      _maybeTidy(null);
     }
     // Brief pause to let GC run before next image
     setTimeout(processNextImage, 50);
@@ -25311,6 +25346,7 @@ function _handleFileDrop(e, files) {
     const at = cascade(1280, 720);
     const newItem = addImage(blobUrl, 1280, 720, at.x, at.y, true, isLast, file.size, false, file);
     applyImportMeta(newItem, file);
+    _maybeTidy(newItem.id);
     videoQueueIdx++;
     setTimeout(processNextVideo, 50);
   }
@@ -25322,7 +25358,8 @@ function _handleFileDrop(e, files) {
     // and readAsDataURL allocates a base64 string (~33% bigger) that OOMs the tab
     // and crashes JSON.stringify during pushUndo/captureSnapshot.
     const blobUrl = URL.createObjectURL(file);
-    applyImportMeta(addAudioItem(blobUrl, file.name, at.x, at.y, file.size, file), file);
+    const _a = applyImportMeta(addAudioItem(blobUrl, file.name, at.x, at.y, file.size, file), file);
+    _maybeTidy(_a.id);
   });
 }
 
@@ -30951,6 +30988,18 @@ function deleteSelected() {
   removeBrushCanvas();
   document.getElementById('viewport').classList.remove('mask-pick-mode');
   sel.forEach(i => {
+    // v7.7.0 — drop the item from its group; a group that falls below 2
+    // members is dissolved (border + label disposed) so deleting the last
+    // image no longer leaves a stale empty group box on the board. Mirrors
+    // the <2 rule in ungroupSelected().
+    const _dg = state.groups.find(g => g.memberIds.has(i.id));
+    if (_dg) {
+      _dg.memberIds.delete(i.id);
+      if (_dg.memberIds.size < 2) {
+        disposeGroupEl(_dg);
+        state.groups = state.groups.filter(g => g !== _dg);
+      }
+    }
     cleanupVideoItem(i);
     cleanupImageItem(i);
     removeAnnoPopoversFor(i);
@@ -30990,6 +31039,9 @@ function deleteSelected() {
   });
   // Redraw the draw canvas so the removed stroke actually disappears
   redrawDrawLayer();
+  // v7.7.0 — reposition any surviving group borders around their remaining
+  // members after a delete.
+  updateAllGroupBorders();
   state.selected.clear();
   refreshSelection();
   scheduleAutoSave();

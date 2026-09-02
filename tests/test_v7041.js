@@ -633,14 +633,14 @@ eq(api.TRIM_MIN_GAP, EXPECT_TRIM_MIN_GAP, 'TRIM_MIN_GAP equals the spec');
 // 10. Version
 // ═══════════════════════════════════════════════════════════════════════
 {
-  ok(src.indexOf("var KRAFTED_VERSION = '7.6.0';") >= 0, 'KRAFTED_VERSION bumped');
-  ok(src.indexOf('<title>Krafted v7.6.0</title>') >= 0, 'title bumped');
+  ok(src.indexOf("var KRAFTED_VERSION = '7.7.0';") >= 0, 'KRAFTED_VERSION bumped');
+  ok(src.indexOf('<title>Krafted v7.7.0</title>') >= 0, 'title bumped');
   const swPath = process.env.KRAFTED_SW
     ? path.resolve(process.env.KRAFTED_SW)
     : path.resolve(__dirname, '../docs/sw.js');
   const sw = fs.readFileSync(swPath, 'utf8');
-  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.6.0-'") >= 0, 'sw CACHE_NAME bumped');
-  ok(sw.indexOf("const APP_VERSION = '7.6.0';") >= 0, 'sw APP_VERSION bumped');
+  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.7.0-'") >= 0, 'sw CACHE_NAME bumped');
+  ok(sw.indexOf("const APP_VERSION = '7.7.0';") >= 0, 'sw APP_VERSION bumped');
 }
 
 console.log('');

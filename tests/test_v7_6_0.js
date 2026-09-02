@@ -129,7 +129,7 @@ section(function () {
   eq(calls.undo, 1, 'grouping pushes undo first');
   eq(st.groups.length, 1, 'a new group is registered');
   eq(made && made.name, '', 'a hand-made group still starts nameless — the name comes from the rename, not a guess');
-  eq(calls.rename.length, 1, 'v7.6.0: creating a group opens the rename exactly once');
+  eq(calls.rename.length, 1, 'v7.7.0: creating a group opens the rename exactly once');
   eq(calls.rename[0], st.groups[0], 'the rename opens on the group just created');
   eq(calls.borders, 1, 'the border is drawn before the rename opens (the chip has somewhere to sit)');
 
@@ -223,8 +223,8 @@ section(function () {
   eq(named.labelEl.style.left, '92px', 'the named chip is placed at the border edge');
 
   const midEdit = run('', true);
-  eq(midEdit.labelEl.style.display, 'block', 'v7.6.0: a nameless chip MID-RENAME stays shown');
-  eq(midEdit.labelEl.style.left, '92px', 'v7.6.0: a nameless chip MID-RENAME is placed, not parked at 0');
+  eq(midEdit.labelEl.style.display, 'block', 'v7.7.0: a nameless chip MID-RENAME stays shown');
+  eq(midEdit.labelEl.style.left, '92px', 'v7.7.0: a nameless chip MID-RENAME is placed, not parked at 0');
 
   const hidden = run('', false);
   eq(hidden.labelEl.style.display, 'none', 'a nameless chip NOT being renamed stays hidden');
