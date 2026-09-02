@@ -794,10 +794,10 @@ function versionTests() {
     ? path.resolve(process.env.KRAFTED_SW)
     : path.resolve(__dirname, '../docs/sw.js');
   const sw = fs.readFileSync(swPath, 'utf8');
-  ok(src.indexOf("var KRAFTED_VERSION = '7.3.0';") >= 0, 'KRAFTED_VERSION bumped');
-  ok(src.indexOf('<title>Krafted v7.3.0</title>') >= 0, 'title bumped');
-  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.3.0-'") >= 0, 'sw CACHE_NAME bumped');
-  ok(sw.indexOf("const APP_VERSION = '7.3.0';") >= 0, 'sw APP_VERSION bumped');
+  ok(src.indexOf("var KRAFTED_VERSION = '7.4.0';") >= 0, 'KRAFTED_VERSION bumped');
+  ok(src.indexOf('<title>Krafted v7.4.0</title>') >= 0, 'title bumped');
+  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.4.0-'") >= 0, 'sw CACHE_NAME bumped');
+  ok(sw.indexOf("const APP_VERSION = '7.4.0';") >= 0, 'sw APP_VERSION bumped');
 }
 
 (async function () {

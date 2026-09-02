@@ -103,9 +103,23 @@ ok(END > START, 'the helper block sits before libMatches');
 const BLOCK = HTML.slice(START, END > START ? END : START);
 
 let saves = 0;
-const api = new Function('scheduleAutoSave',
+// v7.4.0: the slice now also covers folderGroupKey / addItemToFolderGroup,
+// which applyImportMeta calls, so the sandbox has to stand in for the group
+// machinery. They are lazy (a function declaration is only resolved when it
+// runs), which is why the block still evaluates without them — but an import
+// WITH a folder path would throw the moment it tried to join the group.
+const api = new Function(
+  'scheduleAutoSave', 'state', 'G', 'makeGroupEl', 'GROUP_COLORS', 'updateAllGroupBorders', 'setTimeout',
   BLOCK + '\nreturn { folderTagsFromPath: folderTagsFromPath, mergeTags: mergeTags, applyImportMeta: applyImportMeta };'
-)(function () { saves++; });
+)(
+  function () { saves++; },
+  { groups: [] },
+  { nextGroupId: 1 },
+  function (gd) { return { id: gd.id, color: gd.color, name: gd.name || '', memberIds: new Set(gd.memberIds || []) }; },
+  ['#ffffff'],
+  function () {},
+  function () { return 0; }
+);
 
 (function () {
   const f = api.folderTagsFromPath;
@@ -290,8 +304,12 @@ const api = new Function('scheduleAutoSave',
   // an invisible way: a single folder produced  "Head""  (a stray closing
   // quote that only shows up on screen). Executed, not grepped, because
   // "the line is present" is exactly what the broken version passed.
+  // Slice ends after the _fLabel line, NOT at the toast: v7.4.0 appended a
+  // block-count between them, and pulling that in drags `sorted` and
+  // `folderGroupKey` into a sandbox that has neither.
   const at = HTML.indexOf('    var _fShown =');
-  const to = HTML.indexOf("    window.toast('", at);
+  const labelAt = HTML.indexOf('var _fLabel = _fNames.length', at);
+  const to = labelAt >= 0 ? HTML.indexOf('\n', labelAt) + 1 : -1;
   ok(at >= 0 && to > at, 'the folder label is built by its own three lines');
   const label = new Function('_fNames', HTML.slice(at, to) + '\nreturn _fLabel;');
   eq(label(['Head']), ' "Head"', 'one folder reads "Head"');
@@ -301,7 +319,9 @@ const api = new Function('scheduleAutoSave',
   eq(label([]), '', 'no folder means no label, not a dangling quote');
 
   // Inside _finishFolderImport the list has to be built before it is used.
-  const fin = fnWindow('function _finishFolderImport(e, allFiles) {', 2500);
+  // v7.4.0 added the folder-major sort inside this function, so the window
+  // has to be wide enough to still reach the toast at the end of it.
+  const fin = fnWindow('function _finishFolderImport(e, allFiles) {', 4000);
   ok(fin !== null, '_finishFolderImport is present');
   const iNames = fin ? fin.indexOf('var _fNames = [];') : -1;
   const iToast = fin ? fin.indexOf('window.toast(') : -1;

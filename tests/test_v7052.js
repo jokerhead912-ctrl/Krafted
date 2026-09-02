@@ -361,7 +361,7 @@ has("case 'library-toggle-panel':   toggleLibraryPanel(); return true;",
     'the shortcut still dispatches', SRC);
 
 // ═══ report ═══════════════════════════════════════════════════════════
-console.log(`test_v7052.js  (v7.3.0 Library keeps up with the board)`);
+console.log(`test_v7052.js  (v7.4.0 Library keeps up with the board)`);
 if (fails.length) {
   console.log(`  ${pass} passed, ${fails.length} FAILED`);
   fails.forEach(f => console.log('    FAIL  ' + f));

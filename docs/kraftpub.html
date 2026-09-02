@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.3.0</title>
+<title>Krafted v7.4.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2344,6 +2344,12 @@ body.dragging-file .media-anno-toolbar {
 .text-handles .item-handle { pointer-events:auto; }
 /* GROUP BORDER */
 .group-border { position:absolute; pointer-events:none; border:2px dashed; border-radius:4px; z-index:0; transition:all 0.1s; }
+/* v7.4.0 — the chip that names a group. A folder drop makes one per folder.
+   It lives OUTSIDE the border box (above it) so it never covers a member, and
+   it counter-scales by 1/zoom in updateGroupBorder so it stays the same size
+   on screen whether the board is at 8% or 400%. */
+.group-label { position:absolute; z-index:9998; pointer-events:auto; cursor:text; display:none; max-width:600px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:'Inter',sans-serif; font-size:11px; font-weight:500; line-height:14px; letter-spacing:0.04em; color:#111; padding:2px 7px; border-radius:3px; transform-origin:left bottom; user-select:none; }
+.group-label.editing { user-select:text; outline:1px solid #fff; overflow:visible; }
 
 /* ---- audio-only type badge (audio cards don't have an info bar) ---- */
 /* Round 72: the video/gif in-frame `.media-type-badge` and the
@@ -4510,7 +4516,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.3.0';
+var KRAFTED_VERSION = '7.4.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4832,7 +4838,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     manifest.paper = { enabled: paperState.enabled, autoFit: paperState.autoFit, width: paperState.width, height: paperState.height, color: paperState.color };
     manifest.canvasBg = getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim() || '#1a1a1a';
     var groups = state.groups || [];
-    for (var k = 0; k < groups.length; k++) { var g = groups[k]; manifest.groups.push({ id: g.id, color: g.color, memberIds: g.memberIds ? g.memberIds.slice() : [] }); }
+    // v7.4.0: this used to call g.memberIds.slice() — memberIds is a Set, so
+    // that threw. Nobody calls this function today, but the landmine is gone.
+    for (var k = 0; k < groups.length; k++) { manifest.groups.push(serializeGroup(groups[k])); }
     // v7.0.40: named views. Written straight onto the manifest (not through
     // the schema validator's node table) because they are board metadata, not
     // nodes — an old Krafted reading this manifest simply ignores the key.
@@ -7635,7 +7643,52 @@ function applyImportMeta(item, file) {
     item.tags = mergeTags(item.tags, ftags);
     try { scheduleAutoSave(); } catch (e) {}
   }
+  // No second scheduleAutoSave() here: a non-empty key implies a non-empty
+  // ftags, and the branch above has already queued one.
+  var gkey = folderGroupKey(file._kraftedPath);
+  if (gkey) addItemToFolderGroup(item, gkey);
   return item;
+}
+
+// v7.4.0 — a dropped folder becomes a NAMED GROUP: one dashed block per
+// folder with the path printed above it. v7.3.0 already wrote the name into
+// tags; this is the half you can SEE. Keyed on the FULL path, so "Refs/Head"
+// and "Refs/Body" are two blocks rather than one big one.
+// `folderKey` is deliberately NOT serialised: it is a hint for the session
+// that produced the drop. Appending two boards that each carry a "Head" group
+// must keep them apart (group ids are renumbered for the same reason), and a
+// re-drop after a reload starts a fresh block instead of silently growing a
+// stale one.
+function folderGroupKey(path) {
+  return folderTagsFromPath(path).join('/');
+}
+
+var _folderBorderTimer = 0;
+// Import fans out one file every 50ms and updateGroupBorder measures every
+// member with getBoundingClientRect. Re-measuring a 300-strong group on every
+// arrival is O(n^2) forced reflows, so coalesce: at most one pass per 120ms.
+function scheduleFolderGroupUpdate() {
+  if (_folderBorderTimer) return;
+  _folderBorderTimer = setTimeout(function () {
+    _folderBorderTimer = 0;
+    updateAllGroupBorders();
+  }, 120);
+}
+
+function addItemToFolderGroup(item, key) {
+  if (!item || !key) return;
+  var g = null;
+  for (var i = 0; i < state.groups.length; i++) {
+    if (state.groups[i].folderKey === key) { g = state.groups[i]; break; }
+  }
+  if (!g) {
+    var gid = G.nextGroupId++;
+    g = makeGroupEl({ id: gid, color: GROUP_COLORS[(gid - 1) % GROUP_COLORS.length], name: key, memberIds: [] });
+    g.folderKey = key;
+    state.groups.push(g);
+  }
+  g.memberIds.add(item.id);
+  scheduleFolderGroupUpdate();
 }
 // ONE definition of "does this item match the Library search", shared by the
 // Library list and the minimap highlight. Two hand-written copies of the same
@@ -8987,9 +9040,7 @@ function captureSnapshot() {
       connections: (m.connections||[]).map(c => ({ id: c.id, from: c.from, to: c.to, color: c.color })),
       nextNodeId: m.nextNodeId || 1, nextConnId: m.nextConnId || 1,
     })),
-    groups: state.groups.map(g => ({
-      id: g.id, color: g.color, memberIds: [...g.memberIds],
-    })),
+    groups: state.groups.map(serializeGroup),
     // v7.0.40: named views round-trip through undo. They carry no media, just
     // names and id lists, so they cost a few hundred bytes per view.
     views: (state.views || []).map(serializeView),
@@ -9381,16 +9432,12 @@ function applySnapshot(snap) {
     updateItemStyle(mm);
   });
   // Restore groups
-  state.groups.forEach(g => g.borderEl.remove());
+  state.groups.forEach(disposeGroupEl);
   state.groups = [];
   if (snap.groups) {
     G.nextGroupId = snap.nextGroupId || G.nextGroupId;
     snap.groups.forEach(gd => {
-      const borderEl = document.createElement('div');
-      borderEl.className = 'group-border';
-      borderEl.style.borderColor = gd.color;
-      canvasContent.appendChild(borderEl);
-      state.groups.push({ id: gd.id, color: gd.color, memberIds: new Set(gd.memberIds), borderEl });
+      state.groups.push(makeGroupEl({ id: gd.id, color: gd.color, name: gd.name, memberIds: gd.memberIds }));
     });
     setTimeout(() => updateAllGroupBorders(), 100);
   }
@@ -24888,7 +24935,22 @@ function _finishFolderImport(e, allFiles) {
     else if (f.type.startsWith('video/')) videos.push(f);
     else if (f.type.startsWith('audio/') || /\.(mp3|wav|aiff|aif|flac|ogg|m4a)$/i.test(f.name)) audios.push(f);
   });
+  // v7.4.0: folder-major. The old flat images->videos->audio order interleaved
+  // folders, so a two-folder drop produced two bounding boxes covering almost
+  // the same area and the group borders came out as spaghetti. Type order is
+  // kept inside one folder, and sort() is stable so the directory traversal
+  // order survives inside each (folder, type) bucket.
+  function _importTypeRank(f) {
+    if (f.type && f.type.indexOf('image/') === 0) return 0;
+    if (f.type && f.type.indexOf('video/') === 0) return 1;
+    return 2;
+  }
   var sorted = images.concat(videos).concat(audios);
+  sorted.sort(function (a, b) {
+    var ka = folderGroupKey(a._kraftedPath), kb = folderGroupKey(b._kraftedPath);
+    if (ka !== kb) return ka < kb ? -1 : 1;
+    return _importTypeRank(a) - _importTypeRank(b);
+  });
   console.log('[FileDrop] Folder import: ' + sorted.length + ' files (' + images.length + ' images, ' + videos.length + ' videos, ' + audios.length + ' audio)');
   if (typeof window.toast === 'function') {
     var _fNames = [];
@@ -24901,7 +24963,13 @@ function _finishFolderImport(e, allFiles) {
     var _fShown = _fNames.slice(0, 2).join('", "');
     var _fMore = _fNames.length > 2 ? (' +' + (_fNames.length - 2)) : '';
     var _fLabel = _fNames.length ? (' "' + _fShown + '"' + _fMore) : '';
-    window.toast('📁 Importing ' + sorted.length + ' files from folder' + _fLabel + ' - folder name saved as tag');
+    var _fSeen = [], _fBlocks = 0;
+    sorted.forEach(function (f) {
+      var k = folderGroupKey(f._kraftedPath);
+      if (k && _fSeen.indexOf(k) < 0) { _fSeen.push(k); _fBlocks++; }
+    });
+    var _fBlockLabel = _fBlocks > 1 ? (' · ' + _fBlocks + ' blocks') : '';
+    window.toast('📁 Importing ' + sorted.length + ' files from folder' + _fLabel + ' - folder name saved as tag' + _fBlockLabel);
   }
   _handleFileDrop(e, sorted);
 }
@@ -29178,6 +29246,79 @@ function setCanvasBg(color) {
 // ============================================================
 const GROUP_COLORS = ['#ff4444','#44ff44','#4488ff','#ffaa00','#ff44ff','#44ffff','#ff8844','#88ff44','#aa44ff','#ffff44'];
 
+// v7.4.0 — ONE definition of what a group is. Before this, three serialisers
+// and three rebuild sites each hand-wrote `{ id, color, memberIds }`, so one
+// new field meant seven edits, and any miss showed up as "it worked until I
+// saved". Everything that writes a group to disk or rebuilds one from disk
+// goes through these three now.
+function serializeGroup(g) {
+  return { id: g.id, color: g.color, name: g.name || '', memberIds: [...g.memberIds] };
+}
+// `gd.memberIds` must already be an ARRAY of FINAL ids — each caller applies
+// its own id remap (undo has none, append-load has _remapId) before handing
+// the descriptor over.
+function makeGroupEl(gd) {
+  const borderEl = document.createElement('div');
+  borderEl.className = 'group-border';
+  borderEl.style.borderColor = gd.color;
+  canvasContent.appendChild(borderEl);
+  const labelEl = document.createElement('div');
+  labelEl.className = 'group-label';
+  labelEl.style.background = gd.color;
+  labelEl.textContent = gd.name || '';
+  labelEl.style.display = gd.name ? 'block' : 'none';
+  canvasContent.appendChild(labelEl);
+  const group = { id: gd.id, color: gd.color, name: gd.name || '', memberIds: new Set(gd.memberIds || []), borderEl: borderEl, labelEl: labelEl };
+  // mousedown must not reach the canvas, or a click on the chip starts a
+  // marquee selection instead of putting the caret in the name.
+  labelEl.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+  labelEl.addEventListener('dblclick', function (e) {
+    e.stopPropagation(); e.preventDefault(); beginGroupRename(group);
+  });
+  return group;
+}
+function disposeGroupEl(g) {
+  if (!g) return;
+  if (g.borderEl && g.borderEl.remove) g.borderEl.remove();
+  if (g.labelEl && g.labelEl.remove) g.labelEl.remove();
+}
+// v7.4.0 — the name a folder drop guesses is only a GUESS, so it has to be
+// editable: otherwise a folder called "01" is stuck being called "01".
+// Enter commits, Escape reverts, blur commits.
+function beginGroupRename(group) {
+  if (!group || !group.labelEl) return;
+  const el = group.labelEl;
+  if (el.isContentEditable) return;
+  try { pushUndo(); } catch (e) {}
+  el.contentEditable = 'true';
+  el.classList.add('editing');
+  el.focus();
+  try {
+    const r = document.createRange(); r.selectNodeContents(el);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  } catch (e) {}
+  function finish(commit) {
+    if (!el.isContentEditable) return;
+    el.contentEditable = 'false';
+    el.classList.remove('editing');
+    el.removeEventListener('keydown', onKey);
+    el.removeEventListener('blur', onBlur);
+    const txt = String(el.textContent || '').replace(/\s+/g, ' ').trim();
+    if (commit && txt) group.name = txt;
+    el.textContent = group.name || '';
+    el.style.display = group.name ? 'block' : 'none';
+    try { scheduleAutoSave(); } catch (e) {}
+  }
+  function onKey(e) {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  }
+  function onBlur() { finish(true); }
+  el.addEventListener('keydown', onKey);
+  el.addEventListener('blur', onBlur);
+}
+
 function groupSelected() {
   const sel = getSelectedItems();
   if (sel.length < 2) { toast('Select 2+ items to group'); return; }
@@ -29195,11 +29336,8 @@ function groupSelected() {
     // Create new group
     const gid = G.nextGroupId++;
     const color = GROUP_COLORS[(gid - 1) % GROUP_COLORS.length];
-    const borderEl = document.createElement('div');
-    borderEl.className = 'group-border';
-    borderEl.style.borderColor = color;
-    canvasContent.appendChild(borderEl);
-    const group = { id: gid, color, memberIds: new Set(sel.map(i => i.id)), borderEl };
+    // Manual grouping stays nameless — the chip only shows for folder groups.
+    const group = makeGroupEl({ id: gid, color: color, name: '', memberIds: sel.map(i => i.id) });
     state.groups.push(group);
   }
   updateAllGroupBorders();
@@ -29222,7 +29360,7 @@ function ungroupSelected() {
   // Remove groups with < 2 members
   state.groups = state.groups.filter(g => {
     if (groupsToRemove.has(g.id)) {
-      g.borderEl.remove();
+      disposeGroupEl(g);
       return false;
     }
     return true;
@@ -29243,7 +29381,11 @@ function updateAllGroupBorders() {
 function updateGroupBorder(group) {
   const allItems = [...state.items, ...state.texts, ...(state.todos||[]), ...(state.mindmaps||[])];
   const members = allItems.filter(i => group.memberIds.has(i.id));
-  if (members.length === 0) { group.borderEl.style.display = 'none'; return; }
+  if (members.length === 0) {
+    group.borderEl.style.display = 'none';
+    if (group.labelEl) group.labelEl.style.display = 'none';
+    return;
+  }
   // Calculate bounding box of all member items
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const m of members) {
@@ -29267,6 +29409,22 @@ function updateGroupBorder(group) {
   group.borderEl.style.width = (maxX - minX + pad * 2) + 'px';
   group.borderEl.style.height = (maxY - minY + pad * 2) + 'px';
   group.borderEl.style.borderColor = group.color;
+  // v7.4.0 — the name chip sits 4 screen px above the border's top edge and
+  // counter-scales by 1/zoom so it reads the same at 8% as at 400%.
+  // offsetHeight is the UNSCALED layout height (CSS transforms don't change
+  // it), which is exactly what the arithmetic below needs.
+  if (group.labelEl) {
+    if (!group.name) {
+      group.labelEl.style.display = 'none';
+    } else {
+      const _z = Math.max(0.02, Math.min(10, state.zoom || 1));
+      const _lh = group.labelEl.offsetHeight || 18;
+      group.labelEl.style.display = 'block';
+      group.labelEl.style.transform = 'scale(' + (1 / _z) + ')';
+      group.labelEl.style.left = (minX - pad) + 'px';
+      group.labelEl.style.top = (minY - pad - _lh - 4 / _z) + 'px';
+    }
+  }
 }
 
 function setGroupColor(color) {
@@ -29276,6 +29434,7 @@ function setGroupColor(color) {
   if (!g) return;
   g.color = color;
   g.borderEl.style.borderColor = color;
+  if (g.labelEl) g.labelEl.style.background = color;
   scheduleAutoSave();
 }
 
@@ -35719,7 +35878,7 @@ function buildManifest() {
     todos: (state.todos||[]).map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, rot: t.rot || 0, opacity: t.opacity !== undefined ? t.opacity : 1, locked: t.locked || false, title: t.title || '', items: (t.items||[]).map(it => ({ text: it.text, done: it.done })) })),
     mindmaps: (state.mindmaps||[]).map(m => ({ id: m.id, x: m.x, y: m.y, w: m.w, h: m.h, z: m.z, rot: m.rot || 0, opacity: m.opacity !== undefined ? m.opacity : 1, locked: m.locked || false, title: m.title || '', nodes: (m.nodes||[]).map(n => ({ id: n.id, text: n.text, x: n.x, y: n.y, w: n.w, h: n.h, color: n.color, textColor: n.textColor, parentId: n.parentId || null, img: n.img || null, imgW: n.imgW || 0, imgH: n.imgH || 0, audio: n.audio || null, audioName: n.audioName || null })), connections: (m.connections||[]).map(c => ({ id: c.id, from: c.from, to: c.to, color: c.color })), nextNodeId: m.nextNodeId || 1, nextConnId: m.nextConnId || 1 })),
     drawStrokes: G.drawStrokes,
-    groups: state.groups.map(g => ({ id: g.id, color: g.color, memberIds: [...g.memberIds] })),
+    groups: state.groups.map(serializeGroup),
     // v7.0.40: named views persist in .kpak, so the running order survives
     // the meeting — whoever opens the board later sees the same tape.
     views: (state.views || []).map(serializeView),
@@ -36715,7 +36874,7 @@ window.__kraftedRestoreEmergencyBackup = async function() {
     if (!data) { toast('Backup is corrupted'); return; }
     cleanupAllItems();
     state.items = []; state.texts = []; state.todos = []; state.mindmaps = [];
-    state.selected.clear(); state.groups = [];
+    state.selected.clear(); state.groups.forEach(disposeGroupEl); state.groups = [];
     restoreBoard(data, false);
     toast('Emergency backup restored');
     console.log('[EMERGENCY BACKUP] restored');
@@ -37700,7 +37859,7 @@ function serializeBoard() {
       nextNodeId: m.nextNodeId || 1, nextConnId: m.nextConnId || 1,
     })),
     drawStrokes: G.drawStrokes,
-    groups: state.groups.map(g => ({ id: g.id, color: g.color, memberIds: [...g.memberIds] })),
+    groups: state.groups.map(serializeGroup),
     views: (state.views || []).map(serializeView),
     nextViewId: G.nextViewId,
     nextGroupId: G.nextGroupId,
@@ -38410,7 +38569,7 @@ function restoreBoard(data, append) {
   // v6.8.3: only wipe existing groups on a full load. Appending used to
   // delete every group already on the canvas.
   if (!append) {
-    state.groups.forEach(g => g.borderEl.remove());
+    state.groups.forEach(disposeGroupEl);
     state.groups = [];
   }
   if (data.groups) {
@@ -38424,17 +38583,13 @@ function restoreBoard(data, append) {
       G.nextGroupId = (data.G && data.G.nextGroupId) || data.nextGroupId || (Math.max(...data.groups.map(g => g.id), 0) + 1);
     }
     data.groups.forEach(gd => {
-      const borderEl = document.createElement('div');
-      borderEl.className = 'group-border';
-      borderEl.style.borderColor = gd.color;
-      canvasContent.appendChild(borderEl);
       // v6.8.3: memberIds must go through _idRemap too (see relations above).
       // Without this, appending a board whose ids collided would leave the
       // group pointing at the pre-existing items instead of its own.
       // Group ids are renumbered when appending so two boards' groups can't
       // share an id (ungroup / border updates look groups up by id).
       const _gid = append ? (G.nextGroupId++) : gd.id;
-      state.groups.push({ id: _gid, color: gd.color, memberIds: new Set((gd.memberIds || []).map(_remapId)), borderEl });
+      state.groups.push(makeGroupEl({ id: _gid, color: gd.color, name: gd.name, memberIds: (gd.memberIds || []).map(_remapId) }));
     });
     setTimeout(() => updateAllGroupBorders(), 200);
   }
@@ -38906,7 +39061,7 @@ function newBoard() {
   state.todos = [];
   state.mindmaps = [];
   state.selected.clear();
-  state.groups.forEach(g => g.borderEl.remove());
+  state.groups.forEach(disposeGroupEl);
   state.groups = [];
   G.nextGroupId = 1;
   // v7.0.40: views name items, so they die with them. Leaving them behind

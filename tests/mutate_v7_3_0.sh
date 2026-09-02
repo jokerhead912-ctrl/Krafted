@@ -66,7 +66,10 @@ DROP_VID  = "applyImportMeta(newItem, file);"
 DROP_V_B  = "if (newItem && file && file.name) { newItem.filename = file.name; }"
 
 # ── the import toast ───────────────────────────────────────────────────────
-TOAST_TAG = "' - folder name saved as tag');"
+# v7.4.0 appended the block count to this toast, so the anchor now has to
+# reach past it. A stale anchor is SKIPPED, and a skipped mutation is a test
+# that has quietly stopped testing.
+TOAST_TAG = "' - folder name saved as tag' + _fBlockLabel);"
 TOAST_READ = "      var _segs = folderTagsFromPath(f._kraftedPath);\n"
 
 muts = [
@@ -88,7 +91,7 @@ muts = [
     ('the drop image site bypasses the writer',  DROP_GIF, DROP_GIF_B),
     ('the paste audio site bypasses the writer', PASTE_AUD, PASTE_A_B),
     ('the drop video site hand-rolls filename',  DROP_VID, DROP_V_B),
-    ('the toast stops saying the name was kept', TOAST_TAG, "...');"),
+    ('the toast stops saying the name was kept', TOAST_TAG, "' + _fBlockLabel);"),
     ('the toast stops reading the folder path',  TOAST_READ, ''),
 ]
 
