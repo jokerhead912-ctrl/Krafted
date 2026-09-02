@@ -33,13 +33,16 @@ cp Krafted/docs/sw.js $TMP/sw.js
 
 run() {   # run(label)
   local out
-  out=$(KRAFTED_HTML=$TMP/mut.html KRAFTED_SW=$TMP/sw.js $NODE Krafted/tests/test_v7047.js 2>&1 | tail -3 | tr '\n' ' ')
-  if echo "$out" | grep -q "ALL PASS"; then
-    print "  NOT CAUGHT  <- $1"
-    NOTCAUGHT=$((NOTCAUGHT + 1))
-  else
-    print "  caught      <- $1"
-  fi
+  out=$(KRAFTED_HTML=$TMP/mut.html KRAFTED_SW=$TMP/sw.js $NODE Krafted/tests/test_v7047.js 2>&1)
+  # The verdict is judged in mutlib.sh, one copy for every script here. The
+  # detector used to live inline in each of them, and it was blind: it only
+  # looked for the suite's bottom-of-file tally, so a mutation that killed the
+  # suite mid-file scored as "not caught" no matter how many `FAIL:` lines had
+  # already been printed above it. That hid 12 real catches for a release.
+  # See judge() in mutlib.sh — it accepts printed failures as evidence and
+  # reports the missing summary separately as FRAGILE.
+  if [ "$EQUIV" -eq 1 ]; then judge_equiv "$1" "$out"; else judge "$1" "$out"; fi
+  tally_judged
 }
 
 mutate() { # mutate(label, old, new, [count])
@@ -74,8 +77,14 @@ PY
   run "$1"
 }
 
+# judge()/judge_equiv()/tally_judged() live in mutlib.sh — one copy, not
+# one per script. 病根一：一个行为 N 份手写副本，每份都会各自漂移。
+. Krafted/tests/mutlib.sh
 NOTCAUGHT=0
 ANCHORFAIL=0
+CAUGHT=0
+FRAGILE=0
+EQUIV=0
 print "mutation check: v7.5.0 suite (the tape waits for you)"
 
 # ── THE DEFAULT ────────────────────────────────────────────────────────
@@ -361,3 +370,20 @@ if [ $NOTCAUGHT -eq 0 ] && [ $ANCHORFAIL -eq 0 ]; then
 else
   print "NOT CAUGHT: $NOTCAUGHT    SKIPPED (anchor): $ANCHORFAIL"
 fi
+
+# ── machine-readable verdict ─────────────────────────────────────────────
+# The one line run_all.sh reads, plus the exit code it gates on. Placed last
+# on purpose: the restore run above has to happen first. A skipped anchor
+# counts as BAD - a mutation that never ran proves nothing at all.
+if [ $NOTCAUGHT -eq 0 ] && [ $ANCHORFAIL -eq 0 ]; then
+  print "MUTVERDICT ok  holes=0 skipped=0 caught=$CAUGHT fragile=$FRAGILE"
+  if [ $FRAGILE -gt 0 ]; then
+    print ""
+    print "  WARNING: $FRAGILE mutation(s) were caught only because the suite printed"
+    print "  failures before dying. Every one of those is a top-level call that throws"
+    print "  and takes the whole file with it. Guard them and this warning goes away."
+  fi
+  exit 0
+fi
+print "MUTVERDICT BAD holes=$NOTCAUGHT skipped=$ANCHORFAIL caught=$CAUGHT fragile=$FRAGILE"
+exit 1

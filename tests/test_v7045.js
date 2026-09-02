@@ -434,6 +434,14 @@ if (api) {
   v = api.applyShortWriteCheck(mk(1000 * 1000 * 1000 - 1000 * 1000), 1000 * 1000 * 1000);
   ok(v.ok, '1 MB missing from a 1 GB board is drift, not a short write');
 
+  // The two floors are ANDed, so they only disagree in one band: a shortfall
+  // that is over 1% of the expectation but UNDER the 64 KB absolute floor.
+  // Every case above sits outside that band — 1 MB off a 1 GB board is under
+  // 1%, and 1 MB off a 10 MB board is over 64 KB — so a mutation that deletes
+  // the absolute floor was invisible to all of them. This one lands in it.
+  v = api.applyShortWriteCheck(mk(2000000 - 40000), 2000000);
+  ok(v.ok, '40 KB of drift on a 2 MB board is under the absolute floor, so it does not alarm');
+
   v = api.applyShortWriteCheck(mk(1000000), 0);
   ok(v.ok, 'an unknown expectation never alarms — the guard skips it');
 
@@ -471,8 +479,13 @@ if (api) {
   eq(calls.toasts.filter(function (t) { return t.indexOf('Saved ✔') >= 0; }).length, 0,
      'and no "Saved ✔" toast is ever shown for it');
   eq(bodyEl('krafted-save-alarm') !== null, true, 'instead a blocking alarm is raised');
-  ok(bodyEl('krafted-save-banner') !== null, 'and a persistent banner is left on screen');
-  has(bodyEl('krafted-save-banner').className, 'is-fatal', 'the banner is marked fatal, not a warning');
+  const banner = bodyEl('krafted-save-banner');
+  ok(banner !== null, 'and a persistent banner is left on screen');
+  // NOT `bodyEl(...).className`: when a mutation takes the banner away this
+  // threw, the throw killed the whole suite, and the run scored UNPROVEN —
+  // nobody was ever asked. Pass '' instead: the assertion still goes red,
+  // it just reports a readable FAIL instead of a stack trace.
+  has(banner ? banner.className : '', 'is-fatal', 'the banner is marked fatal, not a warning');
   eq(calls.backup, 1, 'and the manifest is still backed up, because that is when it matters');
 
   // (c) valid container, missing media: saved, but not silently.
@@ -488,8 +501,8 @@ if (api) {
      'but it does NOT get the plain success toast');
   const warn = bodyEl('krafted-save-banner');
   ok(warn !== null, 'it gets a persistent banner instead of a 2-second toast');
-  has(warn.className, 'is-warn', 'the banner is marked a warning, not fatal');
-  has(warn.innerHTML, '3', 'and it says how many files were lost');
+  has(warn ? warn.className : '', 'is-warn', 'the banner is marked a warning, not fatal');
+  has(warn ? warn.innerHTML : '', '3', 'and it says how many files were lost');
 
   // (d) a short write is a failure, not a caveat.
   resetCalls(); clearBody(); api._clearSaveBanner();
@@ -514,7 +527,7 @@ if (api) {
   eq(r, true, 'the fallback copy itself is good');
   const dw = bodyEl('krafted-save-banner');
   ok(dw !== null, 'but the damage to the chosen destination is still reported');
-  has(dw.innerHTML, 'emptied', 'naming what happened to the original file');
+  has(dw ? dw.innerHTML : '', 'emptied', 'naming what happened to the original file');
 }
 
 // ── 5. The alarm itself ─────────────────────────────────────────────────
@@ -525,7 +538,7 @@ if (api) {
   api._showSaveAlarm({ fname: 'myboard.kpak', bytes: 0, prevBytes: 251000000, reason: 'the file was written with 0 bytes' });
   const alarm = bodyEl('krafted-save-alarm');
   ok(alarm !== null, 'the alarm is put on screen');
-  const html = alarm.innerHTML;
+  const html = alarm ? alarm.innerHTML : '';
   has(html, 'myboard.kpak', 'it names the file');
   has(html, '0 B', 'it says how many bytes actually landed');
   has(html, '239.4 MB', 'it says how big the file used to be, so the loss is concrete');
@@ -546,8 +559,8 @@ if (api) {
   ok(acts.length > 0, 'the alarm offers recovery actions');
   const btns = acts.length ? acts[0].children : [];
   eq(btns.length, 2, 'without a verified copy in hand there are two: save a copy, and dismiss');
-  has(btns[0].className, 'primary', 'the recovery action is the primary button');
-  eq(btns[0].textContent, 'Save a copy…', 'and it is offered as saving a copy');
+  has(btns.length ? btns[0].className : '', 'primary', 'the recovery action is the primary button');
+  eq(btns.length ? btns[0].textContent : '', 'Save a copy…', 'and it is offered as saving a copy');
 
   // With a verified copy held, a third way out appears.
   clearBody(); api._clearSaveBanner();
@@ -592,7 +605,24 @@ if (api) {
         'the old fire-and-forget backup call is gone, it now belongs to _finishSave');
   eq((saveCode.match(/verifyKpakOutput\(/g) || []).length, 2,
      'both write paths ask the shared verifier — once for the stream, once for the blob');
-  hasnt(saveCode, "'Saved ✔ '", 'saveBoardV6 can no longer print the success toast itself');
+  // Asking the verifier is not enough: the answer has to reach _finishSave,
+  // which is what decides the toast, the banner and the alarm. A mutation that
+  // replaced the stream path's call with a hardcoded `true` slipped past every
+  // assertion above, because they all only look at the verifier.
+  has(saveCode, 'const streamGood = await _finishSave({',
+      'the STREAM path reports through _finishSave — it does not assume success');
+  // This app spells the tick two ways — as a literal backslash-u2714 escape
+  // AND as a real U+2714 character (both occur in the source today). The
+  // mutation that re-adds the toast uses the ESCAPE spelling, so a hasnt()
+  // written against the real character never once saw it and the mutation
+  // went uncaught. Pin both spellings.
+  // (Both needles are built, never typed: writing a backslash-u escape into
+  // this file turns into six literal characters, which is the same bug.)
+  const TICK = String.fromCharCode(0x2714);
+  const SAVED_ESC = "'Saved " + String.fromCharCode(92) + "u2714 '";
+  const SAVED_CHR = "'Saved " + TICK + " '";
+  hasnt(saveCode, SAVED_ESC, 'saveBoardV6 can no longer print the success toast itself (escape spelling)');
+  hasnt(saveCode, SAVED_CHR, 'saveBoardV6 can no longer print the success toast itself (real-character spelling)');
   hasnt(saveCode, "'已保存 ✔ '", 'nor its Chinese form');
   has(saveCode, '_finishSave({', 'it hands the verdict to the one place that reports');
   eq((saveCode.match(/_finishSave\(/g) || []).length, 2,

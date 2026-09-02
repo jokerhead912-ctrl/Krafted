@@ -67,6 +67,20 @@ function occs(hay, needle) {
   return n;
 }
 
+// Read the tape position WITHOUT dereferencing a tape that may not be there.
+//
+// NOT `b.st._present.index` inline. That expression is evaluated as an
+// ARGUMENT, before eq() ever runs, so when a mutation stops the tape early the
+// whole module dies on `TypeError: Cannot read properties of null` and not a
+// single FAIL is printed. Five mutations that this suite had already caught
+// were reported as holes that way (2026-09-02), and the assertions that
+// covered them — including 'a manual tape holds on the last shot' — had been
+// sitting here the whole time, unable to speak.
+//
+// With this, a stopped tape is `null`, which compares unequal to 2 and prints
+// a FAIL like any other.
+function pidx(b) { return b.st._present ? b.st._present.index : null; }
+
 function fnFull(name, s) {
   let a = s.indexOf('async function ' + name + '(');
   if (a < 0) a = s.indexOf('function ' + name + '(');
@@ -323,19 +337,19 @@ console.log('');
   eq(advanceCount(), 0, 'NO ADVANCE IS SCHEDULED — the tape does not advance on its own');
   eq(TIMERS.length, 1, 'the only timer is the deferred takeover handler');
   eq(TIMERS[0].ms, 0, 'and that one is the 0ms deferral, not a shot timer');
-  eq(b.st._present.index, 0, 'it opens on the first shot');
+  eq(pidx(b), 0, 'it opens on the first shot');
   eq(b.calls.goto.length, 1, 'it flew to the first shot');
   eq(b.calls.goto[0], 0, 'it flew to shot 0');
   eq(b.calls.uncull.length, 1, 'the tape un-culls before it flies the camera');
 
   // Advance by hand, the way the user described presenting.
   b.api.presentAdvance(1);
-  eq(b.st._present.index, 1, 'pressing next moves to shot 2');
+  eq(pidx(b), 1, 'pressing next moves to shot 2');
   eq(advanceCount(), 0, 'ADVANCING BY HAND SCHEDULES NO TIMER — the old build restarted the clock here');
 
   // And it stays put. This is the assertion the whole feature exists for.
   fireAll();
-  eq(b.st._present.index, 1, 'firing every pending timer leaves the shot exactly where it was');
+  eq(pidx(b), 1, 'firing every pending timer leaves the shot exactly where it was');
   ok(!!b.st._present, 'the tape did not end on its own');
 }
 
@@ -358,26 +372,26 @@ console.log('');
   const b = build(views(4, true));
   b.api.startPresent();
   b.api.presentAdvance(1);              // sitting on shot 2
-  const before = b.st._present.index;
+  const before = pidx(b);
 
   b.api.presentToggleAuto();
   eq(b.st._present.auto, true, 'A turns auto-play on');
   eq(advanceCount(), 1, 'auto-play schedules exactly one advance');
   ok(TIMERS.some(function (t) { return t.ms === SPEC_CYCLE_MS; }),
      'the scheduled delay is a whole flight + dwell (' + SPEC_CYCLE_MS + 'ms)');
-  eq(b.st._present.index, before, 'turning auto-play on does not move the tape');
+  eq(pidx(b), before, 'turning auto-play on does not move the tape');
 
   fireAll();
-  eq(b.st._present.index, 2, 'the tape advanced on the clock');
+  eq(pidx(b), 2, 'the tape advanced on the clock');
   eq(advanceCount(), 1, 'auto-play keeps going');
 
   // Taking back control mid-reel must not cost the current shot.
   b.api.presentToggleAuto();
   eq(b.st._present.auto, false, 'A turns auto-play off');
   eq(advanceCount(), 0, 'the pending advance is cancelled');
-  eq(b.st._present.index, 2, 'taking back control leaves the tape on the shot it was on');
+  eq(pidx(b), 2, 'taking back control leaves the tape on the shot it was on');
   fireAll();
-  eq(b.st._present.index, 2, 'and it stays there');
+  eq(pidx(b), 2, 'and it stays there');
 
   has(b.calls.toast.join(' | '), 'Auto-play off', 'switching auto-play off says so');
 }
@@ -404,7 +418,7 @@ console.log('');
   b.api.startPresent();
   b.api.presentGoTo(2);
   b.api.presentAdvance(1);
-  eq(b.st._present.index, 2, 'a manual tape holds on the last shot');
+  eq(pidx(b), 2, 'a manual tape holds on the last shot');
   ok(!!b.st._present, 'a manual tape does not end at the last shot');
   eq(advanceCount(), 0, 'and it schedules nothing');
   has(b.n('present-hint').textContent, 'Last shot', 'the HUD says it is the last shot');
@@ -427,7 +441,7 @@ console.log('');
   const b = build(views(3, true));
   b.api.startPresent();
   b.api.presentAdvance(-1);
-  eq(b.st._present.index, 0, 'going back from the first shot clamps to the first');
+  eq(pidx(b), 0, 'going back from the first shot clamps to the first');
   ok(!!b.st._present, 'and does not end the tape');
 }
 
@@ -438,12 +452,12 @@ console.log('');
   const b = build(views(5, true));
   b.api.startPresent();
   b.api.presentGoTo(3);
-  eq(b.st._present.index, 3, 'presentGoTo jumps to a shot');
+  eq(pidx(b), 3, 'presentGoTo jumps to a shot');
   eq(b.calls.goto[b.calls.goto.length - 1], 3, 'and flies there');
   b.api.presentGoTo(99);
-  eq(b.st._present.index, 4, 'presentGoTo clamps past the end');
+  eq(pidx(b), 4, 'presentGoTo clamps past the end');
   b.api.presentGoTo(-7);
-  eq(b.st._present.index, 0, 'presentGoTo clamps before the start');
+  eq(pidx(b), 0, 'presentGoTo clamps before the start');
 
   b.api.presentToggleAuto(true);
   b.api.presentGoTo(2);
@@ -464,9 +478,9 @@ console.log('');
 
   // Forward, including what a physical presenter remote actually sends.
   [' ', 'ArrowRight', 'ArrowDown', 'PageDown', 'Enter', 'n', 'N'].forEach(function (k) {
-    const before = b.st._present.index;
+    const before = pidx(b);
     const ev = b.press(k);
-    eq(b.st._present.index, Math.min(4, before + 1),
+    eq(pidx(b), Math.min(4, before + 1),
        JSON.stringify(k) + ' advances the tape');
     ok(ev.defaultPrevented, JSON.stringify(k) + ' is consumed, so the board never sees it');
     ok(ev.stopped, JSON.stringify(k) + ' does not reach any board hotkey');
@@ -480,7 +494,7 @@ console.log('');
   ['ArrowLeft', 'ArrowUp', 'PageUp', 'p', 'P'].forEach(function (k) {
     b.api.presentGoTo(3);
     const ev = b.press(k);
-    eq(b.st._present.index, 2, JSON.stringify(k) + ' steps back');
+    eq(pidx(b), 2, JSON.stringify(k) + ' steps back');
     ok(ev.defaultPrevented, JSON.stringify(k) + ' is consumed, so the board never sees it');
     ok(ev.stopped, JSON.stringify(k) + ' does not reach any board hotkey');
   });
@@ -495,17 +509,17 @@ console.log('');
 
   // Jumps.
   const ev3 = b.press('3');
-  eq(b.st._present.index, 2, '3 jumps to the third shot');
+  eq(pidx(b), 2, '3 jumps to the third shot');
   ok(ev3.defaultPrevented && ev3.stopped, 'a number key is consumed');
   b.press('5');
-  eq(b.st._present.index, 4, '5 jumps to the fifth shot');
+  eq(pidx(b), 4, '5 jumps to the fifth shot');
   b.press('0');
-  eq(b.st._present.index, 4, '0 means the tenth shot, clamped to the last one here');
+  eq(pidx(b), 4, '0 means the tenth shot, clamped to the last one here');
   const evH = b.press('Home');
-  eq(b.st._present.index, 0, 'Home goes to the first shot');
+  eq(pidx(b), 0, 'Home goes to the first shot');
   ok(evH.defaultPrevented && evH.stopped, 'Home is consumed');
   const evE = b.press('End');
-  eq(b.st._present.index, 4, 'End goes to the last shot');
+  eq(pidx(b), 4, 'End goes to the last shot');
   ok(evE.defaultPrevented && evE.stopped, 'End is consumed');
 
   // Escape ends it.
@@ -521,7 +535,7 @@ console.log('');
   b.api.startPresent();
   b.api.presentGoTo(1);
   const ev = b.press('q');
-  eq(b.st._present.index, 1, 'an unbound key does not move the tape');
+  eq(pidx(b), 1, 'an unbound key does not move the tape');
   ok(!ev.defaultPrevented, 'an unbound key is left alone');
   ok(!ev.stopped, 'an unbound key still reaches the board');
 }
@@ -539,7 +553,7 @@ console.log('');
    [' ', { metaKey: true }], ['ArrowRight', { ctrlKey: true }],
    ['Escape', { metaKey: true }]].forEach(function (pair) {
     const ev = b.press(pair[0], pair[1]);
-    eq(b.st._present.index, 1, 'Cmd/Ctrl/Alt+' + JSON.stringify(pair[0]) + ' does not move the tape');
+    eq(pidx(b), 1, 'Cmd/Ctrl/Alt+' + JSON.stringify(pair[0]) + ' does not move the tape');
     ok(!ev.defaultPrevented, 'Cmd/Ctrl/Alt+' + JSON.stringify(pair[0]) + ' is left for the browser');
   });
   ok(!!b.st._present, 'the tape survived every browser shortcut');
@@ -556,24 +570,24 @@ console.log('');
   b.doc.activeElement = field;
   [' ', '3', 'n', 'a', 'ArrowRight', 'Home', 'End', 'Escape'].forEach(function (k) {
     b.press(k);
-    eq(b.st._present.index, 1, 'a focused input keeps ' + JSON.stringify(k) + ' for itself');
+    eq(pidx(b), 1, 'a focused input keeps ' + JSON.stringify(k) + ' for itself');
   });
   ok(!!b.st._present, 'the tape survived typing');
 
   const ta = reg('some-area', [], 'TEXTAREA');
   b.doc.activeElement = ta;
   b.press(' ');
-  eq(b.st._present.index, 1, 'a focused textarea keeps Space too');
+  eq(pidx(b), 1, 'a focused textarea keeps Space too');
 
   const ce = reg('some-ce', [], 'DIV');
   ce.contentEditable = 'true';
   b.doc.activeElement = ce;
   b.press(' ');
-  eq(b.st._present.index, 1, 'a focused contenteditable keeps Space too');
+  eq(pidx(b), 1, 'a focused contenteditable keeps Space too');
 
   b.doc.activeElement = null;
   b.press(' ');
-  eq(b.st._present.index, 2, 'with nothing focused the tape advances again');
+  eq(pidx(b), 2, 'with nothing focused the tape advances again');
 }
 
 // ═══════════════════════════════════════════════════════════════════════

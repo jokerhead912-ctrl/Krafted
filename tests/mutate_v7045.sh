@@ -24,13 +24,16 @@ cp Krafted/docs/sw.js $TMP/sw.js
 
 run() {   # run(label)
   local out
-  out=$(KRAFTED_HTML=$TMP/mut.html KRAFTED_SW=$TMP/sw.js $NODE Krafted/tests/test_v7045.js 2>&1 | tail -3 | tr '\n' ' ')
-  if echo "$out" | grep -q "0 failed"; then
-    print "  NOT CAUGHT  <- $1"
-    NOTCAUGHT=$((NOTCAUGHT + 1))
-  else
-    print "  caught      <- $1"
-  fi
+  out=$(KRAFTED_HTML=$TMP/mut.html KRAFTED_SW=$TMP/sw.js $NODE Krafted/tests/test_v7045.js 2>&1)
+  # The verdict is judged in mutlib.sh, one copy for every script here. The
+  # detector used to live inline in each of them, and it was blind: it only
+  # looked for the suite's bottom-of-file tally, so a mutation that killed the
+  # suite mid-file scored as "not caught" no matter how many `FAIL:` lines had
+  # already been printed above it. That hid 12 real catches for a release.
+  # See judge() in mutlib.sh — it accepts printed failures as evidence and
+  # reports the missing summary separately as FRAGILE.
+  if [ "$EQUIV" -eq 1 ]; then judge_equiv "$1" "$out"; else judge "$1" "$out"; fi
+  tally_judged
 }
 
 mutate() { # mutate(label, python_old, python_new)
@@ -49,8 +52,14 @@ PY
   run "$1"
 }
 
+# mutate_equivalent() lives in mutlib.sh — one copy, not one per script.
+. Krafted/tests/mutlib.sh
+
 NOTCAUGHT=0
 ANCHORFAIL=0
+EQUIV=0
+CAUGHT=0
+FRAGILE=0
 print "mutation check: v7.0.46 suite (a 0 KB save can no longer report success)"
 
 # ── THE REPORTED BUG, reintroduced five different ways ──────────────────
@@ -103,7 +112,12 @@ mutate "every byte of drift alarms (thresholds dropped)" \
   "  if (shortBy > 65536 && shortBy > expectedBytes * 0.01) {" \
   "  if (shortBy > 0) {"
 
-mutate "the absolute floor is dropped — 1 MB missing from 1 GB alarms" \
+# Re-labelled 2026-09-02. The old label ("1 MB missing from 1 GB alarms") was
+# wrong: 1 MB is under 1% of 1 GB, so BOTH builds stay silent on that case and
+# the mutation proves nothing there. The two floors are ANDed, so they only
+# disagree in one band — a shortfall over 1% of the expectation but UNDER the
+# 64 KB absolute floor (so: boards under ~6.4 MB). That is the case to test.
+mutate "the absolute floor is dropped — 40 KB of drift on a 2 MB board alarms" \
   "  if (shortBy > 65536 && shortBy > expectedBytes * 0.01) {" \
   "  if (shortBy > expectedBytes * 0.01) {"
 
@@ -111,7 +125,13 @@ mutate "the 1% floor is dropped — 200 bytes of drift on 1 MB alarms" \
   "  if (shortBy > 65536 && shortBy > expectedBytes * 0.01) {" \
   "  if (shortBy > 65536) {"
 
-mutate "an unknown expected size alarms anyway" \
+# EQUIVALENT MUTANT (verified 2026-09-02 by executing both builds over 91
+# input pairs — identical output). The guard is provably redundant: the alarm
+# needs `shortBy > 65536`, and shortBy = expectedBytes - v.size, so whenever
+# !(expectedBytes > 0) the shortfall is <= 0 (or NaN) and can never be > 65536.
+# It is defence in depth against a caller that passes a nonsense expectation,
+# not dead code — if shortBy's definition ever changes, `STALE EQUIV` says so.
+mutate_equivalent "an unknown expected size alarms anyway" \
   "  if (!v || !v.ok || !(expectedBytes > 0)) return v;" \
   "  if (!v || !v.ok) return v;"
 
@@ -338,3 +358,20 @@ fi
 print ""
 print "restore: re-running the suite against the untouched dev file"
 $NODE Krafted/tests/test_v7045.js 2>&1 | tail -2
+
+# ── machine-readable verdict ─────────────────────────────────────────────
+# The one line run_all.sh reads, plus the exit code it gates on. Placed last
+# on purpose: the restore run above has to happen first. A skipped anchor
+# counts as BAD - a mutation that never ran proves nothing at all.
+if [ $NOTCAUGHT -eq 0 ] && [ $ANCHORFAIL -eq 0 ]; then
+  print "MUTVERDICT ok  holes=0 skipped=0 caught=$CAUGHT fragile=$FRAGILE"
+  if [ $FRAGILE -gt 0 ]; then
+    print ""
+    print "  WARNING: $FRAGILE mutation(s) were caught only because the suite printed"
+    print "  failures before dying. Every one of those is a top-level call that throws"
+    print "  and takes the whole file with it. Guard them and this warning goes away."
+  fi
+  exit 0
+fi
+print "MUTVERDICT BAD holes=$NOTCAUGHT skipped=$ANCHORFAIL caught=$CAUGHT fragile=$FRAGILE"
+exit 1

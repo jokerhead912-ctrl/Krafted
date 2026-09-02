@@ -161,4 +161,13 @@ for label, old, new in muts:
 shutil.copy2(BAK, SRC)
 print('')
 print('---- %d/%d caught, %d skipped (anchor)' % (caught, len(muts), skipped))
+# ── machine-readable verdict ─────────────────────────────────────────────
+# The one line run_all.sh reads, plus the exit code it gates on. A skipped
+# anchor counts as BAD: a mutation that never ran proves nothing at all.
+_holes = len(muts) - caught - skipped
+print('MUTVERDICT %s holes=%d skipped=%d caught=%d total=%d'
+      % ('ok' if (_holes == 0 and skipped == 0) else 'BAD',
+         _holes, skipped, caught, len(muts)))
+sys.exit(0 if (_holes == 0 and skipped == 0) else 1)
+
 PYEOF

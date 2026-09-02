@@ -20,13 +20,16 @@ cp Krafted/docs/sw.js $TMP/sw.js
 
 run() {   # run(label)
   local out
-  out=$(KRAFTED_HTML=$TMP/mut.html KRAFTED_SW=$TMP/sw.js $NODE Krafted/tests/test_v7044.js 2>&1 | tail -3 | tr '\n' ' ')
-  if echo "$out" | grep -q "0 failed"; then
-    print "  NOT CAUGHT  <- $1"
-    NOTCAUGHT=$((NOTCAUGHT + 1))
-  else
-    print "  caught      <- $1"
-  fi
+  out=$(KRAFTED_HTML=$TMP/mut.html KRAFTED_SW=$TMP/sw.js $NODE Krafted/tests/test_v7044.js 2>&1)
+  # The verdict is judged in mutlib.sh, one copy for every script here. The
+  # detector used to live inline in each of them, and it was blind: it only
+  # looked for the suite's bottom-of-file tally, so a mutation that killed the
+  # suite mid-file scored as "not caught" no matter how many `FAIL:` lines had
+  # already been printed above it. That hid 12 real catches for a release.
+  # See judge() in mutlib.sh — it accepts printed failures as evidence and
+  # reports the missing summary separately as FRAGILE.
+  if [ "$EQUIV" -eq 1 ]; then judge_equiv "$1" "$out"; else judge "$1" "$out"; fi
+  tally_judged
 }
 
 mutate() { # mutate(label, python_old, python_new)
@@ -45,8 +48,14 @@ PY
   run "$1"
 }
 
+# mutate_equivalent() lives in mutlib.sh — one copy, not one per script.
+. Krafted/tests/mutlib.sh
+
 NOTCAUGHT=0
 ANCHORFAIL=0
+EQUIV=0
+CAUGHT=0
+FRAGILE=0
 print "mutation check: v7.0.44 suite (trim range that can grow + a real reset)"
 
 # ── the reported bug, reintroduced three different ways ───────────────────
@@ -109,7 +118,16 @@ mutate "TRIM_MIN_GAP widened to a fifth of a second" \
   "var TRIM_MIN_GAP = 0.05;" \
   "var TRIM_MIN_GAP = 0.2;"
 
-mutate "planTrimMark accepts a NaN duration" \
+# EQUIVALENT MUTANT (verified 2026-09-02 by executing both versions).
+# planTrimMark's own guard is redundant while clampTrimMark carries the
+# identical `if (!isFinite(dur) || dur <= 0) return null;` two calls later:
+# delete the upper one and clampTrimMark still answers NaN / 0 / negative with
+# null, so `if (val == null) return null;` fires and planTrimMark returns null
+# exactly as before. Proven over 9 inputs (NaN, 0, -1, normal, and the conflict
+# branch): the two builds printed identical output.
+# It is defence in depth, not dead code — if clampTrimMark's guard is ever
+# removed, this line becomes load-bearing and `STALE EQUIV` will say so.
+mutate_equivalent "planTrimMark accepts a NaN duration" \
   "function planTrimMark(it, which, t, dur) {
   if (!isFinite(dur) || dur <= 0) return null;" \
   "function planTrimMark(it, which, t, dur) {"
@@ -267,3 +285,20 @@ fi
 print ""
 print "restore: re-running the suite against the untouched dev file"
 $NODE Krafted/tests/test_v7044.js 2>&1 | tail -2
+
+# ── machine-readable verdict ─────────────────────────────────────────────
+# The one line run_all.sh reads, plus the exit code it gates on. Placed last
+# on purpose: the restore run above has to happen first. A skipped anchor
+# counts as BAD - a mutation that never ran proves nothing at all.
+if [ $NOTCAUGHT -eq 0 ] && [ $ANCHORFAIL -eq 0 ]; then
+  print "MUTVERDICT ok  holes=0 skipped=0 caught=$CAUGHT fragile=$FRAGILE"
+  if [ $FRAGILE -gt 0 ]; then
+    print ""
+    print "  WARNING: $FRAGILE mutation(s) were caught only because the suite printed"
+    print "  failures before dying. Every one of those is a top-level call that throws"
+    print "  and takes the whole file with it. Guard them and this warning goes away."
+  fi
+  exit 0
+fi
+print "MUTVERDICT BAD holes=$NOTCAUGHT skipped=$ANCHORFAIL caught=$CAUGHT fragile=$FRAGILE"
+exit 1

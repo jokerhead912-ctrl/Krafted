@@ -11,13 +11,31 @@ mkdir -p $TMP
 cp kraftpub-dev.html $TMP/mut.html
 cp Krafted/docs/sw.js $TMP/sw.js
 
+NOTCAUGHT=0
+ANCHORFAIL=0
+
 run() {   # run(label)
   local out
-  out=$(KRAFTED_HTML=$TMP/mut.html KRAFTED_SW=$TMP/sw.js $NODE Krafted/tests/test_v7040.js 2>&1 | tail -3 | tr '\n' ' ')
-  if echo "$out" | grep -q "ALL PASS"; then
+  out=$(KRAFTED_HTML=$TMP/mut.html KRAFTED_SW=$TMP/sw.js $NODE Krafted/tests/test_v7040.js 2>&1)
+  # A catch has to be PROVEN, not assumed from the absence of a pass.
+  #   - "did it say ALL PASS" also scores a CRASH as a catch: a suite that
+  #     dies before printing anything never says it either.
+  #   - "did it say 0 failed" is worse. test_v7044 and test_v7045 never print
+  #     that string at all, so all 82 of their mutations were scored "caught"
+  #     without the suite ever being asked. Proven 2026-09-02 by running the
+  #     detector against UNMUTATED source: both of them said "caught".
+  # Every suite here prints a non-zero failure count when it fails, so that
+  # count is the only signal worth trusting. NOTE: -E with a bare | . In this
+  # shell `\|` is NOT alternation.
+  if print -r -- "$out" | grep -qE "FAILURES: [1-9]|[0-9]*[1-9][0-9]* (failed|FAILED)"; then
+    print "  caught      $(print -r -- "$out" | grep -oE "FAILURES: [0-9]+|[0-9]+ (failed|FAILED)" | head -1)  <- $1"
+  elif print -r -- "$out" | grep -qE "ALL PASS"; then
     print "  NOT CAUGHT  <- $1"
+    NOTCAUGHT=$((NOTCAUGHT + 1))
   else
-    print "  caught      ${out#*assertions) }   <- $1"
+    print "  UNPROVEN    <- $1"
+    print -r -- "$out" | tail -4 | sed 's/^/                /'
+    NOTCAUGHT=$((NOTCAUGHT + 1))
   fi
 }
 
@@ -33,7 +51,7 @@ if n != 1:
     print('    !! anchor matched %d times' % n); sys.exit(2)
 open(p, 'w', encoding='utf-8').write(s.replace(old, new, 1))
 PY
-  if [ $? -ne 0 ]; then print "  SKIPPED (anchor)  <- $1"; return; fi
+  if [ $? -ne 0 ]; then print "  SKIPPED (anchor)  <- $1"; ANCHORFAIL=$((ANCHORFAIL + 1)); return; fi
   run "$1"
 }
 
@@ -120,3 +138,14 @@ print "restoring…"
 cp kraftpub-dev.html $TMP/mut.html
 KRAFTED_HTML=$TMP/mut.html KRAFTED_SW=$TMP/sw.js $NODE Krafted/tests/test_v7040.js 2>&1 | tail -2
 rm -rf $TMP
+
+# ── machine-readable verdict ─────────────────────────────────────────────
+# The one line run_all.sh reads, plus the exit code it gates on. Placed last
+# on purpose: the restore run above has to happen first. A skipped anchor
+# counts as BAD - a mutation that never ran proves nothing at all.
+if [ $NOTCAUGHT -eq 0 ] && [ $ANCHORFAIL -eq 0 ]; then
+  print "MUTVERDICT ok  holes=0 skipped=0"
+  exit 0
+fi
+print "MUTVERDICT BAD holes=$NOTCAUGHT skipped=$ANCHORFAIL"
+exit 1

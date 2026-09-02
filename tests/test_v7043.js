@@ -121,9 +121,17 @@ function makeFakeKS(opts) {
       store.set(String(k), b);
       return Promise.resolve(true);
     },
+    // failGetKeys rejects only the listed keys, so a board can come back HALF
+    // recovered. Added 2026-09-02 because failGet alone (every read fails)
+    // cannot tell two builds apart: with all reads failing, the outer .catch
+    // marks everything lost and returns exactly the count the per-item .catch
+    // would have. The difference only exists when some reads succeed.
     getMediaBlob: function (k) {
       log.push('get:' + k);
       if (opts.failGet) return Promise.reject(new Error('read error'));
+      if ((opts.failGetKeys || []).indexOf(String(k)) >= 0) {
+        return Promise.reject(new Error('read error'));
+      }
       return Promise.resolve(store.has(String(k)) ? store.get(String(k)) : null);
     },
     removeMediaBlob: function (k) {
@@ -411,6 +419,33 @@ function shippedSrcExpr() {
     const res = await F.rehydrateAutosaveMedia(data);
     eq(res.lost, 1, 'a failing read counts as lost rather than throwing');
     eq(data.items[0].src, '', 'a failing read still clears the sentinel');
+  }
+
+  // 5e-ii. ONE bad blob must not sink the whole board.
+  //
+  // This case exists because 5e could not tell the difference. With a single
+  // item, dropping the per-item .catch is invisible: the outer .catch also
+  // marks everything lost and hands back the same count. It only shows up when
+  // some reads succeed — then the outer catch reports every file as lost even
+  // though the good ones rehydrated fine.
+  //
+  // Verified by execution, not by reading: 8 input matrices run through both
+  // builds. Identical on 5 (all-fail, all-fine, single-item), different on 3
+  // (any board where a strict subset of reads fails): lost=1 vs lost=2.
+  {
+    const KS = makeFakeKS({ failGetKeys: ['2'], store: makeStore([[1, { __tag: 'one' }]]) });
+    const F = buildFns(env({ KS: KS }));
+    const data = {
+      items: [
+        { id: 1, src: P + '1' },
+        { id: 2, src: P + '2', isVideo: true },
+      ],
+    };
+    const res = await F.rehydrateAutosaveMedia(data);
+    eq(data.items[0].src, 'blob:minted/one',
+       'the file that read fine is NOT collateral damage from the one that did not');
+    eq(data.items[1].src, '', 'the file that failed is cleared');
+    eq(res.lost, 1, 'ONE unreadable file is reported lost, not the whole board');
   }
 
   // 5f. non-sentinel srcs are never touched

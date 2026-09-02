@@ -223,6 +223,26 @@ function seg(it) { return (it.trimEnd || EXPECT_DUR) - (it.trimStart || 0); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// 1b. markIsSet — the conflict rule asks this before it clears anything.
+//     Mutation "markIsSet claims everything is set" used to sail through:
+//     the suite exposed the function but never once called it.
+// ═══════════════════════════════════════════════════════════════════════
+{
+  const blank = { trimStart: 0, trimEnd: 0 };
+  eq(api.markIsSet(blank, 'in', EXPECT_DUR), false,
+     'an unset in point is NOT set — otherwise every press "clears" a mark that was never there');
+  eq(api.markIsSet(blank, 'out', EXPECT_DUR), false, 'an out point on the clip edge is NOT set');
+  eq(api.markIsSet({ trimStart: 0, trimEnd: EXPECT_DUR }, 'out', EXPECT_DUR), false,
+     'an out point sitting ON the clip edge is not set either');
+  eq(api.markIsSet({ trimStart: 10, trimEnd: 0 }, 'in', EXPECT_DUR), true, 'a real in point IS set');
+  eq(api.markIsSet({ trimStart: 0, trimEnd: 40 }, 'out', EXPECT_DUR), true, 'a real out point IS set');
+  // The 'out' half is the one the data model makes subtle: it is set only
+  // when it is strictly inside the clip, because the edge spells "unset".
+  eq(api.markIsSet({ trimStart: 0, trimEnd: 0.0005 }, 'in', EXPECT_DUR), false,
+     'an in point under the 0.001 epsilon still counts as unset');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // 2. applyTrimPlan — clearing sets the far edge to the clip boundary
 // ═══════════════════════════════════════════════════════════════════════
 {
@@ -247,8 +267,28 @@ function seg(it) { return (it.trimEnd || EXPECT_DUR) - (it.trimStart || 0); }
   near(c.trimEnd, 25, 1e-9, 'an ordinary plan delegates to applyTrimMark');
   eq(c.trimStart, 10, 'and leaves the other edge alone');
 
-  api.applyTrimPlan({ trimStart: 0, trimEnd: 0 }, null, EXPECT_DUR);
-  ok(true, 'a null plan is ignored instead of throwing');
+  // This used to be `ok(true, 'a null plan is ignored instead of throwing')`
+  // — an assertion that asserts `true`. The mutation that deletes applyTrimPlan's
+  // `if (!plan) return;` makes this throw, the throw killed the whole suite, and
+  // the run was scored UNPROVEN: nobody was ever asked. Catch it and assert.
+  const nullSafe = { trimStart: 7, trimEnd: 42 };
+  let nullThrew = null;
+  try { api.applyTrimPlan(nullSafe, null, EXPECT_DUR); }
+  catch (e) { nullThrew = e; }
+  ok(nullThrew === null, 'a null plan is ignored instead of throwing'
+     + (nullThrew ? ' — it threw: ' + nullThrew.message : ''));
+  ok(nullSafe.trimStart === 7 && nullSafe.trimEnd === 42,
+     'and it leaves the item alone, rather than half-applying a plan that is not there');
+
+  // Every case above marks AT the playhead, so val === currentTime and a
+  // mutation that drags the playhead onto the mark is invisible (that was
+  // the real v7.0.44 bug, and the mutation "THE PLAYHEAD DRAG IS BACK" went
+  // uncaught for exactly this reason). Mark somewhere the playhead is not.
+  const drift = makeItem({ t: 10 });
+  api.applyTrimMark(drift, 'in', 30);
+  near(drift.trimStart, 30, 1e-9, 'the mark lands where it was asked to');
+  eq(drift.video.currentTime, 10,
+     'MARKING DOES NOT DRAG THE PLAYHEAD — it stays at 10, it does not follow the mark to 30');
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -486,6 +526,11 @@ function seg(it) { return (it.trimEnd || EXPECT_DUR) - (it.trimStart || 0); }
   ok(gateCode.indexOf('clearTrimMark(') >= 0, 'Shift+I / Shift+O reach clearTrimMark');
   ok(gateCode.indexOf('trimHotkey(') >= 0, 'the bare keys still MARK');
   ok(gateCode.indexOf('e.shiftKey') >= 0, 'and the two are told apart by shiftKey');
+  // Those three are existence checks: the mutation "the bare keys clear
+  // instead of marking" only SWAPS the two branches, so all three still
+  // passed. Pin the pairing itself, not the presence of the names.
+  ok(/e\.shiftKey \? clearTrimMark\(_ioWhich\) : trimHotkey\(_ioWhich\)/.test(gateCode),
+     'Shift = CLEAR and bare key = MARK, paired in that order — not swapped');
   ok(/\.toLowerCase\(\)/.test(gateCode), 'the key is lowercased, so both "i" and Shift+"I" work');
   // The guard has to be the CONDITION, not just a variable that happens to
   // exist nearby — "typingIO" appearing in the block proves nothing.

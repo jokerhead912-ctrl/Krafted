@@ -189,10 +189,32 @@ if (S) {
   out.ids.push(99);
   eq(full.ids.length, 3, 'mutating the serialized copy cannot reach back into the view');
 
+  // deserializeView is called four times at the TOP LEVEL of this file. When a
+  // mutation removes the remapper default, every one of them throws — and a
+  // throw at the top level kills the module before the tally at the bottom of
+  // the file is ever reached, so the FAILs already printed above it die with
+  // it. That is how two mutations were reported as suite holes in 2026-09-02.
+  //
+  // The stub is deliberately all-undefined and NOT all-empty: the assertions
+  // below exist to prove a missing field loads as '' and not as undefined.
+  // Handing back '' would satisfy them and turn a dead call into a green run.
+  function deserialize(input, remap, label) {
+    try {
+      return S.deserializeView(input, remap);
+    } catch (e) {
+      fail++;
+      console.log('  FAIL: ' + (label || 'deserializeView') + ' — it threw: ' + e.message);
+      return { ids: [], color: undefined, updatedAt: undefined, name: undefined };
+    }
+  }
+
   // A .kpak saved by v7.0.45 has neither colour nor updatedAt. It has to load
   // as a perfectly ordinary uncoloured view, not as a view with undefined
   // fields that then get written back out.
-  const legacy = S.deserializeView({ id: 3, name: 'Old', ids: [5], panX: 1, panY: 2, zoom: 1, createdAt: 'x' });
+  const legacy = deserialize(
+    { id: 3, name: 'Old', ids: [5], panX: 1, panY: 2, zoom: 1, createdAt: 'x' },
+    undefined,
+    'deserializeView defaults the id remapper when the caller hands in none');
   eq(legacy.color, '', 'a v7.0.45 view with no colour loads as uncoloured, not undefined');
   eq(legacy.updatedAt, '', 'a v7.0.45 view with no updatedAt loads as empty, not undefined');
   eq(legacy.name, 'Old', 'a legacy view keeps its name');
@@ -200,14 +222,15 @@ if (S) {
   ok(!('undefined' in JSON.parse(JSON.stringify(legacy))), 'a legacy view carries no undefined fields');
 
   // The remap is what lets a .kpak import renumber every id on the board.
-  const remapped = S.deserializeView({ id: 1, name: 'n', ids: [10, 20] }, function (x) { return x * 100; });
+  const remapped = deserialize({ id: 1, name: 'n', ids: [10, 20] }, function (x) { return x * 100; });
   eq(JSON.stringify(remapped.ids), '[1000,2000]', 'deserializeView runs the id remapper over the id list');
-  const plain = S.deserializeView({ id: 1, name: 'n', ids: [10, 20] });
+  const plain = deserialize({ id: 1, name: 'n', ids: [10, 20] }, undefined,
+                            'deserializeView takes a call with no remapper');
   eq(JSON.stringify(plain.ids), '[10,20]', 'without a remapper the ids pass through untouched');
-  eq(JSON.stringify(S.deserializeView(full).ids), '[1,2,3]', 'deserializeView keeps the id list');
+  eq(JSON.stringify(deserialize(full).ids), '[1,2,3]', 'deserializeView keeps the id list');
 
   // Round trip: a view that survives save/load is unchanged.
-  const back = S.deserializeView(S.serializeView(full));
+  const back = deserialize(S.serializeView(full), undefined, 'a save/load round trip');
   eq(JSON.stringify(Object.keys(back).sort()), JSON.stringify(Object.keys(out).sort()),
      'a round trip neither gains nor loses a field');
   eq(back.color, '#ff6b6b', 'the colour survives a save/load round trip');
@@ -292,8 +315,38 @@ function makeEl(tag) {
   };
   return el;
 }
+// NOT `(el._listeners[type] || [])`. When the element the suite wanted is not
+// in the DOM at all — a chip that never rendered, a name field that never
+// opened — `el` is undefined and that line throws. The throw is at the TOP of
+// the module, so the whole file dies and every FAIL already printed above it
+// dies with it. Three mutations were reported as suite holes that way, on
+// 2026-09-02, when the suite had in fact caught all three.
+//
+// A missing element IS the failure being looked for. Report it as one.
 function fire(el, type, ev) {
+  // NOT just `!el`. The nameField() stand-in below is a real object with no
+  // `_listeners`, so `el._listeners[type]` threw and killed the module anyway
+  // — the guard checked the element and not the thing it was about to index.
+  if (!el || !el._listeners) {
+    fail++;
+    console.log('  FAIL: nothing to ' + type + ' — the element never rendered');
+    return;
+  }
   (el._listeners[type] || []).forEach(function (fn) { fn(ev || {}); });
+}
+
+// The name field on the row being renamed, or a harmless empty stand-in.
+//
+// NOT `byClass('view-name-edit', domIds['views-list'])[0]`. Four call sites
+// wrote exactly that and then derefed it, so when a mutation dropped the field
+// the array came back empty, `inp.value` threw, and the whole file died — after
+// the suite had already printed the FAIL that mattered.
+//
+// A missing field is a failed assertion. It is not a crash.
+function nameField() {
+  const f = byClass('view-name-edit', domIds['views-list'])[0] || null;
+  ok(!!f, 'a name field is open on the row being renamed');
+  return f || { value: '', _focused: 0, _selected: 0 };
 }
 // Document order, not stack order. A DFS that pops the last-pushed child
 // returns siblings reversed, so "the first chip" is actually the last row and
@@ -477,9 +530,14 @@ if (V) {
     flushRaf();
     const inputs = byClass('view-name-edit', domIds['views-list']);
     eq(inputs.length, 1, 'the row renders a name field instead of a label');
-    eq(inputs[0].value, 'Act 2 — the chase', 'the field holds the suggested name');
-    eq(inputs[0]._focused, 1, 'the field takes focus on its own — no second click to start typing');
-    eq(inputs[0]._selected, 1,
+    // NOT `inputs[0].value`. When a mutation drops the name field the array is
+    // empty, `inputs[0]` is undefined, and the deref kills the module before
+    // anything below is asked. The one assertion that did fire was the only
+    // one anyone ever saw.
+    const field = inputs[0] || {};
+    eq(field.value, 'Act 2 — the chase', 'the field holds the suggested name');
+    eq(field._focused, 1, 'the field takes focus on its own — no second click to start typing');
+    eq(field._selected, 1,
        'the suggestion is pre-selected, so the first keystroke replaces it outright');
     eq(calls.toasts.length, 1, 'saving still says it saved');
     has(calls.toasts[0], 'Act 2 — the chase', 'the toast names the view it saved');
@@ -809,7 +867,7 @@ if (V) {
     const h = build([{ id: 1, name: 'One', ids: [1] }, { id: 2, name: 'Two', ids: [2] }]);
     h.api.beginViewRename(0);
     h.api.renderViewsPanel();
-    const inp = byClass('view-name-edit', domIds['views-list'])[0];
+    const inp = nameField();
     inp.value = 'Cold open';
     fire(inp, 'keydown', { key: 'Enter', preventDefault: function () {}, stopPropagation: function () {} });
     eq(h.api._viewsList()[0].name, 'Cold open', 'Enter commits');
@@ -820,7 +878,7 @@ if (V) {
     const h = build([{ id: 1, name: 'One', ids: [1] }]);
     h.api.beginViewRename(0);
     h.api.renderViewsPanel();
-    const inp = byClass('view-name-edit', domIds['views-list'])[0];
+    const inp = nameField();
     inp.value = 'Thrown away';
     fire(inp, 'keydown', { key: 'Escape', preventDefault: function () {}, stopPropagation: function () {} });
     eq(h.api._viewsList()[0].name, 'One', 'Escape discards the edit');
@@ -832,7 +890,7 @@ if (V) {
     const h = build([{ id: 1, name: 'One', ids: [1] }, { id: 2, name: 'Two', ids: [2] }]);
     h.api.beginViewRename(0);
     h.api.renderViewsPanel();
-    const inp = byClass('view-name-edit', domIds['views-list'])[0];
+    const inp = nameField();
     inp.value = 'Cold open';
     fire(inp, 'keydown', { key: 'Tab', preventDefault: function () {}, stopPropagation: function () {} });
     eq(h.api._viewsList()[0].name, 'Cold open', 'Tab commits the name being left');
@@ -845,7 +903,7 @@ if (V) {
     const h = build([{ id: 1, name: 'One', ids: [1] }]);
     h.api.beginViewRename(0);
     h.api.renderViewsPanel();
-    const inp = byClass('view-name-edit', domIds['views-list'])[0];
+    const inp = nameField();
     inp.value = 'Typed then clicked away';
     fire(inp, 'blur', {});
     eq(h.api._viewsList()[0].name, 'Typed then clicked away',

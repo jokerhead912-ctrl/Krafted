@@ -210,13 +210,29 @@ for label, old, new in muts:
 
 shutil.copy2(BAK, SRC)
 print('')
-# NB: the summary MUST NOT restate the word "NOT CAUGHT". run_all.sh judges
-# this script by `grep -c "NOT CAUGHT"` over the whole output, so a tail that
-# says "0 NOT CAUGHT" makes a clean 30/30 run read as one mutation missed.
-# The holes are named individually right below, which is the useful part.
+# The holes are named individually below, which is the useful part.
+#
+# HISTORY: this summary used to have to avoid the phrase "NOT CAUGHT"
+# entirely, because run_all.sh judged every mutation script by
+# `grep -c "NOT CAUGHT"` over the whole output — so a tail reading
+# "0 NOT CAUGHT" made a clean run look like one mutation missed. As of
+# 2026-09-02 the gate reads the MUTVERDICT line and the exit code instead
+# (see run_all.sh), so the wording here is free again. The constraint was
+# real, it was undocumented outside this comment, and it silently stopped
+# being true the moment the gate changed — which is how a stale comment
+# turns into a trap.
 print('---- %d/%d caught, %d skipped (anchor)'
       % (caught, len(muts), skipped))
 if notcaught:
     for l in notcaught:
         print('  HOLE: ' + l)
+# ── machine-readable verdict ─────────────────────────────────────────────
+# The one line run_all.sh reads, plus the exit code it gates on. A skipped
+# anchor counts as BAD: a mutation that never ran proves nothing at all.
+_holes = len(muts) - caught - skipped
+print('MUTVERDICT %s holes=%d skipped=%d caught=%d total=%d'
+      % ('ok' if (_holes == 0 and skipped == 0) else 'BAD',
+         _holes, skipped, caught, len(muts)))
+sys.exit(0 if (_holes == 0 and skipped == 0) else 1)
+
 PYEOF

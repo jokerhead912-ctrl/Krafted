@@ -131,21 +131,76 @@ if [ "$ONLY" = "all" ] || [ "$ONLY" = "--suites" ] || [ "$ONLY" = "--smoke" ]; t
   print ""
 fi
 
+# ── the detector audits itself ───────────────────────────────────────────
+# judge() (in mutlib.sh) decides caught / fragile / notcaught / unproven /
+# illegal for every mutation in every script below. If it ever starts
+# answering "caught" to everything, the whole mutation net turns into
+# decoration and nothing in this run says so out loud — which is exactly the
+# failure the mutation net exists to prevent.
+#
+# judge_control.sh feeds it five canned outputs and asserts each one reaches
+# its OWN verdict. A gate that has never gone red is not a gate, so this runs
+# before the block it validates.
+if [ "$ONLY" = "all" ] || [ "$ONLY" = "--muts" ]; then
+  print "── JUDGE CONTROL ──────────────────────────────────────"
+  jout=$(zsh Krafted/tests/judge_control.sh 2>&1)
+  jrc=$?
+  if [ $jrc -eq 0 ] && print -r -- "$jout" | grep -q "REACH THEIR OWN VERDICT"; then
+    print "   pass   judge_control.sh   5 branches reach their own verdict"
+    PASS=$((PASS + 1))
+  else
+    print "   FAIL   judge_control.sh   exit=$jrc"
+    print -r -- "$jout" | sed 's/^/           /'
+    FAIL=$((FAIL + 1))
+    FAILED_SUITES="$FAILED_SUITES judge_control.sh"
+  fi
+  print ""
+fi
+
 # ── mutation scripts ──────────────────────────────────────────────────────
 if [ "$ONLY" = "all" ] || [ "$ONLY" = "--muts" ]; then
   print "── MUTATIONS ─────────────────────────────────────────"
   for f in Krafted/tests/mutate_v7*.sh; do
     out=$(zsh "$f" 2>&1)
-    skips=$(print -r -- "$out" | grep -c "SKIPPED")
-    notcaught=$(print -r -- "$out" | grep -c "NOT CAUGHT")
-    TOTAL_SKIPS=$((TOTAL_SKIPS + skips))
-    TOTAL_NOTCAUGHT=$((TOTAL_NOTCAUGHT + notcaught))
-    if [ "$skips" -eq 0 ] && [ "$notcaught" -eq 0 ]; then
-      print "   caught all   $(basename $f)"
+    rc=$?
+    # ── the verdict is a contract, not prose ──────────────────────────────
+    # Every mutate_v7*.sh must print exactly one MUTVERDICT line and exit 0
+    # (clean) or 1 (holes, or skipped anchors). This used to be judged by
+    # grepping the output for "NOT CAUGHT" and "SKIPPED", which is wrong in
+    # both directions:
+    #   - mutate_v7038_trim.sh reported "caught all" for months while two of
+    #     its four mutations matched nothing. It died on an ANCHOR MISS, so
+    #     neither phrase was ever printed and both counts were zero.
+    #   - a script summarising with the words "0 NOT CAUGHT" would be read as
+    #     one mutation missed.
+    # A gate that reads prose is not a gate. NOTE: -E with a bare | . In this
+    # shell `\|` is NOT alternation.
+    vline=$(print -r -- "$out" | grep -E "^MUTVERDICT " | tail -1)
+    if [ -z "$vline" ]; then
+      # No verdict: the script crashed before reaching the end, or a new one
+      # was added without the contract. Either way it is UNCHECKED, and an
+      # unchecked mutation script is indistinguishable from a green one — which
+      # is exactly how the v7038 hole survived. So it counts as BAD.
+      print "   NO VERDICT   $(basename $f)   exit=$rc"
+      print -r -- "$out" | tail -6 | sed 's/^/           /'
+      MUT_BAD=$((MUT_BAD + 1))
+      BAD_MUTS="$BAD_MUTS $(basename $f)"
+      continue
+    fi
+    h=$(print -r -- "$vline" | sed -n 's/.*holes=\([0-9][0-9]*\).*/\1/p')
+    k=$(print -r -- "$vline" | sed -n 's/.*skipped=\([0-9][0-9]*\).*/\1/p')
+    TOTAL_SKIPS=$((TOTAL_SKIPS + ${k:-0}))
+    TOTAL_NOTCAUGHT=$((TOTAL_NOTCAUGHT + ${h:-0}))
+    # Both signals have to agree: the line says what happened, the exit code
+    # makes it expensive to ignore. Trust the exit code when they disagree —
+    # it is the harder one to fake by accident.
+    if [ "$rc" -eq 0 ] && print -r -- "$vline" | grep -q "^MUTVERDICT ok"; then
+      print "   caught all   $(basename $f)   $vline"
       MUT_OK=$((MUT_OK + 1))
     else
-      print "   PROBLEM      $(basename $f)   skipped=$skips  not-caught=$notcaught"
-      print -r -- "$out" | grep -E "SKIPPED|NOT CAUGHT" | head -12 | sed 's/^/           /'
+      print "   PROBLEM      $(basename $f)   $vline   exit=$rc"
+      print -r -- "$out" | grep -E "SKIPPED|NOT CAUGHT|UNPROVEN|ANCHOR MISS|HOLE" \
+        | head -12 | sed 's/^/           /'
       MUT_BAD=$((MUT_BAD + 1))
       BAD_MUTS="$BAD_MUTS $(basename $f)"
     fi
