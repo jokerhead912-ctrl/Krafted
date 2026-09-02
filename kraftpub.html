@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.5.0</title>
+<title>Krafted v7.6.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2349,7 +2349,7 @@ body.dragging-file .media-anno-toolbar {
    it counter-scales by 1/zoom in updateGroupBorder so it stays the same size
    on screen whether the board is at 8% or 400%. */
 .group-label { position:absolute; z-index:9998; pointer-events:auto; cursor:text; display:none; max-width:600px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:'Inter',sans-serif; font-size:11px; font-weight:500; line-height:14px; letter-spacing:0.04em; color:#111; padding:2px 7px; border-radius:3px; transform-origin:left bottom; user-select:none; }
-.group-label.editing { user-select:text; outline:1px solid #fff; overflow:visible; }
+.group-label.editing { user-select:text; outline:1px solid #fff; overflow:visible; min-width:60px; }
 
 /* ---- audio-only type badge (audio cards don't have an info bar) ---- */
 /* Round 72: the video/gif in-frame `.media-type-badge` and the
@@ -3833,6 +3833,7 @@ body.screen-share-mode #ss-fps {
       <div class="prop-row"><label>Name</label><input type="text" id="prop-name" maxlength="120" placeholder="reference name" oninput="setItemMeta('name', this.value)"></div>
       <div class="prop-row note-row"><label>Note</label><textarea id="prop-note" rows="2" maxlength="600" placeholder="notes / source" oninput="setItemMeta('note', this.value)"></textarea></div>
       <div class="prop-row"><label>Tags</label><input type="text" id="prop-tags" maxlength="200" placeholder="comma, separated" oninput="setItemMeta('tags', this.value)"><span class="prop-hint">comma-separated</span></div>
+      <div class="prop-row" id="prop-group-row" style="display:none"><label>Group</label><input type="text" id="prop-group-name" maxlength="120" placeholder="group name" oninput="setGroupNameFromPanel(this.value)"><span class="prop-hint">the chip above the group</span></div>
     </div>
     <!-- TRANSFORM -->
     <div class="section-header" onclick="togglePropSection(this)">Transform</div>
@@ -4516,7 +4517,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.5.0';
+var KRAFTED_VERSION = '7.6.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -21889,6 +21890,15 @@ function updatePropsPanel() {
   var pn = document.getElementById('prop-name'); if (pn) pn.value = item.name || '';
   var pnote = document.getElementById('prop-note'); if (pnote) pnote.value = item.note || '';
   var ptags = document.getElementById('prop-tags'); if (ptags) ptags.value = (item.tags && item.tags.length) ? item.tags.join(', ') : '';
+  // v7.6.0 — the Group row only appears when every selected item sits in
+  // the SAME group; a mixed or ungrouped selection hides it.
+  var cg = commonGroupForSelection();
+  var grow = document.getElementById('prop-group-row');
+  var gname = document.getElementById('prop-group-name');
+  if (grow && gname) {
+    grow.style.display = cg ? '' : 'none';
+    if (cg) gname.value = cg.name || '';
+  }
   if (item.opacity !== undefined) {
     document.getElementById('prop-opacity').value = Math.round(item.opacity * 100);
     document.getElementById('prop-opacity-val').textContent = Math.round(item.opacity * 100) + '%';
@@ -29443,6 +29453,13 @@ function beginGroupRename(group) {
   try { pushUndo(); } catch (e) {}
   el.contentEditable = 'true';
   el.classList.add('editing');
+  // v7.6.0 — a nameless group's chip is display:none, and focus() on a
+  // hidden element is a no-op. Creation opens the rename on exactly such a
+  // chip, so show it and re-place it first; updateGroupBorder keeps a chip
+  // visible for as long as it carries .editing, and finish() hides it
+  // again if the name stays empty.
+  el.style.display = 'block';
+  updateGroupBorder(group);
   el.focus();
   try {
     const r = document.createRange(); r.selectNodeContents(el);
@@ -29476,6 +29493,7 @@ function groupSelected() {
   pushUndo();
   // Check if any item is already in a group — if so, add to existing group
   let existingGroup = null;
+  let newGroup = null;
   for (const item of sel) {
     existingGroup = state.groups.find(g => g.memberIds.has(item.id));
     if (existingGroup) break;
@@ -29487,13 +29505,17 @@ function groupSelected() {
     // Create new group
     const gid = G.nextGroupId++;
     const color = GROUP_COLORS[(gid - 1) % GROUP_COLORS.length];
-    // Manual grouping stays nameless — the chip only shows for folder groups.
-    const group = makeGroupEl({ id: gid, color: color, name: '', memberIds: sel.map(i => i.id) });
-    state.groups.push(group);
+    // v7.6.0 — a manual group opens its chip in rename mode right away, so
+    // grouping and naming are one gesture. Folder drops got names for free;
+    // hand-made groups stayed nameless with the chip hidden and no way to
+    // reach it. Escape or an empty commit keeps the group nameless.
+    newGroup = makeGroupEl({ id: gid, color: color, name: '', memberIds: sel.map(i => i.id) });
+    state.groups.push(newGroup);
   }
   updateAllGroupBorders();
   scheduleAutoSave();
   toast('Grouped ' + sel.length + ' items');
+  if (newGroup) beginGroupRename(newGroup);
 }
 
 function ungroupSelected() {
@@ -29565,7 +29587,11 @@ function updateGroupBorder(group) {
   // offsetHeight is the UNSCALED layout height (CSS transforms don't change
   // it), which is exactly what the arithmetic below needs.
   if (group.labelEl) {
-    if (!group.name) {
+    // v7.6.0 — a chip mid-rename stays visible and placed even when the
+    // group is still nameless: that is exactly the state creation opens it
+    // in, and hiding it would focus a display:none element (a no-op).
+    const editing = group.labelEl.classList.contains('editing');
+    if (!group.name && !editing) {
       group.labelEl.style.display = 'none';
     } else {
       const _z = Math.max(0.02, Math.min(10, state.zoom || 1));
@@ -29586,6 +29612,35 @@ function setGroupColor(color) {
   g.color = color;
   g.borderEl.style.borderColor = color;
   if (g.labelEl) g.labelEl.style.background = color;
+  scheduleAutoSave();
+}
+
+// v7.6.0 — the panel's Group row makes sense only when every selected item
+// sits in the SAME group. Mixed or ungrouped selections answer null and the
+// row stays hidden. Renaming through the panel then reaches every member,
+// selected or not, which is what a group name means.
+function commonGroupForSelection() {
+  const sel = (typeof getSelectedItems === 'function') ? getSelectedItems() : [];
+  if (!sel.length) return null;
+  let g = null;
+  for (const item of sel) {
+    const mine = state.groups.find(gr => gr.memberIds.has(item.id));
+    if (!mine) return null;
+    if (g && g !== mine) return null;
+    g = mine;
+  }
+  return g;
+}
+// v7.6.0 — panel writer for the group chip. Follows setItemMeta: no
+// pushUndo per keystroke, just write + autosave. updateGroupBorder
+// re-places the chip and flips its visibility off the new name, so
+// clearing the field hides the chip again.
+function setGroupNameFromPanel(value) {
+  const g = commonGroupForSelection();
+  if (!g) return;
+  g.name = String(value || '').trim();
+  if (g.labelEl) g.labelEl.textContent = g.name;
+  updateGroupBorder(g);
   scheduleAutoSave();
 }
 

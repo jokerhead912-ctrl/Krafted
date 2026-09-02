@@ -56,8 +56,12 @@ const EXPECT_IMAGE_MAX_EDGE_LOCAL = 2048;
 
 // Rule 6e: build version literals, never write them. version_scan rewrites
 // bare MAJOR.MINOR.PATCH in this file, and these are test INPUTS.
-const V = (a, b, c) => `${a}.${b}.${c}`;
-const V_CUR = V(7, 5, 0);
+// (v7.6.0: V_CUR = V(7,5,0) lived here and fed the version-agreement section
+// below. That made an EXPECTATION out of a built literal — version_scan
+// cannot move a built literal, that is the point of building one — so the
+// day 7.6.0 shipped this suite demanded 7.5.0 forever. The agreement
+// section now derives the version from the tree itself, and no built
+// literal remains.)
 
 // Slice a block out of the 2 MB source. The fallback must be HARMLESS, not
 // null: a null here turns "anchor not found" into a crash three lines later
@@ -664,12 +668,20 @@ section(function () {
 });
 
 section(function () {
+  // Derived, not pinned: the four identities must AGREE with each other.
+  // Pinning a value here is version_scan's job, not this suite's — a pinned
+  // value built as a literal cannot be moved by version_scan and goes stale
+  // the day the next release ships (this section failed exactly that way at
+  // 7.6.0).
   const appV = (src.match(/var KRAFTED_VERSION = '([\d.]+)';/) || [])[1];
-  eq(appV, V_CUR, 'KRAFTED_VERSION bumped to ' + V_CUR);
-  ok(src.indexOf('<title>Krafted v' + V_CUR + '</title>') >= 0, 'title bumped');
+  const title = (src.match(/<title>Krafted v([\d.]+)<\/title>/) || [])[1];
   const sw = fs.readFileSync(path.resolve(__dirname, '../docs/sw.js'), 'utf8');
-  ok(sw.indexOf("const CACHE_NAME = 'krafted-v" + V_CUR + "-'") >= 0, 'sw CACHE_NAME bumped');
-  ok(sw.indexOf("const APP_VERSION = '" + V_CUR + "';") >= 0, 'sw APP_VERSION bumped');
+  const cache = (sw.match(/const CACHE_NAME = 'krafted-v([\d.]+)-'/) || [])[1];
+  const appv = (sw.match(/const APP_VERSION = '([\d.]+)';/) || [])[1];
+  ok(appV && title && cache && appv, 'all four version identities are present');
+  eq(title, appV, 'title matches KRAFTED_VERSION');
+  eq(cache, appV, 'sw CACHE_NAME matches KRAFTED_VERSION');
+  eq(appv, appV, 'sw APP_VERSION matches KRAFTED_VERSION');
 });
 
 // ── run ──────────────────────────────────────────────────────────────────

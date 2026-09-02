@@ -37,9 +37,23 @@ orig = open(SRC, encoding='utf-8').read()
 NODE = '/Users/kincheung/.workbuddy/binaries/node/versions/22.12.0/bin/node'
 SUITE = 'Krafted/tests/test_v7_5_0.js'
 
+# The two cull anchors below quote the source's `// v7.5.0:` provenance
+# comments. Provenance comments never move (they record which release
+# introduced the behaviour), but version_scan classifies a bare
+# MAJOR.MINOR.PATCH in this file as bumpable and rewrote these anchors to
+# `// v7.6.0:` at the 7.6.0 bump — the anchors then matched nothing and the
+# mutations went SKIPPED. Build the token so the scanner never sees it.
+V750 = '7.5' + '.0'
+# Same trick for the historical bug references in the labels below: the
+# counter/no-op bugs belong to the folder release BEFORE this one, but the
+# scanner's ride-along rule (prev -> current) rewrote the literals. Build
+# the token so the labels keep pointing at the release the bug actually
+# shipped in.
+V740 = '7.4' + '.0'
+
 muts = [
     # ── 1-4. the folder-drop counter (the v7.4.0 bug, four ways) ──────
-    ('the counter is seeded with entries.length again (v7.4.0 bug)',
+    ('the counter is seeded with entries.length again (v7.5.0 bug)',
      "  var pending = 0;\n  var settled = false;",
      "  var pending = entries.length;\n  var settled = false;"),
 
@@ -51,7 +65,7 @@ muts = [
      "          if (batch.length === 0) { settle(); return; }",
      "          if (batch.length === 0) { return; }"),
 
-    ('settle() decrements but never finishes (v7.4.0 silent no-op)',
+    ('settle() decrements but never finishes (v' + V740 + ' silent no-op)',
      "  function settle() {\n"
      "    pending--;\n"
      "    if (pending <= 0 && !settled) { settled = true; _finishFolderImport(e, allFiles); }\n"
@@ -114,12 +128,12 @@ muts = [
      "    /* mutated: nothing restored */"),
 
     ('panning and zooming no longer re-run the cull',
-     "  // v7.5.0: the visible set changed, so the culling decision is stale.\n"
+     "  // v" + V750 + ": the visible set changed, so the culling decision is stale.\n"
      "  scheduleImageCull();",
      "  /* mutated: stale cull */"),
 
     ('bulk image export no longer un-culls first',
-     "  // v7.5.0: off-screen images have their src detached; put every one back\n"
+     "  // v" + V750 + ": off-screen images have their src detached; put every one back\n"
      "  // before reading pixels out of them.\n"
      "  _ensureAllImagesLive();",
      "  /* mutated: export reads culled images */"),

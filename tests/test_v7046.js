@@ -47,7 +47,7 @@ const SWJS = process.env.KRAFTED_SW
 const src = fs.readFileSync(HTML, 'utf8');
 const sw = fs.readFileSync(SWJS, 'utf8');
 
-const EXPECT_VERSION = '7.5.0';
+const EXPECT_VERSION = '7.6.0';
 
 let pass = 0, fail = 0;
 function ok(cond, label) {

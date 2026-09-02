@@ -50,7 +50,10 @@ DSP_LABEL = "  if (g.labelEl && g.labelEl.remove) g.labelEl.remove();\n"
 UNDO_NAME = "      state.groups.push(makeGroupEl({ id: gd.id, color: gd.color, name: gd.name, memberIds: gd.memberIds }));\n"
 LOAD_NAME = "      state.groups.push(makeGroupEl({ id: _gid, color: gd.color, name: gd.name, memberIds: (gd.memberIds || []).map(_remapId) }));\n"
 SER_CALL  = "groups: state.groups.map(serializeGroup),"
-GS_LIT    = "    const group = makeGroupEl({ id: gid, color: color, name: '', memberIds: sel.map(i => i.id) });\n"
+# v7.6.0: groupSelected now keeps the made group in `newGroup` so it can open
+# the rename chip right after; the makeGroupEl route (what this mutation
+# guards) is unchanged, only the variable holding the result moved.
+GS_LIT    = "    newGroup = makeGroupEl({ id: gid, color: color, name: '', memberIds: sel.map(i => i.id) });\n"
 UNGROUP   = "      disposeGroupEl(g);\n"
 UNDO_LIT  = "state.groups.push(makeGroupEl({ id: gd.id, color: gd.color, name: gd.name, memberIds: gd.memberIds }));"
 
@@ -89,7 +92,7 @@ muts = [
     ('undo restore drops the name',                    UNDO_NAME, "      state.groups.push(makeGroupEl({ id: gd.id, color: gd.color, memberIds: gd.memberIds }));\n"),
     ('load restore drops the name',                    LOAD_NAME, "      state.groups.push(makeGroupEl({ id: _gid, color: gd.color, memberIds: (gd.memberIds || []).map(_remapId) }));\n"),
     ('a serialiser hand-writes the group shape again', SER_CALL,  "groups: state.groups.map(g => ({ id: g.id, color: g.color, memberIds: [...g.memberIds] })),"),
-    ('groupSelected hand-writes the group shape again', GS_LIT,   "    const group = { id: gid, color, memberIds: new Set(sel.map(i => i.id)) };\n"),
+    ('groupSelected hand-writes the group shape again', GS_LIT,   "    newGroup = { id: gid, color, memberIds: new Set(sel.map(i => i.id)) };\n"),
     ('ungroup destroys the border by hand again',      UNGROUP,   "      g.borderEl.remove();\n"),
 
     # the block key and reuse rules

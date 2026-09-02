@@ -28,21 +28,21 @@ SyntaxError: Unexpected token ')'
 expect illegal "$JUDGED" "SyntaxError in the mutated source"
 
 # 2. failures printed, summary never reached -> FRAGILE
-judge "died mid-file" "Krafted v7.5.0
+judge "died mid-file" "Krafted v7.6.0
   FAIL: a manual tape holds on the last shot  (got null, want 2)
   FAIL: and it schedules nothing  (got 1, want 0)
 TypeError: Cannot read properties of null" > /dev/null
 expect fragile "$JUDGED" "failures printed and then the suite died"
 
 # 3. a clean non-zero tally -> caught
-judge "clean red" "Krafted v7.5.0
+judge "clean red" "Krafted v7.6.0
   FAIL: the chip is not marked tinted
 
 1 FAILED, 200 passed" > /dev/null
 expect caught "$JUDGED" "reached its tally and it was non-zero"
 
 # 4. ALL PASS -> not caught
-judge "green" "Krafted v7.5.0
+judge "green" "Krafted v7.6.0
 
 ALL PASS (200 assertions)" > /dev/null
 expect notcaught "$JUDGED" "the suite stayed green"

@@ -128,6 +128,10 @@ function slice(from, to) {
   codeCount('state.groups.push({ id: gd.id', 0, 'the undo rebuild literal is gone');
   codeCount('state.groups.push({ id: _gid', 0, 'the load rebuild literal is gone');
   codeCount('const group = { id: gid, color, memberIds:', 0, 'the groupSelected literal is gone');
+  // v7.6.0: groupSelected now holds the made group in `newGroup` (so it can
+  // open the rename chip). The no-hand-written-shape rule follows the code:
+  // a literal under EITHER variable name is the same bug.
+  codeCount('newGroup = { id: gid, color, memberIds:', 0, 'the v7.6.0 newGroup literal is gone too');
 
   count("borderEl.className = 'group-border';", 1,
     'the border element is built in exactly one place');
@@ -197,9 +201,13 @@ section(function () {
   const canvas = { appendChild: function () { appended++; } };
   global.window = { getSelection: function () { return { removeAllRanges: function () {}, addRange: function () {} }; } };
 
-  const api = new Function('canvasContent', 'document', 'pushUndo', 'scheduleAutoSave',
+  // v7.6.0 — beginGroupRename now re-places the chip through updateGroupBorder
+  // (a nameless chip is display:none, and focus() on one is a no-op). The stub
+  // records the call so the rename below can pin it.
+  let borderPlacements = 0;
+  const api = new Function('canvasContent', 'document', 'pushUndo', 'scheduleAutoSave', 'updateGroupBorder',
     BLOCK + '\nreturn { serializeGroup: serializeGroup, makeGroupEl: makeGroupEl, disposeGroupEl: disposeGroupEl, beginGroupRename: beginGroupRename };'
-  )(canvas, doc, function () { undos++; }, function () { saves++; });
+  )(canvas, doc, function () { undos++; }, function () { saves++; }, function () { borderPlacements++; });
 
   // --- serializeGroup: what actually reaches disk -------------------------
   (function () {
@@ -263,6 +271,8 @@ section(function () {
     eq(undos, 1, 'renaming pushes undo first, so an accidental edit is undoable');
     eq(g.labelEl.isContentEditable, true, 'a double-click makes the chip editable');
     eq(selects, 1, 'the existing name is selected, so typing replaces it');
+    eq(g.labelEl.style.display, 'block', 'v7.6.0: beginning a rename shows the chip (a nameless one starts hidden)');
+    ok(borderPlacements >= 1, 'v7.6.0: beginning a rename re-places the chip through updateGroupBorder');
 
     const key = function (k) { return { key: k, stopPropagation: function () {}, preventDefault: function () {} }; };
     g.labelEl.textContent = '  Faces  ';
@@ -572,11 +582,13 @@ section(function () {
   eq(JSON.stringify(onScreen), JSON.stringify(onScreen.map(function () { return LH; })),
     'the chip renders at the same on-screen height from 8% to 800%');
 
-  // A group with no name never gets placed at all.
+  // A group with no name never gets placed at all — unless it is mid-rename.
+  // v7.6.0: creation opens the rename on a nameless chip, so the guard is
+  // nameless AND not-editing; an editing chip stays visible and placed.
   has("      group.labelEl.style.display = 'none';",
     'a nameless group hides its chip rather than placing an empty one');
-  has("if (group.labelEl) {\n    if (!group.name) {",
-    'the placement is guarded by the name, so a manual group costs nothing');
+  has("const editing = group.labelEl.classList.contains('editing');\n    if (!group.name && !editing) {",
+    'v7.6.0: the guard is nameless AND not-editing, so a mid-rename chip stays placed');
   has("if (group.labelEl) group.labelEl.style.display = 'none';",
     'a group emptied of members hides its chip with its border');
 });
