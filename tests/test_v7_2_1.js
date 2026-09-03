@@ -80,7 +80,7 @@ function before(first, second, label) {
   ok(a >= 0 && b >= 0 && a < b, `${label}  (${JSON.stringify(first.slice(0, 40))} at ${a}, ${JSON.stringify(second.slice(0, 40))} at ${b})`);
 }
 
-// ═══ 1. every load path records the size it already knows ══════════════
+// ═══ 1. every path that hands an item a Blob records its size ══════════════
 // Each anchor spans two lines so it cannot match the addImage paths, which
 // set _fileSize from a function argument rather than from a Blob.
 (function () {
@@ -92,12 +92,20 @@ function before(first, second, label) {
     'legacy JSZip media load sets _fileSize next to _sourceBlob');
   count('            item._sourceBlob = blob;\n            item._fileSize = blob.size;', 1,
     'legacy JSZip lazy video load sets _fileSize next to _sourceBlob');
+  // v7.8.0: knock-out re-encodes the pixels in place and hands the item a brand
+  // new PNG, so it is a fifth Blob-handing path - not a LOAD path, but the
+  // invariant is the same. It went red here for exactly that reason; the fix was
+  // to feed the gate, not to widen it. The 2-space indent makes the anchor
+  // unique: the one-line form is a substring of the 12-space line just above.
+  count('  item._sourceBlob = blob;\n  item._fileSize = blob.size;', 1,
+    'v7.8.0 knock-out sets _fileSize next to _sourceBlob');
 
-  // The four sites must line up with the four _sourceBlob assignments on the
-  // load path. If a fifth load path appears, this count goes to 5 and the
+  // The five sites must line up with the five _sourceBlob assignments that
+  // hand an item a Blob: four load paths plus the v7.8.0 knock-out. If a sixth
+  // appears, this count goes to 6 and the
   // suite goes red — which is the point.
   const loads = (HTML.match(/^\s+(?:dataItem|item)\._sourceBlob = (?:stableMediaBlob|stableBlob|blob);$/gm) || []).length;
-  eq(loads, 4, 'there are exactly four load-path _sourceBlob assignments to cover');
+  eq(loads, 5, 'there are exactly five Blob-handing _sourceBlob assignments to cover');
 })();
 
 // ═══ 2. the estimate can always fall back to the real Blob ═════════════

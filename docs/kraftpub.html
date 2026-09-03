@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.7.0</title>
+<title>Krafted v7.8.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4230,6 +4230,7 @@ body.screen-share-mode #ss-fps {
   <label class="cut-checkbox" title="Drop the crop on the same pixels instead of beside the original"><input type="checkbox" id="cut-inplace-toggle" checked> In place</label>
   <div class="cut-sep"></div>
   <button class="cut-btn primary" id="cut-extract-btn" onclick="applyCutExtract()" style="display:none;">Extract</button>
+  <button class="cut-btn primary" id="cut-knock-btn" onclick="applyCutKnockOut()" style="display:none;" title="Punch the shape out of the image itself, leaving a transparent hole">Knock out</button>
   <button class="cut-btn" id="cut-redraw-btn" onclick="clearCutPath()" style="display:none;">Redraw</button>
   <button class="cut-btn" onclick="cancelCut()">Done</button>
 </div>
@@ -4256,6 +4257,7 @@ body.screen-share-mode #ss-fps {
   <div class="lasso-sep"></div>
   <button class="lasso-btn" id="lasso-close-btn" onclick="closeLasso()" style="display:none;">Close Shape</button>
   <button class="lasso-btn primary" id="lasso-extract-btn" onclick="applyLassoExtract()" style="display:none;">Extract</button>
+  <button class="lasso-btn primary" id="lasso-knock-btn" onclick="applyLassoKnockOut()" style="display:none;" title="Punch the shape out of the image itself, leaving a transparent hole">Knock out</button>
   <button class="lasso-btn" id="lasso-undo-btn" onclick="undoLassoPoint()" style="display:none;">Undo Point</button>
   <button class="lasso-btn" onclick="cancelLasso()">Cancel</button>
 </div>
@@ -4517,7 +4519,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.7.0';
+var KRAFTED_VERSION = '7.8.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6033,6 +6035,7 @@ var I18N = (function() {
     'Free Cut': '自由裁剪',
     'Draw on image to cut': '在图片上绘制裁剪范围',
     'Extract': '提取',
+    'Knock out': '挖空',
     'Redraw': '重画',
     'Done': '完成',
 
@@ -31558,7 +31561,17 @@ const cutPanel = document.getElementById('cut-panel');
 const cutTargetHighlight = document.getElementById('cut-target-highlight');
 const cutPreviewMask = document.getElementById('cut-preview-mask');
 const cutExtractBtn = document.getElementById('cut-extract-btn');
+const cutKnockBtn = document.getElementById('cut-knock-btn');
 const cutRedrawBtn = document.getElementById('cut-redraw-btn');
+// v7.8.0: Extract and Knock out always appear together, so one helper drives
+// both. Five call sites used to poke cutExtractBtn.style.display by hand, and
+// a sixth would have been needed for the new button.
+function setCutActions(show) {
+  const v = show ? '' : 'none';
+  cutExtractBtn.style.display = v;
+  cutKnockBtn.style.display = v;
+  cutRedrawBtn.style.display = v;
+}
 const cutHint = document.getElementById('cut-hint');
 
 function enterCutMode(item) {
@@ -31566,8 +31579,7 @@ function enterCutMode(item) {
   cutState = { itemId: item.id, points: [], isDragging: false, closed: false };
   cutOverlay.classList.add('active');
   cutPanel.classList.add('active');
-  cutExtractBtn.style.display = 'none';
-  cutRedrawBtn.style.display = 'none';
+  setCutActions(false);
   cutHint.textContent = 'Draw on image to cut';
   updateCutTargetHighlight();
 }
@@ -31597,8 +31609,7 @@ function cancelCut() {
   cutPreviewMask.classList.remove('active');
   cutPathEl.setAttribute('d', '');
   cutFillPathEl.setAttribute('d', '');
-  cutExtractBtn.style.display = 'none';
-  cutRedrawBtn.style.display = 'none';
+  setCutActions(false);
 }
 
 function clearCutPath() {
@@ -31609,8 +31620,7 @@ function clearCutPath() {
   cutPathEl.classList.remove('closed');
   cutFillPathEl.setAttribute('d', '');
   cutPreviewMask.classList.remove('active');
-  cutExtractBtn.style.display = 'none';
-  cutRedrawBtn.style.display = 'none';
+  setCutActions(false);
   cutHint.textContent = 'Draw on image to cut';
 }
 
@@ -31624,8 +31634,7 @@ function startCutDraw(clientX, clientY) {
   cutPathEl.classList.remove('closed');
   cutFillPathEl.setAttribute('d', '');
   cutPreviewMask.classList.remove('active');
-  cutExtractBtn.style.display = 'none';
-  cutRedrawBtn.style.display = 'none';
+  setCutActions(false);
 }
 
 // Update path while dragging
@@ -31665,8 +31674,7 @@ function endCutDraw() {
   cutPathEl.classList.add('closed');
   cutFillPathEl.setAttribute('d', d);
   // Show extract + redraw buttons
-  cutExtractBtn.style.display = '';
-  cutRedrawBtn.style.display = '';
+  setCutActions(true);
   cutHint.textContent = 'Extract or redraw';
 }
 
@@ -31688,89 +31696,217 @@ function endCutDraw() {
 //  item is placed on exactly the pixels the selection covered, with the
 //  source's rotation carried over so it sits on top of the original.
 // ============================================================
+// ============================================================
+//  V7.8.0 — THE screen <-> source-pixel mapper
+// ============================================================
+// Cut, Lasso and Knock-out all read an item's pixels through here, and before
+// v7.8.0 every one of them got a rotated source wrong. The old line was
+//     const r = item.el.getBoundingClientRect();
+//     const kx = natW / r.width;
+// getBoundingClientRect() returns the AXIS-ALIGNED box of a rotated element,
+// so r.width is the width of the box AROUND the image, not of the image — a
+// 150x100 item at 20deg reports 175x146. Every cut from a rotated source was
+// therefore offset AND mis-scaled, and because the extracted copy used to
+// inherit the rotation, the next cut read an already-rotated image through a
+// second rotation: the error compounded on every pass. Flip, zoom, reframe's
+// own transform on the inner <img> and object-fit:cover were each ignored too.
+//
+// The browser already knows this mapping exactly, so we ask it instead of
+// re-deriving it: drop zero-size probe elements into the live DOM, let the
+// browser compose canvas zoom+pan, the item's rotate/flip, reframe's
+// translate/rotate/scale and object-fit, then measure where they landed.
+// Nothing here duplicates a renderer, so nothing here can drift out of step
+// with the code that actually draws the item.
+var GEO_PROBE_UNIT = 100;
+function _geoProbe(parent, extraCss) {
+  var d = document.createElement('div');
+  d.style.cssText = 'position:absolute;width:0;height:0;pointer-events:none;visibility:hidden;' + extraCss;
+  parent.appendChild(d);
+  var r = d.getBoundingClientRect();
+  if (d.parentNode) d.parentNode.removeChild(d);
+  return { x: r.left, y: r.top };
+}
+function _geoAffine(p0, p1, p2, w, h) {
+  var m = {
+    a: (p1.x - p0.x) / w, b: (p1.y - p0.y) / w,
+    c: (p2.x - p0.x) / h, d: (p2.y - p0.y) / h,
+    e: p0.x, f: p0.y
+  };
+  var det = m.a * m.d - m.b * m.c;
+  if (!det || !isFinite(det)) return null;
+  // Inverse, so callers go the other way without each writing their own.
+  m.inv = {
+    a: m.d / det, b: -m.b / det, c: -m.c / det, d: m.a / det,
+    e: (m.c * m.f - m.d * m.e) / det, f: (m.b * m.e - m.a * m.f) / det
+  };
+  return m;
+}
+function _geoApply(m, x, y) { return { x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f }; }
+// object-position: a length is absolute, a percentage (the default 50% 50%)
+// slides the image across the free space. Krafted never sets it today; reading
+// it keeps this honest if that ever changes.
+function _geoPosOffset(v, free) {
+  if (v && v.indexOf('px') >= 0) return parseFloat(v) || 0;
+  if (v && v.indexOf('%') >= 0) return free * ((parseFloat(v) || 0) / 100);
+  return free * 0.5;
+}
+// Returns { nat, world, natW, natH } — `nat` maps source pixels to screen px,
+// `world` maps board coordinates to screen px. Both carry an `inv`.
+function itemPixelGeometry(item) {
+  if (!item || !item.el) return null;
+  var imgEl = item.img || item.el.querySelector('img');
+  if (!imgEl) return null;
+  var natW = imgEl.naturalWidth || item.natW;
+  var natH = imgEl.naturalHeight || item.natH;
+  if (!natW || !natH) return null;
+  var cs = getComputedStyle(imgEl);
+  // The <img> box inside the item, in item-local px. offsetLeft/offsetTop are
+  // LAYOUT values, so no transform above them can skew these.
+  var boxL = imgEl.offsetLeft, boxT = imgEl.offsetTop;
+  var boxW = parseFloat(cs.width) || imgEl.offsetWidth;
+  var boxH = parseFloat(cs.height) || imgEl.offsetHeight;
+  if (!boxW || !boxH) return null;
+  // object-fit decides where the source pixels land inside that box. Reframe
+  // sizes the box to the natural image and clears object-fit; a plain item
+  // keeps cover. One formula covers both — that is why it lives here once.
+  var fx = boxW / natW, fy = boxH / natH;
+  var fit = cs.objectFit || 'fill';
+  if (fit === 'cover' || fit === 'contain' || fit === 'scale-down') {
+    var f = (fit === 'cover') ? Math.max(fx, fy) : Math.min(fx, fy);
+    if (fit === 'scale-down') f = Math.min(1, f);
+    fx = fy = f;
+  } else if (fit === 'none') {
+    fx = fy = 1;
+  }
+  var op = (cs.objectPosition || '50% 50%').split(/\s+/);
+  var ox = _geoPosOffset(op[0], boxW - natW * fx);
+  var oy = _geoPosOffset(op[1] !== undefined ? op[1] : op[0], boxH - natH * fy);
+  // Rebuild the <img> transform in front of a probe: a CSS transform list
+  // applies right-to-left, and a transform-origin O turns T into O + T(p - O).
+  var tImg = (cs.transform && cs.transform !== 'none') ? cs.transform : '';
+  var org = (cs.transformOrigin || '0px 0px').split(/\s+/);
+  var oX = parseFloat(org[0]) || 0;
+  var oY = parseFloat(org[1] !== undefined ? org[1] : org[0]) || 0;
+  var head = 'left:0;top:0;transform-origin:0 0;transform:translate(' + boxL + 'px,' + boxT + 'px)'
+    + ' translate(' + oX + 'px,' + oY + 'px) ' + tImg
+    + ' translate(' + (-oX) + 'px,' + (-oY) + 'px) ';
+  var probe = function (nx, ny) {
+    return _geoProbe(item.el, head + 'translate(' + (ox + nx * fx) + 'px,' + (oy + ny * fy) + 'px);');
+  };
+  var nat = _geoAffine(probe(0, 0), probe(natW, 0), probe(0, natH), natW, natH);
+  if (!nat) return null;
+  // Board coordinates, measured the same way. #canvas hides a 50000px origin
+  // offset that cancels against its own transform — do not re-derive it.
+  var world = _geoAffine(
+    _geoProbe(canvasContent, 'left:0;top:0;'),
+    _geoProbe(canvasContent, 'left:' + GEO_PROBE_UNIT + 'px;top:0;'),
+    _geoProbe(canvasContent, 'left:0;top:' + GEO_PROBE_UNIT + 'px;'),
+    GEO_PROBE_UNIT, GEO_PROBE_UNIT);
+  if (!world) return null;
+  return { nat: nat, world: world, natW: natW, natH: natH };
+}
+
 async function extractPolyFromItem(item, screenPts, opts) {
   opts = opts || {};
   if (!item || !item.el || screenPts.length < 3) return null;
   const imgEl = item.el.querySelector('img');
   if (!imgEl || !imgEl.complete || !imgEl.naturalWidth) { toast('Image not loaded'); return null; }
-  const natW = imgEl.naturalWidth || item.natW;
-  const natH = imgEl.naturalHeight || item.natH;
-  const r = item.el.getBoundingClientRect();
-  if (!r.width || !r.height) return null;
+  const geo = itemPixelGeometry(item);
+  if (!geo) { toast('Cannot cut this image'); return null; }
+  const natW = geo.natW, natH = geo.natH;
 
-  // ── screen -> source-pixel space (for the crop itself) ──
-  const kx = natW / r.width, ky = natH / r.height;
-  const imgPts = screenPts.map(p => ({ x: (p.x - r.left) * kx, y: (p.y - r.top) * ky }));
-
-  // ── selection bounds in both spaces ──
-  let ix0 = Infinity, iy0 = Infinity, ix1 = -Infinity, iy1 = -Infinity;
-  imgPts.forEach(p => { if (p.x < ix0) ix0 = p.x; if (p.x > ix1) ix1 = p.x; if (p.y < iy0) iy0 = p.y; if (p.y > iy1) iy1 = p.y; });
+  // ── the crop is the rectangle the user actually drew, ON SCREEN ──
+  // It used to be axis-aligned in SOURCE pixels instead, which is a different
+  // rectangle the moment the source is rotated — the reason a cut-out from a
+  // rotated image landed somewhere else entirely.
   let sL = Infinity, sT = Infinity, sR = -Infinity, sB = -Infinity;
-  screenPts.forEach(p => { if (p.x < sL) sL = p.x; if (p.x > sR) sR = p.x; if (p.y < sT) sT = p.y; if (p.y > sB) sB = p.y; });
+  screenPts.forEach(p => {
+    if (p.x < sL) sL = p.x; if (p.x > sR) sR = p.x;
+    if (p.y < sT) sT = p.y; if (p.y > sB) sB = p.y;
+  });
+  const scrW = sR - sL, scrH = sB - sT;
+  if (!(scrW > 0) || !(scrH > 0)) { toast('Selection too small'); return null; }
 
-  // Clamp: the crop can never be bigger than the pixels that exist.
-  const cx0 = Math.max(0, Math.floor(ix0));
-  const cy0 = Math.max(0, Math.floor(iy0));
-  const cx1 = Math.min(natW, Math.ceil(ix1));
-  const cy1 = Math.min(natH, Math.ceil(iy1));
-  const cw = Math.max(1, Math.round(cx1 - cx0));
-  const ch = Math.max(1, Math.round(cy1 - cy0));
-  if (cw < 3 || ch < 3) { toast('Selection too small'); return null; }
+  // Refuse a shape drawn entirely off the picture: it could only ever produce
+  // a fully transparent item, which reads as a broken tool rather than a miss.
+  const natPts = screenPts.map(p => _geoApply(geo.nat.inv, p.x, p.y));
+  let nL = Infinity, nT = Infinity, nR = -Infinity, nB = -Infinity;
+  natPts.forEach(p => {
+    if (p.x < nL) nL = p.x; if (p.x > nR) nR = p.x;
+    if (p.y < nT) nT = p.y; if (p.y > nB) nB = p.y;
+  });
+  if (nR < 0 || nB < 0 || nL > natW || nT > natH) { toast('Selection is outside the image'); return null; }
 
-  // ── where the result lands, in WORLD coordinates ──
-  // Un-rotate the selection's screen position back into the source item's
-  // local frame, so an in-place crop is exact even when the source is
-  // rotated. At rot = 0 this reduces to the plain centre-less formula.
-  const zoom = state.zoom || 1;
-  const rad = (item.rot || 0) * Math.PI / 180;
-  const cs = Math.cos(rad), sn = Math.sin(rad);
-  const scrCx = r.left + r.width / 2, scrCy = r.top + r.height / 2;
-  const toLocal = (px, py) => {
-    const dx = px - scrCx, dy = py - scrCy;
-    return [(dx * cs + dy * sn) / zoom, (-dx * sn + dy * cs) / zoom];
+  // Render at the source's own resolution where it has that many pixels:
+  // g = screen px per source px, so k = 1/g source px per screen px.
+  const M = geo.nat;
+  const g = Math.sqrt(Math.abs(M.a * M.d - M.b * M.c)) || 1;
+  let k = 1 / g;
+  const GEO_MAX_SIDE = 8192;
+  if (scrW * k > GEO_MAX_SIDE) k = GEO_MAX_SIDE / scrW;
+  if (scrH * k > GEO_MAX_SIDE) k = GEO_MAX_SIDE / scrH;
+  const outW = Math.max(1, Math.round(scrW * k));
+  const outH = Math.max(1, Math.round(scrH * k));
+  if (outW < 3 || outH < 3) { toast('Selection too small'); return null; }
+
+  // Source pixels -> output pixels: (source -> screen) then (screen -> output).
+  const T = {
+    a: M.a * k, b: M.b * k, c: M.c * k, d: M.d * k,
+    e: (M.e - sL) * k, f: (M.f - sT) * k
   };
-  const [lx, ly] = toLocal(sL, sT);
-  const worldW = Math.max(1, (sR - sL) / zoom);
-  const worldH = Math.max(1, (sB - sT) / zoom);
-  let worldX, worldY, worldRot;
-  if (opts.place === 'beside') {
-    worldX = item.x + item.w + 20 / zoom;
-    worldY = item.y;
-    worldRot = 0;
-  } else {
-    worldX = item.x + item.w / 2 + lx;
-    worldY = item.y + item.h / 2 + ly;
-    worldRot = item.rot || 0;
-  }
 
   const cv = document.createElement('canvas');
-  cv.width = cw; cv.height = ch;
+  cv.width = outW; cv.height = outH;
   const ctx = cv.getContext('2d');
   if (!ctx) { toast('Cannot cut this image'); return null; }
   try {
-    const tracePath = () => {
+    const traceNat = () => {
       ctx.beginPath();
-      ctx.moveTo(imgPts[0].x - cx0, imgPts[0].y - cy0);
-      for (let i = 1; i < imgPts.length; i++) ctx.lineTo(imgPts[i].x - cx0, imgPts[i].y - cy0);
+      ctx.moveTo(natPts[0].x, natPts[0].y);
+      for (let i = 1; i < natPts.length; i++) ctx.lineTo(natPts[i].x, natPts[i].y);
       ctx.closePath();
     };
     ctx.save();
-    tracePath();
+    ctx.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
+    traceNat();
     ctx.clip();
-    ctx.drawImage(imgEl, -cx0, -cy0, natW, natH);
+    // Hard edge: the user asked for a cut, not a blend.
+    ctx.drawImage(imgEl, 0, 0);
     ctx.restore();
     if (opts.border) {
-      tracePath();
+      // Stroked in OUTPUT pixels so the thickness depends on neither the zoom
+      // level nor how large the source file happens to be.
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.beginPath();
+      ctx.moveTo((screenPts[0].x - sL) * k, (screenPts[0].y - sT) * k);
+      for (let i = 1; i < screenPts.length; i++) ctx.lineTo((screenPts[i].x - sL) * k, (screenPts[i].y - sT) * k);
+      ctx.closePath();
       ctx.strokeStyle = opts.borderColor || '#7c8cf0';
-      // Thickness now follows the CROP size, not the whole source image, so
-      // a small cut-out no longer gets a hairline and a big one a slab.
-      ctx.lineWidth = Math.max(2, Math.round(Math.min(cw, ch) * 0.012));
+      ctx.lineWidth = Math.max(2, Math.round(Math.min(outW, outH) * 0.012));
       ctx.lineJoin = 'round';
       ctx.stroke();
+      ctx.restore();
     }
   } catch (e) {
     toast('Cannot cut this image (cross-origin)');
     return null;
+  }
+
+  // ── where the result lands, in WORLD coordinates ──
+  // The same screen rectangle the user drew, converted back. Because the
+  // result is an upright image now, world and screen stay axis-aligned.
+  const wTL = _geoApply(geo.world.inv, sL, sT);
+  const wBR = _geoApply(geo.world.inv, sR, sB);
+  const worldW = Math.max(1, wBR.x - wTL.x);
+  const worldH = Math.max(1, wBR.y - wTL.y);
+  let worldX, worldY;
+  if (opts.place === 'beside') {
+    worldX = item.x + item.w + 20 / (state.zoom || 1);
+    worldY = item.y;
+  } else {
+    worldX = wTL.x;
+    worldY = wTL.y;
   }
 
   // Blob, not a data URL: a full-res PNG data URL of a big cut-out is tens of
@@ -31780,13 +31916,19 @@ async function extractPolyFromItem(item, screenPts, opts) {
   });
   if (!blob) { toast('Cannot cut this image'); return null; }
 
-  const newItem = addImage(URL.createObjectURL(blob), cw, ch, worldX, worldY, false, undefined, blob.size, false, blob);
+  const newItem = addImage(URL.createObjectURL(blob), outW, outH, worldX, worldY, false, undefined, blob.size, false, blob);
   // addImage caps display width at 720 world px. For an in-place crop we want
   // the result to cover exactly the pixels that were selected, so set the
   // geometry explicitly instead of inheriting the cap.
   newItem.w = worldW;
   newItem.h = worldH;
-  newItem.rot = worldRot;
+  // v7.8.0: rotation, flip and reframe are now BAKED INTO THE PIXELS, so the
+  // result must be upright. Leaving rot on top of already-rotated pixels is
+  // what made a second cut drift — the next pass read a rotated image through
+  // a second rotation and the error compounded.
+  newItem.rot = 0;
+  newItem.flipH = false;
+  newItem.flipV = false;
   // Carry the source's look across — the baked crop is the RAW image, so
   // without this a graded source would pop back to ungraded on extract.
   ['brightness','contrast','saturate','hueRotate','blur','sepia','grayscale',
@@ -31797,6 +31939,74 @@ async function extractPolyFromItem(item, screenPts, opts) {
   updateItemStyle(newItem);
   selectOnly(newItem.id);
   return newItem;
+}
+
+// Punch the drawn shape out of the item's OWN pixels, leaving transparency.
+// Same mapper as the crop, so the hole lands exactly where it was drawn even
+// on a rotated / flipped / reframed source. The natural size is unchanged on
+// purpose: that is what keeps reframe framing and the item box valid.
+async function knockOutPolyFromItem(item, screenPts) {
+  if (!item || !item.el || screenPts.length < 3) return null;
+  if (item.isVideo || item.isGif) { toast('Knock out works on still images'); return null; }
+  const imgEl = item.el.querySelector('img');
+  if (!imgEl || !imgEl.complete || !imgEl.naturalWidth) { toast('Image not loaded'); return null; }
+  const geo = itemPixelGeometry(item);
+  if (!geo) { toast('Cannot edit this image'); return null; }
+  const natW = geo.natW, natH = geo.natH;
+  const natPts = screenPts.map(p => _geoApply(geo.nat.inv, p.x, p.y));
+  let nL = Infinity, nT = Infinity, nR = -Infinity, nB = -Infinity;
+  natPts.forEach(p => {
+    if (p.x < nL) nL = p.x; if (p.x > nR) nR = p.x;
+    if (p.y < nT) nT = p.y; if (p.y > nB) nB = p.y;
+  });
+  if (nR < 0 || nB < 0 || nL > natW || nT > natH) { toast('Selection is outside the image'); return null; }
+
+  const cv = document.createElement('canvas');
+  cv.width = natW; cv.height = natH;
+  const ctx = cv.getContext('2d');
+  if (!ctx) { toast('Cannot edit this image'); return null; }
+  try {
+    ctx.drawImage(imgEl, 0, 0, natW, natH);
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.moveTo(natPts[0].x, natPts[0].y);
+    for (let i = 1; i < natPts.length; i++) ctx.lineTo(natPts[i].x, natPts[i].y);
+    ctx.closePath();
+    ctx.fill();
+  } catch (e) {
+    toast('Cannot edit this image (cross-origin)');
+    return null;
+  }
+  const blob = await new Promise(res => {
+    try { cv.toBlob(b => res(b), 'image/png'); } catch (e) { res(null); }
+  });
+  if (!blob) { toast('Cannot edit this image'); return null; }
+  // Undo FIRST: the snapshot has to hold the pixels we are about to throw away.
+  pushUndo();
+  const url = URL.createObjectURL(blob);
+  item.src = url;
+  // KPAK save prefers a stable Blob over refetching the object URL (v6.8.29).
+  // v7.8.0: the save estimate and the autosave size guard both read
+  // it._fileSize, so a knock-out records the re-encoded size too. Same
+  // v7.2.1 invariant: every path that hands an item a Blob records its size.
+  item._sourceBlob = blob;
+  item._fileSize = blob.size;
+  item.img.src = url;
+  updateItemStyle(item);
+  scheduleAutoSave();
+  return item;
+}
+
+// Punch the drawn shape out of the source image instead of copying it out.
+// Stays in the tool afterwards: clearing one leftover corner is rarely the
+// last one, and Ctrl+Z brings the pixels back.
+async function applyCutKnockOut() {
+  const item = getCutItem();
+  if (!item || !cutState || !cutState.closed || cutState.points.length < 3) return;
+  const done = await knockOutPolyFromItem(item, cutState.points.map(p => ({ x: p.x, y: p.y })));
+  if (!done) return;
+  toast('Knocked out');
+  clearCutPath();
 }
 
 // Extract the area inside the freehand path as a new image item
@@ -31824,7 +32034,16 @@ const lassoPanel = document.getElementById('lasso-panel');
 const lassoTargetHighlight = document.getElementById('lasso-target-highlight');
 const lassoHint = document.getElementById('lasso-hint');
 const lassoExtractBtn = document.getElementById('lasso-extract-btn');
+const lassoKnockBtn = document.getElementById('lasso-knock-btn');
 const lassoCloseBtn = document.getElementById('lasso-close-btn');
+// v7.8.0: one helper for the pair that always appears together. Close Shape
+// and Undo Point keep their own rules — they depend on the point count, not on
+// whether the shape is finished.
+function setLassoActions(show) {
+  const v = show ? '' : 'none';
+  lassoExtractBtn.style.display = v;
+  lassoKnockBtn.style.display = v;
+}
 const lassoUndoBtn = document.getElementById('lasso-undo-btn');
 let lassoPointEls = []; // DOM elements for point markers
 
@@ -31833,7 +32052,7 @@ function enterLassoMode(item) {
   lassoState = { itemId: item.id, points: [], closed: false };
   lassoOverlay.classList.add('active');
   lassoPanel.classList.add('active');
-  lassoExtractBtn.style.display = 'none';
+  setLassoActions(false);
   lassoCloseBtn.style.display = 'none';
   lassoUndoBtn.style.display = 'none';
   lassoHint.textContent = 'Click points on image to define cut area';
@@ -31864,7 +32083,7 @@ function cancelLasso() {
   lassoTargetHighlight.classList.remove('active');
   lassoPathEl.setAttribute('d', '');
   lassoFillPathEl.setAttribute('d', '');
-  lassoExtractBtn.style.display = 'none';
+  setLassoActions(false);
   lassoCloseBtn.style.display = 'none';
   lassoUndoBtn.style.display = 'none';
   clearLassoPoints();
@@ -31912,7 +32131,7 @@ function closeLasso() {
   renderLassoPath();
   renderLassoPoints();
   lassoCloseBtn.style.display = 'none';
-  lassoExtractBtn.style.display = '';
+  setLassoActions(true);
   lassoHint.textContent = 'Extract or undo points';
 }
 
@@ -31950,6 +32169,16 @@ function renderLassoPoints() {
     document.body.appendChild(el);
     lassoPointEls.push(el);
   });
+}
+
+async function applyLassoKnockOut() {
+  const item = getLassoItem();
+  if (!item || !lassoState || !lassoState.closed || lassoState.points.length < 3) return;
+  const done = await knockOutPolyFromItem(item, lassoState.points.map(p => ({ x: p.x, y: p.y })));
+  if (!done) return;
+  toast('Knocked out');
+  cancelLasso();
+  enterLassoMode(item);
 }
 
 async function applyLassoExtract(beside) {
