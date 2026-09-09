@@ -9,7 +9,7 @@
  *        1. "Save Images to Folder…" lived in the NO-SELECTION branch of the
  *           context menu. Selecting 12 images and right-clicking offered no
  *           bulk export at all.
- *        2. The only reachable per-image export, "Download Source File",
+ *        2. The only reachable per-item export, "Download Source File",
  *           derived its extension with src.split('.').pop(). On a blob: URL
  *           that returns the TAIL OF THE GUID, producing names like
  *           "IMG_2301.blob:http://localhost:8000/550e8400-e29b-41d4-…"
@@ -241,6 +241,9 @@ const EXP = slice('var EXPORT_MIME_EXT = {', '// R88 — Auto-load .kpak');
 const MENU = slice('function exportMenuEntries(n) {', 'function showCtx(x, y) {');
 // "Download Source File" — the only per-item export that was reachable with a
 // selection, and the one that produced the unopenable names. Executed in §2b.
+// v7.10.1 narrowed it to video/audio (see test_v7_10_1.js), so the image cases
+// that used to live here are now pinned in the NEGATIVE: a suite that only
+// asserts what happens cannot tell "moved somewhere better" from "lost".
 const MEDIA = slice('function exportMediaSelected() {', '// ==== save-load.js ====');
 
 const EXP_NAMES = ['extFromMime', 'extFromName', 'stripExt', 'exportBaseName',
@@ -299,10 +302,15 @@ section(function () {
   lacks('Save Images to Folder', 'the old, selection-blind menu entry is gone');
   has('Save images as PNG', 'the new entry NAMES THE FORMAT');
   has('Save original files', 'the untouched-bytes escape hatch exists');
-  has("if (hasImages) html += exportMenuEntries(", 'the export entries appear when images are SELECTED');
+  has("if (_selImages) html += exportMenuEntries(_selImages);",
+    'the image entries appear only for items the export can actually see (v7.10.1)');
   lacks("ext = item.src.split('.').pop().split('?')[0] || 'png';",
-    'Download Source File no longer takes an extension from a blob: URL');
-  has('ext = extFromName(name, \'png\');', 'Download Source File reads the extension from the real file name');
+    'no export takes an extension from a blob: URL');
+  // The image case MOVED to the v7.9.0 engine when v7.10.1 deleted the image
+  // branch of the per-item export. The rule has to survive the move, so the
+  // needle follows it.
+  has("ext = extFromMime(blob.type, extFromName(images[i].filename, 'png'));",
+    'the image export reads the extension from the real file name');
   has("'Save images as PNG…': '储存为 PNG 图片…',", 'the PNG entry is translated');
   has("'Save original files…': '储存原始档案…',", 'the original entry is translated');
   // Bake must not become a fourth copy of the transform maths.
@@ -384,7 +392,7 @@ section(function () {
   });
   api.exportMediaSelected();
   const got = env.links;
-  eq(got.length, 8, 'every selected item produced one download');
+  eq(got.length, 5, 'only the five media items produce a download (v7.10.1: images go to the export engine)');
 
   // --- audio: the branch that still had the old trick until v7.9.0
   eq(got[0], 'ambience.wav', 'audio extension comes from its own name, not the GUID');
@@ -397,10 +405,13 @@ section(function () {
   eq(got[3], 'clip.mov', 'a blob:-sourced video keeps the extension of its own name');
   eq(got[4], 'take1.mp4', 'an mp4 is still an mp4');
 
-  // --- images: the actual report
-  eq(got[5], 'IMG_2301.png', 'the reported case: IMG_2301 on a blob: URL becomes IMG_2301.png');
-  eq(got[6], 'REF heic.heic', 'a real extension in the name is kept');
-  ok(/^image_\d+_\d\.png$/.test(got[7]), 'a nameless item still gets a unique png, not a GUID');
+  // --- images: deliberately NOT exported here any more. They have a better
+  // path (v7.9.0's "Save original files…": a folder or a zip, de-duplicated
+  // names), and offering the same untouched bytes twice in one menu was the
+  // complaint. Pinned in the negative so a later refactor cannot quietly
+  // widen this loop back over images.
+  ok(got.indexOf('IMG_2301.png') < 0, 'the reported image is not downloaded by the media export');
+  ok(got.join('|').indexOf('heic') < 0, 'no image of any kind reaches the media export');
   for (let i = 0; i < got.length; i++) {
     ok(got[i].indexOf('blob:') < 0, 'download ' + i + ' has no URL in its name: ' + got[i]);
     ok(got[i].indexOf('http') < 0, 'download ' + i + ' has no scheme in its name: ' + got[i]);

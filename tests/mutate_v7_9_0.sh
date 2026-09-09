@@ -56,13 +56,15 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.10.0 suite (export = the pixels you saw)"
+print "mutation check: v7.10.1 suite (export = the pixels you saw)"
 
 # ── THE COMPLAINT: the saved files could not be opened ────────────────────
 
-mutate "Download Source File takes the extension from the blob: URL again (the GUID tail)" \
-  "      ext = extFromName(name, 'png');" \
-  "      ext = item.src.split('.').pop().split('?')[0] || 'png';"
+# The image branch of exportMediaSelected() is GONE as of v7.10.1 — images are
+# exported by the v7.9.0 engine instead, so there is no line left to mutate
+# here. The rule it carried ("the extension comes from the real file name") is
+# pinned by "original mode ignores the blob's real type" further down, and the
+# narrowed scope itself is pinned by mutate_v7_10_1.sh.
 
 mutate "the audio branch takes the extension from the blob: URL again (GUID tail)" \
   "        ext = extFromName(name, 'mp3');" \
@@ -172,7 +174,7 @@ mutate "off-screen images are never un-culled, so they export blank" \
 # ── the menu ─────────────────────────────────────────────────────────────
 
 mutate "the export entries vanish from the SELECTION menu again" \
-  "    if (hasImages) html += exportMenuEntries(getSelectedImages().filter(i => i && i.src).length);" \
+  "    if (_selImages) html += exportMenuEntries(_selImages);" \
   ""
 
 mutate "the entries are offered even with nothing to export" \

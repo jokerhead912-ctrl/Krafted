@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.10.0</title>
+<title>Krafted v7.10.1</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4540,7 +4540,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.10.0';
+var KRAFTED_VERSION = '7.10.1';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6311,7 +6311,7 @@ var I18N = (function() {
     'Distribute V': '垂直分布',
     '🧹 Tidy Selected': '🧹 整理选取',
     'Trim GIF': '裁剪 GIF',
-    'Download Source File': '下载原始档',
+    'Save media files…': '储存媒体档…',
     'Crop Image C': '裁剪图片 C',
     'Reframe Image Enter': '重构图片 Enter',
     'Lock/Unlock': '锁定/解锁',
@@ -22834,6 +22834,12 @@ function showCtx(x, y) {
   const hasItems = sel.length > 0;
   const hasImages = getSelectedImages().length > 0;
   const hasVideos = sel.some(function (i) { return i && (i.isVideo || i.type === 'video'); });
+  // v7.10.1: video and audio carry no .img (they are built with img: null), so
+  // no image export can see them — this is what the media entry exists for.
+  // Both shapes occur, hence the type check alongside the booleans.
+  const hasMedia = sel.some(function (i) {
+    return i && (i.isVideo || i.isAudio || i.type === 'video' || i.type === 'audio');
+  });
   let html = '';
   if (hasItems) {
     html += `<div class="ctx-item" onclick="duplicateSelected();hideCtx()">Duplicate <kbd>Ctrl+Shift+D</kbd></div>`;
@@ -22878,11 +22884,19 @@ function showCtx(x, y) {
     if (typeof abCanOpen === 'function' && abCanOpen()) {
       html += `<div class="ctx-item" onclick="openABCompare();hideCtx()" title="Compare these two side by side, or wipe between them">◨ A/B Compare</div>`;
     }
-    html += `<div class="ctx-item" onclick="exportMediaSelected();hideCtx()">Download Source File</div>`;
+    // v7.10.1: this used to be offered for EVERY selection, so an image board
+    // carried two entries writing the same untouched bytes — this one and
+    // v7.9.0's "Save original files…". Images keep the v7.9.0 one; this is the
+    // video/audio path, which nothing else covers.
+    if (hasMedia) html += `<div class="ctx-item" onclick="exportMediaSelected();hideCtx()">Save media files…</div>`;
     // v7.9.0: exporting a SELECTION was unreachable — the only bulk entry sat
     // in the empty-canvas branch. These two are the fix, and they say how many
     // and in what format so the result is not a surprise.
-    if (hasImages) html += exportMenuEntries(getSelectedImages().filter(i => i && i.src).length);
+    // v7.10.1: getSelectedImages() returns every selected item, images or not,
+    // so a video-only selection was offered two image entries that both
+    // answered "No images to export". Count what the export can actually see.
+    const _selImages = getSelectedImages().filter(i => i && i.img && i.src).length;
+    if (_selImages) html += exportMenuEntries(_selImages);
     if (hasImages) html += `<div class="ctx-item" onclick="enterCrop(getSelectedImages()[0]);hideCtx()">Crop Image <kbd>C</kbd></div>`;
     // v7.0.49: pass every selected image, not just the first — silently
     // dropping the rest of a selection is how people lose work. The old kbd
@@ -36192,25 +36206,42 @@ function splitTextChunks(text, maxLen) {
 function exportMediaSelected() {
   const sel = getSelectedItems();
   if (sel.length === 0) { toast('Select an item first'); return; }
+  // v7.10.1: video and audio ONLY. This ran for every selection until now, so
+  // an image board carried two entries writing the very same untouched bytes —
+  // this one (one <a download> per item) and v7.9.0's "Save original files…"
+  // (a folder or a zip, with de-duplicated names). Images keep the v7.9.0 one.
+  // Video and audio have to keep this one: every image export filters on
+  // item.img, and video/audio items are built with img: null, so without this
+  // entry their source bytes could not be written out at all.
+  // Both shapes occur: session items carry isVideo/isAudio, items restored
+  // from a .kpak may only carry type. One predicate each, used by the filter
+  // AND by the branches below — a video that only carries `type` used to pass
+  // the filter and then fall through every branch, coming out as .bin.
+  const isVid = function (it) { return !!(it && (it.isVideo || it.type === 'video')); };
+  const isAud = function (it) { return !!(it && (it.isAudio || it.type === 'audio')); };
+  const media = sel.filter(function (it) {
+    return !!(it && it.src && (isVid(it) || isAud(it)));
+  });
+  if (media.length === 0) { toast('Select a video or audio item first'); return; }
   // _di only exists so two items that share a fallback name do not collide —
   // Date.now() is the same for every item in this loop.
-  sel.forEach((item, _di) => {
+  media.forEach((item, _di) => {
     if (!item.src) return;
     let ext = 'bin';
     let name = 'export_' + Date.now();
-    if (item.isAudio) {
+    if (isAud(item)) {
       name = item.audioName || 'audio';
       if (item.src.startsWith('data:')) {
         const m = item.src.match(/^data:audio\/(\w+)/);
         if (m) ext = m[1];
       } else {
-        // v7.9.0: same blob:-URL trap as the image branch below. On a blob:
+        // v7.9.0: same blob:-URL trap as every branch here. On a blob:
         // URL the ".pop()" lands on the tail of the GUID, so the file comes out
         // named "song.<uuid-tail>" and nothing can open it. audioName is the
         // name of the file that was dropped, which needs no fetching.
         ext = extFromName(name, 'mp3');
       }
-    } else if (item.isVideo) {
+    } else if (isVid(item)) {
       // Use the original video filename if available (e.g. "myclip.mp4"),
       // otherwise fall back to "video_<timestamp>". Previously this
       // was hardcoded to "video_" + Date.now() which always lost the
@@ -36246,20 +36277,6 @@ function exportMediaSelected() {
           ext = extFromName(name, 'mp4');
         }
       }
-    } else if (item.src) {
-      // v7.9.0: item.src is nearly always a blob: URL here, and
-      // src.split('.').pop() on one of those returns the TAIL OF THE GUID —
-      // "IMG_2301.blob:http://localhost:8000/550e8400-e29b-41d4-…", a file no
-      // OS can open. That is the whole of the "I cannot open what I saved"
-      // report. The dropped file's own name is the truth and needs no fetch;
-      // the video branch above has read it this way since v7.0.x.
-      name = item.filename || ('image_' + Date.now() + '_' + _di);
-      if (item.src.startsWith('data:')) {
-        const m = item.src.match(/^data:image\/(\w+)/);
-        ext = m ? extFromMime('image/' + m[1], 'png') : extFromName(name, 'png');
-      } else {
-        ext = extFromName(name, 'png');
-      }
     }
     // Convert data URI or blob URL to download
     const link = document.createElement('a');
@@ -36267,7 +36284,7 @@ function exportMediaSelected() {
     link.href = item.src;
     link.click();
   });
-  toast('Downloading ' + sel.length + ' file(s)');
+  toast('Downloading ' + media.length + ' file(s)');
 }
 
 
