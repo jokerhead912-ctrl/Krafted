@@ -50,7 +50,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.8.0 suite (pixel-accurate cut/lasso + knock out)"
+print "mutation check: v7.9.0 suite (pixel-accurate cut/lasso + knock out)"
 
 # ── THE COMPLAINT: a cut from a rotated source lands somewhere else ───────
 
@@ -103,8 +103,11 @@ mutate "the copy inherits the vertical flip" \
   "  newItem.flipV = false;" \
   "  newItem.flipV = item.flipV || false;"
 
+# v7.9.0: this guard now lives in the one shared renderer (renderItemRegion),
+# so breaking it breaks cut, lasso AND export together. knockOut still keeps
+# its own copy further down — it renders the full source, not a crop.
 mutate "a shape drawn off the image is no longer refused (empty item)" \
-  "  if (nR < 0 || nB < 0 || nL > natW || nT > natH) { toast('Selection is outside the image'); return null; }
+  "  if (nR < 0 || nB < 0 || nL > natW || nT > natH) return fail('Selection is outside the image');
 
   // Render at the source's own resolution" \
   "  /* guard removed */
@@ -188,8 +191,8 @@ mutate "Knock out is left untranslated" \
 # The anchor names the version the source now carries; version_scan.py moves
 # it at every bump. Left stale it matches 0 times and tests nothing.
 mutate "KRAFTED_VERSION not bumped" \
-  "var KRAFTED_VERSION = '7.8.0';" \
-  "var KRAFTED_VERSION = '7.7.0';"
+  "var KRAFTED_VERSION = '7.9.0';" \
+  "var KRAFTED_VERSION = '7.8.0';"
 
 print ""
 if [ $ANCHORFAIL -ne 0 ]; then

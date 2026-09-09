@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.8.0</title>
+<title>Krafted v7.9.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3204,6 +3204,27 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
   min-height: 13px;
 }
 
+/* v7.9.0: a 300-image export takes long enough that "I changed my mind" has
+   to be answerable. The card itself is pointer-events:none so it never eats a
+   click meant for the board — the button opts back in. */
+.save-progress .pg-cancel {
+  margin-top: 8px;
+  text-align: right;
+  pointer-events: auto;
+}
+.save-progress .pg-cancel > button {
+  font: inherit;
+  font-size: 11px;
+  color: var(--text);
+  background: rgba(128, 128, 128, .18);
+  border: 1px solid rgba(128, 128, 128, .45);
+  border-radius: 6px;
+  padding: 3px 12px;
+  cursor: pointer;
+}
+.save-progress .pg-cancel > button:hover { background: rgba(128, 128, 128, .32); }
+.save-progress .pg-cancel > button:disabled { opacity: .5; cursor: default; }
+
 /* SELECTION BOX */
 #sel-box { position:fixed; border:1px dashed var(--accent); background:rgba(200,200,200,0.04); display:none; z-index:999999; pointer-events:none; }
 
@@ -4519,7 +4540,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.8.0';
+var KRAFTED_VERSION = '7.9.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6301,7 +6322,8 @@ var I18N = (function() {
     'Send to Back': '移至最后',
     'Delete Del': '删除 Del',
     'Import Audio': '汇入音讯',
-    'Save Images to Folder...': '保存图片到文件夹...',
+    'Save images as PNG…': '储存为 PNG 图片…',
+    'Save original files…': '储存原始档案…',
     '🧹 Tidy All': '🧹 全部整理',
     'Help & Shortcuts H': '帮助与快捷键 H',
     '🔗 Toggle Relations': '🔗 切换关系线',
@@ -22788,6 +22810,24 @@ async function triggerPaste() {
 // ============================================================
 //  CONTEXT MENU
 // ============================================================
+// v7.9.0: the two export entries, built once. Used by BOTH context-menu
+// branches (a selection, and an empty canvas) so "which items count" cannot
+// drift between them. The LABEL STAYS STATIC with the count in a <kbd> chip:
+// the translation layer matches whole text nodes, so "Save 12 images as PNG…"
+// would never match a dictionary key. That is also why the format is in the
+// label — before this, no export entry said what it was going to produce.
+function exportMenuEntries(n) {
+  if (!n) return '';
+  const chip = ' <kbd style="opacity:.4">' + n + '</kbd>';
+  return '<div class="ctx-item" onclick="exportAllImagesToFolder();hideCtx()"'
+    + ' title="Renders what you see — crop, rotation, flip and colour grade are'
+    + ' baked in. One PNG per image.">Save images as PNG…' + chip + '</div>'
+    + '<div class="ctx-item" onclick="exportOriginalFilesToFolder();hideCtx()"'
+    + ' title="Writes the untouched bytes you imported, in their original'
+    + ' format, under their original file names.">Save original files…'
+    + chip + '</div>';
+}
+
 function showCtx(x, y) {
   if (!ctxMenu) return;
   const sel = getSelectedItems();
@@ -22839,6 +22879,10 @@ function showCtx(x, y) {
       html += `<div class="ctx-item" onclick="openABCompare();hideCtx()" title="Compare these two side by side, or wipe between them">◨ A/B Compare</div>`;
     }
     html += `<div class="ctx-item" onclick="exportMediaSelected();hideCtx()">Download Source File</div>`;
+    // v7.9.0: exporting a SELECTION was unreachable — the only bulk entry sat
+    // in the empty-canvas branch. These two are the fix, and they say how many
+    // and in what format so the result is not a surprise.
+    if (hasImages) html += exportMenuEntries(getSelectedImages().filter(i => i && i.src).length);
     if (hasImages) html += `<div class="ctx-item" onclick="enterCrop(getSelectedImages()[0]);hideCtx()">Crop Image <kbd>C</kbd></div>`;
     // v7.0.49: pass every selected image, not just the first — silently
     // dropping the rest of a selection is how people lose work. The old kbd
@@ -22862,10 +22906,9 @@ function showCtx(x, y) {
     html += `<div class="ctx-item" onclick="triggerPaste();hideCtx()">Paste <kbd>Ctrl+V</kbd></div>`;
     html += `<div class="ctx-item" onclick="document.getElementById('file-audio-input').click();hideCtx()">Import Audio</div>`;
     html += `<div class="ctx-item" onclick="saveBoardV6();hideCtx()">Save Board</div>`;
-    // Save all images (or selected) to a chosen local folder
-    const _imgCount = (typeof getSelectedImages === 'function' ? getSelectedImages() : []).length || state.items.filter(i => i && i.img && i.src && !i.isVideo).length;
-    const _ctxTitle = hasFileSystemAccess() ? 'Save images to a local folder (Chrome / Edge on Win + Mac)' : 'Folder picker unavailable — will download each image instead';
-    html += `<div class="ctx-item" onclick="exportAllImagesToFolder();hideCtx()" title="${_ctxTitle}">Save Images to Folder…${_imgCount > 0 ? ' <kbd style="opacity:.4">' + _imgCount + '</kbd>' : ''}</div>`;
+    // Save every image on the board — there is no selection to narrow it here.
+    const _imgCount = state.items.filter(i => i && i.img && i.src && !i.isVideo).length;
+    html += exportMenuEntries(_imgCount);
     html += `<div class="ctx-item" onclick="document.getElementById('file-load').click();hideCtx()">Load Board</div>`;
     html += `<div class="ctx-item" onclick="tidyAll();hideCtx()">🧹 Tidy All</div>`;
     html += `<div class="ctx-sep"></div>`;
@@ -31806,13 +31849,23 @@ function itemPixelGeometry(item) {
   return { nat: nat, world: world, natW: natW, natH: natH };
 }
 
-async function extractPolyFromItem(item, screenPts, opts) {
+// Render the on-screen polygon `screenPts` of `item` onto a fresh canvas.
+// Cut, lasso and v7.9.0 export ALL read pixels through here. One renderer is
+// the point: the PNG that lands on disk is then the same pixels the board was
+// showing, and a fix to the geometry mapping cannot land in one caller and
+// miss the others.
+// Returns null on failure; opts.onError(msg) says why, for callers that care.
+function renderItemRegion(item, screenPts, opts) {
   opts = opts || {};
-  if (!item || !item.el || screenPts.length < 3) return null;
+  const fail = function (m) {
+    if (typeof opts.onError === 'function') opts.onError(m);
+    return null;
+  };
+  if (!item || !item.el || !screenPts || screenPts.length < 3) return null;
   const imgEl = item.el.querySelector('img');
-  if (!imgEl || !imgEl.complete || !imgEl.naturalWidth) { toast('Image not loaded'); return null; }
+  if (!imgEl || !imgEl.complete || !imgEl.naturalWidth) return fail('Image not loaded');
   const geo = itemPixelGeometry(item);
-  if (!geo) { toast('Cannot cut this image'); return null; }
+  if (!geo) return fail('Cannot cut this image');
   const natW = geo.natW, natH = geo.natH;
 
   // ── the crop is the rectangle the user actually drew, ON SCREEN ──
@@ -31825,7 +31878,7 @@ async function extractPolyFromItem(item, screenPts, opts) {
     if (p.y < sT) sT = p.y; if (p.y > sB) sB = p.y;
   });
   const scrW = sR - sL, scrH = sB - sT;
-  if (!(scrW > 0) || !(scrH > 0)) { toast('Selection too small'); return null; }
+  if (!(scrW > 0) || !(scrH > 0)) return fail('Selection too small');
 
   // Refuse a shape drawn entirely off the picture: it could only ever produce
   // a fully transparent item, which reads as a broken tool rather than a miss.
@@ -31835,7 +31888,7 @@ async function extractPolyFromItem(item, screenPts, opts) {
     if (p.x < nL) nL = p.x; if (p.x > nR) nR = p.x;
     if (p.y < nT) nT = p.y; if (p.y > nB) nB = p.y;
   });
-  if (nR < 0 || nB < 0 || nL > natW || nT > natH) { toast('Selection is outside the image'); return null; }
+  if (nR < 0 || nB < 0 || nL > natW || nT > natH) return fail('Selection is outside the image');
 
   // Render at the source's own resolution where it has that many pixels:
   // g = screen px per source px, so k = 1/g source px per screen px.
@@ -31847,7 +31900,7 @@ async function extractPolyFromItem(item, screenPts, opts) {
   if (scrH * k > GEO_MAX_SIDE) k = GEO_MAX_SIDE / scrH;
   const outW = Math.max(1, Math.round(scrW * k));
   const outH = Math.max(1, Math.round(scrH * k));
-  if (outW < 3 || outH < 3) { toast('Selection too small'); return null; }
+  if (outW < 3 || outH < 3) return fail('Selection too small');
 
   // Source pixels -> output pixels: (source -> screen) then (screen -> output).
   const T = {
@@ -31858,7 +31911,7 @@ async function extractPolyFromItem(item, screenPts, opts) {
   const cv = document.createElement('canvas');
   cv.width = outW; cv.height = outH;
   const ctx = cv.getContext('2d');
-  if (!ctx) { toast('Cannot cut this image'); return null; }
+  if (!ctx) return fail('Cannot cut this image');
   try {
     const traceNat = () => {
       ctx.beginPath();
@@ -31868,6 +31921,10 @@ async function extractPolyFromItem(item, screenPts, opts) {
     };
     ctx.save();
     ctx.setTransform(T.a, T.b, T.c, T.d, T.e, T.f);
+    // v7.9.0: export bakes the colour grade into the pixels. Cut and lasso pass
+    // nothing here and keep carrying the grade as item properties instead, so
+    // an extracted copy stays re-gradable — the same choice v7.8.0 made.
+    if (opts.filter) ctx.filter = opts.filter;
     traceNat();
     ctx.clip();
     // Hard edge: the user asked for a cut, not a blend.
@@ -31889,15 +31946,30 @@ async function extractPolyFromItem(item, screenPts, opts) {
       ctx.restore();
     }
   } catch (e) {
-    toast('Cannot cut this image (cross-origin)');
-    return null;
+    return fail('Cannot cut this image (cross-origin)');
   }
+  return {
+    canvas: cv, outW: outW, outH: outH,
+    geo: geo, sL: sL, sT: sT, sR: sR, sB: sB, k: k
+  };
+}
+
+async function extractPolyFromItem(item, screenPts, opts) {
+  opts = opts || {};
+  if (!item || !item.el || screenPts.length < 3) return null;
+  const r = renderItemRegion(item, screenPts, {
+    border: opts.border,
+    borderColor: opts.borderColor,
+    onError: function (m) { toast(m); }
+  });
+  if (!r) return null;
+  const geo = r.geo;
 
   // ── where the result lands, in WORLD coordinates ──
   // The same screen rectangle the user drew, converted back. Because the
   // result is an upright image now, world and screen stay axis-aligned.
-  const wTL = _geoApply(geo.world.inv, sL, sT);
-  const wBR = _geoApply(geo.world.inv, sR, sB);
+  const wTL = _geoApply(geo.world.inv, r.sL, r.sT);
+  const wBR = _geoApply(geo.world.inv, r.sR, r.sB);
   const worldW = Math.max(1, wBR.x - wTL.x);
   const worldH = Math.max(1, wBR.y - wTL.y);
   let worldX, worldY;
@@ -31912,11 +31984,11 @@ async function extractPolyFromItem(item, screenPts, opts) {
   // Blob, not a data URL: a full-res PNG data URL of a big cut-out is tens of
   // MB of renderer heap AND lands in every undo snapshot verbatim (v7.0.22).
   const blob = await new Promise(res => {
-    try { cv.toBlob(b => res(b), 'image/png'); } catch (e) { res(null); }
+    try { r.canvas.toBlob(b => res(b), 'image/png'); } catch (e) { res(null); }
   });
   if (!blob) { toast('Cannot cut this image'); return null; }
 
-  const newItem = addImage(URL.createObjectURL(blob), outW, outH, worldX, worldY, false, undefined, blob.size, false, blob);
+  const newItem = addImage(URL.createObjectURL(blob), r.outW, r.outH, worldX, worldY, false, undefined, blob.size, false, blob);
   // addImage caps display width at 720 world px. For an in-place crop we want
   // the result to cover exactly the pixels that were selected, so set the
   // geometry explicitly instead of inheriting the cap.
@@ -36067,7 +36139,9 @@ function splitTextChunks(text, maxLen) {
 function exportMediaSelected() {
   const sel = getSelectedItems();
   if (sel.length === 0) { toast('Select an item first'); return; }
-  sel.forEach(item => {
+  // _di only exists so two items that share a fallback name do not collide —
+  // Date.now() is the same for every item in this loop.
+  sel.forEach((item, _di) => {
     if (!item.src) return;
     let ext = 'bin';
     let name = 'export_' + Date.now();
@@ -36088,7 +36162,7 @@ function exportMediaSelected() {
       // files like "video_1784253900344.io_d9ea9eb3-...cacb3c0b9eda"
       // that Windows couldn't open because there was no real .mp4
       // extension and the GUID confused the type-detection.
-      name = item.filename || ('video_' + Date.now());
+      name = item.filename || ('video_' + Date.now() + '_' + _di);
       if (item.src.startsWith('data:')) {
         const m = item.src.match(/^data:video\/(\w+)/);
         if (m) ext = m[1];
@@ -36112,12 +36186,18 @@ function exportMediaSelected() {
         }
       }
     } else if (item.src) {
-      name = item.filename || ('image_' + Date.now());
+      // v7.9.0: item.src is nearly always a blob: URL here, and
+      // src.split('.').pop() on one of those returns the TAIL OF THE GUID —
+      // "IMG_2301.blob:http://localhost:8000/550e8400-e29b-41d4-…", a file no
+      // OS can open. That is the whole of the "I cannot open what I saved"
+      // report. The dropped file's own name is the truth and needs no fetch;
+      // the video branch above has read it this way since v7.0.x.
+      name = item.filename || ('image_' + Date.now() + '_' + _di);
       if (item.src.startsWith('data:')) {
         const m = item.src.match(/^data:image\/(\w+)/);
-        if (m) ext = m[1];
+        ext = m ? extFromMime('image/' + m[1], 'png') : extFromName(name, 'png');
       } else {
-        ext = item.src.split('.').pop().split('?')[0] || 'png';
+        ext = extFromName(name, 'png');
       }
     }
     // Convert data URI or blob URL to download
@@ -36470,15 +36550,33 @@ function _fmtDurSec(sec) {
 // v7.0.27: determinate progress UI — bar + % + bytes written + rolling-rate ETA.
 // Replaces the text-only .save-progress div. update(text, {doneBytes,
 // totalBytes, doneItems, totalItems, extra}); pass text=null to keep the label.
-function makeProgressUI() {
+function makeProgressUI(opts) {
+  opts = opts || {};
   const el = document.createElement('div');
   el.className = 'save-progress';
-  el.innerHTML = '<div class="pct"></div><div class="bar"><i></i></div><div class="sub"></div>';
+  el.innerHTML = '<div class="pct"></div><div class="bar"><i></i></div><div class="sub"></div>'
+    + (opts.onCancel
+        ? '<div class="pg-cancel"><button type="button">'
+          + (opts.cancelLabel || 'Cancel') + '</button></div>'
+        : '');
   document.body.appendChild(el);
   const pctEl = el.querySelector('.pct');
   const barEl = el.querySelector('.bar > i');
   const subEl = el.querySelector('.sub');
   const t0 = performance.now();
+  // v7.9.0: opt-in, so every existing caller keeps the card it had. Cancelling
+  // only SETS THE FLAG — the loop owns stopping, because a half-written file
+  // is worse than a finished one.
+  let _cancelled = false;
+  if (opts.onCancel) {
+    const cBtn = el.querySelector('.pg-cancel > button');
+    if (cBtn) cBtn.addEventListener('click', function () {
+      _cancelled = true;
+      cBtn.disabled = true;
+      cBtn.textContent = opts.cancellingLabel || 'Cancelling…';
+      try { opts.onCancel(); } catch (e) { console.error(e); }
+    });
+  }
   const samples = [];
   let lastBarT = 0;
   return {
@@ -36511,6 +36609,7 @@ function makeProgressUI() {
       subEl.textContent = sub;
     },
     elapsedSec: function() { return (performance.now() - t0) / 1000; },
+    cancelled: function() { return _cancelled; },
     done: function() { try { el.remove(); } catch (e) {} }
   };
 }
@@ -39846,8 +39945,112 @@ function saveCapturePanelToFolder() {
   );
 }
 
-// Export all images on the board (or only the selected ones) to a chosen local folder
-async function exportAllImagesToFolder() {
+// ============================================================
+//  V7.9.0 — EXPORT: one naming rule, one bake rule
+// ============================================================
+// Three export paths used to invent their own file extension
+// (blob.type.split('/')[1] in one place, src.split('.').pop() in another) and
+// their own name ('krafted_image_' + i, 'image_' + Date.now()). On a board
+// full of blob: URLs that produced "IMG_2301.blob:http://localhost:8000/
+// 550e8400-e29b-…" — a name no OS can open — and 300 files all called
+// image_1..image_300 even though item.filename has carried the real name
+// since import. The rules live here once; every sink calls them.
+var EXPORT_MIME_EXT = {
+  'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg',
+  'image/webp': 'webp', 'image/gif': 'gif', 'image/bmp': 'bmp',
+  'image/avif': 'avif', 'image/tiff': 'tiff', 'image/svg+xml': 'svg',
+  'image/x-icon': 'ico', 'image/heic': 'heic', 'image/heif': 'heif'
+};
+function extFromMime(mime, fallback) {
+  var m = String(mime || '').split(';')[0].trim().toLowerCase();
+  if (EXPORT_MIME_EXT[m]) return EXPORT_MIME_EXT[m];
+  // Anything else: take the subtype, but only if it is short enough to BE an
+  // extension. (No jpeg->jpg fixup here: 'image/jpeg' is in the table above,
+  // so a subtype of 'jpeg' cannot reach this line — a mapping that could never
+  // run is worse than none, because it looks like coverage.)
+  var sub = m.split('/')[1];
+  if (sub && /^[a-z0-9]{2,5}$/.test(sub)) return sub;
+  return fallback || 'png';
+}
+// The dropped file's own name is the most truthful source of its extension:
+// no fetch, no guess, and it survives the blob: URL that replaced the path.
+function extFromName(name, fallback) {
+  var parts = String(name == null ? '' : name).split('.');
+  if (parts.length < 2) return fallback || '';
+  var e = parts[parts.length - 1].toLowerCase();
+  return /^[a-z0-9]{2,5}$/.test(e) ? e : (fallback || '');
+}
+function stripExt(name) {
+  return String(name == null ? '' : name).replace(/\.[^.\/\\]+$/, '');
+}
+// Original file name if we have one, else the name given to the item, else a
+// positional fallback. Never invents an extension — the caller adds that.
+function exportBaseName(item, i) {
+  var n = stripExt((item && (item.filename || item.name)) || '').trim();
+  return n || ('image_' + (i + 1));
+}
+// Two folders can both hold IMG_2301.jpg. The first keeps the bare name and
+// the rest get _2, _3… — a silent overwrite would lose a picture for good.
+function dedupeExportNames(names) {
+  var seen = Object.create(null), out = [];
+  for (var i = 0; i < names.length; i++) {
+    var base = names[i], nm = base, k = 2;
+    while (seen[nm.toLowerCase()]) { nm = base + '_' + k; k++; }
+    seen[nm.toLowerCase()] = true;
+    out.push(nm);
+  }
+  return out;
+}
+// The four corners of the item's own box, in screen px. The probes are
+// children of item.el, so the browser folds the item's rotate/flip in itself —
+// the same reason itemPixelGeometry exists. getBoundingClientRect() would hand
+// back the axis-aligned box AROUND a rotated item, which IS the v7.8.0 bug.
+function itemScreenQuad(item) {
+  if (!item || !item.el) return null;
+  var W = item.el.offsetWidth, H = item.el.offsetHeight;
+  if (!W || !H) return null;
+  return [
+    _geoProbe(item.el, 'left:0;top:0;'),
+    _geoProbe(item.el, 'left:' + W + 'px;top:0;'),
+    _geoProbe(item.el, 'left:' + W + 'px;top:' + H + 'px;'),
+    _geoProbe(item.el, 'left:0;top:' + H + 'px;')
+  ];
+}
+// Bake one item into the pixels you actually see: crop, reframe, rotation,
+// flip and the colour grade all end up in the output. Crop/rot/flip are kept
+// as non-destructive transforms and the grade is a CSS filter, so before
+// v7.9.0 an exported board handed back PRE-EDIT originals — only lasso/cut/
+// knock-out, which rewrite pixels, ever showed up in what came out.
+async function bakeItemToBlob(item) {
+  if (!item || !item.el) return null;
+  var imgEl = item.img || item.el.querySelector('img');
+  if (!imgEl || !imgEl.complete || !imgEl.naturalWidth) return null;
+  var quad = itemScreenQuad(item);
+  if (!quad) return null;
+  // An all-defaults filter string is a no-op, but setting ctx.filter at all
+  // still routes the draw through a filtered path in some engines. Compare
+  // against the default rather than guessing which keys exist.
+  var f = mediaFilterString(item);
+  var r = renderItemRegion(item, quad, {
+    filter: (f === mediaFilterString({})) ? '' : f
+  });
+  if (!r) return null;
+  var blob = await new Promise(function (res) {
+    try { r.canvas.toBlob(function (b) { res(b); }, 'image/png'); }
+    catch (e) { res(null); }
+  });
+  // A 6000x4000 canvas is ~96 MB. Release it now instead of waiting for GC to
+  // notice 300 of them piled up behind a loop.
+  try { r.canvas.width = 0; r.canvas.height = 0; } catch (e) {}
+  return blob;
+}
+
+// Export all images on the board (or only the selected ones) to disk.
+// opts.original — write the bytes that were imported, untouched.
+async function exportAllImagesToFolder(opts) {
+  opts = opts || {};
+  const original = !!opts.original;
+  const isZh = (typeof _isZhUI === 'function') && _isZhUI();
   // v7.5.0: off-screen images have their src detached; put every one back
   // before reading pixels out of them.
   _ensureAllImagesLive();
@@ -39860,56 +40063,116 @@ async function exportAllImagesToFolder() {
     images = state.items.filter(i => i && i.img && i.src && !i.isVideo);
   }
   if (images.length === 0) {
-    toast('No images to export');
+    toast(isZh ? '没有图片可导出' : 'No images to export');
     return;
   }
 
-  if (!hasFileSystemAccess()) {
-    // Fallback: download each one
-    toast('Folder picker not supported — downloading ' + images.length + ' image' + (images.length === 1 ? '' : 's') + ' one by one');
-    let saved = 0;
-    for (let i = 0; i < images.length; i++) {
-      try {
-        const blob = await dataUrlToBlob(images[i].src);
-        if (!blob) continue;
-        const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
-        const name = sanitizeFilename('krafted_image_' + (i + 1), 'image') + '.' + ext;
-        triggerDownload(blob, name);
-        saved++;
-        await new Promise(r => setTimeout(r, 200));
-      } catch (e) {
-        console.error('Download image failed', i, e);
-      }
-    }
-    toast('Downloaded ' + saved + ' image' + (saved === 1 ? '' : 's'));
+  const names = dedupeExportNames(images.map((it, i) => exportBaseName(it, i)));
+  const total = images.length;
+  // Cancelling SETS A FLAG; the loop below decides where it is safe to stop.
+  // Killing a write halfway leaves a truncated file on disk.
+  const prog = makeProgressUI({
+    cancelLabel: isZh ? '取消' : 'Cancel',
+    cancellingLabel: isZh ? '正在取消…' : 'Cancelling…',
+    onCancel: function () {}
+  });
+
+  // Chrome/Edge write into the folder the user picks. Safari and Firefox have
+  // no File System Access API, and one <a download> per image means 300
+  // permission prompts — so they get ONE zip instead.
+  let dirHandle = null, zip = null;
+  if (hasFileSystemAccess()) {
+    dirHandle = await pickSaveFolder();
+    if (!dirHandle) { prog.done(); return; } // user cancelled
+  } else if (typeof JSZip !== 'undefined') {
+    zip = new JSZip();
+  } else {
+    prog.done();
+    toast(isZh ? '此浏览器不支持导出图片' : 'This browser cannot export images');
     return;
   }
 
-  const dirHandle = await pickSaveFolder();
-  if (!dirHandle) return; // user cancelled
   let saved = 0, failed = 0;
-  toast('Saving 0/' + images.length + ' to ' + dirHandle.name + '/…');
-  for (let i = 0; i < images.length; i++) {
+  for (let i = 0; i < total; i++) {
+    if (prog.cancelled()) break;
+    prog.update((original
+        ? (isZh ? '复制原档 ' : 'Copying original ')
+        : (isZh ? '渲染 ' : 'Rendering ')) + (i + 1) + '/' + total,
+      { doneItems: i, totalItems: total, extra: names[i] });
     try {
-      const item = images[i];
-      const blob = await dataUrlToBlob(item.src);
-      if (!blob) { failed++; continue; }
-      const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
-      const baseName = sanitizeFilename(item.name || ('image_' + (i + 1)), 'image_' + (i + 1));
-      const filename = await uniqueFilename(dirHandle, baseName, ext);
-      await writeBlobToFolder(dirHandle, filename, blob);
+      let blob = null, ext = 'png';
+      if (original) {
+        blob = await dataUrlToBlob(images[i].src);
+        if (!blob) { failed++; continue; }
+        ext = extFromMime(blob.type, extFromName(images[i].filename, 'png'));
+      } else {
+        blob = await bakeItemToBlob(images[i]);
+        if (!blob) { failed++; continue; }
+        ext = 'png';
+      }
+      if (dirHandle) {
+        const fn = await uniqueFilename(dirHandle, names[i], ext);
+        await writeBlobToFolder(dirHandle, fn, blob);
+      } else {
+        zip.file(names[i] + '.' + ext, blob);
+      }
       saved++;
-      toast('Saving ' + saved + '/' + images.length + '…');
     } catch (e) {
-      console.error('Save image failed', i, e);
+      console.error('Export image failed', i, e);
       failed++;
     }
   }
-  if (failed === 0) {
-    toast('Saved ' + saved + ' image' + (saved === 1 ? '' : 's') + ' to ' + dirHandle.name + '/');
-  } else {
-    toast('Saved ' + saved + ', failed ' + failed);
+
+  if (prog.cancelled()) {
+    prog.done();
+    toast((isZh ? '已取消 — 已存 ' : 'Cancelled — saved ') + saved);
+    return;
   }
+
+  if (dirHandle) {
+    prog.done();
+    if (failed === 0) {
+      toast((isZh ? '已存 ' : 'Saved ') + saved
+        + (isZh ? ' 张图到 ' : ' image' + (saved === 1 ? '' : 's') + ' to ')
+        + dirHandle.name + '/');
+    } else {
+      toast((isZh ? '已存 ' : 'Saved ') + saved
+        + (isZh ? '，失败 ' : ', failed ') + failed);
+    }
+    return;
+  }
+
+  // One zip, one save prompt, whatever the count.
+  prog.update((isZh ? '正在打包… ' : 'Zipping… ') + '0%',
+    { doneItems: total, totalItems: total });
+  let zipBlob = null;
+  try {
+    // STORE, not DEFLATE: PNG is already compressed, so deflating 300 of them
+    // burns minutes of main-thread time to save a few percent.
+    zipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' },
+      function (meta) {
+        prog.update((isZh ? '正在打包… ' : 'Zipping… ') + Math.round(meta.percent) + '%');
+      });
+  } catch (e) {
+    console.error('Zip failed', e);
+  }
+  prog.done();
+  if (!zipBlob) { toast(isZh ? '打包失败' : 'Zipping failed'); return; }
+  const zipName = sanitizeFilename(
+    'krafted_images_' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-'),
+    'krafted-images') + '.zip';
+  const how = await kraftedSaveFile({ filename: zipName, blob: zipBlob, mime: 'application/zip' });
+  if (how !== 'cancelled') {
+    toast((isZh ? '已存 ' : 'Saved ') + saved
+      + (isZh ? ' 张图（' : ' image' + (saved === 1 ? '' : 's') + ' (')
+      + formatBytes(zipBlob.size) + ' zip)');
+  }
+}
+
+// Untouched bytes, original format, original file name — the escape hatch for
+// "I wanted the file I dropped in, not what the board made of it".
+function exportOriginalFilesToFolder() {
+  return exportAllImagesToFolder({ original: true });
 }
 // R88 — Auto-load .kpak from embedded base64 data.
 // When a .kpak is double-clicked, the launcher script base64-encodes the

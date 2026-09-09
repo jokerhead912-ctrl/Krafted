@@ -641,7 +641,9 @@ section(function () {
   ok(codeOnly(del).indexOf('cleanupImageItem(i);') >= 0, 'deleteSelected revokes the deleted image\'s blob URL');
   ok(codeOnly(del).indexOf('cleanupVideoItem(i);') >= 0, 'deleteSelected still cleans up video');
 
-  const exp = slice('async function exportAllImagesToFolder() {', '// Determine which images to export', 'exportAllImagesToFolder');
+  // v7.9.0: the signature grew an opts param. Anchor on the open paren only —
+  // a future signature change must not be able to silently unpin this gate.
+  const exp = slice('async function exportAllImagesToFolder(', '// Determine which images to export', 'exportAllImagesToFolder');
   ok(codeOnly(exp).indexOf('_ensureAllImagesLive();') >= 0, 'bulk image export un-culls first');
 
   const pres = slice('function startPresent() {', '\n}', 'startPresent');
