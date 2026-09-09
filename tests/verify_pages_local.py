@@ -178,6 +178,34 @@ ok(dev.count(b'const ratioX = item.natW / item.w') == 0,
 has(dev, b'rfSetFrameFields(item, { on: false, z: 1, rot: 0, x: 0, y: 0 });',
     'applyCrop resets framing after baking, through the single writer')
 
+# ---- 4c. v7.12.0 — image notes report, one stylesheet not two ----
+# 「我選擇啲圖片right click 撳個掣 → 好似comment咁樣 export html」
+# 病根①嘅守門口：image report 同 video report 必須共用同一份 CSS / lightbox。
+# 所以呢度釘嘅係「兩邊都 spread 同一個常數」，而唔係「段碼存在」。
+print('\n[4c] v7.12.0 — image notes report shares the report shell')
+has(dev, 'const REPORT_SHARED_CSS = ['.encode('utf-8'), 'REPORT_SHARED_CSS exists')
+has(dev, 'const REPORT_LIGHTBOX_JS = ['.encode('utf-8'), 'REPORT_LIGHTBOX_JS exists')
+ok(dev.count(b'const REPORT_SHARED_CSS = [') == 1, 'exactly one shared stylesheet')
+ok(dev.count(b'const REPORT_LIGHTBOX_JS = [') == 1, 'exactly one lightbox script')
+# Two spreads, one per builder. One spread would mean the other report still
+# owns a private copy that will drift.
+ok(dev.count(b'...REPORT_SHARED_CSS,') == 2, 'both builders spread the stylesheet')
+ok(dev.count(b'...REPORT_LIGHTBOX_JS,') == 2, 'both builders spread the lightbox')
+# And the originals are gone from where they used to sit inline.
+ok(dev.count(b"'  :root { --accent: #00e5ff;") == 1,
+   'the accent rule lives once, inside the shared array')
+ok(dev.count(b"'    function exLbOpen(src) {',") == 1,
+   'exLbOpen lives once, inside the shared array')
+has(dev, 'function buildNotesExportHtml('.encode('utf-8'), 'buildNotesExportHtml() exists')
+has(dev, 'async function exportNotesAsHtml('.encode('utf-8'), 'exportNotesAsHtml() exists')
+has(dev, 'function notesReadingOrder('.encode('utf-8'), 'notesReadingOrder() exists')
+has(dev, 'function openNotesExportDialog('.encode('utf-8'), 'openNotesExportDialog() exists')
+has(dev, '📝 Export notes as HTML…'.encode('utf-8'), 'context-menu entry exists')
+has(dev, '📝 匯出圖文備註 HTML…'.encode('utf-8'), 'zh dictionary carries the entry')
+# No new field: the report reads the note that already exists on the item,
+# so .kpak needs no schema change and old boards keep working.
+has(dev, b'it.note)', 'the report reads item.note, it stores nothing new')
+
 # ---- 5. i18n ----
 print('\n[5] i18n')
 has(dev, b'Save images as PNG', 'zh dictionary has "Save images as PNG" key')

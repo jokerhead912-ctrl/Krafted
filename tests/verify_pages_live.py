@@ -14,7 +14,11 @@ SW = 'https://jokerhead912-ctrl.github.io/Krafted/sw.js'
 fails = []
 
 
+CHECKS = [0]
+
+
 def check(cond, label):
+    CHECKS[0] += 1
     print(('  PASS  ' if cond else '  FAIL  ') + label)
     if not cond:
         fails.append(label)
@@ -70,5 +74,20 @@ check(m is not None and m.group(1) == '7.11.0', 'sw APP_VERSION = 7.11.0 (got %r
 m = re.search(r"CACHE_NAME\s*=\s*'([^']+)'", sw)
 check(m is not None and m.group(1).startswith('krafted-v7.11.0'), 'sw CACHE_NAME bumps to krafted-v7.11.0 (got %r)' % (m.group(1) if m else None))
 
-print('\n%s (%d checks, %d failed)' % ('ALL PASS' if not fails else 'FAILURES', 13, len(fails)))
+print('\n[6] v7.12.0 image notes report')
+check('const REPORT_SHARED_CSS = [' in t, 'REPORT_SHARED_CSS present')
+check('const REPORT_LIGHTBOX_JS = [' in t, 'REPORT_LIGHTBOX_JS present')
+check(t.count('...REPORT_SHARED_CSS,') == 2, 'both builders spread the one stylesheet')
+check(t.count('...REPORT_LIGHTBOX_JS,') == 2, 'both builders spread the one lightbox')
+check('function buildNotesExportHtml(' in t, 'buildNotesExportHtml() present')
+check('async function exportNotesAsHtml(' in t, 'exportNotesAsHtml() present')
+check('function notesReadingOrder(' in t, 'notesReadingOrder() present')
+check('function openNotesExportDialog(' in t, 'openNotesExportDialog() present')
+check('\U0001F4DD Export notes as HTML\u2026' in t, 'context-menu entry present')
+check('\U0001F4DD \u532f\u51fa\u5716\u6587\u5099\u8a3b HTML\u2026' in t, 'zh dictionary carries the entry')
+check(t.count('const REPORT_SHARED_CSS = [') == 1, 'exactly one shared stylesheet')
+check(t.count("'  :root { --accent: #00e5ff;") == 1,
+      'the accent rule lives once, inside the shared array')
+
+print('\n%s (%d checks, %d failed)' % ('ALL PASS' if not fails else 'FAILURES', CHECKS[0], len(fails)))
 sys.exit(1 if fails else 0)

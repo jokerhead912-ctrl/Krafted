@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.11.0</title>
+<title>Krafted v7.12.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4540,7 +4540,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.11.0';
+var KRAFTED_VERSION = '7.12.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -6312,6 +6312,7 @@ var I18N = (function() {
     '🧹 Tidy Selected': '🧹 整理选取',
     'Trim GIF': '裁剪 GIF',
     'Save media files…': '储存媒体档…',
+    '📝 Export notes as HTML…': '📝 匯出圖文備註 HTML…',
     'Crop Image C': '裁剪图片 C',
     'Reframe Image Enter': '重构图片 Enter',
     'Lock/Unlock': '锁定/解锁',
@@ -18850,31 +18851,14 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
-function buildExportHtml({ videoName, videoBase, fileExt, durStr, commentsCount, fps, exportedAt, rows, overComment }) {
-  // Compute the h1 HTML (with styled extension) OUTSIDE the string array
-  // so the nested single quotes in the span don't break the outer template
-  // strings. The escapeHtml wrapper makes the file name safe; we then split
-  // it on the last dot to color the extension with the accent.
-  const _safeName = escapeHtml(videoName || '');
-  const _dotPos = _safeName.lastIndexOf('.');
-  const h1Html = (_dotPos > 0)
-    ? (_safeName.slice(0, _dotPos) + '<span class="ext">' + _safeName.slice(_dotPos) + '</span>')
-    : _safeName;
-  // Build the over-comment block as a string (empty if user didn't type one)
-  const overBlockHtml = overComment
-    ? ('    <div class="over-block">' +
-       '      <div class="over-title">📝 (overall comment)</div>' +
-       '      <div class="over-body">' + escapeHtml(overComment) + '</div>' +
-       '    </div>')
-    : '';
-  return [
-'<!DOCTYPE html>',
-'<html lang="en">',
-'<head>',
-'<meta charset="utf-8"/>',
-'<meta name="viewport" content="width=device-width,initial-scale=1"/>',
-'<title>' + escapeHtml(videoName) + ' — Frame Comments</title>',
-'<style>',
+// v7.12.0 — one stylesheet, two reports.
+// The frame-comments report and the image-notes report are different
+// documents but the same artefact: a dark card per note, picture left,
+// words right, one overall comment on top. They used to share nothing
+// because the second one did not exist. Now they share this array, so a
+// style fix is one edit instead of two that drift apart (病根①).
+// buildExportHtml() and buildNotesExportHtml() both spread it.
+const REPORT_SHARED_CSS = [
 '  :root { --accent: #00e5ff; --accent-2: #7c5cfc; --bg: #0d0d0f; --bg-card: #18181c; --bg-card-h: #1f1f25; --bg-over: #1c1c25; --text: #f1f1f4; --text-dim: #b9b9c2; --text-subtle: #888894; --border: rgba(255,255,255,0.08); --border-2: rgba(255,255,255,0.12); }',
 '  * { box-sizing: border-box; }',
 '  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, "PingFang HK", "Microsoft YaHei", sans-serif; padding: 0; }',
@@ -18942,6 +18926,55 @@ function buildExportHtml({ videoName, videoBase, fileExt, durStr, commentsCount,
 '    .snap-wrap { width: 100%; }',
 '    .snap { width: 100%; }',
 '  }',
+];
+
+const REPORT_LIGHTBOX_JS = [
+'    function exLbOpen(src) {',
+'      var lb = document.getElementById("ex-lightbox");',
+'      var img = document.getElementById("ex-lightbox-img");',
+'      if (!lb || !img) return;',
+'      img.src = src;',
+'      lb.classList.add("open");',
+'      try { document.body.style.overflow = "hidden"; } catch (e) {}',
+'    }',
+'    function exLbClose(ev) {',
+'      if (ev && ev.target && ev.target.tagName === "IMG") return;',
+'      var lb = document.getElementById("ex-lightbox");',
+'      if (!lb) return;',
+'      lb.classList.remove("open");',
+'      try { document.body.style.overflow = ""; } catch (e) {}',
+'    }',
+    '    document.addEventListener("keydown", function(e) {',
+    '      if (e.key === "Escape") exLbClose();',
+    '    });'
+];
+
+function buildExportHtml({ videoName, videoBase, fileExt, durStr, commentsCount, fps, exportedAt, rows, overComment }) {
+  // Compute the h1 HTML (with styled extension) OUTSIDE the string array
+  // so the nested single quotes in the span don't break the outer template
+  // strings. The escapeHtml wrapper makes the file name safe; we then split
+  // it on the last dot to color the extension with the accent.
+  const _safeName = escapeHtml(videoName || '');
+  const _dotPos = _safeName.lastIndexOf('.');
+  const h1Html = (_dotPos > 0)
+    ? (_safeName.slice(0, _dotPos) + '<span class="ext">' + _safeName.slice(_dotPos) + '</span>')
+    : _safeName;
+  // Build the over-comment block as a string (empty if user didn't type one)
+  const overBlockHtml = overComment
+    ? ('    <div class="over-block">' +
+       '      <div class="over-title">📝 (overall comment)</div>' +
+       '      <div class="over-body">' + escapeHtml(overComment) + '</div>' +
+       '    </div>')
+    : '';
+  return [
+'<!DOCTYPE html>',
+'<html lang="en">',
+'<head>',
+'<meta charset="utf-8"/>',
+'<meta name="viewport" content="width=device-width,initial-scale=1"/>',
+'<title>' + escapeHtml(videoName) + ' — Frame Comments</title>',
+'<style>',
+    ...REPORT_SHARED_CSS,
 '</style>',
 '</head>',
 '<body>',
@@ -18974,24 +19007,7 @@ function buildExportHtml({ videoName, videoBase, fileExt, durStr, commentsCount,
 '    <div class="ex-lb-hint">Click anywhere or press Esc to close</div>',
 '  </div>',
 '  <script>',
-'    function exLbOpen(src) {',
-'      var lb = document.getElementById("ex-lightbox");',
-'      var img = document.getElementById("ex-lightbox-img");',
-'      if (!lb || !img) return;',
-'      img.src = src;',
-'      lb.classList.add("open");',
-'      try { document.body.style.overflow = "hidden"; } catch (e) {}',
-'    }',
-'    function exLbClose(ev) {',
-'      if (ev && ev.target && ev.target.tagName === "IMG") return;',
-'      var lb = document.getElementById("ex-lightbox");',
-'      if (!lb) return;',
-'      lb.classList.remove("open");',
-'      try { document.body.style.overflow = ""; } catch (e) {}',
-'    }',
-    '    document.addEventListener("keydown", function(e) {',
-    '      if (e.key === "Escape") exLbClose();',
-    '    });',
+    ...REPORT_LIGHTBOX_JS,
     '    // Round 28.7: in-page ZIP writer (STORED mode, no compression).',
     '    // Each entry has a local file header + raw file bytes, followed by',
     '    // a central directory + end-of-central-dir record. PNG data URLs',
@@ -19168,6 +19184,342 @@ function buildExportHtml({ videoName, videoBase, fileExt, durStr, commentsCount,
 '</body>',
 '</html>',
   ].join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  IMAGE NOTES REPORT (v7.12.0)
+// ═══════════════════════════════════════════════════════════════════════════
+// The frame-comments report has always been the good artefact: a dark card per
+// note, the picture on the left, the words on the right, one overall comment on
+// top. It was only reachable from a video. This is the same document for a
+// selection of images, built from the note each image already carries in the
+// properties panel — no new field, no new storage, so .kpak round-trips without
+// touching the schema.
+//
+// Two things it deliberately does NOT do:
+//   · It does not store the overall comment on the board. That comment belongs
+//     to the export, not to an item, and persisting it would mean inventing a
+//     home for "a note about several items at once".
+//   · It does not re-encode anything unless the user says so (see the 25 MB
+//     gate). The bytes you imported are the bytes that go out.
+
+// Reading order: top-to-bottom, then left-to-right.
+//
+// A plain (y, x) sort is not enough. Board items are placed by hand, so two
+// images side by side routinely differ by a few pixels of y — a naive y-sort
+// then visits the right-hand one first. Items are therefore banded into rows by
+// vertical overlap, and only then sorted by x.
+function notesReadingOrder(items) {
+  const list = (items || []).slice().sort(function (a, b) {
+    return (((a && a.y) || 0) - ((b && b.y) || 0)) || (((a && a.x) || 0) - ((b && b.x) || 0));
+  });
+  const rows = [];
+  let cur = null;
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i];
+    const top = (it && it.y) || 0;
+    const bottom = top + ((it && it.h) || 0);
+    if (!cur || top >= cur.bottom) {
+      cur = { bottom: bottom, items: [] };
+      rows.push(cur);
+    }
+    cur.items.push(it);
+    if (bottom > cur.bottom) cur.bottom = bottom;
+  }
+  const out = [];
+  for (let r = 0; r < rows.length; r++) {
+    rows[r].items.sort(function (a, b) { return ((a && a.x) || 0) - ((b && b.x) || 0); });
+    out.push.apply(out, rows[r].items);
+  }
+  return out;
+}
+
+// What a data URL costs once it is decoded: base64 spends 4 characters on every
+// 3 bytes, plus up to two padding characters.
+function dataUrlByteLength(dataUrl) {
+  const s = String(dataUrl || '');
+  const comma = s.indexOf(',');
+  const b64 = (comma >= 0) ? s.slice(comma + 1) : s;
+  let pad = 0;
+  if (b64.slice(-2) === '==') pad = 2;
+  else if (b64.slice(-1) === '=') pad = 1;
+  return Math.max(0, Math.floor(b64.length * 3 / 4) - pad);
+}
+
+// The original bytes, whatever shape item.src is in. Boards are usually data
+// URLs already (that is what .kpak stores); the fetch path covers blob: URLs
+// and anything still pointing at a file on disk.
+async function notesSrcToDataUrl(src) {
+  const s = String(src || '');
+  if (!s) return '';
+  if (s.indexOf('data:') === 0) return s;
+  try {
+    const res = await fetch(s);
+    const blob = await res.blob();
+    return await new Promise(function (resolve, reject) {
+      const fr = new FileReader();
+      fr.onload = function () { resolve(String(fr.result || '')); };
+      fr.onerror = function () { reject(fr.error || new Error('could not read the image')); };
+      fr.readAsDataURL(blob);
+    });
+  } catch (e) {
+    return '';
+  }
+}
+
+// Shrink the long edge so a report can actually be emailed. PNG in stays PNG
+// out (flat-colour screenshots and cut-outs survive it); anything else goes out
+// as JPEG, which is what the frame report captures.
+async function notesDownscale(dataUrl, maxSide) {
+  return await new Promise(function (resolve) {
+    const img = new Image();
+    img.onload = function () {
+      try {
+        const w = img.naturalWidth || 1;
+        const h = img.naturalHeight || 1;
+        const scale = Math.min(1, maxSide / Math.max(w, h));
+        if (scale >= 1) { resolve(dataUrl); return; }
+        const cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(w * scale));
+        cv.height = Math.max(1, Math.round(h * scale));
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, 0, 0, cv.width, cv.height);
+        const png = /^data:image\/png/i.test(String(dataUrl));
+        resolve(cv.toDataURL(png ? 'image/png' : 'image/jpeg', png ? undefined : 0.9));
+      } catch (e) { resolve(dataUrl); }
+    };
+    img.onerror = function () { resolve(dataUrl); };
+    img.src = dataUrl;
+  });
+}
+
+// Which of the selected items this report can actually see. Same rule as
+// v7.10.1's image exports: an item with no .img or no .src has no pixels to
+// put in a report, and video/audio are the media path's job.
+function notesExportableImages() {
+  const sel = (typeof getSelectedImages === 'function') ? getSelectedImages() : [];
+  return notesReadingOrder(sel.filter(function (i) {
+    if (!i || !i.img || !i.src) return false;
+    return !(i.isVideo || i.isAudio || i.type === 'video' || i.type === 'audio');
+  }));
+}
+
+function buildNotesExportHtml(opts) {
+  opts = opts || {};
+  const imageCount = opts.imageCount || 0;
+  const commentCount = opts.commentCount || 0;
+  const exportedAt = opts.exportedAt || '';
+  const rows = opts.rows || '';
+  // Trim here, not only in the caller: an all-spaces comment is no comment,
+  // and rendering it produces an empty gradient card that looks like a bug.
+  const overComment = String(opts.overComment || '').trim();
+  const title = escapeHtml(opts.title || 'Image Notes');
+  // Same markup as the frame report's overall block — the CSS is shared, so
+  // the class names have to be too.
+  const overBlockHtml = overComment
+    ? ('    <div class="over-block">' +
+       '      <div class="over-title">📝 (overall comment)</div>' +
+       '      <div class="over-body">' + escapeHtml(overComment) + '</div>' +
+       '    </div>')
+    : '';
+  return [
+'<!DOCTYPE html>',
+'<html lang="en">',
+'<head>',
+'<meta charset="utf-8"/>',
+'<meta name="viewport" content="width=device-width,initial-scale=1"/>',
+'<title>' + title + ' — Image Notes</title>',
+'<style>',
+    ...REPORT_SHARED_CSS,
+'</style>',
+'</head>',
+'<body>',
+'  <div class="page">',
+'    <div class="head">',
+'      <div class="logo">🖼</div>',
+'      <div style="min-width:0;flex:1;">',
+'        <h1>' + title + '</h1>',
+'        <div class="sub">Image review · <b>' + imageCount + '</b> image' + (imageCount === 1 ? '' : 's') + ' · <b>' + commentCount + '</b> with a note</div>',
+'      </div>',
+'      <div class="right">',
+'        Exported<br/>' + escapeHtml(exportedAt),
+'      </div>',
+'    </div>',
+    overBlockHtml,
+'    <div class="rows">' + rows + '</div>',
+'    <div class="foot">Generated by <b>Krafted</b></div>',
+'  </div>',
+'  <div class="ex-lightbox" id="ex-lightbox" onclick="exLbClose(event)">',
+'    <button class="ex-lb-close" onclick="exLbClose(event)" title="Close (Esc)">×</button>',
+'    <img id="ex-lightbox-img" alt="image" />',
+'    <div class="ex-lb-hint">Click anywhere or press Esc to close</div>',
+'  </div>',
+'  <script>',
+    ...REPORT_LIGHTBOX_JS,
+'  <\/script>',
+'</body>',
+'</html>',
+  ].join('\n');
+}
+
+// Mail and chat attachments start refusing somewhere around here, and a folder
+// of holiday photos blows past it long before the board feels big.
+const NOTES_MAX_BYTES = 25 * 1024 * 1024;
+const NOTES_DOWNSCALE_SIDE = 1600;
+
+async function exportNotesAsHtml(overComment) {
+  const items = notesExportableImages();
+  if (!items.length) { try { toast('Select at least one image first'); } catch (e) {} return; }
+  try { toast('Collecting ' + items.length + ' image' + (items.length === 1 ? '' : 's') + '…'); } catch (e) {}
+  const picked = [];
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const url = await notesSrcToDataUrl(it.src);
+    // Keep the row even when the bytes are unreachable — a card saying so is
+    // better than silently dropping an image out of someone's review.
+    picked.push({ item: it, dataUrl: url || String(it.src || '') });
+  }
+  let total = 0;
+  for (let i = 0; i < picked.length; i++) total += dataUrlByteLength(picked[i].dataUrl);
+  if (total > NOTES_MAX_BYTES) {
+    const mb = (total / 1048576).toFixed(1);
+    let shrink = false;
+    try {
+      shrink = confirm('This report will be about ' + mb + ' MB, which most mail and chat tools refuse.\n\n'
+        + 'Shrink every image to ' + NOTES_DOWNSCALE_SIDE + 'px on the long edge and carry on?\n\n'
+        + '(Cancel keeps the full-size originals.)');
+    } catch (e) { shrink = false; }
+    if (shrink) {
+      try { toast('Shrinking to ' + NOTES_DOWNSCALE_SIDE + 'px…'); } catch (e) {}
+      for (let i = 0; i < picked.length; i++) {
+        picked[i].dataUrl = await notesDownscale(picked[i].dataUrl, NOTES_DOWNSCALE_SIDE);
+      }
+    }
+  }
+  const exportedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  let commentCount = 0;
+  const rows = picked.map(function (p, i) {
+    const it = p.item;
+    const note = String((it && it.note) || '').trim();
+    if (note) commentCount++;
+    const label = (it && (it.name || it.filename)) ? String(it.name || it.filename) : ('Image ' + (i + 1));
+    const snap = p.dataUrl
+      ? ('<img class="snap" src="' + p.dataUrl + '" alt="' + escapeHtml(label) + '"'
+         + ' onclick="exLbOpen(this.src)"/>')
+      : ('<div class="snap no-snap">image unavailable</div>');
+    return (
+      '<div class="row">' +
+        '<div class="snap-wrap">' + snap +
+          '<div class="frame-badge">#' + (i + 1) + '</div>' +
+        '</div>' +
+        '<div class="content">' +
+          '<div class="meta">' +
+            '<span class="time">' + escapeHtml(label) + '</span>' +
+            '<span class="sep">·</span>' +
+            '<span class="idx">#' + (i + 1) + ' of ' + picked.length + '</span>' +
+          '</div>' +
+          '<div class="text">' +
+            (note ? escapeHtml(note) : '<span style="opacity:.45;font-style:italic">(no comment)</span>') +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+  const html = buildNotesExportHtml({
+    title: 'Image Notes',
+    imageCount: picked.length,
+    commentCount: commentCount,
+    exportedAt: exportedAt,
+    rows: rows,
+    overComment: String(overComment || '').trim(),
+  });
+  try {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const stamp = exportedAt.replace(/[^0-9]/g, '').slice(0, 14);
+    const result = await kraftedSaveFile({
+      filename: 'krafted-image-notes-' + stamp + '.html',
+      blob: blob,
+      mime: 'text/html',
+      description: 'Image notes report (HTML)',
+    });
+    if (result === 'cancelled') return;
+    const verb = (result === 'saved') ? 'Saved' : 'Downloaded';
+    toast(verb + ' ' + picked.length + ' image' + (picked.length === 1 ? '' : 's')
+      + (commentCount ? (' · ' + commentCount + ' with a note') : ''));
+  } catch (e) {
+    console.error('Notes export failed:', e);
+    toast('Export failed: ' + e.message);
+  }
+}
+
+function submitNotesExportDialog() {
+  const ta = document.getElementById('notes-export-overall');
+  const text = ta ? String(ta.value || '') : '';
+  closeNotesExportDialog();
+  exportNotesAsHtml(text);
+}
+
+function closeNotesExportDialog() {
+  const ov = document.getElementById('notes-export-overlay');
+  if (ov) { try { ov.remove(); } catch (e) {} }
+}
+
+// One textarea. The overall comment is the only thing the report cannot read
+// off the board — everything else is already on the items.
+function openNotesExportDialog() {
+  const items = notesExportableImages();
+  if (!items.length) { try { toast('Select at least one image first'); } catch (e) {} return; }
+  closeNotesExportDialog();
+  let withNote = 0;
+  for (let i = 0; i < items.length; i++) {
+    if (String((items[i] && items[i].note) || '').trim()) withNote++;
+  }
+  const ov = document.createElement('div');
+  ov.id = 'notes-export-overlay';
+  ov.setAttribute('style',
+    'position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:100000010;'
+    + 'display:flex;align-items:center;justify-content:center;padding:24px;'
+    + 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;');
+  ov.innerHTML =
+    '<div style="width:min(560px,100%);background:#18181c;border:1px solid rgba(255,255,255,0.12);'
+    + 'border-radius:14px;padding:22px 24px 18px;box-shadow:0 24px 70px rgba(0,0,0,.6);color:#f1f1f4;">'
+    + '<div style="font-size:16px;font-weight:800;margin-bottom:6px;">📝 Export notes as HTML</div>'
+    + '<div style="font-size:12.5px;color:#b9b9c2;line-height:1.55;margin-bottom:16px;">'
+    + items.length + ' image' + (items.length === 1 ? '' : 's') + ' · ' + withNote + ' already carry a note · '
+    + 'the rest export as “(no comment)”</div>'
+    + '<div style="font-size:11px;font-weight:800;color:#00e5ff;text-transform:uppercase;'
+    + 'letter-spacing:1.4px;margin-bottom:7px;">Overall comment (optional)</div>'
+    + '<textarea id="notes-export-overall" rows="6" placeholder="One note for the whole batch — the recipient reads this above the images." '
+    + 'style="width:100%;box-sizing:border-box;background:#0d0d0f;color:#f1f1f4;'
+    + 'border:1px solid rgba(255,255,255,0.14);border-radius:9px;padding:11px 13px;font:inherit;'
+    + 'font-size:14px;line-height:1.6;resize:vertical;outline:none;"></textarea>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">'
+    + '<button type="button" onclick="closeNotesExportDialog()" style="background:transparent;'
+    + 'color:#b9b9c2;border:1px solid rgba(255,255,255,0.16);padding:9px 16px;border-radius:8px;'
+    + 'font:inherit;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>'
+    + '<button type="button" onclick="submitNotesExportDialog()" style="background:linear-gradient(135deg,#00e5ff,#7c5cfc);'
+    + 'color:#000;border:none;padding:9px 18px;border-radius:8px;font:inherit;font-size:13px;'
+    + 'font-weight:700;cursor:pointer;">Export HTML…</button>'
+    + '</div>'
+    + '</div>';
+  ov.addEventListener('mousedown', function (ev) {
+    if (ev.target === ov) closeNotesExportDialog();
+  });
+  document.body.appendChild(ov);
+  if (!openNotesExportDialog._wired) {
+    openNotesExportDialog._wired = true;
+    // Capture phase, the same reason the contact sheet does it: Escape is also
+    // "deselect" on the document, and closing the dialog should not throw away
+    // the selection the report is about to describe.
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && document.getElementById('notes-export-overlay')) {
+        ev.stopPropagation();
+        closeNotesExportDialog();
+      }
+    }, true);
+  }
+  const ta = document.getElementById('notes-export-overall');
+  if (ta) { try { ta.focus(); } catch (e) {} }
 }
 
 function videoAnnoDeleteComment(id) {
@@ -22897,6 +23249,10 @@ function showCtx(x, y) {
     // answered "No images to export". Count what the export can actually see.
     const _selImages = getSelectedImages().filter(i => i && i.img && i.src).length;
     if (_selImages) html += exportMenuEntries(_selImages);
+    // v7.12.0: the frame-comments report, but for a selection of images.
+    // Gated on the same count the image exports use, so it cannot appear
+    // for a video-only selection and then answer "no images".
+    if (_selImages) html += `<div class="ctx-item" onclick="openNotesExportDialog();hideCtx()" title="Each image keeps its Note; add one overall comment for the batch, then send the .html">📝 Export notes as HTML…</div>`;
     if (hasImages) html += `<div class="ctx-item" onclick="enterCrop(getSelectedImages()[0]);hideCtx()">Crop Image <kbd>C</kbd></div>`;
     // v7.0.49: pass every selected image, not just the first — silently
     // dropping the rest of a selection is how people lose work. The old kbd
