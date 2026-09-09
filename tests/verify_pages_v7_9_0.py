@@ -83,8 +83,12 @@ ok(re.search(rb'function exportMenuEntries\(', dev) is not None,
 ok(dev.count(b'exportMenuEntries(') >= 3,
    'exportMenuEntries defined + called in both branches (%d)' % dev.count(b'exportMenuEntries('))
 
-# (b) no more src.split('.').pop() guessing
-lacks(dev, b"src.split('.').pop()", "no src.split('.').pop() extension guessing")
+# (b) no more src.split('.').pop() guessing. NB: the string still appears in
+#     two COMMENTS that describe the bug — pin the live line, not the phrase.
+lacks(dev, b"ext = item.src.split('.').pop()",
+      "no live src.split('.').pop() extension guessing (image, video or audio)")
+has(dev, b"ext = extFromName(name, 'mp3');", "audio reads the extension from its own name")
+has(dev, b"ext = extFromName(name, 'mp4');", "video reads the extension from its own name")
 
 # (c) bake uses the one shared renderer, never re-derives geometry
 ok(re.search(rb'function renderItemRegion\(', dev) is not None,

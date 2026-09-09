@@ -164,6 +164,9 @@ function makeEnv(c) {
     };
     return n;
   }
+  // Every <a download=...> exportMediaSelected() clicks is recorded here, so
+  // §2b asserts on the file names it actually produced.
+  const links = [];
   const itemEl = makeNode('item');
   itemEl.offsetWidth = w; itemEl.offsetHeight = h;
   const canvasContent = makeNode('canvas-content');
@@ -209,10 +212,15 @@ function makeEnv(c) {
   };
   return {
     item: item, itemEl: itemEl, canvasContent: canvasContent, imgEl: imgEl, canvases: canvases,
+    links: links,
     document: {
       createElement(t) {
         if (t === 'div') return makeDiv();
         if (t === 'canvas') { const cv = makeCanvas(); canvases.push(cv); return cv; }
+        if (t === 'a') {
+          const a = { _tag: 'a', download: '', href: '', click() { links.push(a.download); } };
+          return a;
+        }
         return null;
       }
     },
@@ -231,10 +239,13 @@ const CORE = slice('var GEO_PROBE_UNIT = 100;', 'async function extractPolyFromI
 // The whole v7.9.0 export section: naming rules, quad, bake, both sinks.
 const EXP = slice('var EXPORT_MIME_EXT = {', '// R88 — Auto-load .kpak');
 const MENU = slice('function exportMenuEntries(n) {', 'function showCtx(x, y) {');
+// "Download Source File" — the only per-item export that was reachable with a
+// selection, and the one that produced the unopenable names. Executed in §2b.
+const MEDIA = slice('function exportMediaSelected() {', '// ==== save-load.js ====');
 
 const EXP_NAMES = ['extFromMime', 'extFromName', 'stripExt', 'exportBaseName',
   'dedupeExportNames', 'itemScreenQuad', 'bakeItemToBlob', 'renderItemRegion',
-  'exportAllImagesToFolder', 'exportOriginalFilesToFolder'];
+  'exportAllImagesToFolder', 'exportOriginalFilesToFolder', 'exportMediaSelected'];
 
 function buildExport(env, o) {
   o = o || {};
@@ -242,7 +253,7 @@ function buildExport(env, o) {
     'state', 'getSelectedImages', '_ensureAllImagesLive', '_isZhUI', 'makeProgressUI',
     'hasFileSystemAccess', 'pickSaveFolder', 'dataUrlToBlob', 'uniqueFilename',
     'writeBlobToFolder', 'JSZip', 'kraftedSaveFile', 'sanitizeFilename', 'formatBytes',
-    'toast', 'console'];
+    'toast', 'console', 'getSelectedItems', 'location'];
   const vals = [
     env.document, env.getComputedStyle, env.canvasContent,
     o.mediaFilterString || function (a) {
@@ -264,9 +275,11 @@ function buildExport(env, o) {
     o.sanitizeFilename || function (n) { return n; },
     o.formatBytes || function (n) { return n + ' B'; },
     o.toast || function () {},
-    { error() {}, log() {} }
+    { error() {}, log() {} },
+    o.getSelectedItems || function () { return []; },
+    o.location || { href: 'https://krafted.test/' }
   ];
-  const body = CORE + '\n' + EXP + '\nreturn {'
+  const body = CORE + '\n' + EXP + '\n' + MEDIA + '\nreturn {'
     + EXP_NAMES.map(function (n) { return n + ': ' + n; }).join(', ') + '};';
   return new Function(args, body).apply(null, vals);
 }
@@ -346,6 +359,52 @@ section(function () {
     JSON.stringify(['a', 'A_2']), 'collision detection is case-insensitive (macOS/Windows are)');
   eq(JSON.stringify(api.dedupeExportNames(['a', 'b'])),
     JSON.stringify(['a', 'b']), 'distinct names are left alone');
+});
+
+// ═══ 2b. Download Source File, executed ══════════════════════════════════
+// The reported defect lives here: on a blob: URL the extension was taken from
+// src.split('.').pop(), which is the tail of the GUID. These run the real
+// function and read the download names it produced.
+section(function () {
+  const BLOB = 'blob:https://krafted.test/550e8400-e29b-41d4-a716-446655440000';
+  const env = makeEnv({});
+  const api = buildExport(env, {
+    getSelectedItems: function () {
+      return [
+        { isAudio: true, audioName: 'ambience.wav', src: BLOB },
+        { isAudio: true, audioName: 'song', src: BLOB },
+        { isAudio: true, audioName: 'voice.mp3', src: 'data:audio/mpeg;base64,AAAA' },
+        { isVideo: true, filename: 'clip.mov', src: BLOB },
+        { isVideo: true, filename: 'take1.mp4', src: BLOB },
+        { filename: 'IMG_2301', src: BLOB },
+        { filename: 'REF heic.heic', src: BLOB },
+        { src: BLOB }
+      ];
+    }
+  });
+  api.exportMediaSelected();
+  const got = env.links;
+  eq(got.length, 8, 'every selected item produced one download');
+
+  // --- audio: the branch that still had the old trick until v7.9.0
+  eq(got[0], 'ambience.wav', 'audio extension comes from its own name, not the GUID');
+  eq(got[1], 'song.mp3', 'audio with no extension falls back to mp3');
+  eq(got[2], 'voice.mpeg', 'a data: URI still resolves from its mime');
+  ok(got[0].indexOf('550e8400') < 0 && got[1].indexOf('550e8400') < 0,
+    'no GUID tail ever reaches a file name');
+
+  // --- video: used to hardcode mp4 for blob: URLs, renaming clip.mov
+  eq(got[3], 'clip.mov', 'a blob:-sourced video keeps the extension of its own name');
+  eq(got[4], 'take1.mp4', 'an mp4 is still an mp4');
+
+  // --- images: the actual report
+  eq(got[5], 'IMG_2301.png', 'the reported case: IMG_2301 on a blob: URL becomes IMG_2301.png');
+  eq(got[6], 'REF heic.heic', 'a real extension in the name is kept');
+  ok(/^image_\d+_\d\.png$/.test(got[7]), 'a nameless item still gets a unique png, not a GUID');
+  for (let i = 0; i < got.length; i++) {
+    ok(got[i].indexOf('blob:') < 0, 'download ' + i + ' has no URL in its name: ' + got[i]);
+    ok(got[i].indexOf('http') < 0, 'download ' + i + ' has no scheme in its name: ' + got[i]);
+  }
 });
 
 // ═══ 3. the quad and the bake, executed ═══════════════════════════════════

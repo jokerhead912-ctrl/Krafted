@@ -36151,7 +36151,11 @@ function exportMediaSelected() {
         const m = item.src.match(/^data:audio\/(\w+)/);
         if (m) ext = m[1];
       } else {
-        ext = item.src.split('.').pop().split('?')[0] || 'mp3';
+        // v7.9.0: same blob:-URL trap as the image branch below. On a blob:
+        // URL the ".pop()" lands on the tail of the GUID, so the file comes out
+        // named "song.<uuid-tail>" and nothing can open it. audioName is the
+        // name of the file that was dropped, which needs no fetching.
+        ext = extFromName(name, 'mp3');
       }
     } else if (item.isVideo) {
       // Use the original video filename if available (e.g. "myclip.mp4"),
@@ -36177,12 +36181,16 @@ function exportMediaSelected() {
           if (parts.length > 1) {
             const candidate = parts[parts.length - 1].toLowerCase();
             if (/^[a-z0-9]{2,5}$/.test(candidate)) ext = candidate;
-            else ext = 'mp4';
+            else ext = extFromName(name, 'mp4');
           } else {
-            ext = 'mp4';
+            // v7.9.0: a blob: URL is "blob:https://host/<uuid>" — no dot, so
+            // there is no extension in the path and the old code hardcoded
+            // mp4, renaming every clip.mov to clip.mp4. name already holds the
+            // real one.
+            ext = extFromName(name, 'mp4');
           }
         } catch (e) {
-          ext = 'mp4';
+          ext = extFromName(name, 'mp4');
         }
       }
     } else if (item.src) {

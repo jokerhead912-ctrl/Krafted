@@ -64,6 +64,16 @@ mutate "Download Source File takes the extension from the blob: URL again (the G
   "      ext = extFromName(name, 'png');" \
   "      ext = item.src.split('.').pop().split('?')[0] || 'png';"
 
+mutate "the audio branch takes the extension from the blob: URL again (GUID tail)" \
+  "        ext = extFromName(name, 'mp3');" \
+  "        ext = item.src.split('.').pop().split('?')[0] || 'mp3';"
+
+# Three fallbacks, one anchor — all of them were a hardcoded 'mp4' before
+# v7.9.0, so reverting all three at once is the honest shape of the old bug.
+mutate "the video branch hardcodes mp4 again, renaming every clip.mov" \
+  "ext = extFromName(name, 'mp4');" \
+  "ext = 'mp4';" 3
+
 mutate "extFromName stops validating — any tail becomes an extension" \
   "  return /^[a-z0-9]{2,5}\$/.test(e) ? e : (fallback || '');" \
   "  return e;"
