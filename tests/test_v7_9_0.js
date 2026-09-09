@@ -605,7 +605,14 @@ section(function () {
   const sw = fs.readFileSync(path.join(ROOT, 'Krafted', 'docs', 'sw.js'), 'utf8');
   ok(sw.indexOf("APP_VERSION = '" + v + "'") >= 0 || sw.indexOf("APP_VERSION = '" + v) >= 0,
     'the service worker carries the same version (' + v + ')');
-  ok(v.indexOf('7.9.') === 0 || v.indexOf('7.8.') === 0, 'the version is the one these tests were written for (' + v + ')');
+  // This suite describes behaviour added in v7.9.0, so it holds for v7.9.0
+  // and anything later. It must NOT be written as `v.indexOf('7.9.') === 0`:
+  // a gate narrowed to one minor silently becomes an empty set the moment the
+  // minor is bumped, which is worse than having no gate at all. Compare
+  // numerically and assert positively.
+  const p = v.split('.').map(Number);
+  ok(p[0] > 7 || (p[0] === 7 && p[1] >= 9),
+    'the version is at least the one these tests were written for (' + v + ', want >= 7.9.0)');
 });
 
 Promise.all(asyncs).then(function () {

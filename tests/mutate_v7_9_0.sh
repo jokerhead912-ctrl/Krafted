@@ -56,7 +56,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.9.0 suite (export = the pixels you saw)"
+print "mutation check: v7.10.0 suite (export = the pixels you saw)"
 
 # ── THE COMPLAINT: the saved files could not be opened ────────────────────
 

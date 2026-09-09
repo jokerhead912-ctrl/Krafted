@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
-"""v7.9.0 Pages 部署後驗證 —— identity + behaviour 錨點 + byte-identical。
+"""Pages 部署後驗證（本地三份副本）—— identity + behaviour 錨點 + byte-identical。
 
 只讀，唔改任何檔。exit 0 = 全部過。
+
+版本係由 dev 檔 DERIVE，唔係硬編碼。理由（memory rule 12）：釘死一個 minor 嘅閘門，
+喺 minor 一 bump 嗰刻就靜默變成空集合 —— 比冇閘門更衰。而且呢支係 .py，
+`version_scan.py --bump` 淨識改 .js，唔會幫佢 bump（v7.10.0 就係咁紅咗 4 條）。
+呢支腳本嘅職責係「三個身份位互相一致」，唔係「版本係 7.x.y」。
 """
 import os
 import re
@@ -39,7 +44,7 @@ def lacks(b, needle, label):
     ok(needle not in b, label)
 
 
-print('v7.9.0 Pages verify')
+print('Pages verify (local copies)')
 print('-' * 62)
 
 for p in (DEV, DEPLOY, DOCS, SW):
@@ -62,13 +67,29 @@ ok(dev == doc, 'dev == Krafted/docs/kraftpub.html')
 ok(b' data-page-node-id' not in dev, 'no data-page-node-id left in shipped file')
 
 # ---- 2. identity anchors ----
+# Derived, never hardcoded: a gate pinned to one minor silently becomes an
+# empty set the moment the minor is bumped (memory rule 12), and version_scan
+# does not touch .py. The job is "the three identity sites agree".
 print('\n[2] identity anchors')
-has(dev, b'<title>Krafted v7.9.0</title>', 'title says v7.9.0')
-has(dev, b"var KRAFTED_VERSION = '7.9.0';", 'KRAFTED_VERSION = 7.9.0')
-has(sw, b"const APP_VERSION = '7.9.0';", 'sw APP_VERSION = 7.9.0')
-ok(re.search(rb"const CACHE_NAME = 'krafted-v7\.9\.0-'", sw) is not None,
-   'sw CACHE_NAME says krafted-v7.9.0-')
-ok(dev.count(b'7.9.0') >= 2, 'dev mentions 7.9.0 at least twice (%d)' % dev.count(b'7.9.0'))
+_vm = re.search(rb"var KRAFTED_VERSION = '([0-9]+\.[0-9]+\.[0-9]+)';", dev)
+ok(_vm is not None, 'dev declares KRAFTED_VERSION')
+if _vm is None:
+    print('\ncannot derive a version, abort')
+    sys.exit(1)
+VER = _vm.group(1).decode('ascii')
+_vp = [int(x) for x in VER.split('.')]
+print('  ..    derived version %s' % VER)
+ok(_vp[0] > 7 or (_vp[0] == 7 and _vp[1] >= 9),
+   'version is at least the one these checks were written for (%s, want >= 7.9.0)' % VER)
+has(dev, ('<title>Krafted v%s</title>' % VER).encode('ascii'),
+    'title matches KRAFTED_VERSION (%s)' % VER)
+has(sw, ("const APP_VERSION = '%s';" % VER).encode('ascii'),
+    'sw APP_VERSION matches dev (%s)' % VER)
+ok(re.search(("const CACHE_NAME = 'krafted-v%s-'" % re.escape(VER)).encode('ascii'),
+             sw) is not None,
+   'sw CACHE_NAME matches dev (krafted-v%s-)' % VER)
+ok(dev.count(VER.encode('ascii')) >= 2,
+   'dev mentions %s at least twice (%d)' % (VER, dev.count(VER.encode('ascii'))))
 
 # ---- 3. the old broken menu item is gone ----
 print('\n[3] old export path removed')

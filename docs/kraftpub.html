@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.9.0</title>
+<title>Krafted v7.10.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4540,7 +4540,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.9.0';
+var KRAFTED_VERSION = '7.10.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -24003,6 +24003,13 @@ const _WheelKind = (function() {
   const NOTCH_FLOOR = 40;
   // Trackpad deltas below this are unmistakably finger-driven.
   const FINGER_CEIL = 8;
+  // v7.10.0: how sure we must be before a 'mouse' verdict is allowed to
+  // override the macOS default of panning on a plain wheel. One event is
+  // not enough — a slow two-finger swipe can look exactly like one notch —
+  // but two agreeing events in a row is, because trackpad momentum is a
+  // decay curve that does not repeat an exact magnitude. Each agreeing
+  // event adds 0.34, so this is reached on the second one.
+  const MOUSE_LOCK = 0.68;
 
   function classify(e) {
     const now = (e.timeStamp || performance.now());
@@ -24012,9 +24019,16 @@ const _WheelKind = (function() {
     const ady = Math.abs(e.deltaY);
     const adx = Math.abs(e.deltaX);
 
-    // Decay stale confidence — a long pause means the user may have
-    // switched input device (mouse -> trackpad on a laptop at a desk).
-    if (gap > 600) { confidence = 0; verdict = 'unknown'; recent = []; }
+    // v7.10.0: a long pause used to reset the verdict back to 'unknown',
+    // which threw away a device we had already locked on. That was fine
+    // while a plain wheel always panned on macOS (v6.8.21), but now that a
+    // locked mouse is what routes the wheel to zoom, the reset meant the
+    // first notch after every pause panned again. Switching devices is
+    // already handled by the stream itself: the new device's own events
+    // score the other way and flip the verdict within one or two of them.
+    // Only the cadence and repeat history is stale after a pause, so
+    // clear just that.
+    if (gap > 600) { recent = []; }
 
     // Hard signals, checked before the rolling window.
     // deltaMode != 0 is line/page based, which only real wheels report.
@@ -24045,7 +24059,15 @@ const _WheelKind = (function() {
     //    is what actually separates them, so this branch only fires when
     //    there's an accompanying finger tell (sideways drift or a
     //    fractional value).
-    if (ady >= NOTCH_FLOOR) score += 2;
+    // v7.10.0: the +2 used to fire on magnitude alone. A fast two-finger
+    // flick ramps past NOTCH_FLOOR too, and because its events also arrive
+    // back to back it was scoring mouse-positive in the middle of a pan —
+    // exactly the regression v6.8.21 was written to prevent. A mechanical
+    // detent cannot repeat inside 30ms; a flick always does. Gating the
+    // credit on the gap keeps the flick negative without touching real
+    // notches, and a genuine wheel that does stream that fast still gets
+    // there on signal 5 (exact repeat) below.
+    if (ady >= NOTCH_FLOOR && gap > 30) score += 2;
     else if (ady > 0 && ady <= FINGER_CEIL && (adx > 0.5 || !Number.isInteger(e.deltaY))) score -= 2;
 
     // 2. Horizontal component. Real wheels don't drift sideways.
@@ -24073,7 +24095,10 @@ const _WheelKind = (function() {
     //    was the main reason low-delta mice never reached a 'mouse'
     //    verdict. An exact repeat is an exact repeat regardless of size;
     //    signals #1-3 above already reject genuine finger noise.
-    if (recent.length >= 3) {
+    // v7.10.0: was `recent.length >= 3`, which delayed the lock by a whole
+    // notch. Two is enough: a flick never repeats a magnitude, so the +3
+    // still cannot carry it, and a real wheel locks one notch sooner.
+    if (recent.length >= 2) {
       const uniq = new Set(recent.map(v => Math.round(v)));
       if (uniq.size === 1 && recent[0] > 0) score += 3;
       else if (uniq.size >= recent.length - 1) score -= 1;
@@ -24102,7 +24127,10 @@ const _WheelKind = (function() {
       const m = (window.state && window.state.wheelMode) || 'auto';
       if (m === 'mouse') return true;
       if (m === 'trackpad') return false;
-      return verdict === 'mouse';
+      // v7.10.0: a pinned mode is authoritative. The heuristic has to
+      // reach MOUSE_LOCK first, so one ambiguous event cannot turn a
+      // two-finger pan into a zoom.
+      return verdict === 'mouse' && confidence >= MOUSE_LOCK;
     },
     get isTrackpad() {
       const m = (window.state && window.state.wheelMode) || 'auto';
@@ -24110,10 +24138,23 @@ const _WheelKind = (function() {
       if (m === 'mouse') return false;
       return verdict === 'trackpad';
     },
+    get confidence() { return confidence; },
     get info() { return verdict + ' (' + Math.round(confidence * 100) + '%)'; },
   };
 })();
 if (typeof window !== 'undefined') window._WheelKind = _WheelKind;
+
+// v7.10.0: ONE definition of which way a wheel-zoom should go. It used to be
+// inlined three times (Cmd+wheel, the Ctrl+wheel mouse branch, and plain
+// wheel), so a change to one silently missed the other two. Contract:
+//   physical mouse -> Windows parity: scroll up (deltaY < 0) zooms IN.
+//   trackpad       -> honour the OS natural-scroll setting.
+// naturalScroll has never touched pinch (spread = in, pinch = out is
+// universal) or two-finger pan, so gating it on the device is exactly the
+// knob being asked for and moves nothing else.
+function wheelZoomDelta(e) {
+  return (_WheelKind.isMouse || !state.naturalScroll) ? e.deltaY : -e.deltaY;
+}
 
 // SCROLL ZOOM / PAN
 // Wheel direction note: On Mac the OS often delivers mouse-wheel deltaY with the
@@ -24210,13 +24251,21 @@ viewport.addEventListener('wheel', e => {
   const ady = Math.abs(e.deltaY);
   const wheelMode = ((window.state && window.state.wheelMode) || 'auto');
   const strongTrackpadDrift = (adx > 0.55 && ady > 0.55 && (adx >= 1.4 || adx >= ady * 0.24));
-  // v6.8.21: on macOS, plain (unmodified) wheel events now ALWAYS pan.
+  // v6.8.21: on macOS, plain (unmodified) wheel events always panned.
   // Chrome emits fast two-finger scroll as large integer deltaY with
-  // deltaX === 0, which is shape-identical to a mouse notch, so any
-  // delta-shape heuristic will eventually turn pan into zoom. The only
-  // way to get predictable behaviour is an explicit contract:
-  //   two-finger move -> pan, pinch -> zoom, Cmd+wheel -> zoom,
-  //   and wheelMode='mouse' (right-click menu) -> wheel zooms.
+  // deltaX === 0, which is shape-identical to a mouse notch, so no
+  // delta-shape heuristic can be trusted on a single event.
+  // v7.10.0: that reasoning was right about ONE event and wrong about a
+  // stream. Two consecutive events repeating an exact magnitude is a
+  // mechanical detent — trackpad momentum is a decay curve and does not
+  // repeat. The contract is therefore now:
+  //   two-finger move   -> pan
+  //   pinch (ctrl)      -> zoom, proportional
+  //   Cmd+wheel         -> zoom
+  //   locked mouse      -> wheel zooms, Windows-style  (v6.8.21: pan)
+  //   wheelMode='mouse' -> wheel zooms (explicit pin, right-click menu)
+  // 'Locked' means at least MOUSE_LOCK confident, so a single ambiguous
+  // event still pans and a trackpad never loses two-finger panning.
   const macWheelLikeMouse = (wheelMode === 'mouse');
 
   // v7.0.31: ZOOM MUST STAY ANCHORED UNDER THE CURSOR.
@@ -24236,7 +24285,7 @@ viewport.addEventListener('wheel', e => {
   // ── Mac Cmd + wheel: zoom (metaKey on Mac, absent on Windows) ──
   if (Platform.mac && e.metaKey) {
     const s = state.zoomStep;
-    const rawDY = state.naturalScroll ? -e.deltaY : e.deltaY;
+    const rawDY = wheelZoomDelta(e);
     zoomBy(rawDY < 0 ? s : 1 / s, wheelCx, wheelCy);
     return;
   }
@@ -24250,7 +24299,11 @@ viewport.addEventListener('wheel', e => {
     // macOS unless the user explicitly pinned wheelMode='mouse'.
     const forceMouseMode = wheelMode === 'mouse';
     const strongTrackpadPinch = _twoFingerPan || _WheelKind.isTrackpad || (e.deltaMode === 0 && (!Number.isInteger(e.deltaY) || ady <= 8 || strongTrackpadDrift));
-    const macPinch = Platform.mac && e.deltaMode === 0 && (strongTrackpadPinch || !forceMouseMode);
+    // v7.10.0: a confident mouse must not be dragged into the pinch ramp.
+    // `ady <= 8` used to be enough on its own, so a mouse that reports small
+    // notches (deltaY 4) got the clamped 2-8% pinch step instead of zoomStep.
+    const macPinch = Platform.mac && e.deltaMode === 0 && !_WheelKind.isMouse &&
+      (strongTrackpadPinch || !forceMouseMode);
     if (macPinch) {
       // ── v7.0.32: the `.item.has-media` guard is GONE ──
       // It was there to stop "two-finger video scrubbing from accidentally
@@ -24265,7 +24318,7 @@ viewport.addEventListener('wheel', e => {
     } else if (e.deltaMode !== 0 || _WheelKind.isMouse) {
       // Real mouse wheel → use zoomStep (discrete notch zoom)
       const s = state.zoomStep;
-      const rawDY = state.naturalScroll ? -e.deltaY : e.deltaY;
+      const rawDY = wheelZoomDelta(e);
       zoomBy(rawDY < 0 ? s : 1 / s, wheelCx, wheelCy);
     } else {
       // Fallback pinch path (non-mac or ambiguous device)
@@ -24292,7 +24345,7 @@ viewport.addEventListener('wheel', e => {
   // - keep a narrow fallback for unknown+pixel mode only when X drift is
   //   genuinely non-trivial (not tiny wheel noise)
   } else if (Platform.mac
-      ? (_twoFingerPan || (e.deltaMode === 0 && !macWheelLikeMouse))
+      ? (_twoFingerPan || (e.deltaMode === 0 && !macWheelLikeMouse && !_WheelKind.isMouse))
       : (_twoFingerPan && e.deltaMode === 0)) {
     state.pan.x -= e.deltaX;
     state.pan.y -= e.deltaY;
@@ -24313,7 +24366,7 @@ viewport.addEventListener('wheel', e => {
       return;
     }
     const s = state.zoomStep;
-    const rawDY = state.naturalScroll ? -e.deltaY : e.deltaY;
+    const rawDY = wheelZoomDelta(e);
     zoomBy(rawDY < 0 ? s : 1 / s, wheelCx, wheelCy);
   }
 }, { passive: false });
