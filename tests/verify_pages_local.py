@@ -95,6 +95,24 @@ ok(dev.count(VER.encode('ascii')) >= 2,
 print('\n[3] old export path removed')
 lacks(dev, b'Save Images to Folder', 'no "Save Images to Folder" string left')
 
+# ---- 3b. v7.10.1: the duplicate "Download Source File" is gone ----
+# It duplicated "Save original files" on IMAGES (v7.9.0 writes the same bytes),
+# but it was the ONLY way out for video/audio: those items are built with
+# img: null, and every image export filters on item.img. So the entry was
+# narrowed, not deleted. Whole-file scope here; the wiring is pinned by
+# test_v7_10_1.js + mutate_v7_10_1.sh.
+print('\n[3b] v7.10.1 the duplicate is gone, media-only keeps a way out')
+lacks(dev, b'Download Source File', 'no "Download Source File" string left anywhere')
+lacks(dev, b'\xe4\xb8\x8b\xe8\xbd\xbd\xe5\x8e\x9f\xe5\xa7\x8b\xe6\xa1\xa3',
+      'zh dictionary no longer carries 下载原始档')
+has(dev, b'Save media files', 'renamed entry "Save media files…" present')
+has(dev, b'\xe5\x82\xa8\xe5\xad\x98\xe5\xaa\x92\xe4\xbd\x93\xe6\xa1\xa3',
+    'zh dictionary carries 储存媒体档…')
+has(dev, b'const isVid = function (it)',
+    'one shared isVid() predicate (filter and branch agree, .kpak type-only works)')
+lacks(dev, b'} else if (item.src) {',
+      'the image branch of exportMediaSelected() is really deleted')
+
 # ---- 4. behaviour anchors: the three bug fixes ----
 print('\n[4] behaviour anchors')
 
