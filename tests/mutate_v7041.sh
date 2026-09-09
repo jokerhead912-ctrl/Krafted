@@ -199,8 +199,8 @@ mutate "the hotkey stops persisting the mark" \
 # ── version ───────────────────────────────────────────────────────────────
 
 mutate "the version bump is forgotten" \
-  "var KRAFTED_VERSION = '7.10.1';" \
-  "var KRAFTED_VERSION = '7.10.0';"
+  "var KRAFTED_VERSION = '7.11.0';" \
+  "var KRAFTED_VERSION = '7.10.1';"
 
 print ""
 print "restoring…"

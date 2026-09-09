@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.10.1</title>
+<title>Krafted v7.11.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4540,7 +4540,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.10.1';
+var KRAFTED_VERSION = '7.11.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -32021,6 +32021,23 @@ function renderItemRegion(item, screenPts, opts) {
   };
 }
 
+// item-local display px -> screen px. Crop stores its box in item-local px
+// (0..item.w) because that is where its overlay lives, but renderItemRegion()
+// wants SCREEN points, and the two are not the same rectangle once the item
+// is rotated or reframed. Three probes into the live element — not
+// getBoundingClientRect(), which is the axis-aligned box AROUND a rotated
+// element (v7.8.0) — so board zoom+pan, the item's own rotate/flip and
+// reframe's transform on the <img> all come out in the answer. Same reasoning
+// as itemPixelGeometry(), and deliberately the same primitives.
+function itemLocalToScreen(item) {
+  if (!item || !item.el) return null;
+  return _geoAffine(
+    _geoProbe(item.el, 'left:0;top:0;'),
+    _geoProbe(item.el, 'left:' + GEO_PROBE_UNIT + 'px;top:0;'),
+    _geoProbe(item.el, 'left:0;top:' + GEO_PROBE_UNIT + 'px;'),
+    GEO_PROBE_UNIT, GEO_PROBE_UNIT);
+}
+
 async function extractPolyFromItem(item, screenPts, opts) {
   opts = opts || {};
   if (!item || !item.el || screenPts.length < 3) return null;
@@ -34700,75 +34717,75 @@ function applyCrop() {
   if (!state.cropping) return;
   const c = state.cropping;
   const item = c.item;
-  // Convert display-pixel crop box to image natural-pixel crop box
-  const ratioX = item.natW / item.w;
-  const ratioY = item.natH / item.h;
-  const sx = Math.max(0, Math.round(c.x * ratioX));
-  const sy = Math.max(0, Math.round(c.y * ratioY));
-  let sw = Math.max(1, Math.round(c.w * ratioX));
-  let sh = Math.max(1, Math.round(c.h * ratioY));
-  // Clamp to image bounds
-  sw = Math.min(sw, item.natW - sx);
-  sh = Math.min(sh, item.natH - sy);
-
-  if (sw < 2 || sh < 2) { toast('Crop area too small'); return; }
+  if (c.w < 2 || c.h < 2) { toast('Crop area too small'); return; }
   toast('Cropping…');
 
-  const sourceSrc = item.src;
-  const img = new Image();
-  img.onload = function() {
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = sw;
-      canvas.height = sh;
-      const ctx2d = canvas.getContext('2d');
-      ctx2d.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-      // Preserve format: try to keep original mime, fallback png
-      let mime = 'image/png';
-      const m = (sourceSrc.match(/^data:([^;,]+)/) || [])[1];
-      if (m && /^image\/(png|jpeg|webp)$/i.test(m)) mime = m;
-      const quality = mime === 'image/jpeg' ? 0.92 : undefined;
-      const newSrc = canvas.toDataURL(mime, quality);
+  // v7.11.0 — C crop reads its pixels through renderItemRegion(), the ONE
+  // renderer cut / lasso / export already share. It used to hand-roll
+  // `natW / item.w` into a drawImage() off item.src, which is a different
+  // rectangle the moment reframe (⇧R) has moved the picture inside its frame:
+  // reframe is NON-DESTRUCTIVE — a CSS transform on the <img>, with item.src
+  // still holding the whole original — so the old maths cut the ORIGINAL's
+  // top-left corner instead of the region actually on screen. "C captures
+  // something different from what I see" was that, not a drawing bug.
+  // Going through the renderer also fixes item rotation and flip, which the
+  // old ratio ignored entirely.
+  const local = itemLocalToScreen(item);
+  if (!local) { toast('Crop failed'); return; }
+  const screenPts = [
+    _geoApply(local, c.x, c.y),
+    _geoApply(local, c.x + c.w, c.y),
+    _geoApply(local, c.x + c.w, c.y + c.h),
+    _geoApply(local, c.x, c.y + c.h)
+  ];
+  const r = renderItemRegion(item, screenPts, {
+    onError: function (m) { toast('Crop failed: ' + m); }
+  });
+  if (!r) return;
 
-      // Compute new display size: keep the same display width, recompute height
-      const newAspect = sw / sh;
-      const oldDispW = item.w;
-      const newDispW = oldDispW;
-      const newDispH = Math.max(20, Math.round(newDispW / newAspect));
+  let newSrc;
+  try {
+    // Preserve format where canvas can write it, otherwise fall back to PNG.
+    let mime = 'image/png';
+    const m = ((item.src || '').match(/^data:([^;,]+)/) || [])[1];
+    if (m && /^image\/(png|jpeg|webp)$/i.test(m)) mime = m;
+    newSrc = r.canvas.toDataURL(mime, mime === 'image/jpeg' ? 0.92 : undefined);
+  } catch (err) {
+    console.error('Crop failed', err);
+    toast('Crop failed');
+    return;
+  }
+  const sw = r.outW, sh = r.outH;
 
-      // Persist old for restore on cancel (we already passed orig values into state.cropping)
-      const old = { src: item.src, natW: item.natW, natH: item.natH, w: item.w, h: item.h,
-                    cropX: item.cropX || 0, cropY: item.cropY || 0 };
-      item.src = newSrc;
-      item.natW = sw; item.natH = sh;
-      item.w = newDispW; item.h = newDispH;
-      item.cropX = 0; item.cropY = 0;
-      if (item.img) {
-        item.img.src = newSrc;
-        item.img.style.width = '100%'; item.img.style.height = '100%';
-        item.img.style.transform = '';
-        item.img.style.objectFit = '';
-        item.img.style.objectPosition = '';
-      }
-      // Tear down crop UI
-      if (state.cropping) {
-        const crop = state.cropping;
-        state.cropping = null;
-        if (crop.els.overlay && crop.els.overlay.parentNode) crop.els.overlay.parentNode.removeChild(crop.els.overlay);
-        if (crop.els.toolbar && crop.els.toolbar.parentNode) crop.els.toolbar.parentNode.removeChild(crop.els.toolbar);
-        crop.item.el.classList.remove('cropping');
-      }
-      updateItemStyle(item);
-      refreshSelection();
-      scheduleAutoSave();
-      toast('Image cropped to ' + sw + '×' + sh);
-    } catch (err) {
-      console.error('Crop failed', err);
-      toast('Crop failed');
-    }
-  };
-  img.onerror = function() { toast('Could not load image for cropping'); };
-  img.src = sourceSrc;
+  // Keep the frame's width and recompute the height from the new aspect, so a
+  // full-image crop stays a no-op and the item does not jump.
+  const newAspect = sw / sh;
+  const newDispW = item.w;
+  const newDispH = Math.max(20, Math.round(newDispW / newAspect));
+
+  item.src = newSrc;
+  item.natW = sw; item.natH = sh;
+  item.w = newDispW; item.h = newDispH;
+  // v7.11.0: the crop is baked, so the framing that produced it has to go —
+  // leaving frameOn on would pan/zoom/rotate the already-cropped pixels a
+  // second time (v7.8.0's bake-then-reset rule). Zeroing cropX/cropY first
+  // also stops migrateLegacyCrop() from reading them as a legacy pan and
+  // silently re-framing the item it was supposed to leave flat.
+  item.cropX = 0; item.cropY = 0;
+  rfSetFrameFields(item, { on: false, z: 1, rot: 0, x: 0, y: 0 });
+  if (item.img) item.img.src = newSrc;
+  // Tear down crop UI
+  if (state.cropping) {
+    const crop = state.cropping;
+    state.cropping = null;
+    if (crop.els.overlay && crop.els.overlay.parentNode) crop.els.overlay.parentNode.removeChild(crop.els.overlay);
+    if (crop.els.toolbar && crop.els.toolbar.parentNode) crop.els.toolbar.parentNode.removeChild(crop.els.toolbar);
+    crop.item.el.classList.remove('cropping');
+  }
+  updateItemStyle(item);
+  refreshSelection();
+  scheduleAutoSave();
+  toast('Image cropped to ' + sw + '×' + sh);
 }
 
 

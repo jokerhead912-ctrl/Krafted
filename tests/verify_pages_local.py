@@ -153,6 +153,31 @@ has(dev, b'opts.onCancel', 'progress UI supports onCancel')
 ok(re.search(rb'function exportAllImagesToFolder\(opts\)', dev) is not None,
    'exportAllImagesToFolder takes opts')
 
+# ---- 4b. v7.11.0 — C crop reads the pixels you saw ----
+# 「c capture 功能有問題,佢截嘅圖同我真實有啲唔同,當我用了 <Reframe> 呢兩個功能」
+# 病根：applyCrop() 自己一份 hand-rolled capture（natW / item.w 塞落 drawImage
+# 切 item.src），而 reframe 係 non-destructive（淨係 <img> 嘅 CSS transform，
+# item.src 仲係成張原圖）→ 兩邊嘅 ratio 講嘅唔係同一件事，cut 咗去原圖左上角。
+# 呢度釘死「改咗」同「冇咗」兩邊。
+print('\n[4b] v7.11.0 — C crop captures what was on the board')
+ok(re.search(rb'function itemLocalToScreen\(item\)', dev) is not None,
+   'itemLocalToScreen() exists (item-local px -> screen px)')
+ok(dev.count(b'function itemLocalToScreen(') == 1, 'exactly one itemLocalToScreen definition')
+has(dev, b'renderItemRegion(item, screenPts, {',
+    'applyCrop reads pixels through the shared renderer')
+# The two halves of the OLD world, pinned in the negative. A positive anchor
+# right after keeps them from quietly becoming an empty set.
+ok(re.search(rb'function applyCrop\(\)', dev) is not None,
+   'applyCrop() still exists (the negative needles below are not vacuous)')
+ok(dev.count(b'drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh)') == 0,
+   'the old hand-rolled drawImage capture is gone')
+ok(dev.count(b'const ratioX = item.natW / item.w') == 0,
+   'the wrong natW/item.w ratio is gone')
+# bake-then-reset (v7.8.0's rule): a baked crop must drop the framing that
+# produced it, or the same pan/zoom/rotate is applied a second time.
+has(dev, b'rfSetFrameFields(item, { on: false, z: 1, rot: 0, x: 0, y: 0 });',
+    'applyCrop resets framing after baking, through the single writer')
+
 # ---- 5. i18n ----
 print('\n[5] i18n')
 has(dev, b'Save images as PNG', 'zh dictionary has "Save images as PNG" key')

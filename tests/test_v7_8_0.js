@@ -220,7 +220,7 @@ section(function () {
   has('  lassoKnockBtn.style.display = v;', 'the helper drives the lasso Knock out button too');
   has("'Knock out': '挖空',", "Knock out is translated");
   // Provenance comments in this file must not be mutated by a version bump.
-  ok(HTML.indexOf('// v7.10.1:') > 0, 'v7.10.1 provenance comments are present');
+  ok(HTML.indexOf('// v7.11.0:') > 0, 'v7.11.0 provenance comments are present');
 });
 
 // ═══ 2. itemPixelGeometry, executed against the stub DOM ══════════════════
@@ -241,7 +241,11 @@ function expectedScreen(c, nx, ny) {
 }
 
 section(function () {
-  ok(GEO_BLOCK.length > 1500 && GEO_BLOCK.length < 9000, 'the mapper block is present and bounded');
+  // v7.11.0: the upper bound moved 9000 -> 12000. It is a tripwire against
+  // unrelated code being swept into the mapper, not a budget; v7.11.0 added
+  // itemLocalToScreen() (crop's item-local -> screen mapper) to this block on
+  // purpose, because it is the same probe machinery and must drift with it.
+  ok(GEO_BLOCK.length > 1500 && GEO_BLOCK.length < 12000, 'the mapper block is present and bounded');
 
   // ── the case that was broken: a ROTATED source ──
   let c = { x: 100, y: 200, w: 300, h: 150, rot: 30, natW: 600, natH: 300 };
@@ -249,7 +253,7 @@ section(function () {
   let g = geo.itemPixelGeometry(env.item);
   ok(!!g, 'the mapper returns geometry for a rotated item');
   let p00 = geo._geoApply(g.nat, 0, 0), e00 = expectedScreen(c, 0, 0);
-  near(p00.x, e00.x, 'v7.10.1: source pixel (0,0) lands on the rotated item’s top-left corner (x)', 0.02);
+  near(p00.x, e00.x, 'v7.11.0: source pixel (0,0) lands on the rotated item’s top-left corner (x)', 0.02);
   near(p00.y, e00.y, 'source pixel (0,0) lands on the rotated item’s top-left corner (y)', 0.02);
   let p11 = geo._geoApply(g.nat, 600, 300), e11 = expectedScreen(c, 600, 300);
   near(p11.x, e11.x, 'source pixel (natW,natH) lands on the rotated item’s bottom-right corner (x)', 0.02);
@@ -344,8 +348,16 @@ asection(async function () {
   // The whole point: NOTHING in the extract measures the element box any
   // more. getBoundingClientRect() on a rotated element returns the
   // axis-aligned box AROUND the image, which is where the bug came from.
-  ok(EXTRACT_BLOCK.indexOf('getBoundingClientRect') < 0,
+  // v7.11.0: the needle is a METHOD CALL, not any mention of the name.
+  // v7.11.0's itemLocalToScreen() documents why it does NOT use
+  // getBoundingClientRect(), and a bare-substring gate cannot tell an
+  // explanation from a measurement — it went red on its own comment. The
+  // reverse assertion right after keeps the narrower needle honest: a gate
+  // that matches nothing at all is worse than no gate.
+  ok(EXTRACT_BLOCK.indexOf('.getBoundingClientRect(') < 0,
     'the extract never measures the element box itself (the AABB bug cannot come back)');
+  ok(EXTRACT_BLOCK.indexOf('itemPixelGeometry(item)') >= 0,
+    '...and the block really is the extract, so that needle is not vacuous');
   // One renderer for cut, lasso and export. A second copy of this maths is
   // the oldest root cause on the project, so pin the call instead of trusting
   // that nobody adds one.
@@ -433,7 +445,7 @@ asection(async function () {
 
   // The result is upright: rot and flip are baked into the pixels, so leaving
   // them on the item is what made the NEXT cut drift.
-  eq(newItem.rot, 0, 'v7.10.1: the extracted copy is upright (rot = 0)');
+  eq(newItem.rot, 0, 'v7.11.0: the extracted copy is upright (rot = 0)');
   eq(newItem.flipH, false, 'the extracted copy carries no horizontal flip');
   eq(newItem.flipV, false, 'the extracted copy carries no vertical flip');
   near(newItem.w, (sR - sL), 'the copy covers exactly the drawn width, in world px', 0.02);
@@ -535,7 +547,7 @@ asection(async function () {
   ok(log.drawImage.length === 1 && log.drawImage[0].length === 5, 'the whole source is drawn with an explicit source rect');
   eq(log.drawImage[0][3], 600, 'the source rect is the natural width');
   eq(log.drawImage[0][4], 300, 'the source rect is the natural height');
-  eq(log.fill[0], 'destination-out', 'v7.10.1: the hole is SUBTRACTED (destination-out), not painted over');
+  eq(log.fill[0], 'destination-out', 'v7.11.0: the hole is SUBTRACTED (destination-out), not painted over');
   // The path is in SOURCE pixels: on a 30deg source, screen and source coords
   // differ, so a wrong mapper cannot land on these exact numbers.
   near(log.path[0][1], 100, 'the hole is cut in source pixels (first x)');
