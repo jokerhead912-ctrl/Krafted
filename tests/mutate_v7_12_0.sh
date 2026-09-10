@@ -52,7 +52,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.12.0 suite (image notes report)"
+print "mutation check: v7.13.0 suite (image notes report)"
 
 # ── reading order ─────────────────────────────────────────────────────────
 
@@ -155,9 +155,11 @@ mutate "the image report loses the lightbox" \
 
 # ── the dialog ────────────────────────────────────────────────────────────
 
+# v7.13.0 renamed the variable (text → overall) when the dialog grew per-image
+# rows; the behaviour under test is unchanged: what is typed must be read.
 mutate "the dialog's textarea is never read" \
-  "  const text = ta ? String(ta.value || '') : '';" \
-  "  const text = '';"
+  "  const overall = ta ? String(ta.value || '') : '';" \
+  "  const overall = '';"
 
 print "MUTVERDICT $([ $NOTCAUGHT -eq 0 ] && [ $ANCHORFAIL -eq 0 ] && echo ok || echo BAD)  holes=$NOTCAUGHT skipped=$ANCHORFAIL caught=$CAUGHT fragile=$FRAGILE"
 exit $((NOTCAUGHT + ANCHORFAIL))

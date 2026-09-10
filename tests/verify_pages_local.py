@@ -206,6 +206,26 @@ has(dev, '📝 匯出圖文備註 HTML…'.encode('utf-8'), 'zh dictionary carri
 # so .kpak needs no schema change and old boards keep working.
 has(dev, b'it.note)', 'the report reads item.note, it stores nothing new')
 
+# ---- 4d. v7.13.0 — per-image typing, zip on the image report, copy what you see ----
+# 「一樣可以每一張圖都打字,同埋個HTML 可以下載全部圖片,另外想問吓可唔可以
+#  喺個app裏面選擇圖片copy,paste在微信?」
+print('\n[4d] v7.13.0 — per-image notes, shared zip, bake-to-clipboard')
+# A: one textarea per image, written back onto the item (one undo step).
+has(dev, b'function notesWriteBack(', 'notesWriteBack() exists')
+has(dev, b'function notesDialogRow(', 'notesDialogRow() exists')
+has(dev, 'saved back onto each image'.encode('utf-8'),
+    'the dialog says typing is written back')
+# B: the zip writer moved into the shared script — one copy, two buttons.
+ok(dev.count(b'function buildZip(files)') == 1, 'exactly one zip writer')
+ok(dev.count(b'id="zipBtn" type="button"') == 2, 'both reports carry the zip button')
+has(dev, b'data-prefix="image"', 'the image report prefixes its zip entries image-*')
+# C: Cmd+C bakes through the ONE renderer; a multi-selection becomes one
+# contact sheet (ceil-sqrt grid, 4096px cap, board background).
+has(dev, b'async function copySelectionAsImage(', 'copySelectionAsImage() exists')
+has(dev, b'function composeContactSheet(', 'composeContactSheet() exists')
+has(dev, b'const COPY_SHEET_MAX_SIDE = 4096;', 'the sheet is capped at 4096px')
+has(dev, b'    copySelectionAsImage()', 'copySelected() hands images to the bake path')
+
 # ---- 5. i18n ----
 print('\n[5] i18n')
 has(dev, b'Save images as PNG', 'zh dictionary has "Save images as PNG" key')
