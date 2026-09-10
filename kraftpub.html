@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.13.0</title>
+<title>Krafted v7.14.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2439,6 +2439,11 @@ body.relation-mode .item:hover { outline: 2px solid rgba(0,229,255,0.5); outline
 #toolbar button.tb-full:hover { background:#22c55e; color:#fff; border-color:#22c55e; }
 #toolbar kbd { font-size:9px; opacity:0.35; font-family:'Inter',monospace; }
 #toolbar .tb-label { font-size:11px; font-weight:500; }
+/* v7.14.0: collapsible toolbar -- collapsed hides the bar; the pill restores it */
+#toolbar.collapsed { display:none; }
+#toolbar-expand { position:fixed; top:12px; left:50%; transform:translateX(-50%); display:none; align-items:center; justify-content:center; width:40px; height:32px; background:var(--toolbar-bg); border:1px solid var(--border-subtle); border-radius:999px; z-index:9999999; box-shadow:var(--shadow-medium); cursor:pointer; color:var(--text-dim); padding:0; font-family:'Inter',sans-serif; }
+#toolbar-expand:hover { color:var(--text); background:var(--btn-hover); }
+#toolbar-expand.show { display:flex; }
 
 /* PROPERTIES PANEL */
 #props { position:fixed; top:calc(12px + var(--right-top, 0px)); right:12px; width:250px; background:var(--panel-bg); border:1px solid var(--border-subtle); border-radius:12px; padding:0; z-index:9999999; max-height:calc(100vh - 24px - var(--right-top, 0px) - var(--minimap-h, 0px) - var(--rail-bottom, 0px)); overflow-y:auto; box-shadow:var(--shadow-medium); transition:top 0.18s ease, width 0.2s ease, min-width 0.2s ease, opacity 0.2s ease; }
@@ -3456,6 +3461,11 @@ body.capturing .item.has-media .media-type-badge.audio-badge { display: none !im
     font-size: 11px !important;
     min-height: 36px;
   }
+  /* v7.14.0: expand pill follows the toolbar to the bottom on mobile */
+  #toolbar-expand {
+    bottom: 8px !important; top: auto !important;
+    left: 50% !important; transform: translateX(-50%) !important;
+  }
 
   /* Move status bar to bottom above toolbar */
   #status-bar {
@@ -3841,7 +3851,11 @@ body.screen-share-mode #ss-fps {
   <button onclick="newBoard()" title="New Board (clear all)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h10M6 5V3h4v2M5 5l1 9h4l1-9"/></svg> <span class="tb-label">Clear</span></button>
   <div class="sep"></div>
   <button onclick="toggleScreenShareMode()" id="btn-screen-share" title="Screen Share Mode — 投屏模式 (Ctrl+Shift+P)&#10;降低 GPU 负担，改善腾讯会议投屏流畅度"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="14" height="9" rx="1.5"/><path d="M5 15l3-3M11 15L8 12"/></svg> <span class="tb-label">Screen</span></button>
+  <button onclick="setToolbarCollapsed(true)" id="btn-toolbar-collapse" title="Collapse toolbar"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l5-5 5 5"/></svg></button>
 </div>
+
+<!-- v7.14.0: toolbar expand pill (only visible while the toolbar is collapsed) -->
+<button id="toolbar-expand" onclick="setToolbarCollapsed(false)" title="Show toolbar"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5h12M2 8h12M2 11h12"/></svg></button>
 
 <!-- PROPERTIES PANEL -->
 <div id="props">
@@ -4540,7 +4554,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.13.0';
+var KRAFTED_VERSION = '7.14.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -7427,6 +7441,26 @@ function cullOffscreenItems() {
     }
   }
 }
+// v7.14.0: collapsible toolbar -- the bar hides, a centered pill restores it; persisted across sessions
+function setToolbarCollapsed(collapsed) {
+  var tb = document.getElementById('toolbar');
+  var pill = document.getElementById('toolbar-expand');
+  if (!tb || !pill) return;
+  tb.classList.toggle('collapsed', !!collapsed);
+  pill.classList.toggle('show', !!collapsed);
+  try { localStorage.setItem('krafted_toolbar_collapsed', collapsed ? '1' : '0'); } catch(e) {}
+}
+// v7.14.0: restore collapsed state on load
+(function() {
+  try {
+    if (localStorage.getItem('krafted_toolbar_collapsed') === '1') {
+      var tb = document.getElementById('toolbar');
+      var pill = document.getElementById('toolbar-expand');
+      if (tb) tb.classList.add('collapsed');
+      if (pill) pill.classList.add('show');
+    }
+  } catch(e) {}
+})();
 // v6.1.8s: Implement missing toggleProps function
 function toggleProps() {
   var p = document.getElementById('props');

@@ -226,6 +226,21 @@ has(dev, b'function composeContactSheet(', 'composeContactSheet() exists')
 has(dev, b'const COPY_SHEET_MAX_SIDE = 4096;', 'the sheet is capped at 4096px')
 has(dev, b'    copySelectionAsImage()', 'copySelected() hands images to the bake path')
 
+# ---- 4e. v7.14.0 — collapsible toolbar ----
+# 「這工具難有時候擋住畫面，想增加收起按鍵功能」
+# 同 props/library/minimap 一個模式：class toggle + localStorage 記住。
+print('\n[4e] v7.14.0 — collapsible toolbar')
+ok(dev.count(b'function setToolbarCollapsed(collapsed) {') == 1,
+   'one setToolbarCollapsed()')
+ok(dev.count(b'id="btn-toolbar-collapse"') == 1, 'one collapse button in the toolbar')
+ok(dev.count(b'id="toolbar-expand"') >= 1, 'the expand pill exists')
+ok(dev.count(b'#toolbar.collapsed { display:none; }') == 1,
+   'the collapsed state hides the bar')
+ok(dev.count(b'#toolbar-expand.show { display:flex; }') == 1,
+   'the pill appears via .show')
+ok(dev.count(b'krafted_toolbar_collapsed') >= 2,
+   'state persisted and restored (%d)' % dev.count(b'krafted_toolbar_collapsed'))
+
 # ---- 5. i18n ----
 print('\n[5] i18n')
 has(dev, b'Save images as PNG', 'zh dictionary has "Save images as PNG" key')

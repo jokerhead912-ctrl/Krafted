@@ -135,5 +135,13 @@ check('async function copySelectionAsImage(' in t, 'copySelectionAsImage() prese
 check('const COPY_SHEET_MAX_SIDE = 4096;' in t, 'contact sheet capped at 4096px')
 check('    copySelectionAsImage()' in t, 'copySelected() calls the bake path')
 
+print('\n[8] v7.14.0 collapsible toolbar')
+check(t.count('function setToolbarCollapsed(collapsed) {') == 1, 'one setToolbarCollapsed()')
+check(t.count('id="btn-toolbar-collapse"') == 1, 'collapse button present')
+check('id="toolbar-expand"' in t, 'expand pill present')
+check('#toolbar.collapsed { display:none; }' in t, 'collapsed state hides the bar')
+check('#toolbar-expand.show { display:flex; }' in t, 'pill appears via .show')
+check(t.count('krafted_toolbar_collapsed') >= 2, 'state persisted and restored')
+
 print('\n%s (%d checks, %d failed)' % ('ALL PASS' if not fails else 'FAILURES', CHECKS[0], len(fails)))
 sys.exit(1 if fails else 0)
