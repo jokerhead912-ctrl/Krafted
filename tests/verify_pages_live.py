@@ -125,5 +125,15 @@ check(t.count('const REPORT_SHARED_CSS = [') == 1, 'exactly one shared styleshee
 check(t.count("'  :root { --accent: #00e5ff;") == 1,
       'the accent rule lives once, inside the shared array')
 
+print('\n[7] v7.13.0 per-image notes, shared zip, bake-to-clipboard')
+check('function notesWriteBack(' in t, 'notesWriteBack() present')
+check('function notesDialogRow(' in t, 'notesDialogRow() present')
+check(t.count('function buildZip(files)') == 1, 'exactly one zip writer')
+check(t.count('id="zipBtn" type="button"') == 2, 'both reports carry the zip button')
+check('data-prefix="image"' in t, 'image report prefixes zip entries image-*')
+check('async function copySelectionAsImage(' in t, 'copySelectionAsImage() present')
+check('const COPY_SHEET_MAX_SIDE = 4096;' in t, 'contact sheet capped at 4096px')
+check('    copySelectionAsImage()' in t, 'copySelected() calls the bake path')
+
 print('\n%s (%d checks, %d failed)' % ('ALL PASS' if not fails else 'FAILURES', CHECKS[0], len(fails)))
 sys.exit(1 if fails else 0)
