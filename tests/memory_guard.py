@@ -23,7 +23,23 @@ memory_guard.py — 睇住 .workbuddy/memory/ 嘅体积同索引完整性。
 ----
   MEMORY.md        60 行 /  5000 字符   永远注入 —— 最严
   MEMORY-*.md     200 行 / 16000 字符   按需读取 —— 每次读都烧 context
-  日誌 YYYY-MM-DD  400 行               档案 —— 超 30 日要蒸餾再删
+  日誌 YYYY-MM-DD  每段 ≤ 12 行要有指针 · 段 > 40 行即异常（2026-09-10 起生效）
+                   成檔冇行数上限 · 超 30 日未蒸餾 = advisory
+
+点解日誌唔再限成檔行数（2026-09-10）
+----------------------------------
+旧预算 400 行 ≈ **一个 productive day**（实测 08-31: 375 / 09-01: 348 /
+09-02: 408 / 09-09: 238），即係个上限一写好就贴住天花板，任何认真落 code 嘅日子
+都会爆。而佢係 advisory → 唔阻出货 → 冇人急 → 永远唔还 → 变永久噪音
+（「每次都见到嘅警告 = 已经冇人睇嘅警告」，同 fail-open 闸门同一条病）。
+
+而且佢同呢支脚本自己嘅推理打架：日誌係档案层，唔注入、唔按需读，胀大只係**还债**
+问题 —— 咁真正嘅 deadline 係「30 日」，行数上限係同一笔债嘅第二个讯号，仲要係个
+冇到期日、唔会自动清嘅讯号。
+
+所以改用**段长**做单位：段长先分到「写咗叙事」定「写咗指针」。叙事（why / how）
+落主题档或 SKILL，日誌净留「做咗乜 + 决定 + → 去边度搵」。09-03（46 行）、
+09-10（49 行）呢啲净答问题、冇落 code 嘅日子就係目标形态。
 
 仲check一样嘢：**索引完整性**。memory/ 里每个 MEMORY-*.md 都要喺 MEMORY.md 被提到，
 否则个 agent 根本唔知嗰个主题档存在 —— 開咗档等如冇開。
@@ -33,6 +49,7 @@ memory_guard.py — 睇住 .workbuddy/memory/ 嘅体积同索引完整性。
   python3 Krafted/tests/memory_guard.py             # 超预算 exit 1
   python3 Krafted/tests/memory_guard.py --strict    # 日誌债都当致命
   python3 Krafted/tests/memory_guard.py --snapshot  # 先备份去 backups/，再检查
+  python3 Krafted/tests/memory_guard.py --from=2026-08-31  # 用指针规则审旧日誌
 
 点解要 --snapshot
 ----------------
@@ -56,8 +73,17 @@ INDEX_MAX_LINES = 60
 INDEX_MAX_CHARS = 5000
 TOPIC_MAX_LINES = 200
 TOPIC_MAX_CHARS = 16000
-DAILY_MAX_LINES = 400
 DAILY_DISTILL_AFTER_DAYS = 30
+
+# 日誌 = 指针层：成檔冇行数上限（理由见 docstring），改用段长做单位。
+# 点解净向前生效：旧日誌（08-31 / 09-01 / 09-02 / 09-09）全部係叙事体，一开波就
+# 会成堆红 —— 又变永久噪音。佢哋係 legacy debt，由「30 日」嗰条去追。
+# 想家陣审旧檔：--from=2026-08-31。
+DAILY_SECTION_POINTER_FROM = date(2026, 9, 10)
+DAILY_SECTION_NEED_POINTER = 12    # 段长 > 咁多行就要有指针
+DAILY_SECTION_MAX_LINES = 40       # 无论有冇指针，超过即异常
+POINTER_RE = re.compile(r'MEMORY-[A-Za-z0-9_-]+\.md|SKILL|§')
+SECTION_RE = re.compile(r'^## ', re.M)
 
 DAILY_RE = re.compile(r'^(\d{4})-(\d{2})-(\d{2})\.md$')
 
@@ -104,6 +130,34 @@ class Report(object):
         self.rows.append((path, lines, chars, note))
 
 
+def check_daily_sections(name, text, rep, apply_rule):
+    """日誌 = 指针层：每段要有指针；段长先係「叙事 vs 指针」嘅真讯号。
+
+    返回 '%d/%d 段有指针' 做打印用，或者 None（规则未生效 / 冇分段）。
+    """
+    if not apply_rule:
+        return None
+    secs = [s for s in SECTION_RE.split(text) if s.strip()]
+    if not secs:
+        return None
+    with_ptr = 0
+    for s in secs:
+        title = s.split('\n', 1)[0].strip()[:26]
+        n = s.count('\n') + 1
+        has_ptr = bool(POINTER_RE.search(s))
+        if has_ptr:
+            with_ptr += 1
+        if n > DAILY_SECTION_MAX_LINES:
+            rep.add(name, 'section too long',
+                    '「%s」%d 行 > %d — 日誌净留指针，叙事落主题档' % (title, n, DAILY_SECTION_MAX_LINES),
+                    advisory=True)
+        elif n > DAILY_SECTION_NEED_POINTER and not has_ptr:
+            rep.add(name, 'no pointer',
+                    '「%s」%d 行冇指针 — 加 `→ MEMORY-*.md` / `SKILL §n`' % (title, n),
+                    advisory=True)
+    return '%d/%d 段有指针' % (with_ptr, len(secs))
+
+
 def main():
     if not os.path.isdir(MEMDIR):
         print('memory_guard: no memory dir at %s' % MEMDIR)
@@ -111,6 +165,12 @@ def main():
 
     if '--snapshot' in sys.argv:
         snapshot(os.path.join(HERE, '..', '..'))
+
+    # 指针规则默认净对 DAILY_SECTION_POINTER_FROM 之后嘅日誌生效；--from= 可以提早。
+    pointer_from = DAILY_SECTION_POINTER_FROM
+    for a in sys.argv[1:]:
+        if a.startswith('--from='):
+            pointer_from = datetime.strptime(a.split('=', 1)[1], '%Y-%m-%d').date()
 
     names = sorted(n for n in os.listdir(MEMDIR) if n.endswith('.md'))
     index_path = os.path.join(MEMDIR, 'MEMORY.md')
@@ -130,15 +190,17 @@ def main():
 
         m = DAILY_RE.match(name)
         if m:
+            when = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+            apply_ptr = when >= pointer_from
+            cov = check_daily_sections(name, text, rep, apply_ptr)
             note = 'daily log (archive)'
+            if cov:
+                note += ' — ' + cov
+            elif not apply_ptr:
+                note += ' — 指针规则未生效'
             rep.row(name, lines, chars, note)
             # 日誌係档案层，唔会注入、唔会按需读 —— 佢胀大只係还债问题，
             # 唔会令 agent 静默失效，所以列为 advisory。--strict 会升呢做致命。
-            if lines > DAILY_MAX_LINES:
-                rep.add(name, 'daily too long',
-                        '%d lines > %d — 蒸餾入主题档再删' % (lines, DAILY_MAX_LINES),
-                        advisory=True)
-            when = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
             age = (date.today() - when).days
             if age > DAILY_DISTILL_AFTER_DAYS:
                 rep.add(name, 'daily not distilled',
@@ -177,8 +239,8 @@ def main():
     for name, lines, chars, note in rep.rows:
         flag = ''
         limit = INDEX_MAX_LINES if name == 'MEMORY.md' else (
-            DAILY_MAX_LINES if DAILY_RE.match(name) else TOPIC_MAX_LINES)
-        if lines > limit:
+            None if DAILY_RE.match(name) else TOPIC_MAX_LINES)
+        if limit is not None and lines > limit:
             flag = '  <-- over budget'
         print('  %-22s %5d lines  %7d chars   %-26s%s'
               % (name, lines, chars, note, flag))
