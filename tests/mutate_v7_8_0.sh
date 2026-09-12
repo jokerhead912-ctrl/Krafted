@@ -50,7 +50,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.15.1 suite (pixel-accurate cut/lasso + knock out)"
+print "mutation check: v7.16.0 suite (pixel-accurate cut/lasso + knock out)"
 
 # ── THE COMPLAINT: a cut from a rotated source lands somewhere else ───────
 
@@ -191,8 +191,8 @@ mutate "Knock out is left untranslated" \
 # The anchor names the version the source now carries; version_scan.py moves
 # it at every bump. Left stale it matches 0 times and tests nothing.
 mutate "KRAFTED_VERSION not bumped" \
-  "var KRAFTED_VERSION = '7.15.1';" \
-  "var KRAFTED_VERSION = '7.15.0';"
+  "var KRAFTED_VERSION = '7.16.0';" \
+  "var KRAFTED_VERSION = '7.15.1';"
 
 print ""
 if [ $ANCHORFAIL -ne 0 ]; then

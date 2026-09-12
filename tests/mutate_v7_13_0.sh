@@ -46,7 +46,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.15.1 suite (per-image notes, zip, copy-what-you-see)"
+print "mutation check: v7.16.0 suite (per-image notes, zip, copy-what-you-see)"
 
 # ── the zip writer ────────────────────────────────────────────────────────
 

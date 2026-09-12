@@ -168,6 +168,8 @@ function boot() {
     requestLibraryRefresh: () => { calls.library++; }, renderTagControls: () => { calls.tags++; },
     // v7.15.1: mutateSelectedTags now toasts on no-op — record instead of crashing the harness.
     toast: msg => { calls.toasts.push(msg); },
+    // v7.15.2: append/replace now bumps the recent-tag store — record instead of crashing.
+    bumpRecentTags: tags => { calls.bumps = (calls.bumps || []).concat(tags); },
     refreshSelection: () => { calls.refresh++; }, updateTextColorPalette: () => {},
     setTool: tool => { state.tool = tool; },
     mediaFilterString: unexpected('mediaFilterString'), renderMasks: unexpected('renderMasks'),

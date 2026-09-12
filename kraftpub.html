@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.15.1</title>
+<title>Krafted v7.16.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4607,7 +4607,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.15.1';
+var KRAFTED_VERSION = '7.16.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -23167,6 +23167,7 @@ function mutateSelectedTags(mode, value) {
   if (mode === 'replace' && !window.confirm(boardTextLabel('Replace all tags on the selected unlocked items?', '替换所选未锁定项目的全部标签？'))) return -1;
   pushUndo();
   plans.forEach(function (plan) { plan.it.tags = plan.tags; });
+  if (mode !== 'remove') bumpRecentTags(tags);
   renderTagControls();
   positionBoardTextUI();
   scheduleAutoSave();
@@ -23261,6 +23262,25 @@ function renderTagControls() {
       remove.setAttribute('aria-label', remove.title);
       remove.disabled = !selected.some(function (it) { return !it.locked && boardTagValues(it.tags).indexOf(tag) >= 0; });
       remove.addEventListener('click', function () { mutateSelectedTags('remove', [tag]); });
+      // v7.16.0: the chip body is now a one-click copy. Single click copies that
+      // tag's text, double click copies the whole selection's tag union (comma
+      // joined). The short timer keeps one double-click from firing the
+      // single-copy twice; clicks that land on the × button are not copies.
+      chip.title = boardTextLabel('Click to copy this tag; double-click to copy all tags', '点击复制此标签；双击复制全部标签');
+      chip.style.cursor = 'pointer';
+      var copyTimer = null;
+      chip.addEventListener('click', function (event) {
+        if (event.target === remove || copyTimer) return;
+        copyTimer = setTimeout(function () {
+          copyTimer = null;
+          copyBoardTagText(tag, boardTextLabel('Copied: ', '已复制：') + tag);
+        }, 260);
+      });
+      chip.addEventListener('dblclick', function () {
+        if (copyTimer) { clearTimeout(copyTimer); copyTimer = null; }
+        copyBoardTagText(entries.map(function (entry2) { return entry2[0]; }).join(', '),
+          boardTextLabel('Copied all tags', '已复制全部标签'));
+      });
       chip.append(label, remove);
       chips.appendChild(chip);
     });
@@ -23270,12 +23290,58 @@ function renderTagControls() {
   if (!list) return;
   // persistence 补丁提供 libraryItems；独立验收时也覆盖 items + texts。
   var all = typeof libraryItems === 'function' ? libraryItems() : (state.items || []).concat(state.texts || []);
-  var suggestions = boardTagValues(all.reduce(function (tags, it) { return tags.concat(boardTagValues(it.tags)); }, [])).sort();
+  // v7.16.0: recently used tags lead the datalist, then the rest alphabetically.
+  var suggestions = orderBoardTagSuggestions(boardTagValues(all.reduce(function (tags, it) { return tags.concat(boardTagValues(it.tags)); }, [])).sort());
   var listSignature = JSON.stringify(suggestions);
   if (list.dataset.signature !== listSignature) {
     list.replaceChildren();
     suggestions.forEach(function (tag) { var option = document.createElement('option'); option.value = tag; list.appendChild(option); });
     list.dataset.signature = listSignature;
+  }
+}
+
+// v7.16.0: tag chips are one-click copy, and the datalist leads with the tags
+// you actually used recently. Both tolerate missing storage: a bare
+// localStorage reference in a sandbox throws, and that throw is caught here.
+function recentBoardTagList() {
+  try {
+    var raw = JSON.parse(localStorage.getItem('krafted_recent_tags') || '[]');
+    return Array.isArray(raw) ? raw.filter(function (t) { return typeof t === 'string' && t; }) : [];
+  } catch (e) { return []; }
+}
+function bumpRecentTags(tags) {
+  try {
+    var list = recentBoardTagList().filter(function (t) { return tags.indexOf(t) < 0; });
+    tags.slice().reverse().forEach(function (t) { list.unshift(t); });
+    localStorage.setItem('krafted_recent_tags', JSON.stringify(list.slice(0, 8)));
+  } catch (e) { /* no storage - suggestions just stay alphabetical */ }
+}
+function orderBoardTagSuggestions(all) {
+  var seen = {}, out = [];
+  recentBoardTagList().forEach(function (t) { if (!seen[t]) { seen[t] = 1; out.push(t); } });
+  all.forEach(function (t) { if (!seen[t]) { seen[t] = 1; out.push(t); } });
+  return out;
+}
+// One writer for tag copy: async Clipboard API first, execCommand fallback for
+// non-secure contexts. Never silent - success and failure both toast.
+function copyBoardTagText(text, okLabel) {
+  var failLabel = boardTextLabel('Copy failed', '复制失败');
+  var done = function () { toast(okLabel); };
+  var fail = function () { toast(failLabel); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, fail);
+  } else {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var copied = document.execCommand('copy');
+      document.body.removeChild(ta);
+      toast(copied ? okLabel : failLabel);
+    } catch (e) { fail(); }
   }
 }
 
