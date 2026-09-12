@@ -64,11 +64,12 @@ function fnFull(name, hay) {
 ok(fnFull('setItemMeta', SRC).length > 0, 'setItemMeta exists');
 ok(fnFull('splitTags', SRC).length > 0, 'splitTags exists');
 const sim = fnFull('setItemMeta', SRC);
-has("if (field === 'name') it.name = value || '';", 'setItemMeta writes the name field', sim);
-has("else if (field === 'note') it.note = value || '';", 'setItemMeta writes the note field', sim);
-has("else if (field === 'tags') it.tags = splitTags(value);", 'setItemMeta writes tags through splitTags', sim);
-has("try { scheduleAutoSave(); } catch (e) {}", 'setItemMeta triggers an auto-save', sim);
-has('renderLibraryPanel()', 'setItemMeta refreshes the Library while it is open', sim);
+has("if (field === 'tags') return mutateSelectedTags('append', value);", 'setItemMeta routes tags through append flow', sim);
+has("if (field !== 'name' && field !== 'note') return 0;", 'setItemMeta rejects unknown metadata fields', sim);
+has("var targets = getSelectedItems().filter(function (it) { return !it.locked && (it[field] || '') !== value; });", 'setItemMeta only writes unlocked changed items', sim);
+has('targets.forEach(function (it) { it[field] = value; });', 'setItemMeta writes name/note through one field-aware path', sim);
+has('scheduleAutoSave();', 'setItemMeta triggers an auto-save', sim);
+has('requestLibraryRefresh();', 'setItemMeta refreshes the Library via shared refresh gate', sim);
 
 // splitTags is pure — execute it and check the actual comma/trim/drop-empty maths.
 const st = fnFull('splitTags', SRC);
@@ -93,23 +94,23 @@ const iTf = SRC.indexOf(tfMarker);
 ok(iRef >= 0 && iTf >= 0, 'both the Reference and Transform section markers exist');
 ok(iRef < iTf, 'the Reference section is placed ABOVE Transform (locked order)');
 
-// The three inputs wire to the single writer with the correct field name.
+// Name/Note still use direct writer; Tags moved to explicit append/remove/replace controls.
 has("oninput=\"setItemMeta('name', this.value)\"", 'the Name input writes the name field');
 has("oninput=\"setItemMeta('note', this.value)\"", 'the Note input writes the note field');
-has("oninput=\"setItemMeta('tags', this.value)\"", 'the Tags input writes the tags field');
 has("id=\"prop-name\"", 'the Name input has a stable id (updatePropsPanel targets it)');
 has("id=\"prop-note\"", 'the Note input has a stable id');
 has("id=\"prop-tags\"", 'the Tags input has a stable id');
+has('<input type="text" id="prop-tags" data-tag-input list="board-tag-suggestions" maxlength="200" autocomplete="off">',
+  'the Properties Tags input keeps the shared tag-controls contract');
+hasNot("oninput=\"setItemMeta('tags', this.value)\"", 'Tags are no longer overwritten on every keystroke');
 
-// ═══ 3. updatePropsPanel fills all three back in ═════════════════════
-// Selecting an item must repopulate the Reference fields, or the panel lies
-// about what the item currently holds.
-const upp = SRC.slice(SRC.indexOf("var pn = document.getElementById('prop-name')"),
-                       SRC.indexOf("var pn = document.getElementById('prop-name')") + 400);
-has("pn.value = item.name || ''", 'updatePropsPanel fills the Name field', upp);
-has("pnote.value = item.note || ''", 'updatePropsPanel fills the Note field', upp);
-has("ptags.value = (item.tags && item.tags.length) ? item.tags.join(', ') : '';",
-    'updatePropsPanel fills the Tags field (comma-joined)', upp);
+// ═══ 3. updatePropsPanel hands metadata to shared tag controls ════════
+// Selecting an item must route through renderTagControls(), which now handles
+// mixed values and tag chips for both the Properties panel and quick bar.
+const upp = fnFull('updatePropsPanel', SRC);
+has('renderTagControls();', 'updatePropsPanel delegates metadata refresh to renderTagControls', upp);
+hasNot("ptags.value = (item.tags && item.tags.length) ? item.tags.join(', ') : '';",
+  'updatePropsPanel no longer overwrites tag draft text directly');
 
 // ═══ 4. the Library panel DOM + CSS ═════════════════════════════════
 has('id="library-panel"', 'the Library panel element exists');
@@ -134,6 +135,8 @@ ok(fnFull('revealItem', SRC).length > 0, 'revealItem exists (the row-click targe
 ok(fnFull('selectOnly', SRC).length > 0, 'selectOnly exists (the row-click target)');
 
 const rlp = fnFull('renderLibraryPanel', SRC);
+has("var source = (typeof libraryItems === 'function') ? libraryItems() : (state.items || []).concat(state.texts || []);",
+  'renderLibraryPanel has a local fallback when libraryItems is unavailable', rlp);
 has("it.type === 'draw' || it.isDraw", 'renderLibraryPanel skips draw items', rlp);
 has("var q = ((document.getElementById('library-search').value) || '').toLowerCase().trim();",
     'renderLibraryPanel reads the live search query', rlp);
@@ -144,9 +147,13 @@ has('return libMatches(it, q);',
     'renderLibraryPanel filters through the shared libMatches predicate', rlp);
 const lm = fnFull('libMatches', SRC);
 ok(lm.length > 0, 'libMatches exists (shared by the list and the minimap)');
-has("var hay = [it.name, it.note, (it.tags || []).join(' ')].join(' ').toLowerCase();",
-    'libMatches searches name + note + tags', lm);
-has("hay.indexOf(q) >= 0", 'libMatches uses a substring match, not an exact equal', lm);
+has("var body = isText ? (it.el ? it.el.textContent : (it.content || '')) : '';",
+    'libMatches includes text body for text items', lm);
+has("var tags = (typeof boardTagValues === 'function') ? boardTagValues(it.tags) : ((it.tags || []).filter(Boolean));",
+    'libMatches normalizes tags and has a no-helper fallback', lm);
+has("var hay = [it.name, it.note, tags.join(' '), body].join(' ').toLowerCase();",
+    'libMatches searches name + note + tags + text body', lm);
+has("hay.indexOf(String(q).toLowerCase()) >= 0", 'libMatches uses case-insensitive substring match', lm);
 has('if (!q) return true;', 'libMatches treats an empty query as "everything matches"', lm);
 has('selectOnly(it.id)', 'clicking a row selects only that item', rlp);
 has('revealItem(it)', 'clicking a row flies to / reveals the item', rlp);
@@ -177,7 +184,7 @@ has("case 'library-toggle-panel':   toggleLibraryPanel(); return true;",
     'the Library toggle is dispatched through the registry');
 
 // ═══ report ═══════════════════════════════════════════════════════
-console.log(`\ntest_v7051.js — Reference metadata + Library (v7.14.0)`);
+console.log(`\ntest_v7051.js — Reference metadata + Library (v7.15.0)`);
 console.log(`${'-'.repeat(46)}`);
 if (fails.length) {
   fails.forEach(f => console.log(`  FAIL  ${f}`));

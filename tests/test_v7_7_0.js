@@ -83,7 +83,7 @@ section(function () {
   api._maybeTidy(11);
   api._maybeTidy(12);
   api._maybeTidy(13);
-  eq(tidyCalls, 1, 'v7.14.0: the tidy fires exactly once when the last item lands');
+  eq(tidyCalls, 1, 'v7.15.0: the tidy fires exactly once when the last item lands');
   eq(tidySel && tidySel.length, 3, 'the tidy runs over all three new items');
   ok(tidySel && tidySel.indexOf(11) >= 0 && tidySel.indexOf(12) >= 0 && tidySel.indexOf(13) >= 0,
     'every new item is in the tidy selection');
@@ -106,7 +106,7 @@ section(function () {
   // A lone item never triggers a tidy (would resize a single reference image).
   api._armFolderTidy(1);
   api._maybeTidy(99);
-  eq(tidyCalls, 3, 'v7.14.0: a single-item import does NOT auto-tidy');
+  eq(tidyCalls, 3, 'v7.15.0: a single-item import does NOT auto-tidy');
 
   // Without arming, reporting in is a no-op (plain drops / pastes).
   api._maybeTidy(123);
@@ -166,7 +166,7 @@ section(function () {
   var b = build();
   b.st.groups = [g1];
   b.api.deleteSelected();
-  eq(b.rec.disposed.length, 1, 'v7.14.0: deleting the last member dissolves the group');
+  eq(b.rec.disposed.length, 1, 'v7.15.0: deleting the last member dissolves the group');
   eq(b.rec.disposed[0], g1, 'the dissolved group is the one that lost its member');
   eq(b.st.groups.length, 0, 'the dissolved group leaves state.groups');
   eq(b.rec.borders, 1, 'surviving borders are repositioned (runs even with none left)');

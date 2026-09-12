@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.14.0</title>
+<title>Krafted v7.15.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2302,7 +2302,7 @@ body.dragging-file .media-anno-toolbar {
 .item-handle.e { top:calc(50% - 8px); right:-8px; cursor:e-resize; }
 .item-handle.w { top:calc(50% - 8px); left:-8px; cursor:w-resize; }
 .item-rot { position:absolute; top:-28px; left:calc(50% - 7px); width:14px; height:14px; background:var(--accent); border:1.5px solid var(--bg-panel); border-radius:50%; cursor:grab; z-index:999999; }
-.text-item { position:absolute; cursor:move; padding:4px 10px; min-width:80px; min-height:28px; max-width:2000px; outline:none; word-wrap:break-word; white-space:pre-wrap; writing-mode:horizontal-tb; line-height:1.5; overflow:visible; font-family:'Inter',sans-serif; letter-spacing:0.01em; user-select:text; -webkit-user-select:text; -moz-user-select:text; -ms-user-select:text; }
+.text-item { position:absolute; cursor:text; padding:4px 10px; min-width:80px; min-height:28px; max-width:2000px; outline:none; word-wrap:break-word; white-space:pre-wrap; writing-mode:horizontal-tb; line-height:1.5; overflow:visible; font-family:'Inter',sans-serif; letter-spacing:0.01em; user-select:text; -webkit-user-select:text; -moz-user-select:text; -ms-user-select:text; }
 .text-item.selected { outline:1.5px solid var(--accent); outline-offset:2.5px; }
 .text-item.editing { outline:2px solid var(--accent); outline-offset:2px; border-radius:6px; box-shadow:inset 0 0 0 1000px rgba(255,255,255,0.05); cursor:text; overflow:visible !important; min-width:100px; user-select:text; -webkit-user-select:text; -moz-user-select:text; -ms-user-select:text; }
 .text-item:empty::before { content:attr(data-placeholder); color:rgba(255,255,255,0.25); pointer-events:none; }
@@ -3784,6 +3784,61 @@ body.screen-share-mode #ss-fps {
 }
 .krafted-save-alarm-actions button.primary:hover { background: #c8392f; }
 
+/* Board Text：复用原节点；不增加常驻全局工具栏。 */
+#text-toolbar[data-board-text-defaults="false"],
+#text-color-palette { display:none !important; }
+#text-quick-bar {
+  top:0; left:0; transform:none; width:max-content; box-sizing:border-box;
+  flex-direction:column; align-items:stretch; gap:6px; max-width:calc(100vw - 16px);
+  max-height:calc(100vh - 16px); overflow:auto; padding:7px; visibility:hidden;
+}
+#text-quick-bar .tqb-controls {
+  display:flex; align-items:center; flex-wrap:wrap; gap:4px;
+}
+#text-quick-bar button, #text-quick-bar select, #text-quick-bar input,
+.board-tag-controls button, .board-tag-controls input {
+  box-sizing:border-box; font:11px 'Inter',sans-serif; min-height:26px;
+  background:var(--input-bg); color:var(--text); border:1px solid var(--border);
+  border-radius:5px; padding:3px 6px;
+}
+#text-quick-bar button, .board-tag-controls button { cursor:pointer; }
+#text-quick-bar button:hover, .board-tag-controls button:hover { background:var(--btn-hover); }
+#text-quick-bar button.active { background:var(--btn-active-bg); color:var(--btn-active-text); border-color:var(--btn-active-border); }
+#text-quick-bar button.mixed { border-style:dashed; }
+#text-quick-bar [disabled], .board-tag-controls [disabled] { opacity:.5; cursor:default; }
+#tqb-font { width:124px; }
+#tqb-size-input { width:68px; }
+#tqb-align { width:68px; }
+#text-quick-bar .tqb-color-wrap { position:relative; width:48px; height:26px; display:inline-flex; }
+#text-quick-bar #tqb-custom-color { width:48px; height:26px; margin:0; padding:1px; }
+#text-quick-bar .mixed-color #tqb-custom-color { opacity:0; }
+#tqb-color-mixed { position:absolute; inset:0; pointer-events:none; display:grid; place-items:center; font-size:10px; border:1px dashed var(--border); border-radius:5px; }
+#tqb-color-mixed[hidden] { display:none; }
+.board-tag-controls { display:flex; flex-direction:column; gap:5px; min-width:0; }
+.board-tag-entry { display:flex; align-items:center; flex-wrap:wrap; gap:4px; }
+.board-tag-entry > label { font-size:10px; color:var(--text-dim); }
+.board-tag-controls [data-tag-input] { flex:1 1 120px; width:120px; min-width:70px; }
+.board-tag-controls [data-tag-chips] { display:flex; flex-wrap:wrap; gap:4px; max-height:84px; overflow:auto; }
+.board-tag-chip { display:inline-flex; align-items:center; gap:4px; max-width:100%; color:var(--text); border:1px solid var(--border); border-radius:5px; padding:2px 4px; font-size:10px; }
+.board-tag-chip > span { overflow-wrap:anywhere; min-width:0; }
+.board-tag-chip.partial { border-style:dashed; color:var(--text-dim); }
+.board-tag-controls .board-tag-chip button { min-height:18px; min-width:18px; padding:0 3px; border:0; background:transparent; }
+#prop-tag-controls { margin:5px 0; }
+#text-quick-bar .board-tag-entry { flex-wrap:nowrap; }
+@media (max-width:560px) {
+  #text-quick-bar .board-tag-entry { flex-wrap:wrap; }
+}
+
+/* Board Text interaction chrome never enters saved HTML/content. */
+.text-item, .text-item.editing { min-width:0; max-width:none; box-sizing:border-box; }
+.text-item.locked { cursor:default; }
+.bt-move { position:absolute; bottom:calc(100% + 4px); left:0; transform-origin:bottom left; pointer-events:auto; cursor:grab; touch-action:none; background:var(--panel-bg); color:var(--text); border:1px solid var(--border); border-radius:5px; font:12px 'Inter',sans-serif; padding:4px 10px; white-space:nowrap; }
+.bt-move:active { cursor:grabbing; }
+.bt-select-edge { position:absolute; left:0; right:0; height:6px; pointer-events:auto; cursor:default; }
+.bt-select-edge.n { top:-3px; }
+.bt-select-edge.s { bottom:-3px; }
+body.is-dragging #text-quick-bar { visibility:hidden !important; }
+
 </style>
 
 
@@ -3867,7 +3922,16 @@ body.screen-share-mode #ss-fps {
     <div class="prop-section">
       <div class="prop-row"><label>Name</label><input type="text" id="prop-name" maxlength="120" placeholder="reference name" oninput="setItemMeta('name', this.value)"></div>
       <div class="prop-row note-row"><label>Note</label><textarea id="prop-note" rows="2" maxlength="600" placeholder="notes / source" oninput="setItemMeta('note', this.value)"></textarea></div>
-      <div class="prop-row"><label>Tags</label><input type="text" id="prop-tags" maxlength="200" placeholder="comma, separated" oninput="setItemMeta('tags', this.value)"><span class="prop-hint">comma-separated</span></div>
+<div id="prop-tag-controls" class="board-tag-controls" data-board-tags>
+  <div class="board-tag-entry">
+    <label for="prop-tags" data-btc-en="Tags" data-btc-zh="标签">Tags</label>
+    <input type="text" id="prop-tags" data-tag-input list="board-tag-suggestions" maxlength="200" autocomplete="off">
+    <button type="button" data-tag-mode="append" data-btc-en="Append" data-btc-zh="追加">Append</button>
+    <button type="button" data-tag-mode="remove" data-btc-en="Remove" data-btc-zh="移除">Remove</button>
+    <button type="button" data-tag-mode="replace" data-btc-en="Replace…" data-btc-zh="替换…">Replace…</button>
+  </div>
+  <div data-tag-chips></div>
+</div>
       <div class="prop-row" id="prop-group-row" style="display:none"><label>Group</label><input type="text" id="prop-group-name" maxlength="120" placeholder="group name" oninput="setGroupNameFromPanel(this.value)"><span class="prop-hint">the chip above the group</span></div>
     </div>
     <!-- TRANSFORM -->
@@ -4315,52 +4379,41 @@ body.screen-share-mode #ss-fps {
 </div>
 
 <!-- TEXT QUICK BAR (inline size + color while editing) -->
-<div id="text-quick-bar" onmousedown="if(event.target.id!=='tqb-custom-color' && event.target.type!=='color' && event.target.id!=='tqb-size-input') event.preventDefault()">
-  <span class="tqb-label">Size</span>
-  <button class="tqb-step" id="tqb-size-down" onclick="stepTextSize(-1)" title="Smaller (A−)">A−</button>
-  <button class="tqb-size" onclick="applyInlineSize(8)">8</button>
-  <button class="tqb-size" onclick="applyInlineSize(10)">10</button>
-  <button class="tqb-size" onclick="applyInlineSize(12)">12</button>
-  <button class="tqb-size" onclick="applyInlineSize(16)">16</button>
-  <button class="tqb-size" onclick="applyInlineSize(20)">20</button>
-  <button class="tqb-size active" onclick="applyInlineSize(24)">24</button>
-  <button class="tqb-size" onclick="applyInlineSize(32)">32</button>
-  <button class="tqb-size" onclick="applyInlineSize(48)">48</button>
-  <button class="tqb-size" onclick="applyInlineSize(64)">64</button>
-  <button class="tqb-size" onclick="applyInlineSize(80)">80</button>
-  <button class="tqb-size" onclick="applyInlineSize(96)">96</button>
-  <button class="tqb-step" id="tqb-size-up" onclick="stepTextSize(1)" title="Bigger (A+)">A+</button>
-  <!-- Round 55: replaced the number input with a proper select dropdown so
-       the user can click → pick a font size. The select shows the current
-       size; if the value isn't in the preset list, setTextProp will add it
-       dynamically. -->
-  <select id="tqb-size-input" title="Font size (px on screen)" onchange="applyInlineSize(parseInt(this.value,10)||24)" style="width:52px;height:22px;background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:5px;font-size:11px;font-family:'Inter',sans-serif;padding:1px 4px;cursor:pointer;margin-left:3px;outline:none;">
-    <option value="8">8</option>
-    <option value="10">10</option>
-    <option value="12">12</option>
-    <option value="16">16</option>
-    <option value="20">20</option>
-    <option value="24" selected>24</option>
-    <option value="32">32</option>
-    <option value="48">48</option>
-    <option value="64">64</option>
-    <option value="80">80</option>
-    <option value="96">96</option>
-  </select>
-  <div class="tqb-sep"></div>
-  <span class="tqb-label">Color</span>
-  <div class="tqb-swatch" style="background:#ffffff;" onclick="applyInlineColor('#ffffff')"></div>
-  <div class="tqb-swatch" style="background:#ff4444;" onclick="applyInlineColor('#ff4444')"></div>
-  <div class="tqb-swatch" style="background:#ffdd00;" onclick="applyInlineColor('#ffdd00')"></div>
-  <div class="tqb-swatch" style="background:#44ff44;" onclick="applyInlineColor('#44ff44')"></div>
-  <div class="tqb-swatch" style="background:#44ddff;" onclick="applyInlineColor('#44ddff')"></div>
-  <div class="tqb-swatch" style="background:#ff44aa;" onclick="applyInlineColor('#ff44aa')"></div>
-  <div class="tqb-sep"></div>
-  <input type="color" id="tqb-custom-color" value="#ffffff" oninput="applyInlineColor(this.value)" title="Custom color">
-  <div class="tqb-sep"></div>
-  <button id="tqb-translate" onclick="translateSelectedText('en','zh')" title="Translate EN→中文 (Ctrl+Shift+T)" style="background:var(--accent-dim);color:#44ddff;border:1px solid var(--accent);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:11px;font-family:'Inter',sans-serif;font-weight:600;letter-spacing:0.3px;transition:all 0.15s;">EN→中</button>
-  <button onclick="openInGoogleTranslate('en','zh')" title="Open in Google Translate (new tab) — always works" style="background:transparent;color:var(--text-dim);border:1px solid var(--text-dim);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px;font-family:'Inter',sans-serif;font-weight:600;letter-spacing:0.3px;transition:all 0.15s;">🌐</button>
+<div id="text-quick-bar" role="toolbar" onmousedown="if(event.target.closest('button')) event.preventDefault()">
+  <div class="tqb-controls">
+    <select id="tqb-font" data-text-style-control onchange="setTextProp('font',this.value)" data-btc-en="Font" data-btc-zh="字体" data-btc-attr="title"><option value="" data-btc-en="Mixed" data-btc-zh="混合">Mixed</option></select>
+    <button type="button" id="tqb-size-down" data-text-style-control onclick="stepTextSize(-1)" data-btc-en="Smaller" data-btc-zh="减小字号" data-btc-attr="title">−</button>
+    <input type="number" id="tqb-size-input" min="1" max="512" step="1" data-text-style-control onchange="setTextProp('size',this.value)" data-btc-en="Font size" data-btc-zh="字号" data-btc-attr="title">
+    <button type="button" id="tqb-size-up" data-text-style-control onclick="stepTextSize(1)" data-btc-en="Larger" data-btc-zh="增大字号" data-btc-attr="title">+</button>
+    <button type="button" id="tqb-bold" data-text-style-control onclick="toggleTextStyle('bold')" data-btc-en="Bold" data-btc-zh="粗体" data-btc-attr="title"><b>B</b></button>
+    <label class="tqb-color-wrap">
+      <input type="color" id="tqb-custom-color" data-text-style-control onchange="setTextProp('color',this.value)" data-btc-en="Text color" data-btc-zh="文字颜色" data-btc-attr="title">
+      <span id="tqb-color-mixed" data-btc-en="Mixed" data-btc-zh="混合">Mixed</span>
+    </label>
+    <select id="tqb-align" data-text-style-control onchange="setTextAlign(this.value)" data-btc-en="Alignment" data-btc-zh="对齐" data-btc-attr="title">
+      <option value="" data-btc-en="Mixed" data-btc-zh="混合">Mixed</option>
+      <option value="left" data-btc-en="Left" data-btc-zh="左对齐">Left</option>
+      <option value="center" data-btc-en="Center" data-btc-zh="居中">Center</option>
+      <option value="right" data-btc-en="Right" data-btc-zh="右对齐">Right</option>
+      <option value="justify" data-btc-en="Justify" data-btc-zh="两端对齐">Justify</option>
+    </select>
+    <button type="button" data-text-style-control data-text-preset="title" onclick="applyBoardTextPreset('title')" data-btc-en="Title" data-btc-zh="标题">Title</button>
+    <button type="button" data-text-style-control data-text-preset="body" onclick="applyBoardTextPreset('body')" data-btc-en="Body" data-btc-zh="正文">Body</button>
+    <button type="button" data-text-style-control data-text-preset="label" onclick="applyBoardTextPreset('label')" data-btc-en="Label" data-btc-zh="标签文字">Label</button>
+    <button type="button" id="tqb-done" onclick="doneBoardTextUI()" data-btc-en="Done" data-btc-zh="完成">Done</button>
+  </div>
+<div id="tqb-tag-controls" class="board-tag-controls" data-board-tags>
+  <div class="board-tag-entry">
+    <label for="tqb-tags" data-btc-en="Tags" data-btc-zh="标签">Tags</label>
+    <input type="text" id="tqb-tags" data-tag-input list="board-tag-suggestions" maxlength="200" autocomplete="off">
+    <button type="button" data-tag-mode="append" data-btc-en="Append" data-btc-zh="追加">Append</button>
+    <button type="button" data-tag-mode="remove" data-btc-en="Remove" data-btc-zh="移除">Remove</button>
+    <button type="button" data-tag-mode="replace" data-btc-en="Replace…" data-btc-zh="替换…">Replace…</button>
+  </div>
+  <div data-tag-chips></div>
 </div>
+</div>
+<datalist id="board-tag-suggestions"></datalist>
 
 <!-- EXPORT MODAL -->
 <div id="export-modal">
@@ -4554,7 +4607,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.14.0';
+var KRAFTED_VERSION = '7.15.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -4869,7 +4922,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       manifest.nodes.push(node);
     }
     var texts = state.texts || [];
-    for (var j = 0; j < texts.length; j++) { var t = texts[j]; manifest.texts.push({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, highlightColor: t.highlightColor, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: 1 }); }
+    for (var j = 0; j < texts.length; j++) { var t = texts[j]; manifest.texts.push({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, highlightColor: t.highlightColor, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: 1, rot: t.rot, opacity: t.opacity, locked: t.locked, name: t.name || '', note: t.note || '', tags: Array.isArray(t.tags) ? t.tags.slice() : splitTags(t.tags), textPreset: t.textPreset || '' }); }
     manifest.drawStrokes = (window.G && window.G.drawStrokes) || [];
     manifest.todos = (state.todos || []).map(function(td) { return { id: td.id, x: td.x, y: td.y, w: td.w, h: td.h, z: td.z, rot: td.rot || 0, opacity: td.opacity !== undefined ? td.opacity : 1, locked: td.locked || false, title: td.title || '', items: (td.items || []).map(function(it) { return { text: it.text, done: it.done }; }) }; });
     manifest.mindmaps = (state.mindmaps || []).map(function(mm) { return { id: mm.id, x: mm.x, y: mm.y, w: mm.w, h: mm.h, z: mm.z, rot: mm.rot || 0, opacity: mm.opacity !== undefined ? mm.opacity : 1, locked: mm.locked || false, title: mm.title || '', nodes: (mm.nodes || []).map(function(nn) { return { id: nn.id, text: nn.text, x: nn.x, y: nn.y, w: nn.w, h: nn.h, color: nn.color, textColor: nn.textColor, parentId: nn.parentId || null, img: nn.img || null, imgW: nn.imgW || 0, imgH: nn.imgH || 0, audio: nn.audio || null, audioName: nn.audioName || null }; }), connections: (mm.connections || []).map(function(c) { return { id: c.id, from: c.from, to: c.to, color: c.color }; }), nextNodeId: mm.nextNodeId || 1, nextConnId: mm.nextConnId || 1 }; });
@@ -4913,7 +4966,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       data.items.push(item);
     }
     var texts = manifest.texts || [];
-    for (var ti = 0; ti < texts.length; ti++) { var t = texts[ti]; data.texts.push({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, highlightColor: t.highlightColor, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, align: t.align, html: t.html || '', content: t.content || '', userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: t._textZoom }); }
+    for (var ti = 0; ti < texts.length; ti++) { var t = texts[ti]; data.texts.push({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, highlightColor: t.highlightColor, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, align: t.align, html: t.html || '', content: t.content || '', userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: t._textZoom, rot: t.rot, opacity: t.opacity, locked: t.locked, name: t.name || '', note: t.note || '', tags: Array.isArray(t.tags) ? t.tags.slice() : splitTags(t.tags), textPreset: t.textPreset || '' }); }
     var todos = manifest.todos || []; for (var ti2 = 0; ti2 < todos.length; ti2++) { data.todos = data.todos || []; data.todos.push(todos[ti2]); }
     var mindmaps = manifest.mindmaps || []; for (var ti3 = 0; ti3 < mindmaps.length; ti3++) { data.mindmaps = data.mindmaps || []; data.mindmaps.push(mindmaps[ti3]); }
     var groups = manifest.groups || []; for (var j = 0; j < groups.length; j++) { data.groups.push({ id: groups[j].id, color: groups[j].color, memberIds: groups[j].memberIds ? groups[j].memberIds.slice() : [] }); }
@@ -6846,6 +6899,7 @@ var I18N = (function() {
     // v7.0.29: board-pen pack/exit hint is injected by JS, so the tree walk
     // above cannot translate it — refresh it explicitly.
     if (typeof refreshDrawPackHint === 'function') refreshDrawPackHint();
+    if (typeof syncBoardTextUI === 'function') syncBoardTextUI();
 
     // Update the lang button icon
     updateLangButton();
@@ -7277,6 +7331,8 @@ function _ensureAllImagesLive() {
 }
 
 function updateCanvas() {
+  requestAnimationFrame(positionBoardTextUI);
+  document.querySelectorAll(".bt-move").forEach(el => { el.style.transform = "scale(" + (1 / Math.max(.05, state.zoom)) + ")"; });
   // Canvas uses a large fixed area with coordinate offset (50000px) so the grid
   // covers all content including negative world coordinates. Items are inside
   // #canvas-content which is offset by 50000px, so world (0,0) maps to
@@ -7837,23 +7893,8 @@ function addItemToFolderGroup(item, key) {
 // Library list and the minimap highlight. Two hand-written copies of the same
 // filter is the oldest root cause on this project - they always drift, and one
 // of them always ends up deciding something different from the other.
-function libMatches(it, q) {
-  if (!q) return true;
-  var hay = [it.name, it.note, (it.tags || []).join(' ')].join(' ').toLowerCase();
-  return hay.indexOf(q) >= 0;
-}
-function setItemMeta(field, value) {
-  var sel = (typeof getSelectedItems === 'function') ? getSelectedItems() : [];
-  if (!sel.length) return;
-  sel.forEach(function (it) {
-    if (field === 'name') it.name = value || '';
-    else if (field === 'note') it.note = value || '';
-    else if (field === 'tags') it.tags = splitTags(value);
-  });
-  try { scheduleAutoSave(); } catch (e) {}
-  var lib = document.getElementById('library-panel');
-  if (lib && !lib.classList.contains('collapsed')) renderLibraryPanel();
-}
+
+
 
 function toggleLibraryPanel() {
   var p = document.getElementById('library-panel');
@@ -7912,6 +7953,7 @@ function libSyncActive() {
 // v7.0.51 wrote this key but never read it back, so the panel forgot whether
 // the user had opened it on every single reload.
 (function initLibraryPanel() {
+  if (typeof document === 'undefined') return;
   var apply = function () {
     var p = document.getElementById('library-panel');
     if (!p) return;
@@ -7936,13 +7978,28 @@ function libThumbSrc(it) {
 // find by panning, so this is the navigation entry point. Each row flies the
 // camera to the item (revealItem) and selects it. Search covers name, note and
 // tags - the three fields P0-2 just added.
+function libraryItems() {
+  return (state.items || []).concat(state.texts || []);
+}
+
+function libMatches(it, q) {
+  if (!q) return true;
+  var texts = (typeof state !== 'undefined' && state && state.texts) ? state.texts : [];
+  var isText = it.el ? it.el.classList.contains('text-item') : texts.indexOf(it) >= 0;
+  var body = isText ? (it.el ? it.el.textContent : (it.content || '')) : '';
+  var tags = (typeof boardTagValues === 'function') ? boardTagValues(it.tags) : ((it.tags || []).filter(Boolean));
+  var hay = [it.name, it.note, tags.join(' '), body].join(' ').toLowerCase();
+  return hay.indexOf(String(q).toLowerCase()) >= 0;
+}
+
 function renderLibraryPanel() {
   var p = document.getElementById('library-panel');
   if (!p || p.classList.contains('collapsed')) return;
   var listEl = document.getElementById('library-list');
   if (!listEl) return;
   var q = ((document.getElementById('library-search').value) || '').toLowerCase().trim();
-  var items = (state.items || []).filter(function (it) {
+  var source = (typeof libraryItems === 'function') ? libraryItems() : (state.items || []).concat(state.texts || []);
+  var items = source.filter(function (it) {
     if (it.type === 'draw' || it.isDraw) return false;
     return libMatches(it, q);
   });
@@ -7966,15 +8023,17 @@ function renderLibraryPanel() {
     row.setAttribute('data-id', String(it.id));
     var thumb = document.createElement('div');
     thumb.className = 'lib-thumb';
+    var isText = (state.texts || []).indexOf(it) !== -1;
     var src = libThumbSrc(it);
     if (src) { var im = document.createElement('img'); im.src = src; im.draggable = false; thumb.appendChild(im); }
-    else { thumb.textContent = it.type === 'video' ? '\u25B6' : it.type === 'audio' ? '\u266A' : it.type === 'link' ? '\uD83D\uDD17' : '\u25A2'; }
+    else { thumb.textContent = isText ? 'T' : it.type === 'video' ? '\u25B6' : it.type === 'audio' ? '\u266A' : it.type === 'link' ? '\uD83D\uDD17' : '\u25A2'; }
     row.appendChild(thumb);
     var meta = document.createElement('div');
     meta.className = 'lib-meta';
     var nm = document.createElement('div');
     nm.className = 'lib-name';
-    nm.textContent = it.name || it.filename || (it.src ? String(it.src).split('/').pop().split('?')[0] : 'Unnamed');
+    var textTitle = isText ? String(it.el ? it.el.textContent : (it.content || '')).replace(/\s+/g, ' ').trim().slice(0, 80) : '';
+    nm.textContent = it.name || (isText ? (textTitle || 'Text') : (it.filename || (it.src ? String(it.src).split('/').pop().split('?')[0] : 'Unnamed')));
     meta.appendChild(nm);
     var tg = document.createElement('div');
     tg.className = 'lib-tags';
@@ -8108,7 +8167,9 @@ function libMatchIds() {
   var q = (el && (el.value || '').toLowerCase().trim()) || '';
   if (!q) return null;
   var out = (typeof Set !== 'undefined') ? new Set() : null;
-  (state.items || []).forEach(function (it) {
+  var source = (typeof libraryItems === 'function') ? libraryItems() : (state.items || []).concat(state.texts || []);
+  source.forEach(function (it) {
+    if (it.type === 'draw' || it.isDraw) return;
     if (!libMatches(it, q)) return;
     if (out) out.add(String(it.id));
   });
@@ -8248,6 +8309,7 @@ function miniBindInput() {
 }
 
 (function initMinimapPanel() {
+  if (typeof document === 'undefined') return;
   var apply = function () {
     var p = document.getElementById('minimap-panel');
     if (!p) return;
@@ -9045,6 +9107,7 @@ document.addEventListener('keydown', function (ev) {
 // choice. The IIFE tolerates either script position (inline after the markup,
 // or deferred), and re-runs harmlessly if it somehow beats the parser.
 (function initViewsPanel() {
+  if (typeof document === 'undefined') return;
   const apply = function () {
     const p = document.getElementById('views-panel');
     if (!p) return;
@@ -9157,23 +9220,7 @@ function captureSnapshot() {
       })(),
       masks: (i.masks || []).map(m => ({ id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength })),
     })),
-    texts: state.texts.map(t => ({
-      id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z,
-      font: t.font, size: t.size, bold: t.bold, italic: t.italic,
-      underline: t.underline, strike: t.strike, highlight: t.highlight,
-      shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase,
-      color: t.color, highlightColor: t.highlightColor, align: t.align,
-      // Save innerHTML (preserves inline <span style="color:.."> from per-word recolor)
-      // Falls back to textContent on restore for old data
-      html: t.el ? t.el.innerHTML : '',
-      content: t.el ? t.el.textContent : '',
-      // Remember user-resized state so autoGrow respects the width on reload
-      userResized: t.userResized || false,
-      // v6.8.2: _autoGrowLocked must survive undo too. Without it, undo/redo
-      // dropped the flag and the next keystroke could fall through to the
-      // maxW=520 measuring fallback, making the box suddenly jump wider.
-      _autoGrowLocked: t._autoGrowLocked || false,
-    })),
+    texts: state.texts.map(serializeBoardText),
     todos: (state.todos||[]).map(t => ({
       id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z,
       rot: t.rot || 0, opacity: t.opacity !== undefined ? t.opacity : 1, locked: t.locked || false,
@@ -9540,6 +9587,7 @@ function applySnapshot(snap) {
     }
     canvasContent.appendChild(el);
     const tx = { ...data, el };
+    normalizeBoardTextMeta(tx, data);
     delete tx.content;
     delete tx.html;
     state.texts.push(tx);
@@ -9846,6 +9894,7 @@ function refreshSelection() {
     // per-item handle children. The 8 union handles do the resize job.
     sel.forEach(item => item.el.classList.add('selected'));
     addMultiSelectHandles(sel);
+    sel.filter(it => it.el.classList.contains('text-item')).forEach(it => addTextHandles(it, true));
   } else {
     sel.forEach(item => {
       item.el.classList.add('selected');
@@ -9905,6 +9954,7 @@ function refreshSelection() {
       lbl._forceVisible = false;
     }
   });
+  syncBoardTextUI();
   updatePropsPanel();
   updateStatus();
   // v7.0.52: keep the Library highlight on the current selection. Cheap on
@@ -10001,34 +10051,46 @@ function addMultiSelectHandles(sel) {
 
 // Text items get corner + edge handles for resizing
 // Handles go in a SIBLING container (.text-handles), NOT inside the contentEditable div
-function addTextHandles(tx) {
-  const handles = [
-    { cls: 'nw', dir: 'nw' }, { cls: 'ne', dir: 'ne' },
-    { cls: 'sw', dir: 'sw' }, { cls: 'se', dir: 'se' },
-    { cls: 'e', dir: 'e' }, { cls: 'w', dir: 'w' },
-  ];
-  // Find or create the handle container (sibling of text-item)
-  let hCont = tx.el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]');
-  if (!hCont) {
-    hCont = document.createElement('div');
-    hCont.className = 'text-handles';
-    hCont.dataset.owner = tx.id;
-    tx.el.parentElement.appendChild(hCont);
+function addTextHandles(tx, moveOnly) {
+  if (!tx.el || !tx.el.parentElement || tx.locked) return;
+  let box = tx.el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'text-handles';
+    box.dataset.owner = tx.id;
+    tx.el.parentElement.appendChild(box);
   }
-  // v6.8.26: tx.w/tx.h are world px — the handle container lives inside
-  // the canvas (scaled by the same transform), so no zoom division.
-  hCont.style.left = tx.x + 'px';
-  hCont.style.top = tx.y + 'px';
-  hCont.style.width = tx.w + 'px';
-  hCont.style.height = tx.h + 'px';
-  hCont.style.zIndex = tx.z || 1;
-  handles.forEach(h => {
-    const el = document.createElement('div');
-    el.className = `item-handle ${h.cls}`;
-    el.dataset.dir = h.dir;
-    el.dataset.id = tx.id;
-    el.dataset.textHandle = '1';
-    hCont.appendChild(el);
+  box.replaceChildren();
+  box.style.left = tx.x + 'px';
+  box.style.top = tx.y + 'px';
+  box.style.width = tx.w + 'px';
+  box.style.height = tx.h + 'px';
+  box.style.zIndex = (tx.z || 1) + 1;
+  box.style.transform = 'rotate(' + (tx.rot || 0) + 'deg)';
+  const grip = document.createElement('button');
+  grip.type = 'button';
+  grip.className = 'bt-move';
+  grip.dataset.id = tx.id;
+  grip.textContent = boardTextLabel('Move', '移动');
+  grip.title = boardTextLabel('Drag to move; click text to edit', '拖动把手移动；点击正文编辑');
+  grip.setAttribute('aria-label', grip.title);
+  grip.style.transform = 'scale(' + (1 / Math.max(.05, state.zoom)) + ')';
+  box.appendChild(grip);
+  if (moveOnly) return;
+  ['n','s'].forEach(dir => {
+    const border = document.createElement('div');
+    border.className = 'bt-select-edge ' + dir;
+    border.dataset.id = tx.id;
+    box.appendChild(border);
+  });
+  ['e','w'].forEach(dir => {
+    const handle = document.createElement('div');
+    handle.className = 'item-handle ' + dir;
+    handle.dataset.id = tx.id;
+    handle.dataset.dir = dir;
+    handle.dataset.textHandle = '1';
+    handle.title = boardTextLabel('Change width; keep font size', '调整宽度，不改变字号');
+    box.appendChild(handle);
   });
 }
 
@@ -11747,73 +11809,140 @@ function rebuildLinkCard(item) {
 // restore was missing updateTextColorPalette() (stale colour swatches after
 // an undo) and updateAutoFitPaper() (paper bounds not recomputed on blur).
 // Both paths now call this, so they can never diverge again.
+function serializeBoardText(t) {
+  return normalizeBoardTextMeta({
+    id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z,
+    rot: t.rot, opacity: t.opacity, locked: t.locked,
+    font: t.font, size: t.size, bold: t.bold, italic: t.italic,
+    underline: t.underline, strike: t.strike, highlight: t.highlight,
+    shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase,
+    color: t.color, highlightColor: t.highlightColor, align: t.align,
+    // 实时 DOM 优先；无 DOM 时保留已有 HTML 或纯正文，正文不作为 HTML 插入。
+    html: t.el ? t.el.innerHTML : (typeof t.html === 'string' ? t.html : ''),
+    content: t.el ? t.el.textContent : (typeof t.content === 'string' ? t.content : ''),
+    userResized: t.userResized || false,
+    _autoGrowLocked: t._autoGrowLocked || false,
+    _textZoom: 1,
+  }, t);
+}
+
+function normalizeBoardTextMeta(tx, data) {
+  data = data || {};
+  tx.name = typeof data.name === 'string' ? data.name : '';
+  tx.note = typeof data.note === 'string' ? data.note : '';
+  var tags = Array.isArray(data.tags) ? data.tags
+    : (typeof data.tags === 'string' ? splitTags(data.tags) : []);
+  // 每次生成独立数组；只规范化 metadata，不应用预设或改变几何、样式。
+  tx.tags = tags.filter(function (tag) { return typeof tag === 'string'; })
+    .map(function (tag) { return tag.trim(); })
+    .filter(function (tag) { return tag.length > 0; });
+  tx.textPreset = typeof data.textPreset === 'string' ? data.textPreset : '';
+  return tx;
+}
+
+// Board Text: one edit lifecycle; controls remain outside the editable DOM.
+function boardTextIsComposing(e, el) {
+  return !!(e.isComposing || e.keyCode === 229 || (el && el._btComposing));
+}
+function beginBoardTextUndo(tx) {
+  if (tx.locked || tx.el._btUndo) return;
+  pushUndo();
+  tx.el._btUndo = true;
+}
+function finishBoardTextEditing() {
+  var tx = getEditingText();
+  if (tx && tx.el._btComposing) return;
+  if (tx) tx.el.blur();
+  if (state.tool === 'text') setTool('select');
+  clearSelection();
+  syncBoardTextUI();
+}
+window.addEventListener('board-text-done', finishBoardTextEditing);
+window.addEventListener('resize', function () { positionBoardTextUI(); });
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', positionBoardTextUI);
+  window.visualViewport.addEventListener('scroll', positionBoardTextUI);
+}
+
+function routeBoardTextMouse(e) {
+  if (e.button !== 0 || (state.tool !== 'select' && state.tool !== 'text')) return false;
+  const grip = e.target.closest('.bt-move');
+  const edge = e.target.closest('.bt-select-edge');
+  const resize = e.target.closest('.item-handle[data-text-handle]');
+  if (grip || resize) {
+    const editing = getEditingText();
+    if (editing) editing.el.blur();
+    if (state.tool !== 'select') setTool('select');
+    return false; // existing move/resize lifecycle owns the gesture
+  }
+  const textEl = e.target.closest('.text-item');
+  const tx = edge ? state.texts.find(t => t.id === Number(edge.dataset.id)) : state.texts.find(t => t.el === textEl);
+  if (!tx) return false;
+  if (tx.locked || edge || e.shiftKey || e.metaKey || e.ctrlKey) {
+    e.preventDefault();
+    if (textEl && document.activeElement === textEl) textEl.blur();
+    if (e.shiftKey || e.metaKey || e.ctrlKey) toggleSelect(tx.id);
+    else selectOnly(tx.id);
+    return true;
+  }
+  // Do not preventDefault: native caret placement and drag-to-select remain intact.
+  if (!state.selected.has(tx.id) || state.selected.size !== 1) selectOnly(tx.id);
+  tx.el.focus({preventScroll:true});
+  return true;
+}
 function attachTextListeners(tx) {
   const el = tx.el;
   if (!el || el._textListenersAttached) return;
   el._textListenersAttached = true;
-
-  el.addEventListener('input', () => autoGrowTextItem(tx));
-
-  // v7.0.26: keyboard commit / cancel while editing (Figma-style).
-  //   Esc            — cancel: restore the focus-time content, then blur
-  //   Cmd/Ctrl+Enter — commit: blur (the blur handler does the rest)
-  // Plain Enter stays a newline. stopPropagation keeps these away from
-  // the global keydown chain (which would otherwise blur-on-Escape
-  // WITHOUT restoring, i.e. an accidental commit).
-  el.addEventListener('keydown', (ke) => {
-    if (ke.key === 'Escape') {
+  el.setAttribute('role', 'textbox');
+  el.setAttribute('aria-multiline', 'true');
+  el.setAttribute('aria-label', boardTextLabel('Board text', '画板文字'));
+  el.addEventListener('compositionstart', () => { el._btComposing = true; });
+  el.addEventListener('compositionend', () => { el._btComposing = false; autoGrowTextItem(tx); });
+  el.addEventListener('beforeinput', e => {
+    if (tx.locked) { e.preventDefault(); return; }
+    beginBoardTextUndo(tx);
+  });
+  el.addEventListener('input', () => {
+    autoGrowTextItem(tx);
+    scheduleAutoSave();
+    syncBoardTextUI();
+  });
+  el.addEventListener('keydown', ke => {
+    if (boardTextIsComposing(ke, el)) return;
+    if (ke.key === 'Escape' || (ke.key === 'Enter' && (ke.metaKey || ke.ctrlKey))) {
       ke.preventDefault();
       ke.stopPropagation();
-      if (el._focusSnapshot !== undefined) el.innerHTML = el._focusSnapshot;
-      el.blur();
-    } else if (ke.key === 'Enter' && (ke.metaKey || ke.ctrlKey)) {
-      ke.preventDefault();
-      ke.stopPropagation();
-      el.blur();
+      // Esc now commits; undo, not Esc, is the explicit way to revert edits.
+      finishBoardTextEditing();
     }
   });
-
   el.addEventListener('focus', () => {
+    if (tx.locked) { el.blur(); return; }
     el.classList.add('editing');
-    // v6.8.22: remember the content at focus time so blur can skip
-    // auto-grow when nothing was typed. Re-measuring an untouched box
-    // (e.g. after a plain click) could shift its height because the
-    // measurement depends on live font metrics / zoom, which visibly
-    // deformed boxes that were just restored from a file.
     el._focusSnapshot = el.innerHTML;
-    showTextQuickBar(true);
-    updateTextQuickBarActive();
-    updateTextColorPalette();
+    el._btUndo = false;
+    if (!state.selected.has(tx.id) || state.selected.size !== 1) selectOnly(tx.id);
+    syncBoardTextUI();
   });
-
   el.addEventListener('blur', () => {
     el.classList.remove('editing');
-    showTextQuickBar(false);
-    updateTextColorPalette();
     if (!el.textContent.trim()) {
-      // No pushUndo() here on purpose. addText() already snapshotted the
-      // state BEFORE this box existed, so undo goes straight back to
-      // "no text box". The old code snapshotted "an empty text box
-      // exists" — and that box deletes itself again the instant it blurs,
-      // which made the undo look like it did nothing.
+      // Creation already has a pre-create snapshot; clearing existing content has beforeinput undo.
       el.remove();
-      const hCont = canvas.querySelector('.text-handles[data-owner="' + tx.id + '"]');
-      if (hCont) hCont.remove();
+      const handles = canvas.querySelector('.text-handles[data-owner="' + tx.id + '"]');
+      if (handles) handles.remove();
       state.texts = state.texts.filter(t => t.id !== tx.id);
       clearSelection();
-    } else {
-      // v6.8.24: only re-measure when we have a valid focus snapshot AND
-      // the content actually changed. When _focusSnapshot is undefined
-      // (element was never properly focused), skip auto-grow entirely —
-      // the stored w/h from creation/load is authoritative.
-      const _changed = (el._focusSnapshot !== undefined && el._focusSnapshot !== el.innerHTML);
-      if (_changed) autoGrowTextItem(tx);
+    } else if (el._focusSnapshot !== undefined && el._focusSnapshot !== el.innerHTML) {
+      autoGrowTextItem(tx);
     }
     el._focusSnapshot = undefined;
-    // Auto-switch back to select mode so clicking doesn't keep creating text boxes
+    el._btUndo = false;
     if (state.tool === 'text') setTool('select');
     scheduleAutoSave();
     updateAutoFitPaper();
+    syncBoardTextUI();
   });
 }
 function addText(x, y, initialText, opts) {
@@ -11835,7 +11964,8 @@ function addText(x, y, initialText, opts) {
     // zooming out shrinks text (Figma/Miro behavior). Old on-screen-px
     // files are converted at load time in restoreBoard (_textWorld marker).
     // opts.initW still wins (used by paste/undo paths).
-    w: (opts && opts.initW) ? opts.initW : 160, h: 36, z: G.nextZ++,
+    w: (opts && opts.initW) ? opts.initW : 320, h: 36, z: G.nextZ++,
+    _autoGrowLocked: true, name: '', note: '', tags: [], textPreset: 'body',
     font: textTool.font, size: textTool.size || 24,
     bold: textTool.bold, italic: textTool.italic, underline: textTool.underline, strike: textTool.strike,
     highlight: textTool.highlight, shadow: textTool.shadow, bg: textTool.bg, outline: textTool.outline,
@@ -11858,109 +11988,8 @@ function addText(x, y, initialText, opts) {
   return tx;
 }
 function autoGrowTextItem(tx) {
-  const el = tx.el;
-  if (!el || !el.isConnected) return;
-  // v6.8.26: tx.w/tx.h/tx.size are WORLD px. The element's inline CSS
-  // width IS tx.w (canvas transform handles zoom scaling), and
-  // scrollHeight/scrollWidth are measured directly in world units —
-  // no zoom conversion anywhere.
-
-  const origW = el.style.width;
-  const origH = el.style.height;
-  const origMinW = el.style.minWidth;
-  // v6.8.24: CSS classes (.text-item min-width:80px, .editing min-width:100px)
-  // can override the inline width we set during measurement (e.g. a small
-  // box in editing mode), causing scrollHeight to be read at the wrong
-  // computed width. Temporarily zero out min-width so measurements are
-  // taken at the exact intended width.
-  if (origMinW) el.style.minWidth = '0';
-  try {
-
-  // If the user has manually resized the text box, respect their width.
-  // Only grow the HEIGHT to fit wrapped content — never force the width back
-  // to a wider value, otherwise the text jumps wider every time the user
-  // starts typing.
-  const lockWidth = (tx.userResized || tx._autoGrowLocked) && tx.w;
-  if (lockWidth) {
-    el.style.width = tx.w + 'px';
-    el.style.height = 'auto';
-    const finalH = el.scrollHeight; // world px
-    const padH = 12;                // world px of padding
-    const newH = Math.max(32, finalH + padH);
-    if (tx.h === newH) {
-      el.style.width = origW;
-      el.style.height = origH;
-      return;
-    }
-    tx.h = newH;
-    updateItemStyle(tx);
-    const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
-    if (hCont) { hCont.style.width = tx.w + 'px'; hCont.style.height = newH + 'px'; }
-    updateAutoFitPaper();
-    return;
-  }
-
-  // v7.0.26: Figma-style AUTO-WIDTH for fresh boxes (never user-resized).
-  // The box grows HORIZONTALLY with the content (min 160, max 520 world
-  // px); once the natural single-line width exceeds 520 the text wraps
-  // and only the height grows. Dragging any resize handle sets
-  // userResized, which moves the box into the width-locked branch above.
-  if (tx.w) {
-    const origWS = el.style.whiteSpace;
-    // Measure the natural single-line width: nowrap + shrink-to-fit.
-    el.style.whiteSpace = 'nowrap';
-    el.style.width = 'auto';
-    el.style.height = 'auto';
-    const naturalW = el.scrollWidth; // world px, includes padding
-    el.style.whiteSpace = origWS || '';
-    const minW = 160, maxW = 520;    // world px
-    const newW = Math.max(minW, Math.min(maxW, Math.ceil(naturalW) + 2));
-    el.style.width = newW + 'px';
-    el.style.height = 'auto';
-    const finalH = el.scrollHeight; // world px (wrapped if over maxW)
-    const padH = 12;                // world px of padding
-    const newH = Math.max(32, finalH + padH);
-    if (tx.w === newW && tx.h === newH) {
-      el.style.width = origW;
-      el.style.height = origH;
-      return;
-    }
-    tx.w = newW;
-    tx.h = newH;
-    updateItemStyle(tx);
-    const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
-    if (hCont) { hCont.style.width = newW + 'px'; hCont.style.height = newH + 'px'; }
-    updateAutoFitPaper();
-    return;
-  }
-
-  // Fallback: measure at maxW and shrink to fit (original behavior)
-  const maxW = 520; // world px
-  const minW = 120; // world px
-  el.style.width = maxW + 'px';
-  el.style.height = 'auto';
-  const naturalH = el.scrollHeight;
-  const contentW = el.scrollWidth; // world px
-  const padW = 28;                 // world px of horizontal padding
-  const targetWOS = Math.min(maxW, Math.max(minW, contentW + padW));
-  el.style.width = targetWOS + 'px';
-  el.style.height = 'auto';
-  const finalH = el.scrollHeight;
-  const padH = 12;
-  const newW = targetWOS;
-  const newH = Math.max(32, finalH + padH);
-  if (tx.w === newW && tx.h === newH) {
-    el.style.width = origW;
-    el.style.height = origH;
-    return;
-  }
-  tx.w = newW;
-  tx.h = newH;
-  updateItemStyle(tx);
-  const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
-  if (hCont) { hCont.style.width = newW + 'px'; hCont.style.height = newH + 'px'; }
-  updateAutoFitPaper();
-  } finally { el.style.minWidth = origMinW; }
+  // Width is authoritative, regardless of old auto-width flags. Opening alone never measures.
+  growTextHeightToFit(tx);
 }
 // v7.0.26: grow-only height refit for text items. Used after box resizes
 // and font-size changes, where the wrapped content may need MORE vertical
@@ -11969,25 +11998,16 @@ function autoGrowTextItem(tx) {
 function growTextHeightToFit(tx) {
   const el = tx.el;
   if (!el || !el.isConnected || !tx.w) return;
-  const origW = el.style.width;
-  const origH = el.style.height;
-  const origMinW = el.style.minWidth;
-  if (origMinW) el.style.minWidth = '0';
-  try {
-    el.style.width = tx.w + 'px';
-    el.style.height = 'auto';
-    const needH = Math.max(32, el.scrollHeight + 12); // world px + padding
-    if (needH > (tx.h || 0)) {
-      tx.h = needH;
-      updateItemStyle(tx);
-      const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + tx.id + '"]') : null;
-      if (hCont) { hCont.style.width = tx.w + 'px'; hCont.style.height = needH + 'px'; }
-      updateAutoFitPaper();
-    } else {
-      el.style.width = origW;
-      el.style.height = origH;
-    }
-  } finally { el.style.minWidth = origMinW; }
+  const oldMin = el.style.minWidth;
+  el.style.minWidth = '0';
+  el.style.width = tx.w + 'px';
+  el.style.height = 'auto';
+  const nextH = Math.max(32, Math.ceil(el.scrollHeight) + 2);
+  el.style.minWidth = oldMin;
+  tx.h = nextH;
+  updateItemStyle(tx);
+  updateAutoFitPaper();
+  positionBoardTextUI();
 }
 function updateItemStyle(item, lightweight) {
   const el = item.el;
@@ -22386,9 +22406,7 @@ function updatePropsPanel() {
   empty.style.display = 'none';
   content.style.display = 'block';
   const item = sel[0];
-  var pn = document.getElementById('prop-name'); if (pn) pn.value = item.name || '';
-  var pnote = document.getElementById('prop-note'); if (pnote) pnote.value = item.note || '';
-  var ptags = document.getElementById('prop-tags'); if (ptags) ptags.value = (item.tags && item.tags.length) ? item.tags.join(', ') : '';
+  renderTagControls();
   // v7.6.0 — the Group row only appears when every selected item sits in
   // the SAME group; a mixed or ungrouped selection hides it.
   var cg = commonGroupForSelection();
@@ -22756,58 +22774,503 @@ function updateCgiOverlays(item) {
 
 // ==== text-style.js ====
 
+// BOARD_TEXT_CONTROLS_PATCH_BEGIN
+// Board Text controls：此片段由 patch_text_controls.py 注入，不单独加载。
+function boardTextLabel(en, zh) {
+  return _isZhUI() ? zh : en;
+}
+
+function selectedBoardTexts(targets) {
+  return Array.from(new Set(targets === undefined ? getSelectedItems() : targets))
+    .filter(function (tx) { return tx && tx.el && tx.el.classList.contains('text-item'); });
+}
+
+function boardTextValue(tx, key) {
+  var defaults = {font:'Arial', size:24, bold:false, italic:false, underline:false,
+    strike:false, highlight:false, shadow:false, bg:false, outline:false,
+    uppercase:false, color:'#ffffff', highlightColor:'#ffff00', align:'left', textPreset:''};
+  var value = tx[key] === undefined ? defaults[key] : tx[key];
+  return key === 'size' ? Number(value) : value;
+}
+
+function commonBoardValue(items, key, read) {
+  if (!items.length) return null;
+  read = read || boardTextValue;
+  var value = read(items[0], key);
+  return items.every(function (it) { return read(it, key) === value; }) ? value : null;
+}
+
+function normalizeBoardTextPatch(patch) {
+  var clean = {};
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return clean;
+  var bools = ['bold','italic','underline','strike','highlight','shadow','bg','outline','uppercase'];
+  Object.keys(patch).forEach(function (key) {
+    var value = patch[key];
+    if (bools.indexOf(key) >= 0) {
+      if (typeof value === 'boolean') clean[key] = value;
+    } else if (key === 'size') {
+      if ((typeof value === 'number' || typeof value === 'string') && String(value).trim() && Number.isFinite(Number(value)))
+        clean.size = Math.max(1, Math.min(512, Number(value)));
+    } else if (key === 'font') {
+      if (typeof value === 'string' && value.trim()) clean.font = value.trim();
+    } else if (key === 'color' || key === 'highlightColor') {
+      if (typeof value === 'string' && CSS.supports('color', value)) clean[key] = value;
+    } else if (key === 'align') {
+      if (['left','center','right','justify'].indexOf(value) >= 0) clean.align = value;
+    } else if (key === 'textPreset') {
+      if (['','title','body','label'].indexOf(value) >= 0) clean.textPreset = value;
+    }
+  });
+  return clean;
+}
+
+function boardTextPatchPlan(patch, targets) {
+  var clean = normalizeBoardTextPatch(patch), keys = Object.keys(clean);
+  if (!keys.length) return [];
+  return selectedBoardTexts(targets).filter(function (tx) {
+    return !tx.locked && keys.some(function (key) { return boardTextValue(tx, key) !== clean[key]; });
+  }).map(function (tx) { return {tx:tx, patch:clean}; });
+}
+
+function commitBoardTextPlans(plans) {
+  if (!plans.length) return 0;
+  pushUndo();
+  plans.forEach(function (plan) {
+    Object.keys(plan.patch).forEach(function (key) { plan.tx[key] = plan.patch[key]; });
+    applyTextProps(plan.tx);
+    if (plan.patch.textPreset === 'label') {
+      const el = plan.tx.el, ws = el.style.whiteSpace;
+      el.style.whiteSpace = 'nowrap'; el.style.width = 'max-content';
+      plan.tx.w = Math.max(100, Math.min(320, Math.ceil(el.scrollWidth) + 2));
+      el.style.whiteSpace = ws;
+    }
+    autoGrowTextItem(plan.tx);
+  });
+  syncBoardTextUI();
+  scheduleAutoSave();
+  return plans.length;
+}
+
+function applyTextPatch(patch, targets) {
+  return commitBoardTextPlans(boardTextPatchPlan(patch, targets));
+}
+
+function applyTextStyleToSelected(patch) {
+  return applyTextPatch(patch);
+}
+
+function setTextProp(prop, val) {
+  var patch = normalizeBoardTextPatch({[prop]:val});
+  if (selectedBoardTexts().length) return applyTextStyleToSelected(patch);
+  // 无选中文字时只编辑新建默认值，不产生画板 undo/autosave。
+  if (state.tool === 'text') Object.keys(patch).forEach(function (key) { textTool[key] = patch[key]; });
+  syncBoardTextUI();
+  return 0;
+}
+
+function toggleTextStyle(style) {
+  if (['bold','italic','underline','strike','highlight','shadow','bg','outline','uppercase'].indexOf(style) < 0) return 0;
+  var texts = selectedBoardTexts();
+  return setTextProp(style, texts.length ? commonBoardValue(texts, style) !== true : !textTool[style]);
+}
+
+function setTextAlign(align) {
+  return setTextProp('align', align);
+}
+
+function applyBoardTextPreset(kind) {
+  var definitions = {title:{size:36, bold:true, bg:false}, body:{size:24, bold:false, bg:false}, label:{size:18, bold:true, bg:true}};
+  if (!Object.prototype.hasOwnProperty.call(definitions, kind)) return 0;
+  var preset = definitions[kind];
+  return applyTextPatch({size:preset.size, bold:preset.bold, bg:preset.bg,
+    italic:false, underline:false, strike:false, highlight:false, shadow:false,
+    outline:false, uppercase:false, align:'left', textPreset:kind});
+}
+
+function stepTextSize(dir) {
+  dir = dir < 0 ? -1 : 1;
+  var texts = selectedBoardTexts();
+  if (!texts.length) return setTextProp('size', Number(textTool.size || 24) + dir);
+  // 混合字号按各自实际值步进；整个操作仍只有一个 undo。
+  var plans = [];
+  texts.forEach(function (tx) {
+    plans = plans.concat(boardTextPatchPlan({size:boardTextValue(tx, 'size') + dir}, [tx]));
+  });
+  return commitBoardTextPlans(plans);
+}
+
+function applyInlineSize(px) {
+  return applyBoardInlinePatch('size', px);
+}
+
+function applyInlineColor(color) {
+  return applyBoardInlinePatch('color', color);
+}
+
+function applyBoardInlinePatch(key, value) {
+  var patch = normalizeBoardTextPatch({[key]:value});
+  if (!Object.keys(patch).length) return 0;
+  var tx = getEditingText(), selection = window.getSelection();
+  if (!selection || !selection.rangeCount || selection.isCollapsed) {
+    var targets = selectedBoardTexts();
+    if (tx && targets.indexOf(tx) < 0) targets.push(tx);
+    return targets.length ? applyTextPatch(patch, targets) : setTextProp(key, patch[key]);
+  }
+  // 旧 inline API 只接受当前正在编辑的文字内部选区，不能修改其他 DOM。
+  if (!tx || tx.locked) return 0;
+  var range = selection.getRangeAt(0);
+  if (!tx.el.contains(range.startContainer) || !tx.el.contains(range.endContainer)) return 0;
+  var cssKey = key === 'size' ? 'fontSize' : 'color';
+  var cssValue = key === 'size' ? patch.size + 'px' : patch.color;
+  var probe = document.createElement('span');
+  probe.style[cssKey] = cssValue;
+  // 颜色用浏览器规范化，不让相同颜色的 hex/rgb 写法产生空 undo。
+  var expected = probe.style[cssKey], allSame = true, seen = false;
+  if (key === 'color') {
+    var canvas = document.createElement('canvas').getContext('2d');
+    if (canvas) { canvas.fillStyle = cssValue; expected = canvas.fillStyle; }
+  }
+  var walker = document.createTreeWalker(tx.el, NodeFilter.SHOW_TEXT), node;
+  while ((node = walker.nextNode())) {
+    if (!node.nodeValue || !range.intersectsNode(node)) continue;
+    if (node === range.startContainer && range.startOffset === node.length) continue;
+    if (node === range.endContainer && range.endOffset === 0) continue;
+    seen = true;
+    var actual = getComputedStyle(node.parentElement)[cssKey];
+    if (key === 'color' && canvas) { canvas.fillStyle = actual; actual = canvas.fillStyle; }
+    if (actual !== expected) allSame = false;
+  }
+  if (!seen || allSame) return 0;
+  pushUndo();
+  var content = range.extractContents();
+  // 保留选中片段的其他格式，但已有子 span 不能遮住本次明确设置的属性。
+  content.querySelectorAll('*').forEach(function (el) { el.style[cssKey] = cssValue; });
+  probe.appendChild(content);
+  range.insertNode(probe);
+  range.selectNodeContents(probe);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  // 仅显式 inline 操作改 DOM 选区；同步路径绝不触碰光标或正文。
+  autoGrowTextItem(tx);
+  syncBoardTextUI();
+  scheduleAutoSave();
+  return 1;
+}
+
+function applyTextColorToSelected(hexColor) {
+  if (!/^#[0-9a-f]{6}$/i.test(hexColor)) return 0;
+  var targets = selectedBoardTexts(), tx = getEditingText();
+  if (!targets.length && tx) targets.push(tx);
+  return applyTextPatch({color:hexColor}, targets);
+}
+
+function ensureBoardTextControls() {
+  var bar = document.getElementById('text-quick-bar');
+  if (!bar || bar.dataset.controlsReady) return;
+  var font = document.getElementById('tqb-font'), source = document.getElementById('text-font');
+  if (font && source) Array.from(source.options).forEach(function (option) { font.appendChild(option.cloneNode(true)); });
+  bar.dataset.controlsReady = '1';
+}
+
+function setBoardControlValue(el, value) {
+  if (!el || document.activeElement === el) return;
+  var str = value === null || value === undefined ? '' : String(value);
+  if (el.tagName === 'SELECT' && str && !Array.from(el.options).some(function (o) { return o.value === str; })) {
+    var option = document.createElement('option');
+    option.value = str;
+    option.textContent = str;
+    el.appendChild(option);
+  }
+  if (el.value !== str) el.value = str;
+}
+
+function refreshBoardTextLabels(root) {
+  if (!root) return;
+  root.querySelectorAll('[data-btc-en]').forEach(function (el) {
+    var label = boardTextLabel(el.dataset.btcEn, el.dataset.btcZh);
+    if (el.dataset.btcAttr) el.setAttribute(el.dataset.btcAttr, label);
+    else if (el.textContent !== label) el.textContent = label;
+  });
+}
+
+function updateTextQuickBarActive() {
+  ensureBoardTextControls();
+  var bar = document.getElementById('text-quick-bar');
+  if (!bar) return;
+  refreshBoardTextLabels(bar);
+  var texts = selectedBoardTexts(), disabled = !texts.some(function (tx) { return !tx.locked; });
+  ['font','size','align'].forEach(function (key) {
+    var el = document.getElementById(key === 'size' ? 'tqb-size-input' : 'tqb-' + key);
+    var value = commonBoardValue(texts, key);
+    setBoardControlValue(el, value);
+    if (el) {
+      el.dataset.mixed = String(texts.length > 0 && value === null);
+      el.disabled = disabled;
+      if (key === 'size') el.placeholder = value === null ? boardTextLabel('Mixed', '混合') : '';
+    }
+  });
+  var bold = document.getElementById('tqb-bold'), boldValue = commonBoardValue(texts, 'bold');
+  bold.classList.toggle('active', boldValue === true);
+  bold.classList.toggle('mixed', texts.length > 0 && boldValue === null);
+  bold.setAttribute('aria-pressed', boldValue === null && texts.length ? 'mixed' : String(boldValue === true));
+  var color = commonBoardValue(texts, 'color'), picker = document.getElementById('tqb-custom-color');
+  var mixedColor = color === null;
+  picker.parentElement.classList.toggle('mixed-color', mixedColor);
+  picker.dataset.mixed = String(mixedColor);
+  // 原生 color input 不能表示空值；混合时隐藏其色块而显示明确的“混合”。
+  if (!mixedColor && picker.dataset.sourceColor !== color && document.activeElement !== picker) {
+    var hex = color;
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) {
+      var context = document.createElement('canvas').getContext('2d');
+      if (context) {
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        var rgb = context.getImageData(0, 0, 1, 1).data;
+        hex = '#' + Array.from(rgb).slice(0, 3).map(function (v) { return v.toString(16).padStart(2, '0'); }).join('');
+      }
+    }
+    setBoardControlValue(picker, hex);
+    picker.dataset.sourceColor = color;
+  }
+  document.getElementById('tqb-color-mixed').hidden = !mixedColor;
+  bar.querySelectorAll('[data-text-style-control]').forEach(function (el) { el.disabled = disabled; });
+  var preset = commonBoardValue(texts, 'textPreset');
+  bar.querySelectorAll('[data-text-preset]').forEach(function (el) {
+    el.classList.toggle('active', !!preset && el.dataset.textPreset === preset);
+  });
+}
+
+function updateTextSizeActive(px) {
+  updateTextQuickBarActive();
+}
+
+function syncBoardTextUI() {
+  ensureBoardTextControls();
+  var texts = selectedBoardTexts(), hasText = texts.length > 0;
+  var old = document.getElementById('text-toolbar'), palette = document.getElementById('text-color-palette');
+  var bar = document.getElementById('text-quick-bar');
+  if (old) {
+    var defaults = state.tool === 'text' && !hasText;
+    old.dataset.boardTextDefaults = String(defaults);
+    old.classList.toggle('active', defaults);
+    if (defaults) {
+      setBoardControlValue(document.getElementById('text-font'), textTool.font);
+      setBoardControlValue(document.getElementById('text-size'), textTool.size);
+      setBoardControlValue(document.getElementById('text-size-select'), textTool.size);
+      ['bold','italic','underline','strike','highlight','shadow','outline','bg','uppercase'].forEach(function (key) {
+        var button = document.getElementById('ts-' + (key === 'uppercase' ? 'upper' : key));
+        if (button) button.classList.toggle('active', !!textTool[key]);
+      });
+      ['l','c','r'].forEach(function (key) {
+        var button = document.getElementById('ts-align-' + key);
+        if (button) button.classList.toggle('active', textTool.align === {l:'left',c:'center',r:'right'}[key]);
+      });
+    } else {
+      var grid = document.getElementById('text-color-grid');
+      if (grid) grid.style.display = 'none';
+    }
+  }
+  if (palette) palette.classList.remove('active');
+  if (bar) {
+    bar.classList.toggle('active', hasText);
+    bar.setAttribute('aria-label', boardTextLabel('Text styles', '文字样式'));
+  }
+  updateTextQuickBarActive();
+  renderTagControls();
+  positionBoardTextUI();
+}
+
+function showTextQuickBar(show) {
+  // 保留旧签名；显隐只由当前选中的文字决定，blur 不会误关工具条。
+  syncBoardTextUI();
+}
+
+function updateTextColorPalette() {
+  syncBoardTextUI();
+}
+
+function positionBoardTextUI() {
+  var bar = document.getElementById('text-quick-bar');
+  if (!bar || !bar.classList.contains('active')) return;
+  var rects = selectedBoardTexts().map(function (tx) { return tx.el.getBoundingClientRect(); })
+    .filter(function (r) { return r.width > 0 && r.height > 0; });
+  if (!rects.length) { bar.style.visibility = 'hidden'; return; }
+  var vv = window.visualViewport, margin = 8, gap = 10;
+  var left = (vv ? vv.offsetLeft : 0) + margin, top = (vv ? vv.offsetTop : 0) + margin;
+  var right = left + (vv ? vv.width : window.innerWidth) - margin * 2;
+  var bottom = top + (vv ? vv.height : window.innerHeight) - margin * 2;
+  bar.style.maxWidth = Math.max(0, right - left) + 'px';
+  bar.style.maxHeight = Math.max(0, bottom - top) + 'px';
+  var box = bar.getBoundingClientRect();
+  var minX = Math.min.apply(null, rects.map(function (r) { return r.left; }));
+  var maxX = Math.max.apply(null, rects.map(function (r) { return r.right; }));
+  var minY = Math.min.apply(null, rects.map(function (r) { return r.top; }));
+  var maxY = Math.max.apply(null, rects.map(function (r) { return r.bottom; }));
+  var x = (minX + maxX - box.width) / 2;
+  var y = minY - gap - box.height >= top ? minY - gap - box.height : maxY + gap;
+  // 上下均不足时尝试左右；最后才做视口夹取。
+  if (y + box.height > bottom) {
+    if (maxX + gap + box.width <= right) { x = maxX + gap; y = minY; }
+    else if (minX - gap - box.width >= left) { x = minX - gap - box.width; y = minY; }
+    else {
+      var above = Math.max(0, minY - gap - top), below = Math.max(0, bottom - maxY - gap);
+      if (Math.max(above, below) >= 36) {
+        bar.style.maxHeight = Math.max(above, below) + 'px';
+        box = bar.getBoundingClientRect();
+        y = above >= below ? minY - gap - box.height : maxY + gap;
+      }
+    }
+  }
+  bar.style.left = Math.max(left, Math.min(x, right - box.width)) + 'px';
+  bar.style.top = Math.max(top, Math.min(y, bottom - box.height)) + 'px';
+  bar.style.visibility = 'visible';
+}
+
+function doneBoardTextUI() {
+  // 主代理监听此事件并执行提交/退出编辑；这里不自行 blur 或清选区。
+  window.dispatchEvent(new CustomEvent('board-text-done'));
+}
+
+function boardTagValues(value) {
+  var values = Array.isArray(value) ? value : splitTags(value);
+  return Array.from(new Set(values.filter(function (tag) { return typeof tag === 'string'; })
+    .map(function (tag) { return tag.trim(); }).filter(Boolean)));
+}
+
+function mutateSelectedTags(mode, value) {
+  if (['append','remove','replace'].indexOf(mode) < 0) return 0;
+  var tags = boardTagValues(value), plans = [];
+  if (mode !== 'replace' && !tags.length) return 0;
+  getSelectedItems().forEach(function (it) {
+    if (it.locked) return;
+    var previous = boardTagValues(it.tags), next;
+    if (mode === 'append') next = boardTagValues(previous.concat(tags));
+    else if (mode === 'remove') next = previous.filter(function (tag) { return tags.indexOf(tag) < 0; });
+    else next = tags.slice();
+    if (previous.length !== next.length || previous.some(function (tag, i) { return tag !== next[i]; })) plans.push({it:it, tags:next});
+  });
+  if (!plans.length) return 0;
+  if (mode === 'replace' && !window.confirm(boardTextLabel('Replace all tags on the selected unlocked items?', '替换所选未锁定项目的全部标签？'))) return -1;
+  pushUndo();
+  plans.forEach(function (plan) { plan.it.tags = plan.tags; });
+  renderTagControls();
+  positionBoardTextUI();
+  scheduleAutoSave();
+  requestLibraryRefresh();
+  return plans.length;
+}
+
+function setItemMeta(field, value) {
+  // v7.15.0: metadata edits are no-op guarded; tags use explicit append/remove/replace flow.
+  if (field === 'tags') return mutateSelectedTags('append', value);
+  if (field !== 'name' && field !== 'note') return 0;
+  value = value == null ? '' : String(value);
+  var targets = getSelectedItems().filter(function (it) { return !it.locked && (it[field] || '') !== value; });
+  if (!targets.length) return 0;
+  pushUndo();
+  targets.forEach(function (it) { it[field] = value; });
+  renderTagControls();
+  scheduleAutoSave();
+  requestLibraryRefresh();
+  return targets.length;
+}
+
+function submitBoardTags(root, mode) {
+  var input = root.querySelector('[data-tag-input]');
+  if (!input || input.dataset.composing === '1') return;
+  var value = input.value;
+  // 空草稿绝不等同“清空所有”；清空必须直接显式调用 replace 并确认。
+  if (!value.trim()) return;
+  var changed = mutateSelectedTags(mode, value);
+  if (changed >= 0) input.value = '';
+}
+
+function handleBoardTagKey(event, root) {
+  var input = root.querySelector('[data-tag-input]');
+  if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229 || input.dataset.composing === '1') return;
+  event.preventDefault();
+  event.stopPropagation();
+  submitBoardTags(root, 'append');
+}
+
+function renderTagControls() {
+  var selected = getSelectedItems(), writable = selected.some(function (it) { return !it.locked; });
+  var readMeta = function (it, key) { return it[key] || ''; };
+  ['name','note'].forEach(function (key) {
+    var input = document.getElementById('prop-' + key), value = commonBoardValue(selected, key, readMeta);
+    setBoardControlValue(input, value);
+    if (input) {
+      input.disabled = !writable;
+      input.placeholder = selected.length && value === null ? boardTextLabel('Mixed', '混合')
+        : (key === 'name' ? boardTextLabel('Name', '名称') : boardTextLabel('Note', '备注'));
+    }
+  });
+  var counts = new Map();
+  selected.forEach(function (it) {
+    boardTagValues(it.tags).forEach(function (tag) { counts.set(tag, (counts.get(tag) || 0) + 1); });
+  });
+  var entries = Array.from(counts.entries()).sort(function (a, b) { return a[0].localeCompare(b[0]); });
+  var signature = JSON.stringify([entries, selected.length, writable, _isZhUI()]);
+  document.querySelectorAll('[data-board-tags]').forEach(function (root) {
+    refreshBoardTextLabels(root);
+    var input = root.querySelector('[data-tag-input]');
+    if (!root.dataset.ready) {
+      input.addEventListener('compositionstart', function () { input.dataset.composing = '1'; });
+      input.addEventListener('compositionend', function () { input.dataset.composing = ''; });
+      input.addEventListener('keydown', function (event) { handleBoardTagKey(event, root); });
+      root.querySelectorAll('[data-tag-mode]').forEach(function (button) {
+        button.addEventListener('click', function () { submitBoardTags(root, button.dataset.tagMode); });
+      });
+      root.dataset.ready = '1';
+    }
+    input.disabled = !writable;
+    input.placeholder = boardTextLabel('Add tags; Enter to append', '输入标签，回车追加');
+    root.querySelectorAll('[data-tag-mode]').forEach(function (button) { button.disabled = !writable; });
+    var chips = root.querySelector('[data-tag-chips]');
+    if (chips.dataset.signature === signature) return;
+    chips.replaceChildren();
+    entries.forEach(function (entry) {
+      var tag = entry[0], count = entry[1], partial = count < selected.length;
+      var chip = document.createElement('span'), label = document.createElement('span'), remove = document.createElement('button');
+      chip.className = 'board-tag-chip' + (partial ? ' partial' : '');
+      label.textContent = tag + (partial ? ' (' + count + '/' + selected.length + ')' : '');
+      if (partial) chip.title = boardTextLabel('Present on some selected items', '仅部分选中项目具有此标签');
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.title = boardTextLabel('Remove tag: ', '移除标签：') + tag;
+      remove.setAttribute('aria-label', remove.title);
+      remove.disabled = !selected.some(function (it) { return !it.locked && boardTagValues(it.tags).indexOf(tag) >= 0; });
+      remove.addEventListener('click', function () { mutateSelectedTags('remove', [tag]); });
+      chip.append(label, remove);
+      chips.appendChild(chip);
+    });
+    chips.dataset.signature = signature;
+  });
+  var list = document.getElementById('board-tag-suggestions');
+  if (!list) return;
+  // persistence 补丁提供 libraryItems；独立验收时也覆盖 items + texts。
+  var all = typeof libraryItems === 'function' ? libraryItems() : (state.items || []).concat(state.texts || []);
+  var suggestions = boardTagValues(all.reduce(function (tags, it) { return tags.concat(boardTagValues(it.tags)); }, [])).sort();
+  var listSignature = JSON.stringify(suggestions);
+  if (list.dataset.signature !== listSignature) {
+    list.replaceChildren();
+    suggestions.forEach(function (tag) { var option = document.createElement('option'); option.value = tag; list.appendChild(option); });
+    list.dataset.signature = listSignature;
+  }
+}
+
+// 无循环/常驻计时器；仅初始化一次。后续由主代理的 selection/canvas/input hook 驱动。
+setTimeout(function () { syncBoardTextUI(); }, 0);
+
+// BOARD_TEXT_CONTROLS_PATCH_END
+
 // ============================================================
 //  TEXT TOOL
 // ============================================================
-function toggleTextStyle(style) {
-  textTool[style] = !textTool[style];
-  document.getElementById('ts-' + style.replace('highlight','highlight').replace('uppercase','upper')).classList.toggle('active', textTool[style]);
-  applyTextStyleToSelected();
-}
-function setTextProp(prop, val) {
-  textTool[prop] = val;
-  applyTextStyleToSelected();
-  // Round 54/55: keep both size dropdowns (main toolbar #text-size-select,
-  // quick bar #tqb-size-input) and the active-state in sync so the three
-  // UIs never drift apart. The hidden #text-size number input is also
-  // synced for back-compat with any code that still reads its `.value`.
-  if (prop === 'size') {
-    const tsEl = document.getElementById('text-size');
-    if (tsEl) tsEl.value = val;
-    _setSizeSelectValue(document.getElementById('text-size-select'), val);
-    _setSizeSelectValue(document.getElementById('tqb-size-input'), val);
-    updateTextSizeActive(val);
-  }
-}
-function setTextAlign(align) {
-  textTool.align = align;
-  ['l','c','r'].forEach(a => document.getElementById('ts-align-' + a).classList.toggle('active', align === {l:'left',c:'center',r:'right'}[a]));
-  applyTextStyleToSelected();
-}
-function applyTextStyleToSelected() {
-  const sel = getSelectedItems().filter(i => i.el && i.el.classList.contains('text-item'));
-  sel.forEach(tx => {
-    const prevSize = tx.size;
-    Object.assign(tx, {
-      font: textTool.font, size: textTool.size, bold: textTool.bold, italic: textTool.italic,
-      underline: textTool.underline, strike: textTool.strike, highlight: textTool.highlight,
-      shadow: textTool.shadow, bg: textTool.bg, outline: textTool.outline, uppercase: textTool.uppercase,
-      color: textTool.color, highlightColor: textTool.highlightColor, align: textTool.align,
-    });
-    applyTextProps(tx);
-    // v7.0.26: a font-size change reflows the wrapped text, so the box
-    // must be re-fitted IMMEDIATELY. Previously nothing re-measured until
-    // the next keystroke, leaving the box clipped/oversized — and the
-    // mismatch exploded on the next resize drag. Only react to size
-    // changes (colour/bold etc. don't change line count enough to
-    // justify fighting a user-set height).
-    if (tx.size !== prevSize) {
-      if (tx.userResized || tx._autoGrowLocked) growTextHeightToFit(tx);
-      else autoGrowTextItem(tx);
-    }
-  });
-  scheduleAutoSave();
-}
+
+
+
+
 function showTextColorPicker(target) {
   textTool.activeColorTarget = target;
   const grid = document.getElementById('text-color-grid');
@@ -22818,9 +23281,8 @@ function showTextColorPicker(target) {
     sw.style.background = c;
     if (textTool[target] === c) sw.classList.add('active');
     sw.onclick = () => {
-      textTool[target] = c;
       grid.style.display = 'none';
-      applyTextStyleToSelected();
+      setTextProp(target, c);
     };
     grid.appendChild(sw);
   });
@@ -22845,62 +23307,7 @@ function getEditingText() {
   return null;
 }
 
-function applyInlineSize(px) {
-  // Round 54: `px` is the user-facing on-screen size. Stored value is
-  // ALSO on-screen (rendering code divides by zoom at display time).
-  // Round 55: also sync the hidden #text-size number input (back-compat)
-  // and the size dropdowns so the UIs stay in sync.
-  const sel = window.getSelection();
-  if (!sel.rangeCount || sel.isCollapsed) {
-    // No selection — apply to entire text item
-    setTextProp('size', px);
-    // Fallback: if nothing was selected, apply to the currently editing text item directly
-    const editingTx = getEditingText();
-    if (editingTx && !state.selected.has(editingTx.id)) {
-      editingTx.size = px;
-      applyTextProps(editingTx);
-      // v7.0.26: refit the box right away (see applyTextStyleToSelected)
-      if (editingTx.userResized || editingTx._autoGrowLocked) growTextHeightToFit(editingTx);
-      else autoGrowTextItem(editingTx);
-      scheduleAutoSave();
-    }
-    const tsEl = document.getElementById('text-size');
-    if (tsEl) tsEl.value = px;
-    _setSizeSelectValue(document.getElementById('text-size-select'), px);
-    _setSizeSelectValue(document.getElementById('tqb-size-input'), px);
-    updateTextSizeActive(px);
-    return;
-  }
-  // Has selection — wrap in a span
-  const range = sel.getRangeAt(0);
-  const span = document.createElement('span');
-  span.style.fontSize = px + 'px';
-  try {
-    range.surroundContents(span);
-    sel.removeAllRanges();
-  } catch(e) {
-    // surroundContents fails on partial selections — fallback
-    document.execCommand('fontSize', false, '7');
-    const fonts = document.querySelectorAll('font[size="7"]');
-    fonts.forEach(f => {
-      const s = document.createElement('span');
-      s.style.fontSize = px + 'px';
-      while (f.firstChild) s.appendChild(f.firstChild);
-      f.replaceWith(s);
-    });
-  }
-  updateTextSizeActive(px);
-  // Also update the text item's default size
-  const editingTx = getEditingText();
-  if (editingTx) {
-    editingTx.size = px;
-    // v7.0.26: the inline <span> changed the rendered line heights —
-    // refit the box so it doesn't clip until the next keystroke.
-    if (editingTx.userResized || editingTx._autoGrowLocked) growTextHeightToFit(editingTx);
-    else autoGrowTextItem(editingTx);
-  }
-  scheduleAutoSave();
-}
+
 
 // Round 55: helper for syncing the size <select> dropdowns (text-size-select
 // in the main toolbar, tqb-size-input in the quick bar). When the user
@@ -22924,131 +23331,22 @@ function _setSizeSelectValue(el, val) {
 // to the closest preset. If `px` doesn't match any preset (e.g. user
 // typed a custom value in the number input), clear all active states.
 const TQB_PRESETS = [8, 10, 12, 16, 20, 24, 32, 48, 64, 80, 96];
-function updateTextSizeActive(px) {
-  document.querySelectorAll('.tqb-size').forEach(b => {
-    b.classList.toggle('active', b.textContent === String(px));
-  });
-}
+
 // Step the current text size up/down through the preset list.
-function stepTextSize(dir) {
-  const cur = textTool.size || 24;
-  // Find closest preset
-  let idx = 0;
-  let bestDiff = Infinity;
-  TQB_PRESETS.forEach((p, i) => {
-    const d = Math.abs(p - cur);
-    if (d < bestDiff) { bestDiff = d; idx = i; }
-  });
-  // If current is bigger than largest preset, append it
-  if (cur > TQB_PRESETS[TQB_PRESETS.length - 1]) idx = TQB_PRESETS.length - 1;
-  const next = TQB_PRESETS[Math.max(0, Math.min(TQB_PRESETS.length - 1, idx + dir))];
-  // Update slider + tool state + quick bar
-  // Round 55: also sync the new size <select> dropdowns.
-  textTool.size = next;
-  const tsEl = document.getElementById('text-size');
-  if (tsEl) tsEl.value = next;
-  _setSizeSelectValue(document.getElementById('text-size-select'), next);
-  _setSizeSelectValue(document.getElementById('tqb-size-input'), next);
-  applyInlineSize(next);
-}
 
-function applyInlineColor(color) {
-  const sel = window.getSelection();
-  if (!sel.rangeCount || sel.isCollapsed) {
-    // No selection — apply to entire text item
-    textTool.color = color;
-    applyTextStyleToSelected();
-    // Fallback: if nothing was selected, apply to the currently editing text item directly
-    const editingTx = getEditingText();
-    if (editingTx && !state.selected.has(editingTx.id)) {
-      editingTx.color = color;
-      applyTextProps(editingTx);
-      scheduleAutoSave();
-    }
-    const ccEl = document.getElementById('tqb-custom-color');
-    if (ccEl) ccEl.value = color;
-    return;
-  }
-  // Has selection — use execCommand for inline color (creates <span style="color:..">)
-  document.execCommand('foreColor', false, color);
-  // NOTE: We do NOT overwrite the editing text's default `color` here.
-  // The default color applies to NEW text the user types; the inline <span>
-  // already records the per-word color and will be saved via innerHTML.
-  // Previously this also updated tx.color — that overwrote the previous
-  // default with whatever was just picked, which corrupted multi-color text
-  // items on reload.
-  scheduleAutoSave();
-}
 
-function showTextQuickBar(show) {
-  document.getElementById('text-quick-bar').classList.toggle('active', show);
-}
 
-function updateTextQuickBarActive() {
-  // Round 55: sync the active size button + both size <select> dropdowns
-  // (quick bar #tqb-size-input + main toolbar #text-size-select) to the
-  // current textTool.size.
-  updateTextSizeActive(textTool.size);
-  _setSizeSelectValue(document.getElementById('text-size-select'), textTool.size);
-  _setSizeSelectValue(document.getElementById('tqb-size-input'), textTool.size);
-}
+
+
+
+
 
 // ============================================================
 //  TEXT COLOR PALETTE — apply color to selected text items
 // ============================================================
-function updateTextColorPalette() {
-  const palette = document.getElementById('text-color-palette');
-  if (!palette) return;
-  // Find any selected or editing text item
-  const sel = getSelectedItems().filter(i => i.el && i.el.classList.contains('text-item'));
-  // If nothing selected, check the currently editing text item
-  let targetCount = sel.length;
-  if (targetCount === 0) {
-    const ed = getEditingText();
-    if (ed) { sel.push(ed); targetCount = 1; }
-  }
-  if (targetCount === 0) {
-    palette.classList.remove('active');
-    return;
-  }
-  palette.classList.add('active');
-  // Show which item(s) we're targeting
-  const lbl = document.getElementById('tcp-target-label');
-  if (lbl) lbl.textContent = targetCount > 1 ? `(${targetCount} items)` : '';
-  // Highlight the swatch matching the first selected text's color
-  const firstColor = (sel[0].color || '#ffffff').toLowerCase();
-  palette.querySelectorAll('.tcp-swatch').forEach(sw => {
-    sw.classList.toggle('active', sw.dataset.color && sw.dataset.color.toLowerCase() === firstColor);
-  });
-  const picker = document.getElementById('tcp-custom-color');
-  if (picker) picker.value = /^#[0-9a-f]{6}$/i.test(firstColor) ? firstColor : '#ffffff';
-}
 
-function applyTextColorToSelected(hexColor) {
-  if (!/^#[0-9a-f]{6}$/i.test(hexColor)) return;
-  const sel = getSelectedItems().filter(i => i.el && i.el.classList.contains('text-item'));
-  let targets = sel;
-  if (targets.length === 0) {
-    const ed = getEditingText();
-    if (ed) targets = [ed];
-  }
-  if (targets.length === 0) { toast('Select a text item first'); return; }
-  pushUndo();
-  // Also update the new-item default so future texts use this color
-  textTool.color = hexColor;
-  targets.forEach(tx => {
-    tx.color = hexColor;
-    applyTextProps(tx);
-  });
-  scheduleAutoSave();
-  updateTextColorPalette();
-  // Update visual active swatch
-  document.querySelectorAll('#text-color-palette .tcp-swatch').forEach(sw => {
-    sw.classList.toggle('active', sw.dataset.color && sw.dataset.color.toLowerCase() === hexColor.toLowerCase());
-  });
-  const picker = document.getElementById('tcp-custom-color');
-  if (picker) picker.value = hexColor;
-}
+
+
 
 // Wire up palette swatches + custom picker (run after DOM is ready)
 (function initTextColorPalette() {
@@ -23099,7 +23397,7 @@ function setTool(tool) {
   document.querySelectorAll('#toolbar button').forEach(b => b.classList.remove('active'));
   const btnMap = { select: 'btn-select', text: 'btn-text', draw: 'btn-draw', export: 'btn-export', capture: 'btn-capture', cut: 'btn-cut', lasso: 'btn-lasso', mindmap: 'btn-mindmap', relation: 'btn-relation' };
   if (btnMap[tool]) document.getElementById(btnMap[tool]).classList.add('active');
-  document.getElementById('text-toolbar').classList.toggle('active', tool === 'text');
+  syncBoardTextUI();
   document.getElementById('draw-toolbar').classList.toggle('active', tool === 'draw');
   // v7.0.29: refresh the Enter=pack / Esc=exit hint whenever the pen opens
   if (tool === 'draw' && typeof refreshDrawPackHint === 'function') refreshDrawPackHint();
@@ -26720,10 +27018,10 @@ document.addEventListener('keydown', e => {
       }
       if (textItem) {
         // v6.1.1: Save selected text to internal clipboard
-        state.clipboard = [{ ...textItem, el: null, img: null, content: selectedText }];
+        state.clipboard = [{ ...textItem, el: null, img: null, tags: (textItem.tags || []).slice(), content: selectedText }];
         state._textCopiedFromKrafted = true;
         state._lastInternalPaste = 0; // reset guard so this copy can be pasted immediately
-        e.preventDefault();
+        // Native copy remains allowed so text can also be pasted outside Krafted.
         e.stopPropagation();
         try { toast('Copied text'); } catch (ex) {}
         return;
@@ -26749,7 +27047,7 @@ document.addEventListener('keydown', e => {
       translateSelectedText('en', 'zh');
       return;
     }
-    if (e.key === 'Escape') e.target.blur();
+    if (e.key === 'Escape' && !boardTextIsComposing(e, ae)) e.target.blur();
     return;
   }
 
@@ -27528,6 +27826,9 @@ viewport.addEventListener('mousedown', e => {
     return;
   }
 
+  // Text body edits, handles move; all other tools keep their own routing.
+  if (routeBoardTextMouse(e)) return;
+
   // TEXT TOOL
   if (state.tool === 'text') {
     // Check if clicking on existing text
@@ -27722,9 +28023,12 @@ viewport.addEventListener('mousedown', e => {
   }
 
   // Check for item click
-  const itemEl = e.target.closest('.item, .text-item, .todo-item, .mindmap-item');
+  const textGrip = e.target.closest('.bt-move');
+  const gripText = textGrip ? state.texts.find(t => t.id === Number(textGrip.dataset.id)) : null;
+  if (textGrip) e.preventDefault();
+  const itemEl = gripText ? gripText.el : e.target.closest('.item, .text-item, .todo-item, .mindmap-item');
   if (itemEl) {
-    const isEditingText = itemEl.classList.contains('text-item') && itemEl.classList.contains('editing');
+    const isEditingText = !textGrip && itemEl.classList.contains('text-item');
     // When clicking on an editing text-item, do NOT initiate a move drag.
     // Let the browser handle native text selection / caret positioning.
     // To move the box, the user clicks outside first (commits edit), then clicks the box to select, then drags.
@@ -28455,19 +28759,7 @@ document.addEventListener('mousemove', e => {
           if (el.classList.contains('todo-item')) a.item._resized = true;
           if (_isText) {
             a.item.userResized = true;
-            // v7.0.26: match the single-item path — corner drags scale
-            // the font live (cached original survives the whole drag),
-            // edge drags leave the font alone. Previously multi-resize
-            // never scaled the font, so single vs multi behaved
-            // differently on the same gesture.
-            if (a.item.size && d.dir && d.dir.length === 2 && a.origW) {
-              const _ms = a.w / a.origW;
-              if (Math.abs(_ms - 1) > 0.001) {
-                a.item._origTextSize = (a.item._origTextSize !== undefined) ? a.item._origTextSize : a.item.size;
-                a.item.size = Math.round(a.item._origTextSize * _ms * 10) / 10;
-                el.style.fontSize = a.item.size + 'px';
-              }
-            }
+            autoGrowTextItem(a.item);
             // v6.8.2: keep the text-handles sibling in sync (see fast path below)
             if (a._hCont === undefined) {
               a._hCont = el.parentElement
@@ -28500,20 +28792,7 @@ document.addEventListener('mousemove', e => {
       if (!el.classList.contains('todo-item')) {
         el.style.height = ((isMedia ? h + 54 : h) / _rzFast) + 'px';
       }
-      // v6.6.0: Live text font scaling during resize — commit size to state
-      // every frame so applyTextProps (called by reflows, imports, etc.)
-      // always picks up the correct value. No more CSS-only drift.
-      // v7.0.26: ONLY corner drags scale the font (uniform scale, Figma
-      // behavior). Edge drags (n/s/e/w) resize the BOX ONLY — the font
-      // stays at whatever the user picked in the quick bar. Previously
-      // every edge drag also scaled the font by the width ratio, so
-      // widening a box blew up the type size and the quick-bar preset
-      // no longer matched ("揀完大細一拉伸就走咗").
-      const _cornerDrag = d.dir && d.dir.length === 2;
-      if (el.classList.contains('text-item') && d.item.size && _cornerDrag && Math.abs(scaleX - 1) > 0.001) {
-        d.item.size = Math.round((d._origTextSize || (d._origTextSize = d.item.size)) * scaleX * 10) / 10;
-        el.style.fontSize = d.item.size + 'px';
-      }
+      if (_isTextFast) autoGrowTextItem(d.item);
       // Direct write to cached media-wrap (skip querySelector)
       if (d._mediaWrap) d._mediaWrap.style.height = h + 'px';
       // Direct transform write (position + rotation, scale handled by width/height)
@@ -28830,25 +29109,7 @@ document.addEventListener('mouseup', e => {
           if (m) { delete m._origX; delete m._origY; delete m._origW; delete m._origH; }
         });
       }
-      // v6.6.0: Text resize — commit final size. During drag, item.size
-      // was already updated via rAF. Here we just ensure it's final and
-      // run applyTextProps once. Use d._origTextSize (cached at mousedown)
-      // to avoid double-scaling since rAF already wrote to item.size.
-      // v7.0.26: corner drags only — edge drags never touch the font.
-      if (item.el && item.el.classList.contains('text-item') && d.origW > 0) {
-        const _cornerUp = d.dir && d.dir.length === 2;
-        const origSz = d._origTextSize || item.size;
-        const textScale = item.w / d.origW;
-        if (_cornerUp && Math.abs(textScale - 1) > 0.001) {
-          item.size = Math.round(origSz * textScale * 10) / 10;
-          if (typeof applyTextProps === 'function') applyTextProps(item);
-        }
-        // v7.0.26: after ANY text resize (edge or corner), grow the box
-        // height if the content no longer fits (wrap changed or the font
-        // was scaled). Grow-only — never shrink below the dragged height,
-        // so deliberate vertical drags still stick.
-        if (typeof growTextHeightToFit === 'function') growTextHeightToFit(item);
-      }
+      if (item.el && item.el.classList.contains('text-item')) autoGrowTextItem(item);
       // v6.6.3: remove isolation after resize to free compositor resources
       if (item.el && item.el.classList.contains('text-item')) {
         item.el.style.willChange = 'auto';
@@ -31220,6 +31481,7 @@ function copySelected() {
   if (sel.length === 0) return;
   state.clipboard = sel.map(i => {
     const copy = { ...i, el: null, img: null };
+    if (Array.isArray(i.tags)) copy.tags = i.tags.slice();
     if (i.items) copy.items = i.items.map(it => ({ ...it }));
     // v6.1.1: Preserve text content so pasteClipboard can restore it.
     // copySelected nulls out `el` (DOM ref), but pasteClipboard needs
@@ -31444,6 +31706,7 @@ function pasteClipboard() {
       }
       applyTextProps(tx);
       updateItemStyle(tx);
+      normalizeBoardTextMeta(tx, data);
       state.selected.add(tx.id);
       pastedCount++;
     }
@@ -37216,7 +37479,7 @@ function buildManifest() {
     _textWorld: true,
     _savedAt: new Date().toISOString(),
     items,
-    texts: state.texts.map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, font: t.font, size: t.size, bold: t.bold, italic: t.italic, underline: t.underline, strike: t.strike, highlight: t.highlight, shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase, color: t.color, highlightColor: t.highlightColor, align: t.align, html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '', userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: 1 })),
+    texts: state.texts.map(serializeBoardText),
     todos: (state.todos||[]).map(t => ({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z, rot: t.rot || 0, opacity: t.opacity !== undefined ? t.opacity : 1, locked: t.locked || false, title: t.title || '', items: (t.items||[]).map(it => ({ text: it.text, done: it.done })) })),
     mindmaps: (state.mindmaps||[]).map(m => ({ id: m.id, x: m.x, y: m.y, w: m.w, h: m.h, z: m.z, rot: m.rot || 0, opacity: m.opacity !== undefined ? m.opacity : 1, locked: m.locked || false, title: m.title || '', nodes: (m.nodes||[]).map(n => ({ id: n.id, text: n.text, x: n.x, y: n.y, w: n.w, h: n.h, color: n.color, textColor: n.textColor, parentId: n.parentId || null, img: n.img || null, imgW: n.imgW || 0, imgH: n.imgH || 0, audio: n.audio || null, audioName: n.audioName || null })), connections: (m.connections||[]).map(c => ({ id: c.id, from: c.from, to: c.to, color: c.color })), nextNodeId: m.nextNodeId || 1, nextConnId: m.nextConnId || 1 })),
     drawStrokes: G.drawStrokes,
@@ -39197,15 +39460,7 @@ function serializeBoard() {
       // catching a real bug — the values are deterministic given the
       // live state. If you need a one-off dump for debugging, call
       // window.__kraftedDumpTexts() in the console.
-      return {
-        id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z,
-        font: t.font, size: t.size, bold: t.bold, italic: t.italic,
-        underline: t.underline, strike: t.strike, highlight: t.highlight,
-        shadow: t.shadow, bg: t.bg, outline: t.outline, uppercase: t.uppercase,
-        color: t.color, highlightColor: t.highlightColor, align: t.align,
-        html: t.el ? t.el.innerHTML : '', content: t.el ? t.el.textContent : '',
-        userResized: t.userResized || false, _autoGrowLocked: t._autoGrowLocked || false, _textZoom: 1
-      };
+      return serializeBoardText(t);
     }),
     todos: (state.todos||[]).map(t => ({
       id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z,
@@ -39784,6 +40039,7 @@ function restoreBoard(data, append) {
     canvasContent.appendChild(el);
     const txId = _claimId(d.id);
     const tx = { ...d, id: txId, el };
+    normalizeBoardTextMeta(tx, d);
     delete tx.content;
     delete tx.html;
     // v6.8.26: convert old on-screen px to world px (no-op for new files)

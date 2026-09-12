@@ -143,5 +143,19 @@ check('#toolbar.collapsed { display:none; }' in t, 'collapsed state hides the ba
 check('#toolbar-expand.show { display:flex; }' in t, 'pill appears via .show')
 check(t.count('krafted_toolbar_collapsed') >= 2, 'state persisted and restored')
 
+print('\n[9] v7.15.0 Board Text editing + tag/search unification')
+check('function routeBoardTextMouse(' in t, 'routeBoardTextMouse() present')
+check('if (routeBoardTextMouse(e)) return;' in t, 'pointer routing hooks before text tool branch')
+check("if (field === 'tags') return mutateSelectedTags('append', value);" in t,
+      'setItemMeta routes tags through append flow')
+check("var source = (typeof libraryItems === 'function') ? libraryItems() : (state.items || []).concat(state.texts || []);" in t,
+      'Library list has local source fallback')
+check("var tags = (typeof boardTagValues === 'function') ? boardTagValues(it.tags) : ((it.tags || []).filter(Boolean));" in t,
+      'libMatches has boardTagValues fallback')
+check("var body = isText ? (it.el ? it.el.textContent : (it.content || '')) : '';" in t,
+      'libMatches includes text body search')
+check("if (typeof document === 'undefined') return;" in t,
+      'panel init IIFEs tolerate non-DOM test sandboxes')
+
 print('\n%s (%d checks, %d failed)' % ('ALL PASS' if not fails else 'FAILURES', CHECKS[0], len(fails)))
 sys.exit(1 if fails else 0)

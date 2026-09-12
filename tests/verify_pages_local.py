@@ -241,6 +241,20 @@ ok(dev.count(b'#toolbar-expand.show { display:flex; }') == 1,
 ok(dev.count(b'krafted_toolbar_collapsed') >= 2,
    'state persisted and restored (%d)' % dev.count(b'krafted_toolbar_collapsed'))
 
+# ---- 4f. v7.15.0 — Board Text editing + tag/search unification ----
+print('\n[4f] v7.15.0 — Board Text editing + tag/search unification')
+has(dev, b'function routeBoardTextMouse(', 'routeBoardTextMouse() exists')
+has(dev, b'if (routeBoardTextMouse(e)) return;', 'board text pointer routing is hooked before text tool branch')
+has(dev, b"if (field === 'tags') return mutateSelectedTags('append', value);",
+    'setItemMeta routes tags through append flow')
+has(dev, b"var source = (typeof libraryItems === 'function') ? libraryItems() : (state.items || []).concat(state.texts || []);",
+    'Library list has a local source fallback (legacy test sandbox safe)')
+has(dev, b"var tags = (typeof boardTagValues === 'function') ? boardTagValues(it.tags) : ((it.tags || []).filter(Boolean));",
+    'libMatches has boardTagValues fallback')
+has(dev, b"var body = isText ? (it.el ? it.el.textContent : (it.content || '')) : '';",
+    'libMatches includes text body search')
+has(dev, b"if (typeof document === 'undefined') return;", 'panel init IIFEs tolerate non-DOM test sandboxes')
+
 # ---- 5. i18n ----
 print('\n[5] i18n')
 has(dev, b'Save images as PNG', 'zh dictionary has "Save images as PNG" key')

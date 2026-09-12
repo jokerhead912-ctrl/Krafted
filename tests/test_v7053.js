@@ -265,8 +265,12 @@ has("document.removeEventListener('pointermove', miniOnMove);",
 // ═══ 4. one predicate, two readers ════════════════════════════════════
 const lm = fnFull('libMatches', SRC);
 ok(lm.length > 0, 'libMatches exists');
-has("var hay = [it.name, it.note, (it.tags || []).join(' ')].join(' ').toLowerCase();",
-    'libMatches searches name, note and tags', lm);
+has("var body = isText ? (it.el ? it.el.textContent : (it.content || '')) : '';",
+    'libMatches includes text body', lm);
+has("var tags = (typeof boardTagValues === 'function') ? boardTagValues(it.tags) : ((it.tags || []).filter(Boolean));",
+    'libMatches normalizes tags with fallback', lm);
+has("var hay = [it.name, it.note, tags.join(' '), body].join(' ').toLowerCase();",
+    'libMatches searches name, note, tags and text body', lm);
 has('if (!q) return true;', 'an empty query matches everything', lm);
 has('return libMatches(it, q);', 'the Library list filters through libMatches',
     fnFull('renderLibraryPanel', SRC));
@@ -387,7 +391,7 @@ has('id="minimap-canvas"', 'the canvas is in the markup', SRC);
 has('miniBindInput();', 'the pointer handlers are bound before the first paint', SRC);
 
 // ═══ report ═══════════════════════════════════════════════════════════
-console.log('test_v7053.js  (v7.14.0 Minimap - draggable board radar)');
+console.log('test_v7053.js  (v7.15.0 Minimap - draggable board radar)');
 if (fails.length) {
   console.log(`  ${pass} passed, ${fails.length} FAILED`);
   fails.forEach(f => console.log('    FAIL  ' + f));

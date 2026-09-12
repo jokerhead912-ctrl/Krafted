@@ -324,7 +324,7 @@ has("try { collapsed = localStorage.getItem('krafted_library_collapsed') !== '0'
 // exactly what this assertion is checking for.
 const bootI = SRC.indexOf('(function initLibraryPanel()');
 ok(bootI > 0, 'initLibraryPanel exists');
-const bootRegion = SRC.slice(bootI, bootI + 460);
+const bootRegion = SRC.slice(bootI, bootI + 760);
 has('(function initLibraryPanel() {', 'the boot restore is an IIFE, not a stray call', bootRegion);
 has("if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);",
     'the boot restore waits for the DOM when the parser has not finished', bootRegion);
@@ -361,7 +361,7 @@ has("case 'library-toggle-panel':   toggleLibraryPanel(); return true;",
     'the shortcut still dispatches', SRC);
 
 // ═══ report ═══════════════════════════════════════════════════════════
-console.log(`test_v7052.js  (v7.14.0 Library keeps up with the board)`);
+console.log(`test_v7052.js  (v7.15.0 Library keeps up with the board)`);
 if (fails.length) {
   console.log(`  ${pass} passed, ${fails.length} FAILED`);
   fails.forEach(f => console.log('    FAIL  ' + f));
