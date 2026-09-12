@@ -123,7 +123,7 @@ mutate '取消替换错误清空草稿' submitBoardTags \
 mutate '标签 IME Enter 被误提交' handleBoardTagKey \
   ' || event.isComposing || event.keyCode === 229' ''
 mutate '标签重复操作仍产生事务' mutateSelectedTags \
-  'if (!plans.length) return 0;' 'if (false) return 0;'
+  'if (!plans.length) {' 'if (false) {'
 
 mutate 'metadata 缺失默认名称失效' normalizeBoardTextMeta \
   "tx.name = typeof data.name === 'string' ? data.name : '';" 'tx.name = data.name;'

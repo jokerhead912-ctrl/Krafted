@@ -144,7 +144,7 @@ const sources = new Map();
 function sourceOf(name) { if (!sources.has(name)) sources.set(name, extract(name)); return sources.get(name); }
 function model(tx) { return plain(Object.fromEntries(Object.entries(tx).filter(([k]) => k !== 'el'))); }
 function boot() {
-  const document = dom(), calls = {undo: [], save: 0, sync: 0, paper: 0, position: 0, library: 0, refresh: 0, tags: 0}, frames = [];
+  const document = dom(), calls = {undo: [], save: 0, sync: 0, paper: 0, position: 0, library: 0, refresh: 0, tags: 0, toasts: []}, frames = [];
   const state = {items: [], texts: [], todos: [], mindmaps: [], groups: [], views: [], selected: new Set(), tool: 'select', zoom: .5, pan: {x: 31, y: -17}};
   const textTool = {font:'Arial', size:24, bold:false, italic:false, underline:false, strike:false, highlight:false,
     shadow:false, bg:false, outline:false, uppercase:false, color:'#ffffff', highlightColor:'#ffff00', align:'left'};
@@ -166,6 +166,8 @@ function boot() {
     scheduleAutoSave: () => { calls.save++; }, syncBoardTextUI: () => { calls.sync++; },
     updateAutoFitPaper: () => { calls.paper++; }, positionBoardTextUI: () => { calls.position++; },
     requestLibraryRefresh: () => { calls.library++; }, renderTagControls: () => { calls.tags++; },
+    // v7.15.1: mutateSelectedTags now toasts on no-op — record instead of crashing the harness.
+    toast: msg => { calls.toasts.push(msg); },
     refreshSelection: () => { calls.refresh++; }, updateTextColorPalette: () => {},
     setTool: tool => { state.tool = tool; },
     mediaFilterString: unexpected('mediaFilterString'), renderMasks: unexpected('renderMasks'),

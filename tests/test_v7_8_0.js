@@ -220,7 +220,7 @@ section(function () {
   has('  lassoKnockBtn.style.display = v;', 'the helper drives the lasso Knock out button too');
   has("'Knock out': '挖空',", "Knock out is translated");
   // Provenance comments in this file must not be mutated by a version bump.
-  ok(HTML.indexOf('// v7.15.0:') > 0, 'v7.15.0 provenance comments are present');
+  ok(HTML.indexOf('// v7.15.1:') > 0, 'v7.15.1 provenance comments are present');
 });
 
 // ═══ 2. itemPixelGeometry, executed against the stub DOM ══════════════════
@@ -253,7 +253,7 @@ section(function () {
   let g = geo.itemPixelGeometry(env.item);
   ok(!!g, 'the mapper returns geometry for a rotated item');
   let p00 = geo._geoApply(g.nat, 0, 0), e00 = expectedScreen(c, 0, 0);
-  near(p00.x, e00.x, 'v7.15.0: source pixel (0,0) lands on the rotated item’s top-left corner (x)', 0.02);
+  near(p00.x, e00.x, 'v7.15.1: source pixel (0,0) lands on the rotated item’s top-left corner (x)', 0.02);
   near(p00.y, e00.y, 'source pixel (0,0) lands on the rotated item’s top-left corner (y)', 0.02);
   let p11 = geo._geoApply(g.nat, 600, 300), e11 = expectedScreen(c, 600, 300);
   near(p11.x, e11.x, 'source pixel (natW,natH) lands on the rotated item’s bottom-right corner (x)', 0.02);
@@ -445,7 +445,7 @@ asection(async function () {
 
   // The result is upright: rot and flip are baked into the pixels, so leaving
   // them on the item is what made the NEXT cut drift.
-  eq(newItem.rot, 0, 'v7.15.0: the extracted copy is upright (rot = 0)');
+  eq(newItem.rot, 0, 'v7.15.1: the extracted copy is upright (rot = 0)');
   eq(newItem.flipH, false, 'the extracted copy carries no horizontal flip');
   eq(newItem.flipV, false, 'the extracted copy carries no vertical flip');
   near(newItem.w, (sR - sL), 'the copy covers exactly the drawn width, in world px', 0.02);
@@ -547,7 +547,7 @@ asection(async function () {
   ok(log.drawImage.length === 1 && log.drawImage[0].length === 5, 'the whole source is drawn with an explicit source rect');
   eq(log.drawImage[0][3], 600, 'the source rect is the natural width');
   eq(log.drawImage[0][4], 300, 'the source rect is the natural height');
-  eq(log.fill[0], 'destination-out', 'v7.15.0: the hole is SUBTRACTED (destination-out), not painted over');
+  eq(log.fill[0], 'destination-out', 'v7.15.1: the hole is SUBTRACTED (destination-out), not painted over');
   // The path is in SOURCE pixels: on a 30deg source, screen and source coords
   // differ, so a wrong mapper cannot land on these exact numbers.
   near(log.path[0][1], 100, 'the hole is cut in source pixels (first x)');
