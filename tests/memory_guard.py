@@ -49,6 +49,7 @@ memory_guard.py — 睇住 .workbuddy/memory/ 嘅体积同索引完整性。
   python3 Krafted/tests/memory_guard.py             # 超预算 exit 1
   python3 Krafted/tests/memory_guard.py --strict    # 日誌债都当致命
   python3 Krafted/tests/memory_guard.py --snapshot  # 先备份去 backups/，再检查
+  python3 Krafted/tests/memory_guard.py --prune     # 人手轮替旧备份（会真删）
   python3 Krafted/tests/memory_guard.py --from=2026-08-31  # 用指针规则审旧日誌
 
 点解要 --snapshot
@@ -90,26 +91,48 @@ DAILY_RE = re.compile(r'^(\d{4})-(\d{2})-(\d{2})\.md$')
 SNAPSHOT_KEEP = 10
 
 
+def _old_snapshots(backups):
+    """最旧行先嘅 memory-* 备份目录（净係我哋自己产生嗰啲，唔掂 html 备份）。"""
+    return sorted(p for p in os.listdir(backups)
+                  if p.startswith('memory-')
+                  and os.path.isdir(os.path.join(backups, p)))
+
+
 def snapshot(workspace):
-    """把 memory/ 复制去 backups/memory-<时间戳>/，留最近 SNAPSHOT_KEEP 份。"""
+    """把 memory/ 复制去 backups/memory-<时间戳>/。
+
+    2026-09-13：**呢度唔再自动删嘢。** 以前 snapshot 会顺手 prune 超咗
+    SNAPSHOT_KEEP 嘅旧份，但删一份 ~18 个 file，一轮 release 跑几次 run_all
+    就过咗环境嗰条 bulk-delete 闸门（>50 file 要人手确认）—— 一拦，
+    memory_guard 就 exit 1，于是「记忆档多咗个备份」呢件小事会令成个 release
+    网报 NOT GREEN。而闸门係拦 process，try/except 捉唔到。
+    所以：snapshot 只写、只 warn；真要删就人手跑 `--prune`（嗰阵你會喺度，
+    可以自己 confirm）。
+    """
     backups = os.path.join(workspace, 'backups')
     os.makedirs(backups, exist_ok=True)
     stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     dest = os.path.join(backups, 'memory-' + stamp)
     shutil.copytree(MEMDIR, dest)
 
-    # 只 prune 我哋自己产生嘅 memory-* 备份，唔好掂用户嘅 html 备份
-    old = sorted(p for p in os.listdir(backups)
-                 if p.startswith('memory-')
-                 and os.path.isdir(os.path.join(backups, p)))
-    dropped = 0
-    for p in old[:-SNAPSHOT_KEEP]:
-        shutil.rmtree(os.path.join(backups, p))
-        dropped += 1
-    print('memory_guard: snapshot -> backups/%s%s'
-          % (os.path.basename(dest),
-             '  (dropped %d older)' % dropped if dropped else ''))
+    over = max(0, len(_old_snapshots(backups)) - SNAPSHOT_KEEP)
+    print('memory_guard: snapshot -> backups/%s' % os.path.basename(dest))
+    if over:
+        print('memory_guard: %d snapshot(s) over the keep budget (%d) - '
+              'run `python3 Krafted/tests/memory_guard.py --prune` to drop '
+              'the oldest (bulk delete, needs your confirmation)'
+              % (over, SNAPSHOT_KEEP))
     return dest
+
+
+def prune_snapshots(workspace):
+    """人手轮替：净留最近 SNAPSHOT_KEEP 份。会真删，所以要人手跑。"""
+    backups = os.path.join(workspace, 'backups')
+    old = _old_snapshots(backups)
+    for p in old[:max(0, len(old) - SNAPSHOT_KEEP)]:
+        shutil.rmtree(os.path.join(backups, p))
+        print('memory_guard: dropped backups/%s' % p)
+    return backups
 
 
 def read(path):
@@ -165,6 +188,10 @@ def main():
 
     if '--snapshot' in sys.argv:
         snapshot(os.path.join(HERE, '..', '..'))
+
+    # 人手轮替 —— 唔摆落 --snapshot 入面（理由见 snapshot() 嘅 docstring）。
+    if '--prune' in sys.argv:
+        prune_snapshots(os.path.join(HERE, '..', '..'))
 
     # 指针规则默认净对 DAILY_SECTION_POINTER_FROM 之后嘅日誌生效；--from= 可以提早。
     pointer_from = DAILY_SECTION_POINTER_FROM

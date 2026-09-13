@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.16.0</title>
+<title>Krafted v7.17.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2305,6 +2305,12 @@ body.dragging-file .media-anno-toolbar {
 .text-item { position:absolute; cursor:text; padding:4px 10px; min-width:80px; min-height:28px; max-width:2000px; outline:none; word-wrap:break-word; white-space:pre-wrap; writing-mode:horizontal-tb; line-height:1.5; overflow:visible; font-family:'Inter',sans-serif; letter-spacing:0.01em; user-select:text; -webkit-user-select:text; -moz-user-select:text; -ms-user-select:text; }
 .text-item.selected { outline:1.5px solid var(--accent); outline-offset:2.5px; }
 .text-item.editing { outline:2px solid var(--accent); outline-offset:2px; border-radius:6px; box-shadow:inset 0 0 0 1000px rgba(255,255,255,0.05); cursor:text; overflow:visible !important; min-width:100px; user-select:text; -webkit-user-select:text; -moz-user-select:text; -ms-user-select:text; }
+/* v7.17.0: an imported .md/.txt card caps its height and scrolls inside
+   itself. The .editing rule above forces overflow:visible !important, so
+   the doc card needs the higher-specificity override to keep scrolling
+   while you are typing in it. */
+.text-item.doc-card { overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; box-shadow:inset 0 -18px 14px -14px rgba(0,0,0,0.55); }
+.text-item.doc-card.editing { overflow-y:auto !important; }
 .text-item:empty::before { content:attr(data-placeholder); color:rgba(255,255,255,0.25); pointer-events:none; }
 /* v6.8.22: while Board Pen is active, text boxes must not capture the click.
    A click used to focus the contentEditable box, which applied .editing
@@ -3903,6 +3909,7 @@ body.is-dragging #text-quick-bar { visibility:hidden !important; }
   <button onclick="document.getElementById('file-load').click()" class="tb-primary" title="Load Board"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v9h12V5H8L6 3H2z"/></svg> <span class="tb-label">Load</span></button>
   <input type="file" id="file-load" accept=".kpak" style="display:none" onchange="loadBoardFile(event)">
   <input type="file" id="file-audio-input" accept="audio/*,.mp3,.wav,.aiff,.aif,.flac,.ogg,.m4a" style="display:none" onchange="handleAudioUpload(event)">
+  <input type="file" id="file-text-input" accept=".md,.markdown,.txt" multiple style="display:none" onchange="handleTextUpload(event)">
   <button onclick="newBoard()" title="New Board (clear all)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h10M6 5V3h4v2M5 5l1 9h4l1-9"/></svg> <span class="tb-label">Clear</span></button>
   <div class="sep"></div>
   <button onclick="toggleScreenShareMode()" id="btn-screen-share" title="Screen Share Mode — 投屏模式 (Ctrl+Shift+P)&#10;降低 GPU 负担，改善腾讯会议投屏流畅度"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="14" height="9" rx="1.5"/><path d="M5 15l3-3M11 15L8 12"/></svg> <span class="tb-label">Screen</span></button>
@@ -4607,7 +4614,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.16.0';
+var KRAFTED_VERSION = '7.17.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -11945,6 +11952,116 @@ function attachTextListeners(tx) {
     syncBoardTextUI();
   });
 }
+// ── v7.17.0: text documents on the board (.md / .txt) ──
+// One file becomes one editable text card. Markdown markers are stripped to
+// plain text — per-line font sizes would need real HTML and a second editing
+// mode, which is a much bigger change — and long documents are capped and
+// scroll inside the card instead of growing two screens tall.
+var DOC_TEXT_MAX_H = 600;          // world px, same unit as every other item box
+var DOC_TEXT_W = 560;              // world px
+var DOC_TEXT_MAX_BYTES = 512 * 1024;
+
+function isDocTextFile(f) {
+  return !!f && /\.(md|markdown|txt)$/i.test(String((f && f.name) || ''));
+}
+
+function stripMarkdownToPlain(raw) {
+  var lines = String(raw == null ? '' : raw).replace(/\r\n?/g, '\n').split('\n');
+  var parts = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    var indent = (line.match(/^\s*/) || [''])[0];
+    var body = line.slice(indent.length);
+    if (/^#{1,6}\s+/.test(body)) {
+      if (i > 0) parts.push('');
+      parts.push(indent + '▎' + body.replace(/^#{1,6}\s+/, ''));
+      continue;
+    }
+    if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(body)) { parts.push('————'); continue; }
+    if (/^>\s?/.test(body)) { parts.push(indent + '  ' + body.replace(/^>\s?/, '')); continue; }
+    if (/^([-*+])\s+/.test(body)) { parts.push(indent + '• ' + body.replace(/^([-*+])\s+/, '')); continue; }
+    var plain = body
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/__([^_]+)__/g, '$1')
+      .replace(/(^|[^\*\w])\*([^*\s][^*]*)\*(?!\*)/g, '$1$2')
+      .replace(/(^|[^_\w])_([^_\s][^_]*)_(?!_)/g, '$1$2');
+    parts.push(indent + plain);
+  }
+  return parts.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '').replace(/\s+$/, '');
+}
+
+function readTextFile(file) {
+  if (file && typeof file.text === 'function') return file.text();
+  return new Promise(function (resolve, reject) {
+    var fr = new FileReader();
+    fr.onload = function () { resolve(String(fr.result || '')); };
+    fr.onerror = function () { reject(fr.error || new Error('read failed')); };
+    try { fr.readAsText(file); } catch (e) { reject(e); }
+  });
+}
+
+function importDocTextFiles(files, posAt) {
+  (files || []).forEach(function (file, i) {
+    if (!file) return;
+    if (file.size && file.size > DOC_TEXT_MAX_BYTES) {
+      var ok = false;
+      try {
+        ok = window.confirm(boardTextLabel(
+          '"' + (file.name || '') + '" is ' + Math.round(file.size / 1024) + ' KB. Import it anyway?',
+          '「' + (file.name || '') + '」有 ' + Math.round(file.size / 1024) + ' KB，仍然汇入？'));
+      } catch (e) { ok = true; }
+      if (!ok) return;
+    }
+    readTextFile(file).then(function (raw) {
+      var plain = stripMarkdownToPlain(raw);
+      if (!plain) {
+        try { toast(boardTextLabel('Empty file: ', '空档案：') + (file.name || '')); } catch (e) {}
+        return;
+      }
+      var at = (typeof posAt === 'function' ? posAt(i) : null) || { x: 0, y: 0 };
+      var tx = addText(at.x, at.y, plain, { noFocus: true, initW: DOC_TEXT_W });
+      if (!tx) return;
+      tx.name = String(file.name || '').replace(/\.[^.]+$/, '');
+      tx.el.classList.add('doc-card');
+      requestAnimationFrame(function () { autoGrowTextItem(tx); });
+      try { toast(boardTextLabel('Imported ', '已汇入 ') + (file.name || '')); } catch (e) {}
+    }).catch(function () {
+      try { toast(boardTextLabel('Could not read ', '读唔到 ') + (file.name || '')); } catch (e) {}
+    });
+  });
+}
+
+function handleTextUpload(ev) {
+  var input = ev && ev.target;
+  var list = [];
+  try { list = Array.prototype.slice.call((input && input.files) || []); } catch (e) {}
+  try { if (input) input.value = ''; } catch (e) {}
+  if (!list.length) return;
+  var cx = (window.innerWidth / 2 - DOC_TEXT_W / 2 - state.pan.x) / state.zoom;
+  var cy = (window.innerHeight / 2 - state.pan.y) / state.zoom;
+  importDocTextFiles(list, function (i) { return { x: cx + i * 28, y: cy + i * 28 }; });
+}
+
+// v7.17.0: a doc card consumes the wheel only while it can still scroll, and
+// never for pinch / Cmd zoom. Deciding first and swallowing second is the same
+// contract the board's own nested handlers follow — and because we return
+// WITHOUT calling preventDefault, the browser performs the scroll itself.
+function wheelDocCardTarget(e) {
+  var t = e && e.target;
+  if (!t || typeof t.closest !== 'function') return null;
+  return t.closest('.text-item.doc-card');
+}
+function docCardCanScroll(el, e) {
+  if (!el || !e) return false;
+  if (e.ctrlKey || e.metaKey) return false;
+  if (state.dragging) return false;
+  var dy = e.deltaY;
+  if (!dy) return false;
+  if (el.scrollHeight <= el.clientHeight + 1) return false;
+  if (dy < 0) return el.scrollTop > 0;
+  return el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+}
+
 function addText(x, y, initialText, opts) {
   pushUndo();
   const el = document.createElement('div');
@@ -12002,7 +12119,12 @@ function growTextHeightToFit(tx) {
   el.style.minWidth = '0';
   el.style.width = tx.w + 'px';
   el.style.height = 'auto';
-  const nextH = Math.max(32, Math.ceil(el.scrollHeight) + 2);
+  // v7.17.0: an imported .md is one card, not two screens of text. The cap
+  // lives here (not only in CSS) so tx.h and the drawn box agree, and so
+  // editing cannot grow the card past it either.
+  const _naturalH = Math.max(32, Math.ceil(el.scrollHeight) + 2);
+  const _capH = el.classList.contains('doc-card') ? DOC_TEXT_MAX_H : Infinity;
+  const nextH = Math.min(_naturalH, _capH);
   el.style.minWidth = oldMin;
   tx.h = nextH;
   updateItemStyle(tx);
@@ -23781,6 +23903,7 @@ function showCtx(x, y) {
   } else {
     html += `<div class="ctx-item" onclick="triggerPaste();hideCtx()">Paste <kbd>Ctrl+V</kbd></div>`;
     html += `<div class="ctx-item" onclick="document.getElementById('file-audio-input').click();hideCtx()">Import Audio</div>`;
+    html += `<div class="ctx-item" onclick="document.getElementById('file-text-input').click();hideCtx()">Import Text (.md/.txt)</div>`;
     html += `<div class="ctx-item" onclick="saveBoardV6();hideCtx()">Save Board</div>`;
     // Save every image on the board — there is no selection to narrow it here.
     const _imgCount = state.items.filter(i => i && i.img && i.src && !i.isVideo).length;
@@ -25090,6 +25213,12 @@ viewport.addEventListener('wheel', e => {
     }
   }
 
+  // v7.17.0: a long text card scrolls ITSELF before the board sees the
+  // wheel — but only while it can still move. At either end the event
+  // falls through to the router, so the gesture can never trap you.
+  const _docCard = wheelDocCardTarget(e);
+  if (_docCard && docCardCanScroll(_docCard, e)) return;
+
   e.preventDefault();
   // ============================================================
   //  PLATFORM ROUTER — every branch is gated by Platform.* flags
@@ -26238,6 +26367,8 @@ function _handleFileDrop(e, files) {
   const imageFiles = [];
   const videoFiles = [];
   const audioFiles = [];
+  // v7.17.0: .md / .txt are board text, not media.
+  const _docTextFiles = files.filter(function (f) { return isDocTextFile(f); });
   files.forEach((file, idx) => {
     const isVideo = file.type.startsWith('video/');
     const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|aiff|aif|flac|ogg|m4a)$/i.test(file.name);
@@ -26246,12 +26377,22 @@ function _handleFileDrop(e, files) {
     else if (isAudio) audioFiles.push({ file, idx });
     else imageFiles.push({ file, idx });
   });
+  // v7.17.0: a file we cannot use used to vanish with no toast at all —
+  // the same silence as a dead button. Say so instead.
+  const _skipped = files.length - (imageFiles.length + videoFiles.length + audioFiles.length + _docTextFiles.length);
+  if (_skipped > 0) {
+    try { toast(boardTextLabel('Skipped ' + _skipped + ' unsupported file(s) — images, video, audio, .md or .txt', '已略过 ' + _skipped + ' 个不支援的档案 — 图片 / 影片 / 音讯 / .md / .txt')); } catch (e) {}
+  }
   const dropX0 = (e.clientX - state.pan.x) / state.zoom;
   const dropY0 = (e.clientY - state.pan.y) / state.zoom;
   // v7.0.37 — P1-9: ONE cascade shared by the image, video and audio chains
   // so all three fan out from the cursor instead of each starting on top of
   // the others at dropX0/dropY0.
   const cascade = makeCascade(dropX0, dropY0);
+  // v7.17.0: text cards fan out to the right of the cursor, one per file.
+  if (_docTextFiles.length) {
+    importDocTextFiles(_docTextFiles, function (i) { return { x: dropX0 + i * (DOC_TEXT_W + 24), y: dropY0 }; });
+  }
   // Process images SEQUENTIALLY (one at a time) to avoid memory crash.
   // v6.1.23: Use createImageBitmap() for dimension reading (zero-copy,
   // no blob URL needed for the temp decode). The canvas <img> gets the

@@ -44,8 +44,13 @@ mutate_equivalent() { # mutate_equivalent(label, python_old, python_new)
 # reported as a SEPARATE defect (the suite cannot survive its own failure)
 # rather than being allowed to swallow the evidence.
 #
-# The two spellings below are both real: most suites print '  FAIL: ', the
-# v7038 family prints '  FAIL  '.
+# The indent below is OPTIONAL on purpose (2026-09-13). This comment used to
+# claim "most suites print '  FAIL: '" — a lie. test_v7_15_1.js and
+# test_v7_16_0.js print 'FAIL: ' with NO indent, so every fragile suite in
+# those files was scored UNPROVEN (a hole) instead of caught-but-fragile: the
+# evidence was on stdout and the detector was blind to it. Verified on
+# mutate_v7_17_0.sh, where two mutants crashed a suite that had already
+# printed its FAIL. Anchor on the word, not on the leading spaces.
 judge() { # judge(label, captured_output)
   local label="$1" out="$2" n
   # (0) The mutated file does not even PARSE. That is not a behaviour change,
@@ -71,8 +76,8 @@ judge() { # judge(label, captured_output)
   fi
   # (2) Failures were printed but the tally never came: the suite died on the
   #     way. Real evidence, fragile suite.
-  if print -r -- "$out" | grep -qE "^  FAIL[: ]"; then
-    n=$(print -r -- "$out" | grep -cE "^  FAIL[: ]" 2>/dev/null || true)
+  if print -r -- "$out" | grep -qE "^[[:space:]]*FAIL[: ]"; then
+    n=$(print -r -- "$out" | grep -cE "^[[:space:]]*FAIL[: ]" 2>/dev/null || true)
     print "  caught ($n) but FRAGILE  <- $label"
     print "        failures were printed and then the suite died before its summary."
     print "        The evidence is real, so this counts as caught — but the suite does"
@@ -94,7 +99,7 @@ judge() { # judge(label, captured_output)
 # catches is STALE: the redundancy it relied on is gone, so the line became
 # load-bearing. That is a hole — the annotation is now a lie.
 judge_equiv() { # judge_equiv(label, captured_output)
-  if print -r -- "$2" | grep -qE "^  FAIL[: ]"; then
+  if print -r -- "$2" | grep -qE "^[[:space:]]*FAIL[: ]"; then
     print "  STALE EQUIV <- $1"
     print "        annotated EQUIVALENT but the suite caught it — the guard became"
     print "        load-bearing. Convert this back to mutate()."

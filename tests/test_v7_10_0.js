@@ -100,6 +100,10 @@ function makeEnv(opts) {
   const zoomBy = function (f, cx, cy) { log.zooms.push({ f: f, cx: cx, cy: cy }); };
   const updateCanvas = function () { log.canvas++; };
   const noop = function () {};
+  // v7.17.0 stub (rule 6m): the wheel handler slice calls these two to ask
+  // whether a long text card is under the cursor. This suite is about the
+  // BOARD's routing, so the answer is always "no card" — the pre-7.17.0 board.
+  const noCard = function () { return null; };
 
   const src = 'var _twoFingerPan = false;\n'
     + CORE + '\n' + HELPER + '\n'
@@ -111,9 +115,10 @@ function makeEnv(opts) {
     + '  kind: _WheelKind, delta: wheelZoomDelta, state: state, viewport: viewport };';
 
   const api = new Function('document', 'state', 'Platform', 'zoomBy', 'updateCanvas',
-    'scheduleVisibleItemsUpdate', 'updateStatus', 'rfSetZoom', 'rfSyncUI', 'window', src)(
+    'scheduleVisibleItemsUpdate', 'updateStatus', 'rfSetZoom', 'rfSyncUI', 'window',
+    'wheelDocCardTarget', 'docCardCanScroll', src)(
     { fullscreenElement: null, webkitFullscreenElement: null },
-    state, Platform, zoomBy, updateCanvas, noop, noop, noop, noop, win);
+    state, Platform, zoomBy, updateCanvas, noop, noop, noop, noop, win, noCard, noCard);
 
   api.log = log;
   api.t = 1000;
@@ -350,13 +355,13 @@ section(function () {
 
 // ═══ 8. the version ══════════════════════════════════════════════════════
 section(function () {
-  has('<title>Krafted v7.16.0', 'the title carries the new version');
-  has("KRAFTED_VERSION = '7.16.0'", 'KRAFTED_VERSION carries the new version');
+  has('<title>Krafted v7.17.0', 'the title carries the new version');
+  has("KRAFTED_VERSION = '7.17.0'", 'KRAFTED_VERSION carries the new version');
   const swPath = process.env.KRAFTED_SW
     ? path.resolve(process.env.KRAFTED_SW)
     : path.join(ROOT, 'Krafted', 'docs', 'sw.js');
   const sw = fs.readFileSync(swPath, 'utf8');
-  ok(sw.indexOf('7.16.0') >= 0, 'the service worker carries the new version');
+  ok(sw.indexOf('7.17.0') >= 0, 'the service worker carries the new version');
 });
 
 // ═══ report ══════════════════════════════════════════════════════════════

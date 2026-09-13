@@ -303,7 +303,7 @@ section(function () {
   has('Save images as PNG', 'the new entry NAMES THE FORMAT');
   has('Save original files', 'the untouched-bytes escape hatch exists');
   has("if (_selImages) html += exportMenuEntries(_selImages);",
-    'the image entries appear only for items the export can actually see (v7.16.0)');
+    'the image entries appear only for items the export can actually see (v7.17.0)');
   lacks("ext = item.src.split('.').pop().split('?')[0] || 'png';",
     'no export takes an extension from a blob: URL');
   // The image case MOVED to the v7.9.0 engine when v7.10.1 deleted the image
@@ -392,7 +392,7 @@ section(function () {
   });
   api.exportMediaSelected();
   const got = env.links;
-  eq(got.length, 5, 'only the five media items produce a download (v7.16.0: images go to the export engine)');
+  eq(got.length, 5, 'only the five media items produce a download (v7.17.0: images go to the export engine)');
 
   // --- audio: the branch that still had the old trick until v7.9.0
   eq(got[0], 'ambience.wav', 'audio extension comes from its own name, not the GUID');
