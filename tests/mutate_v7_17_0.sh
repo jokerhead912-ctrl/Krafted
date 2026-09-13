@@ -51,7 +51,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.17.0 suite (.md / .txt as board text)"
+print "mutation check: v7.18.0 suite (.md / .txt as board text)"
 
 # ── (1) the gate: what counts as board text ──────────────────────────────
 
@@ -108,7 +108,7 @@ mutate "trailing whitespace is no longer trimmed" \
 # ── (3) one file, one card ───────────────────────────────────────────────
 
 mutate "the card never gets the .doc-card class (no cap, no scroll)" \
-"      tx.el.classList.add('doc-card');" \
+"      syncDocCardClasses(tx);" \
 "      ;"
 
 mutate "the card is not named after the file" \
@@ -116,12 +116,12 @@ mutate "the card is not named after the file" \
 "      ;"
 
 mutate "importing steals the caret (noFocus ignored)" \
-"      var tx = addText(at.x, at.y, plain, { noFocus: true, initW: DOC_TEXT_W });" \
-"      var tx = addText(at.x, at.y, plain, { initW: DOC_TEXT_W });"
+"      var tx = addText(at.x, at.y, isMd ? '' : body, { noFocus: true, initW: DOC_TEXT_W });" \
+"      var tx = addText(at.x, at.y, isMd ? '' : body, { initW: DOC_TEXT_W });"
 
 mutate "the card is not created at the doc width" \
-"      var tx = addText(at.x, at.y, plain, { noFocus: true, initW: DOC_TEXT_W });" \
-"      var tx = addText(at.x, at.y, plain, { noFocus: true });"
+"      var tx = addText(at.x, at.y, isMd ? '' : body, { noFocus: true, initW: DOC_TEXT_W });" \
+"      var tx = addText(at.x, at.y, isMd ? '' : body, { noFocus: true });"
 
 mutate "the card is never auto-grown (it stays one line tall)" \
 "      requestAnimationFrame(function () { autoGrowTextItem(tx); });" \
@@ -144,11 +144,11 @@ mutate "a null entry in the dropped list is no longer skipped" \
 # ── (4) nothing fails silently ───────────────────────────────────────────
 
 mutate "an empty file toasts nothing (it just vanishes)" \
-"      if (!plain) {
+"      if (!String(raw == null ? '' : raw).trim() || !body) {
         try { toast(boardTextLabel('Empty file: ', '空档案：') + (file.name || '')); } catch (e) {}
         return;
       }" \
-"      if (!plain) {
+"      if (!String(raw == null ? '' : raw).trim() || !body) {
         return;
       }"
 

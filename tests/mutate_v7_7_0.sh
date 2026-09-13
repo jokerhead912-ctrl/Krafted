@@ -49,7 +49,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.17.0 suite (folder auto-tidy + delete disposes group)"
+print "mutation check: v7.18.0 suite (folder auto-tidy + delete disposes group)"
 
 # ── FOLDER AUTO-TIDY: THE COMPLAINT (items stay overlapping) ──────────────
 
@@ -95,8 +95,8 @@ mutate "the deleted item is never removed from the group (membership lies)" \
 # The anchor names the version the source now carries; version_scan.py moves
 # it at every bump. Left stale it matches 0 times and tests nothing.
 mutate "KRAFTED_VERSION not bumped" \
-  "var KRAFTED_VERSION = '7.17.0';" \
-  "var KRAFTED_VERSION = '7.16.0';"
+  "var KRAFTED_VERSION = '7.18.0';" \
+  "var KRAFTED_VERSION = '7.17.0';"
 
 print ""
 if [ $ANCHORFAIL -ne 0 ]; then

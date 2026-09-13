@@ -190,9 +190,11 @@ mutate '新文本错误初始宽度' addText \
   'opts.initW : 320, h: 36' 'opts.initW : 220, h: 36'
 mutate '自动宽度旧逻辑回归' autoGrowTextItem \
   'growTextHeightToFit(tx);' 'tx.w = Math.ceil(tx.el.scrollWidth) + 2; growTextHeightToFit(tx);'
+# v7.18.0: the md-source sync now sits at the top of the input handler, so the
+# anchor moved. Same mutation: typing no longer re-measures the card height.
 mutate 'input 不再测量高度' attachTextListeners \
-  "el.addEventListener('input', () => {
-    autoGrowTextItem(tx);" "el.addEventListener('input', () => {
+  "    if (tx.mdSrc === '') tx.mdMode = '';
+    autoGrowTextItem(tx);" "    if (tx.mdSrc === '') tx.mdMode = '';
     void 0;"
 mutate '高度错误缩放字号' growTextHeightToFit \
   'tx.h = nextH;' 'tx.h = nextH; tx.size *= 2;'

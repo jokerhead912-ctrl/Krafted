@@ -53,7 +53,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.17.0 suite (C crop reads the pixels you saw)"
+print "mutation check: v7.18.0 suite (C crop reads the pixels you saw)"
 
 # ── THE COMPLAINT: the old hand-rolled capture ────────────────────────────
 

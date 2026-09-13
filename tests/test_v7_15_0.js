@@ -139,7 +139,10 @@ const CORE = ['splitTags','getSelectedItems','selectOnly','clearSelection','togg
   'handleBoardTagKey','libMatches','libraryItems','normalizeBoardTextMeta','serializeBoardText','captureSnapshot',
   'buildManifest','serializeBoard','v4StateToManifest','manifestToV4Restore','boardTextIsComposing',
   'beginBoardTextUndo','finishBoardTextEditing','routeBoardTextMouse','attachTextListeners','getEditingText',
-  'addText','autoGrowTextItem','growTextHeightToFit','applyTextProps','updateItemStyle','addTextHandles'];
+  'addText','autoGrowTextItem','growTextHeightToFit','applyTextProps','updateItemStyle','addTextHandles',
+  // v7.18.0: updateItemStyle now re-derives the doc-card classes through this helper, so the
+  // sandbox needs the real function (rule 6m). It touches no other global, so it is safe here.
+  'syncDocCardClasses'];
 const sources = new Map();
 function sourceOf(name) { if (!sources.has(name)) sources.set(name, extract(name)); return sources.get(name); }
 function model(tx) { return plain(Object.fromEntries(Object.entries(tx).filter(([k]) => k !== 'el'))); }
@@ -302,7 +305,12 @@ section('标签输入保留取消草稿及 IME',()=>{
 section('metadata 规范化不得应用预设或变形',()=>{
   const e=boot(), x=e.make(1), before=model(x), data={name:'标题',note:'备注',tags:[' a ',42,'',null,' b '],textPreset:'unknown-future'};
   const r=e.a.normalizeBoardTextMeta(x,data); ok(r===x,'原对象返回');
-  eq(model(x),{...before,name:'标题',note:'备注',tags:['a','b'],textPreset:'unknown-future'},'仅更新 metadata，保留未来预设字符串');
+  // v7.18.0: normalizeBoardTextMeta now materialises the doc-card triple (docCard / mdMode /
+  // mdSrc) alongside name / note / tags, so that serializeBoardText has exactly one place to
+  // read them from. That is an intentional widening, not a regression — pin the new shape here
+  // so the widening stays visible (the semantics of each field live in test_v7_18_0.js).
+  eq(model(x),{...before,name:'标题',note:'备注',tags:['a','b'],textPreset:'unknown-future',
+    docCard:false,mdMode:'',mdSrc:''},'仅更新 metadata，保留未来预设字符串（v7.18.0 起含 doc-card 三元组）');
   ok(x.tags!==data.tags,'metadata 标签独立'); data.tags[0]='changed'; eq(x.tags,['a','b'],'外部更改不回流');
   e.a.normalizeBoardTextMeta(x,{tags:' one, two, ',name:2,note:{},textPreset:4});
   eq([x.name,x.note,x.tags,x.textPreset],['','',['one','two'],''],'旧字符串标签与非法 metadata 默认值');

@@ -83,6 +83,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEV_HTML = os.path.join(ROOT, 'kraftpub-dev.html')
 SW_JS = os.path.join(ROOT, 'Krafted', 'docs', 'sw.js')
+PAGES_INDEX = os.path.join(ROOT, 'Krafted', 'docs', 'index.html')
 TESTS = os.path.join(ROOT, 'Krafted', 'tests')
 STATE_FILE = os.path.join(TESTS, '.version_state')
 
@@ -192,11 +193,59 @@ def save_state(current, prev):
 
 
 def target_files():
-    files = [DEV_HTML, SW_JS]
+    files = [DEV_HTML, SW_JS, PAGES_INDEX]
     for name in sorted(os.listdir(TESTS)):
         if name.endswith(('.js', '.sh')) and name != 'version_scan.py':
             files.append(os.path.join(TESTS, name))
     return files
+
+
+# The Pages entry point is the FOURTH bump site, and the only one no test
+# reads - which is exactly why it used to rot: it still advertised the
+# previous release two versions later, so a returning visitor could be
+# served a stale app by their own HTTP cache. Its number is just the
+# version with the dots removed, so derive it rather than ask for it.
+BUSTER_RE = re.compile(r'\?v=(\d{3,4})')
+
+
+def scan_pages_index(path, current, nxt, mode):
+    """Same (findings, changes, newtext) shape as scan_file."""
+    findings, changes = [], []
+    if not os.path.exists(path):
+        return findings, changes, ''
+    # `nxt` is the PROPOSED next version in a dry run (7.18.1), so it is
+    # the rewrite target only. What makes the anchor stale is disagreeing
+    # with the version the app currently IS - same rule as every other
+    # identity in this scanner.
+    want = current.replace('.', '')
+    new = (nxt if mode == 'bump' else current).replace('.', '')
+    # stale asks "is it wrong now", change asks "does it need writing".
+    # Both against `want` meant a bump never rewrote this file: it was
+    # already correct for `current`, so the change list came back empty
+    # and the number stayed on the old release.
+    with open(path, encoding='utf-8') as fh:
+        lines = fh.read().split('\n')
+    out = []
+    for n, line in enumerate(lines, 1):
+        m = BUSTER_RE.search(line)
+        if not m:
+            out.append(line)
+            continue
+        got = m.group(1)
+        findings.append({'line': n, 'ver': got, 'kind': 'identity',
+                         'want': want, 'stale': got != want,
+                         'text': line.strip()[:88]})
+        if got != new:
+            changes.append((n, got, new, 'buster', line.strip()[:88]))
+            line = line[:m.start(1)] + new + line[m.end(1):]
+        out.append(line)
+    return findings, changes, '\n'.join(out)
+
+
+def scan_any(path, current, nxt, mode, cur_major=None, prev=None):
+    if os.path.abspath(path) == os.path.abspath(PAGES_INDEX):
+        return scan_pages_index(path, current, nxt, mode)
+    return scan_file(path, current, nxt, mode, cur_major=cur_major, prev=prev)
 
 
 def own_version(path):
@@ -385,7 +434,7 @@ def main():
     total_stale = 0
     total_change = 0
     for path in target_files():
-        findings, changes, newtext = scan_file(
+        findings, changes, newtext = scan_any(
             path, current, nxt, mode, cur_major=cur_major, prev=prev)
         rel = os.path.relpath(path, ROOT)
         stales = [f for f in findings if f['stale']]
@@ -412,7 +461,7 @@ def main():
     write = args.write or args.bump
     if write and total_change:
         for path in target_files():
-            _, changes, newtext = scan_file(
+            _, changes, newtext = scan_any(
                 path, current, nxt, mode, cur_major=cur_major, prev=prev)
             if changes:
                 with open(path, 'w', encoding='utf-8') as fh:

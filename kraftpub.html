@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.17.0</title>
+<title>Krafted v7.18.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2311,6 +2311,33 @@ body.dragging-file .media-anno-toolbar {
    while you are typing in it. */
 .text-item.doc-card { overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; box-shadow:inset 0 -18px 14px -14px rgba(0,0,0,0.55); }
 .text-item.doc-card.editing { overflow-y:auto !important; }
+/* v7.18.0: rendered markdown. Sizes are in em so the whole card still scales
+   with the item's own font size, like every other text card. Table borders
+   live here rather than in inline styles because sanitizeTextHtml() keeps
+   only allowlisted style properties and drops `border`. */
+/* white-space stays pre-wrap on purpose: a soft line break in the .md is a line
+   break on the card, and the renderer emits no whitespace between block tags. */
+.text-item.doc-card.md-rendered { overflow:auto; }
+.text-item.doc-card.md-rendered.editing { overflow:auto !important; }
+.text-item.doc-card.md-rendered > :first-child { margin-top:0; }
+.text-item.doc-card.md-rendered > :last-child { margin-bottom:0; }
+.text-item.doc-card.md-rendered h1 { font-size:1.7em; font-weight:700; line-height:1.25; margin:0.8em 0 0.35em; }
+.text-item.doc-card.md-rendered h2 { font-size:1.45em; font-weight:700; line-height:1.3; margin:0.75em 0 0.3em; }
+.text-item.doc-card.md-rendered h3 { font-size:1.25em; font-weight:600; margin:0.7em 0 0.3em; }
+.text-item.doc-card.md-rendered h4, .text-item.doc-card.md-rendered h5, .text-item.doc-card.md-rendered h6 { font-size:1.1em; font-weight:600; margin:0.6em 0 0.25em; }
+.text-item.doc-card.md-rendered p { margin:0 0 0.65em; }
+.text-item.doc-card.md-rendered ul, .text-item.doc-card.md-rendered ol { margin:0 0 0.65em; padding-left:1.5em; }
+.text-item.doc-card.md-rendered li { margin:0 0 0.18em; }
+.text-item.doc-card.md-rendered li > ul, .text-item.doc-card.md-rendered li > ol { margin:0.18em 0 0; }
+.text-item.doc-card.md-rendered blockquote { margin:0 0 0.65em; padding:0.1em 0 0.1em 0.85em; border-left:3px solid rgba(255,255,255,0.3); opacity:0.86; }
+.text-item.doc-card.md-rendered pre { margin:0 0 0.65em; padding:8px 10px; background:rgba(0,0,0,0.34); border-radius:4px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:0.88em; white-space:pre; overflow-x:auto; }
+.text-item.doc-card.md-rendered code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:0.9em; background:rgba(0,0,0,0.24); padding:1px 4px; border-radius:3px; }
+.text-item.doc-card.md-rendered pre code { background:none; padding:0; }
+.text-item.doc-card.md-rendered hr { border:0; border-top:1px solid rgba(255,255,255,0.28); margin:0.9em 0; }
+.text-item.doc-card.md-rendered table { border-collapse:collapse; min-width:100%; margin:0 0 0.75em; font-size:0.94em; }
+.text-item.doc-card.md-rendered th, .text-item.doc-card.md-rendered td { border:1px solid rgba(255,255,255,0.24); padding:4px 8px; vertical-align:top; }
+.text-item.doc-card.md-rendered th { background:rgba(255,255,255,0.08); font-weight:600; }
+.text-item.doc-card.md-rendered a { color:#7fb2ff; text-decoration:underline; }
 .text-item:empty::before { content:attr(data-placeholder); color:rgba(255,255,255,0.25); pointer-events:none; }
 /* v6.8.22: while Board Pen is active, text boxes must not capture the click.
    A click used to focus the contentEditable box, which applied .editing
@@ -4614,7 +4641,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.17.0';
+var KRAFTED_VERSION = '7.18.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -11817,7 +11844,7 @@ function rebuildLinkCard(item) {
 // an undo) and updateAutoFitPaper() (paper bounds not recomputed on blur).
 // Both paths now call this, so they can never diverge again.
 function serializeBoardText(t) {
-  return normalizeBoardTextMeta({
+  const out = normalizeBoardTextMeta({
     id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, z: t.z,
     rot: t.rot, opacity: t.opacity, locked: t.locked,
     font: t.font, size: t.size, bold: t.bold, italic: t.italic,
@@ -11831,6 +11858,15 @@ function serializeBoardText(t) {
     _autoGrowLocked: t._autoGrowLocked || false,
     _textZoom: 1,
   }, t);
+  // v7.18.0: doc-card identity plus the original markdown, set AFTER
+  // normalizeBoardTextMeta. That helper reads its defaults from the live
+  // item (its second argument), so anything written into the literal
+  // above is a second copy of the same coercion that it then overwrites.
+  // The tell was mutation: breaking those literal fields changed nothing.
+  out.docCard = !!t.docCard;
+  out.mdMode = (t.mdMode === 'rendered' || t.mdMode === 'source') ? t.mdMode : '';
+  out.mdSrc = typeof t.mdSrc === 'string' ? t.mdSrc : '';
+  return out;
 }
 
 function normalizeBoardTextMeta(tx, data) {
@@ -11844,6 +11880,11 @@ function normalizeBoardTextMeta(tx, data) {
     .map(function (tag) { return tag.trim(); })
     .filter(function (tag) { return tag.length > 0; });
   tx.textPreset = typeof data.textPreset === 'string' ? data.textPreset : '';
+  // v7.18.0: doc-card flags. Restored from whatever the file carried, so a
+  // reloaded or undone card comes back as the same kind of card it was.
+  tx.docCard = !!data.docCard;
+  tx.mdMode = (data.mdMode === 'rendered' || data.mdMode === 'source') ? data.mdMode : '';
+  tx.mdSrc = typeof data.mdSrc === 'string' ? data.mdSrc : '';
   return tx;
 }
 
@@ -11911,6 +11952,14 @@ function attachTextListeners(tx) {
     beginBoardTextUndo(tx);
   });
   el.addEventListener('input', () => {
+    // v7.18.0: in SOURCE mode the text you type IS the markdown, so keep
+    // the source in step with the card. In RENDERED mode the source no
+    // longer describes what you see, so we drop it (and with it the
+    // source/rendered toggle) rather than offer a re-render that would
+    // silently throw the edit away.
+    if (el.classList.contains('md-source')) tx.mdSrc = el.textContent;
+    else if (tx.mdSrc) tx.mdSrc = '';
+    if (tx.mdSrc === '') tx.mdMode = '';
     autoGrowTextItem(tx);
     scheduleAutoSave();
     syncBoardTextUI();
@@ -12013,16 +12062,26 @@ function importDocTextFiles(files, posAt) {
       if (!ok) return;
     }
     readTextFile(file).then(function (raw) {
-      var plain = stripMarkdownToPlain(raw);
-      if (!plain) {
+      // v7.18.0: .md renders (tables, heading sizes, real bold); .txt stays
+      // plain, because a .txt is usually not markdown and rendering it
+      // would surprise more than it helps.
+      var isMd = isMarkdownFile(file);
+      var body = isMd ? renderMarkdownToHtml(raw) : stripMarkdownToPlain(raw);
+      if (!String(raw == null ? '' : raw).trim() || !body) {
         try { toast(boardTextLabel('Empty file: ', '空档案：') + (file.name || '')); } catch (e) {}
         return;
       }
       var at = (typeof posAt === 'function' ? posAt(i) : null) || { x: 0, y: 0 };
-      var tx = addText(at.x, at.y, plain, { noFocus: true, initW: DOC_TEXT_W });
+      var tx = addText(at.x, at.y, isMd ? '' : body, { noFocus: true, initW: DOC_TEXT_W });
       if (!tx) return;
       tx.name = String(file.name || '').replace(/\.[^.]+$/, '');
-      tx.el.classList.add('doc-card');
+      // v7.18.0: these flags are what survive save / undo / load; the CSS
+      // classes are re-derived from them by syncDocCardClasses().
+      tx.docCard = true;
+      tx.mdMode = isMd ? 'rendered' : '';
+      tx.mdSrc = isMd ? String(raw) : '';
+      if (isMd) tx.el.innerHTML = sanitizeTextHtml(body);
+      syncDocCardClasses(tx);
       requestAnimationFrame(function () { autoGrowTextItem(tx); });
       try { toast(boardTextLabel('Imported ', '已汇入 ') + (file.name || '')); } catch (e) {}
     }).catch(function () {
@@ -12060,6 +12119,212 @@ function docCardCanScroll(el, e) {
   if (el.scrollHeight <= el.clientHeight + 1) return false;
   if (dy < 0) return el.scrollTop > 0;
   return el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+}
+
+// ── v7.18.0: render markdown into the card's own HTML ──
+// An imported .md is no longer flattened to plain text: headings get real
+// sizes, bold is real bold, and GFM tables become real tables. Everything is
+// escaped FIRST and only a closed set of tags is ever emitted, and the result
+// still goes through sanitizeTextHtml() on every save / undo / load, so a
+// hostile .md cannot smuggle script onto the board.
+function escMd(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function safeMdUrl(u) {
+  var t = String(u == null ? '' : u).trim();
+  if (/^(https?:|mailto:)/i.test(t)) return t;
+  if (/^[#/]/.test(t) || /^\.{1,2}\//.test(t)) return t;
+  return '#';
+}
+function inlineMd(s) {
+  var t = escMd(s);
+  t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+  t = t.replace(/!\[([^\]]*)\]\(([^)\s]*)\)/g, function (m, a) {
+    return '<span>[' + (a || 'image') + ']</span>';
+  });
+  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, a, b) {
+    return '<a href="' + safeMdUrl(b) + '">' + a + '</a>';
+  });
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  t = t.replace(/(^|[^\w*])\*([^*\s][^*]*)\*(?!\*)/g, '$1<em>$2</em>');
+  t = t.replace(/(^|[^_\w])_([^_\s][^_]*)_(?!_)/g, '$1<em>$2</em>');
+  t = t.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+  return t;
+}
+function splitMdRow(line) {
+  var s = String(line == null ? '' : line).trim();
+  if (s.charAt(0) === '|') s = s.slice(1);
+  if (s.charAt(s.length - 1) === '|') s = s.slice(0, -1);
+  return s.split('|').map(function (c) { return c.trim(); });
+}
+function mdAlignCell(c) {
+  var s = String(c == null ? '' : c).trim();
+  if (!/^:?-{1,}:?$/.test(s)) return '';
+  var l = s.charAt(0) === ':', r = s.charAt(s.length - 1) === ':';
+  if (l && r) return 'center';
+  if (r) return 'right';
+  if (l) return 'left';
+  return '';
+}
+var MD_LIST_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+function mdListTree(flat, pos, indent) {
+  var items = [];
+  while (pos < flat.length) {
+    if (flat[pos].indent < indent) break;
+    if (flat[pos].indent > indent) {
+      if (!items.length) { items.push(flat[pos]); pos++; continue; }
+      var sub = mdListTree(flat, pos, flat[pos].indent);
+      items[items.length - 1].children = sub.items;
+      pos = sub.pos;
+      continue;
+    }
+    items.push(flat[pos]);
+    pos++;
+  }
+  return { items: items, pos: pos };
+}
+function mdRenderList(items, ordered) {
+  var tag = ordered ? 'ol' : 'ul';
+  var s = '<' + tag + '>';
+  for (var k = 0; k < items.length; k++) {
+    s += '<li>' + inlineMd(items[k].text);
+    var kids = items[k].children || [];
+    if (kids.length) s += mdRenderList(kids, !!kids[0].ordered);
+    s += '</li>';
+  }
+  return s + '</' + tag + '>';
+}
+function renderMarkdownToHtml(raw) {
+  var src = String(raw == null ? '' : raw).replace(/\r\n?/g, '\n').replace(/\t/g, '    ');
+  var lines = src.split('\n');
+  var out = [];
+  var i = 0;
+  while (i < lines.length) {
+    var line = lines[i];
+    if (/^\s*$/.test(line)) { i++; continue; }
+    var fence = line.match(/^\s*(`{3,}|~{3,})\s*[A-Za-z0-9_+-]*\s*$/);
+    if (fence) {
+      var mark = fence[1].charAt(0), flen = fence[1].length, buf = [];
+      i++;
+      while (i < lines.length) {
+        var cm = lines[i].match(/^\s*(`{3,}|~{3,})\s*$/);
+        if (cm && cm[1].charAt(0) === mark && cm[1].length >= flen) { i++; break; }
+        buf.push(lines[i]); i++;
+      }
+      out.push('<pre><code>' + escMd(buf.join('\n')) + '</code></pre>');
+      continue;
+    }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { out.push('<hr>'); i++; continue; }
+    var h = line.match(/^\s*(#{1,6})\s+(.*)$/);
+    if (h) {
+      var lv = Math.min(h[1].length, 6);
+      out.push('<h' + lv + '>' + inlineMd(h[2].replace(/\s+#+\s*$/, '')) + '</h' + lv + '>');
+      i++; continue;
+    }
+    if (line.indexOf('|') >= 0 && i + 1 < lines.length &&
+        /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/.test(lines[i + 1])) {
+      var head = splitMdRow(line);
+      var align = splitMdRow(lines[i + 1]).map(mdAlignCell);
+      i += 2;
+      var rows = [];
+      while (i < lines.length && lines[i].indexOf('|') >= 0 && lines[i].trim() !== '') {
+        rows.push(splitMdRow(lines[i])); i++;
+      }
+      var th = '', r0, c1;
+      for (c1 = 0; c1 < head.length; c1++) {
+        th += '<th' + (align[c1] ? ' style="text-align:' + align[c1] + '"' : '') + '>' + inlineMd(head[c1]) + '</th>';
+      }
+      var tb = '';
+      for (r0 = 0; r0 < rows.length; r0++) {
+        tb += '<tr>';
+        for (c1 = 0; c1 < head.length; c1++) {
+          tb += '<td' + (align[c1] ? ' style="text-align:' + align[c1] + '"' : '') + '>' +
+                inlineMd(rows[r0][c1] == null ? '' : rows[r0][c1]) + '</td>';
+        }
+        tb += '</tr>';
+      }
+      out.push('<table><thead><tr>' + th + '</tr></thead><tbody>' + tb + '</tbody></table>');
+      continue;
+    }
+    if (/^\s*>/.test(line)) {
+      var qb = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) {
+        qb.push(lines[i].replace(/^\s*>\s?/, '')); i++;
+      }
+      out.push('<blockquote>' + renderMarkdownToHtml(qb.join('\n')) + '</blockquote>');
+      continue;
+    }
+    if (MD_LIST_RE.test(line)) {
+      var flat = [];
+      while (i < lines.length) {
+        var lm = lines[i].match(MD_LIST_RE);
+        if (lm) {
+          flat.push({ indent: lm[1].length, ordered: /\d/.test(lm[2]), text: lm[3], children: [] });
+          i++; continue;
+        }
+        if (flat.length && /^\s{2,}\S/.test(lines[i])) {
+          flat[flat.length - 1].text += ' ' + lines[i].trim(); i++; continue;
+        }
+        if (/^\s*$/.test(lines[i])) {
+          var nx = i + 1;
+          if (nx < lines.length && MD_LIST_RE.test(lines[nx])) { i++; continue; }
+          break;
+        }
+        break;
+      }
+      var tree = mdListTree(flat, 0, flat.length ? flat[0].indent : 0);
+      out.push(mdRenderList(tree.items, tree.items.length ? !!tree.items[0].ordered : false));
+      continue;
+    }
+    var para = [];
+    while (i < lines.length && !/^\s*$/.test(lines[i]) &&
+           !/^\s*(#{1,6})\s+/.test(lines[i]) && !/^\s*>/.test(lines[i]) &&
+           !MD_LIST_RE.test(lines[i]) && lines[i].indexOf('|') < 0) {
+      para.push(lines[i]); i++;
+    }
+    if (!para.length) { para.push(lines[i]); i++; }
+    out.push('<p>' + inlineMd(para.join('\n')) + '</p>');
+  }
+  return out.join('');
+}
+function isMarkdownFile(f) {
+  return !!f && /\.(md|markdown)$/i.test(String((f && f.name) || ''));
+}
+// v7.18.0: the classes are DERIVED from the persisted flags on every style
+// pass, not stamped on once at import time. Stamping is what let a reload or
+// an undo restore the words while silently dropping the height cap and the
+// scrolling that make a long script usable.
+function syncDocCardClasses(tx) {
+  var el = tx && tx.el;
+  if (!el || !el.classList) return;
+  var wantDoc = !!tx.docCard;
+  var wantRen = wantDoc && tx.mdMode === 'rendered';
+  var wantSrc = wantDoc && tx.mdMode === 'source';
+  if (el.classList.contains('doc-card') !== wantDoc) el.classList.toggle('doc-card', wantDoc);
+  if (el.classList.contains('md-rendered') !== wantRen) el.classList.toggle('md-rendered', wantRen);
+  if (el.classList.contains('md-source') !== wantSrc) el.classList.toggle('md-source', wantSrc);
+}
+function docCardSetMode(tx, mode) {
+  if (!tx || !tx.el || typeof tx.mdSrc !== 'string' || !tx.mdSrc) return false;
+  tx.mdMode = (mode === 'source') ? 'source' : 'rendered';
+  if (tx.mdMode === 'source') tx.el.textContent = tx.mdSrc;
+  else tx.el.innerHTML = sanitizeTextHtml(renderMarkdownToHtml(tx.mdSrc));
+  syncDocCardClasses(tx);
+  autoGrowTextItem(tx);
+  scheduleAutoSave();
+  return true;
+}
+function toggleDocCardSource(id) {
+  var list = state.texts || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].id === id) {
+      docCardSetMode(list[i], list[i].mdMode === 'source' ? 'rendered' : 'source');
+      return;
+    }
+  }
 }
 
 function addText(x, y, initialText, opts) {
@@ -12156,6 +12421,10 @@ function updateItemStyle(item, lightweight) {
   // causing handle/textbox mismatch after zooming. World coords make zoom
   // "just work" via the canvas scale, same as images/videos.
   const isTextItem = el.classList.contains('text-item');
+  // v7.18.0: keep a doc card's classes in step with its persisted flags,
+  // so a reload or an undo cannot quietly turn a scrolling script card
+  // back into an unbounded wall of text.
+  if (isTextItem) syncDocCardClasses(item);
   const _tz = 1;
   if (item.w !== undefined) el.style.width = (item.w / _tz) + 'px';
   // Video/GIF items (.has-media): total height = video height + 54px
@@ -23892,6 +24161,15 @@ function showCtx(x, y) {
     // Translate option for text items
     const hasTexts = sel.some(i => !i.img);
     if (hasTexts) html += `<div class="ctx-item" onclick="translateSelectedText('en','zh');hideCtx()">Translate EN→中</div>`;
+    // v7.18.0: flip an imported .md between the rendered view and its raw
+    // source. Offered only for a single doc card that still HAS a source —
+    // once you edit the rendered text the source is stale and dropped, so
+    // the entry disappears instead of offering a re-render that would
+    // silently discard the edit.
+    if (sel.length === 1 && sel[0] && typeof sel[0].mdSrc === 'string' && sel[0].mdSrc) {
+      const _isSrc = sel[0].mdMode === 'source';
+      html += `<div class="ctx-item" onclick="toggleDocCardSource(${sel[0].id});hideCtx()">${_isSrc ? 'Show rendered' : 'Show markdown source'}</div>`;
+    }
     html += `<div class="ctx-sep"></div>`;
     html += `<div class="ctx-item" onclick="groupSelected();hideCtx()">Group <kbd>Ctrl+G</kbd></div>`;
     html += `<div class="ctx-item" onclick="ungroupSelected();hideCtx()">Ungroup <kbd>Ctrl+⇧+G</kbd></div>`;
@@ -24421,9 +24699,15 @@ function sanitizeTextHtml(html) {
   // styles) to round-trip through undo/redo, paste-import, and reload.
   clean = clean.replace(/<(\/?)([a-z][a-z0-9]*)([^>]*?)>/gi, function(m, slash, tag, attrs) {
     const t = tag.toLowerCase();
-    const allowed = ['span', 'br', 'b', 'i', 'u', 'strong', 'em', 'font', 's', 'strike', 'mark', 'div', 'p'];
+    // v7.18.0: a rendered markdown card needs block + table tags. Still a
+    // closed set (no iframe / script / svg), and every attribute except an
+    // allowlisted style / color / href is dropped just below.
+    const allowed = ['span', 'br', 'b', 'i', 'u', 'strong', 'em', 'font', 's', 'strike', 'del', 'mark', 'div', 'p',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'code', 'pre', 'blockquote', 'hr',
+      'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'a'];
     if (allowed.indexOf(t) === -1) return '';
     if (t === 'br') return '<br>';
+    if (t === 'hr') return '<hr>';
     // For allowed tags, only keep style="..." and color="..." attributes
     const keptAttrs = [];
     const styleMatch = attrs.match(/style\s*=\s*("([^"]*)"|'([^']*)')/i);
@@ -24505,6 +24789,16 @@ function sanitizeTextHtml(html) {
     if (faceMatch) {
       const f = (faceMatch[2] || faceMatch[3] || '').trim();
       if (/^[a-z0-9 ,'"\-_]{1,80}$/i.test(f)) keptAttrs.push('face="' + f + '"');
+    }
+    // v7.18.0: markdown links. Only http(s), mailto and clearly relative
+    // targets survive. javascript: and data: are already rewritten to
+    // about:blank# above; anything else simply loses its href.
+    if (t === 'a') {
+      const hm = attrs.match(/(?:^|\s)href\s*=\s*("([^"]*)"|'([^']*)')/i);
+      const href = hm ? (hm[2] || hm[3] || '').trim() : '';
+      if (/^(https?:|mailto:)/i.test(href) || /^[#/]/.test(href) || /^\.{1,2}\//.test(href)) {
+        keptAttrs.push('href="' + href + '"');
+      }
     }
     return '<' + slash + t + (keptAttrs.length ? ' ' + keptAttrs.join(' ') : '') + '>';
   });

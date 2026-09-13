@@ -11,6 +11,11 @@
 //   (6) the wheel gate only fires while the card can still scroll, and never
 //       for pinch / Cmd zoom
 // The suite extracts the REAL functions and executes them (rule 6k).
+//
+// v7.18.0: a .md no longer lands as stripped plain text — it renders (tables,
+// heading sizes, real bold). So this suite now pins the plain-text contract on
+// .txt, the format that still has it, and asserts only that .md takes the render
+// path. The renderer's own detail lives in test_v7_18_0.js.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -35,6 +40,10 @@ function codeOnly(s) {
   return s.replace(/\/\*[\s\S]{0,4000}?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
+// v7.18.0: importDocTextFiles pushes a rendered .md through the sanitizer, so the
+// sandbox needs the real one. A stub would hide the whole allowlist question.
+const SAN_BLOCK = slice('\nfunction sanitizeTextHtml(html) {',
+  '\n// v6.8.4: manual override for the wheel-device heuristic.');
 const calls = { toasts: [], cards: [], grows: [], confirms: 0, confirmAnswer: true, exec: 0 };
 function resetCalls() {
   calls.toasts = []; calls.cards = []; calls.grows = []; calls.confirms = 0;
@@ -52,6 +61,8 @@ function makeEl() {
       add(c) { if (el._cls.indexOf(c) < 0) el._cls.push(c); },
       remove(c) { const i = el._cls.indexOf(c); if (i >= 0) el._cls.splice(i, 1); },
       contains(c) { return el._cls.indexOf(c) >= 0; },
+      // v7.18.0: syncDocCardClasses toggles rather than adds.
+      toggle(c, on) { if (on) el.classList.add(c); else el.classList.remove(c); },
     },
   };
   return el;
@@ -70,8 +81,9 @@ function makeApi(opts) {
     'autoGrowTextItem', 'requestAnimationFrame', 'FileReader',
     'updateItemStyle', 'updateAutoFitPaper', 'positionBoardTextUI',
     slice('\nvar DOC_TEXT_MAX_H = 600;', '\nfunction addText(x, y, initialText, opts) {') + '\n' +
+    SAN_BLOCK + '\n' +
     slice('\nfunction growTextHeightToFit(tx) {', '\nfunction updateItemStyle(') + '\n' +
-    'return { isDocTextFile, stripMarkdownToPlain, readTextFile, importDocTextFiles, handleTextUpload, wheelDocCardTarget, docCardCanScroll, growTextHeightToFit, DOC_TEXT_MAX_H, DOC_TEXT_W, DOC_TEXT_MAX_BYTES };'
+    'return { isDocTextFile, stripMarkdownToPlain, readTextFile, importDocTextFiles, handleTextUpload, wheelDocCardTarget, docCardCanScroll, growTextHeightToFit, isMarkdownFile, renderMarkdownToHtml, syncDocCardClasses, sanitizeTextHtml, DOC_TEXT_MAX_H, DOC_TEXT_W, DOC_TEXT_MAX_BYTES };'
   )(
     state,
     {
@@ -173,7 +185,7 @@ function fileWith(name, text, size) {
 {
   resetCalls();
   const A = makeApi();
-  A.importDocTextFiles([fileWith('scene 3.md', '## 场 3\n- convoy')], i => ({ x: i * 10, y: 5 }));
+  A.importDocTextFiles([fileWith('scene 3.txt', '## 场 3\n- convoy')], i => ({ x: i * 10, y: 5 }));
   await sleep(5);
   eq(calls.cards.length, 1, 'one file makes one card');
   const c = calls.cards[0];
@@ -182,10 +194,28 @@ function fileWith(name, text, size) {
   eq(c.noFocus, true, 'importing does not steal the caret');
   eq(c.el.classList.contains('doc-card'), true, 'the card gets the .doc-card class (cap + scroll)');
   eq(c.text, '▎场 3\n• convoy', 'the card holds the stripped text');
+  eq(c.el.classList.contains('md-rendered'), false, 'a .txt is not a rendered markdown card');
+  eq(c.mdSrc, '', 'a .txt keeps no markdown source (there is nothing to flip back to)');
   eq(JSON.stringify([c.x, c.y]), '[0,5]', 'the first card lands at the drop point');
   eq(calls.toasts.length, 1, 'a successful import toasts exactly once');
-  eq(calls.toasts[0], 'Imported scene 3.md', 'the toast names the file');
+  eq(calls.toasts[0], 'Imported scene 3.txt', 'the toast names the file');
   eq(calls.grows.length, 1, 'the card is auto-grown once the DOM settles');
+}
+
+// S4-md (v7.18.0): a .md renders instead of being stripped
+{
+  resetCalls();
+  const A = makeApi();
+  A.importDocTextFiles([fileWith('table.md', '| a | b |\n|---|---|\n| 1 | 2 |')], () => ({ x: 0, y: 0 }));
+  await sleep(5);
+  eq(calls.cards.length, 1, 'a .md still makes one card');
+  const c = calls.cards[0];
+  eq(c.text, '', 'the rendered card is filled through innerHTML, not the text argument');
+  eq(c.el.innerHTML.indexOf('<table>') >= 0, true, 'a markdown table survives as a real table');
+  eq(c.el.classList.contains('doc-card'), true, 'the rendered card is still a doc card');
+  eq(c.el.classList.contains('md-rendered'), true, 'the rendered card carries .md-rendered');
+  eq(c.mdSrc.indexOf('| a | b |') >= 0, true, 'the source markdown is kept so the card can flip back');
+  eq(calls.toasts[0], 'Imported table.md', 'a rendered import toasts just like a plain one');
 }
 
 // S4b. fan-out, and the oversized / empty / unreadable paths
@@ -348,7 +378,7 @@ function fileWith(name, text, size) {
     'the drop path creates the cards');
   // Provenance pin (ride-along with test_v7_8_0): the shipped version must
   // appear in a source comment, and version_scan rewrites this string on bump.
-  ok(src.indexOf('// v7.17.0:') > 0, 'the shipped version has provenance comments');
+  ok(src.indexOf('// v7.18.0:') > 0, 'the shipped version has provenance comments');
 }
 
 // S8. the drop path is EXECUTED, not just present. The expressions that decide
