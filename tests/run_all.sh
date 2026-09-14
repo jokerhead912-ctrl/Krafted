@@ -112,22 +112,29 @@ fi
 #   that reason, not for convenience.
 if [ "$ONLY" = "all" ] || [ "$ONLY" = "--suites" ] || [ "$ONLY" = "--smoke" ]; then
   print "── LIVE BROWSER SMOKE ────────────────────────────────"
-  OUT=$($NODE Krafted/tests/smoke_v7_5_0.js 2>&1)
-  SRC=$?
-  if print -r -- "$OUT" | grep -q "^SKIP "; then
-    # Not a pass and not a failure. Say so out loud: a silent skip is how a
-    # gate that is supposed to catch v7.4.0 becomes decoration.
-    print "   SKIP   smoke_v7_5_0.js — $(print -r -- "$OUT" | head -1)"
-    SMOKE_SKIP=1
-  elif [ $SRC -eq 0 ] && print -r -- "$OUT" | grep -qE "ALL PASS"; then
-    print "   pass   smoke_v7_5_0.js   $(print -r -- "$OUT" | grep -oE '[0-9]+ assertions' | head -1)"
-    PASS=$((PASS + 1))
-  else
-    print "   FAIL   smoke_v7_5_0.js"
-    print -r -- "$OUT" | grep -iE "FAIL|crash|Error" | head -8 | sed 's/^/           /'
-    FAIL=$((FAIL + 1))
-    FAILED_SUITES="$FAILED_SUITES smoke_v7_5_0.js"
-  fi
+  # v7.20.0: the list is a GLOB, not one hard-coded name. Hard-coding
+  # smoke_v7_5_0.js meant every smoke test written afterwards ran only when
+  # somebody remembered to type it — the exact rot this file was created to
+  # stop. Dropping a new smoke_v*.js in the folder is now enough.
+  for SMOKE in Krafted/tests/smoke_v*.js; do
+    SMOKE_NAME=$(basename "$SMOKE")
+    OUT=$($NODE "$SMOKE" 2>&1)
+    SRC=$?
+    if print -r -- "$OUT" | grep -q "^SKIP "; then
+      # Not a pass and not a failure. Say so out loud: a silent skip is how a
+      # gate that is supposed to catch v7.4.0 becomes decoration.
+      print "   SKIP   $SMOKE_NAME — $(print -r -- "$OUT" | head -1)"
+      SMOKE_SKIP=1
+    elif [ $SRC -eq 0 ] && print -r -- "$OUT" | grep -qE "ALL PASS"; then
+      print "   pass   $SMOKE_NAME   $(print -r -- "$OUT" | grep -oE '[0-9]+ assertions' | head -1)"
+      PASS=$((PASS + 1))
+    else
+      print "   FAIL   $SMOKE_NAME"
+      print -r -- "$OUT" | grep -iE "FAIL|crash|Error" | head -8 | sed 's/^/           /'
+      FAIL=$((FAIL + 1))
+      FAILED_SUITES="$FAILED_SUITES $SMOKE_NAME"
+    fi
+  done
   print ""
 fi
 

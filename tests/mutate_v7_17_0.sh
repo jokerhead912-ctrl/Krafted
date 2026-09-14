@@ -51,7 +51,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.19.0 suite (.md / .txt as board text)"
+print "mutation check: v7.20.0 suite (.md / .txt as board text)"
 
 # ── (1) the gate: what counts as board text ──────────────────────────────
 

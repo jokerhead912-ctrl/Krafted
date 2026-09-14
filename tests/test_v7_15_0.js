@@ -313,7 +313,7 @@ section('metadata 规范化不得应用预设或变形',()=>{
   // read them from. That is an intentional widening, not a regression — pin the new shape here
   // so the widening stays visible (the semantics of each field live in test_v7_18_0.js).
   eq(model(x),{...before,name:'标题',note:'备注',tags:['a','b'],textPreset:'unknown-future',
-    docCard:false,mdMode:'',mdSrc:''},'仅更新 metadata，保留未来预设字符串（v7.19.0 起含 doc-card 三元组）');
+    docCard:false,mdMode:'',mdSrc:''},'仅更新 metadata，保留未来预设字符串（v7.20.0 起含 doc-card 三元组）');
   ok(x.tags!==data.tags,'metadata 标签独立'); data.tags[0]='changed'; eq(x.tags,['a','b'],'外部更改不回流');
   e.a.normalizeBoardTextMeta(x,{tags:' one, two, ',name:2,note:{},textPreset:4});
   eq([x.name,x.note,x.tags,x.textPreset],['','',['one','two'],''],'旧字符串标签与非法 metadata 默认值');
@@ -361,24 +361,31 @@ section('Library 正文搜索与类型边界',()=>{
   ok(!e.a.libMatches(image,'media body'),'媒体 DOM 不当作文本正文');
   eq(e.a.libraryItems().map(it=>it.id),[3,1,2],'Library 索引含媒体和文本');
 });
-section('正文鼠标两段制：首击只选择（v7.19.0 新规格）',()=>{
-  // v7.19.0 rewrote the body-click spec (user-approved): click 1 selects,
-  // an ALREADY-selected card hands the gesture back so the canvas can arm a
-  // move drag (drag = move, micro-click = edit). The old one-click-to-edit
-  // assertions were the previous spec — pinned here in their inverted form.
+section('正文按下即交还画布（v7.20.0 新规格：同图片卡一样）',()=>{
+  // v7.19.0 pinned "click 1 selects, an ALREADY-selected card hands back".
+  // v7.20.0 DELETED that two-stage rule — a text card that is not being
+  // edited is now byte-for-byte an image card: EVERY body press hands back to
+  // the canvas mousedown (which selects AND arms a move drag in one gesture),
+  // and editing is double-click only. Rewritten to the new spec (rule 4e) —
+  // the old expectations were not deleted, they were inverted.
+  //
+  // preventDefault is the load-bearing half and it is NEW here: the body is
+  // contentEditable even when it is not editing, so without it the press
+  // focuses the card (the focus listener adds .editing) and a drag paints a
+  // native text selection. Verified in Chrome: dblclick still fires.
   const e=boot(), x=e.make(1), y=e.make(2); e.a.attachTextListeners(x); e.select(y); const before=model(x);
   const child=e.document.createElement('span'); child.textContent='嵌套正文'; x.el.appendChild(child);
-  const ev=event('mousedown',{target:child}); eq(e.a.routeBoardTextMouse(ev),true,'首击正文路由已处理');
-  eq([ev.defaultPrevented,ev.stopped],[false,false],'正文不 preventDefault/stopPropagation');
-  eq([...e.state.selected],[1],'首击单选当前文本');
-  ok(e.document.activeElement!==x.el,'首击只选择不进入编辑（两段制）');
+  const ev=event('mousedown',{target:child}); eq(e.a.routeBoardTextMouse(ev),false,'正文按下不消费事件：交还画布去选择 + arm move drag');
+  eq([ev.defaultPrevented,ev.stopped],[true,false],'必须 preventDefault（否则 contentEditable 聚焦 + 拉出文字选区）；但唔 stopPropagation');
+  eq([...e.state.selected],[2],'路由唔负责选择——选择系画布 mousedown 嘅事（同图片卡一模一样）');
+  ok(e.document.activeElement!==x.el,'按下唔入编辑——编辑只靠双击');
   eq(model(x),before,'正文不修改坐标/宽高或样式'); eq(e.calls.undo.length,0,'正文点击没有移动 undo');
   ok(!e.state.dragging && !e.state.dragStart && !e.state.resizing,'路由未启动移动/缩放状态');
-  const ev2=event('mousedown',{target:child}); eq(e.a.routeBoardTextMouse(ev2),false,'已选正文交还画布：拖=移动、微击=编辑');
-  eq([...e.state.selected],[1],'交还时选择保持'); eq(model(x),before,'交还本身不改模型');
+  const ev2=event('mousedown',{target:child}); eq(e.a.routeBoardTextMouse(ev2),false,'已选中嘅卡都系同一条路：一律交还画布');
+  eq([...e.state.selected],[2],'路由自己始终唔郁选择'); eq(model(x),before,'交还本身不改模型');
   ok(!e.state.dragging,'路由自身绝不启动拖拽（画布 mousedown 负责）');
 });
-section('编辑中正文与文字工具保持一键编辑（v7.19.0 保留面）',()=>{
+section('编辑中正文与文字工具保持一键编辑（v7.20.0 保留面）',()=>{
   const e=boot(), x=e.make(1); e.a.attachTextListeners(x); e.select(x);
   x.el.focus(); // focus 監聽器加 .editing
   ok(x.el.classList.contains('editing'),'前置：焦点即编辑状态');
@@ -464,10 +471,13 @@ section('新建宽 320、输入只改高及旧自动宽标记',()=>{
   const y=e.a.addText(0,0,'指定宽度',{initW:457,noFocus:true}); e.flush(); eq(y.w,457,'显式 initW 保留'); eq(y.el.focusCount,0,'noFocus 不抢焦点');
   const detached=e.make(9); detached.el.remove(); const old=model(detached); e.a.autoGrowTextItem(detached); eq(model(detached),old,'未连接 DOM 不测量');
 });
-section('仅左右两个尺寸柄且始终为兄弟节点',()=>{
+section('尺寸柄：e/w 改宽 + 四角整体缩放，且始终为兄弟节点',()=>{
   const e=boot(), x=e.make(1); e.a.addTextHandles(x); let box=e.canvasContent.querySelector('.text-handles');
   ok(box && box.parentElement===x.el.parentElement && !x.el.contains(box),'把手不污染 contenteditable 正文');
-  eq(box.querySelectorAll('.item-handle').map(h=>[h.dataset.dir,h.dataset.id,h.dataset.textHandle]),[['e','1','1'],['w','1','1']],'仅 e/w 两个尺寸柄');
+  // v7.20.0: the 4 corners are NEW — a text card scales like an image now
+  // (aspect-locked, font follows through scaleBoardTextFontSize). e/w keep
+  // their old width-only meaning on purpose.
+  eq(box.querySelectorAll('.item-handle').map(h=>[h.dataset.dir,h.dataset.id,h.dataset.textHandle]),[['e','1','1'],['w','1','1'],['nw','1','1'],['ne','1','1'],['sw','1','1'],['se','1','1']],'e/w 宽度柄 + nw/ne/sw/se 四角缩放柄');
   eq(box.querySelectorAll('.bt-select-edge').map(h=>h.className),['bt-select-edge n','bt-select-edge s'],'上下是选择边框而非尺寸柄');
   eq(box.querySelectorAll('.bt-move').length,1,'一个移动把手');
   eq([box.style.left,box.style.top,box.style.width,box.style.height],['37px','-19px','287px','36px'],'兄弟把手使用真实几何');

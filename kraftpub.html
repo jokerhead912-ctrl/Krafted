@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.19.0</title>
+<title>Krafted v7.20.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -2302,7 +2302,7 @@ body.dragging-file .media-anno-toolbar {
 .item-handle.e { top:calc(50% - 8px); right:-8px; cursor:e-resize; }
 .item-handle.w { top:calc(50% - 8px); left:-8px; cursor:w-resize; }
 .item-rot { position:absolute; top:-28px; left:calc(50% - 7px); width:14px; height:14px; background:var(--accent); border:1.5px solid var(--bg-panel); border-radius:50%; cursor:grab; z-index:999999; }
-.text-item { position:absolute; cursor:text; padding:4px 10px; min-width:80px; min-height:28px; max-width:2000px; outline:none; word-wrap:break-word; white-space:pre-wrap; writing-mode:horizontal-tb; line-height:1.5; overflow:visible; font-family:'Inter',sans-serif; letter-spacing:0.01em; user-select:text; -webkit-user-select:text; -moz-user-select:text; -ms-user-select:text; }
+.text-item { position:absolute; cursor:grab; padding:4px 10px; min-width:80px; min-height:28px; max-width:2000px; outline:none; word-wrap:break-word; white-space:pre-wrap; writing-mode:horizontal-tb; line-height:1.5; overflow:visible; font-family:'Inter',sans-serif; letter-spacing:0.01em; user-select:text; -webkit-user-select:text; -moz-user-select:text; -ms-user-select:text; }
 .text-item.selected { outline:1.5px solid var(--accent); outline-offset:2.5px; }
 .text-item.editing { outline:2px solid var(--accent); outline-offset:2px; border-radius:6px; box-shadow:inset 0 0 0 1000px rgba(255,255,255,0.05); cursor:text; overflow:visible !important; min-width:100px; user-select:text; -webkit-user-select:text; -moz-user-select:text; -ms-user-select:text; }
 /* v7.17.0: an imported .md/.txt card caps its height and scrolls inside
@@ -4641,7 +4641,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.19.0';
+var KRAFTED_VERSION = '7.20.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -10106,7 +10106,7 @@ function addTextHandles(tx, moveOnly) {
   grip.className = 'bt-move';
   grip.dataset.id = tx.id;
   grip.textContent = boardTextLabel('Move', '移动');
-  grip.title = boardTextLabel('Drag to move; click text to edit', '拖动把手移动；点击正文编辑');
+  grip.title = boardTextLabel('Drag to move; double-click text to edit', '拖动把手移动；双击正文编辑');
   grip.setAttribute('aria-label', grip.title);
   grip.style.transform = 'scale(' + (1 / Math.max(.05, state.zoom)) + ')';
   box.appendChild(grip);
@@ -10124,6 +10124,19 @@ function addTextHandles(tx, moveOnly) {
     handle.dataset.dir = dir;
     handle.dataset.textHandle = '1';
     handle.title = boardTextLabel('Change width; keep font size', '调整宽度，不改变字号');
+    box.appendChild(handle);
+  });
+  // v7.20.0: corner handles, so a text card scales like an IMAGE — aspect
+  // locked, and the font scales with the box (see scaleBoardTextFontSize).
+  // Edge handles keep the old width-only meaning on purpose: "resize the
+  // box, not the type" is still a thing people want.
+  ['nw','ne','sw','se'].forEach(dir => {
+    const handle = document.createElement('div');
+    handle.className = 'item-handle ' + dir;
+    handle.dataset.id = tx.id;
+    handle.dataset.dir = dir;
+    handle.dataset.textHandle = '1';
+    handle.title = boardTextLabel('Scale text; font scales too', '整体缩放，字号同步放大');
     box.appendChild(handle);
   });
 }
@@ -11951,11 +11964,21 @@ function routeBoardTextMouse(e) {
     tx.el.focus({preventScroll:true});
     return true;
   }
-  if (!state.selected.has(tx.id) || state.selected.size !== 1) {
-    selectOnly(tx.id);
-    return true; // click 1 selects; the NEXT click or drag on the body acts
-  }
-  return false; // already selected: the canvas mousedown arms the move drag
+  // v7.20.0: a text card that is NOT being edited behaves exactly like an
+  // image card — the press hands straight back to the canvas mousedown,
+  // which selects the card AND arms a move drag in the SAME gesture. There
+  // is no "click 1 selects, click 2 acts" stage any more; editing is
+  // double-click only (see the viewport dblclick handler).
+  //
+  // preventDefault is REQUIRED here, and it is the whole reason the old
+  // one-press drag could never work: the body is contentEditable even when
+  // it is not being edited, so a plain press FOCUSES the card (the focus
+  // listener then adds .editing) and a drag paints a native TEXT SELECTION
+  // instead of moving the card. Machine-verified in Chrome: preventDefault
+  // on mousedown suppresses focus and text selection, while dblclick still
+  // fires — which is exactly the split we want.
+  e.preventDefault();
+  return false;
 }
 function attachTextListeners(tx) {
   const el = tx.el;
@@ -12545,6 +12568,18 @@ function applyTextProps(tx) {
   el.style.textShadow = tx.outline ? `-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000${tx.shadow ? ', 2px 2px 4px rgba(0,0,0,0.7)' : ''}` : (tx.shadow ? shadow : 'none');
 }
 
+// v7.20.0: ONE definition for "scale a text card's font along with its box".
+// baseSize is the font size captured when the corner drag STARTED and scale
+// is w / origW — deriving from the ORIGINAL every frame means the size can
+// never compound, so dragging out and back lands on the exact start size.
+function scaleBoardTextFontSize(tx, baseSize, scale) {
+  if (!tx || typeof baseSize !== 'number' || !isFinite(baseSize)) return;
+  if (!scale || !isFinite(scale) || scale <= 0) return;
+  const next = Math.max(4, Math.min(800, Math.round(baseSize * scale * 10) / 10));
+  if (next === tx.size) return;
+  tx.size = next;
+  if (tx.el) applyTextProps(tx);
+}
 
 // ==== media-player.js ====
 
@@ -28502,6 +28537,10 @@ viewport.addEventListener('mousedown', e => {
           // every mousemove (rAF may skip frames; we want pure derivation)
           const snaps = sel41.map(s => ({
             item: s,
+            // v7.20.0: text cards take their FONT along for the ride, so the
+            // multi-select path needs the start size per snap too.
+            isText: !!(s.el && s.el.classList.contains('text-item')),
+            size0: s.size,
             x: s.x, y: s.y, w: s.w, h: s.h,
             // For media items: also cache the .media-wrap element so the
             // fast-path can resize it without querySelector each frame
@@ -28518,7 +28557,13 @@ viewport.addEventListener('mousedown', e => {
         item.el.style.willChange = 'transform';
         item.el.style.contain = 'layout style';
       }
-      state.dragging = { type: 'resize', item, dir, startX: e.clientX, startY: e.clientY, origW: item.w, origH: item.h, origX: item.x, origY: item.y, _rafId: null, _mediaWrap: cachedMediaWrap, _group: cachedGroup, _members: cachedMembers, _multi: multiData };
+      state.dragging = { type: 'resize', item, dir, startX: e.clientX, startY: e.clientY, origW: item.w, origH: item.h, origX: item.x, origY: item.y, _rafId: null, _mediaWrap: cachedMediaWrap, _group: cachedGroup, _members: cachedMembers, _multi: multiData,
+        // v7.20.0: a CORNER drag on a text card scales it like an image, so
+        // remember the START font size + width. Every frame derives from the
+        // ORIGINAL (see scaleBoardTextFontSize) instead of compounding.
+        // Only for a single card: a multi-select drag scales the UNION box,
+        // not this card, and that path carries its own per-snap snapshot.
+        _textScale0: (item.el && item.el.classList.contains('text-item') && dir.length === 2 && !multiData) ? { size: item.size, w: item.w } : null };
       document.body.classList.add('is-dragging');
       document.querySelectorAll('.item-handle, .item-rot').forEach(el => el.remove());
       // Round 67 — also wipe the empty union multi-select container left
@@ -28630,10 +28675,6 @@ viewport.addEventListener('mousedown', e => {
           // handler for the matching skip-when-moving guard.
           _lockedPanX: state.pan.x, _lockedPanY: state.pan.y,
           items: moveItems,
-          // v7.19.0: a body click on an already-selected text card becomes an
-          // edit on mouseup IF the gesture was a micro-click (see the 3px
-          // cancel in the move-mouseup handler). Grip drags never set this.
-          _textEditCandidate: (!textGrip && itemEl.classList.contains('text-item')) ? item : null,
           _allItems: allItemsNow,
           _toMoveCache: toMoveNow,
           _moveRafId: null,
@@ -29192,6 +29233,14 @@ document.addEventListener('mousemove', e => {
       if (dir === 'e' || dir === 'w') y = d.origY + (d.origH - h) / 2;
       if (dir === 'n' || dir === 's') x = d.origX + (d.origW - w) / 2;
     }
+    // v7.20.0: a CORNER drag on a text card is aspect-locked exactly like an
+    // image, so the font below has ONE ratio to follow. Shift frees it,
+    // matching the image convention.
+    if (d._textScale0 && !e.shiftKey && dir.length === 2) {
+      h = w / (d.origW / d.origH);
+      if (dir.includes('w')) x = d.origX + (d.origW - w);
+      if (dir.includes('n')) y = d.origY + (d.origH - h);
+    }
     // Round 41 — MULTI-SELECT SCALE: scale all selected items together
     // when 2+ items are selected. Computes a single scaleX/scaleY from
     // the cursor delta applied to the union bbox, then maps every snap
@@ -29268,6 +29317,9 @@ document.addEventListener('mousemove', e => {
         const nx = M.pivotX + (s.x - M.pivotX) * scaleX;
         const ny = M.pivotY + (s.y - M.pivotY) * scaleY;
         s.item.x = nx; s.item.y = ny; s.item.w = nw; s.item.h = nh;
+        // v7.20.0: one call, one definition — the font follows the box on a
+        // corner drag. Edge drags keep width-only behaviour.
+        if (s.isText && dir.length === 2 && !freeScale) scaleBoardTextFontSize(s.item, s.size0, scaleX);
         return { item: s.item, x: nx, y: ny, w: nw, h: nh, origW: s.w, origH: s.h, wrapEl: s.wrapEl };
       });
       multiApply = applies;
@@ -29277,6 +29329,8 @@ document.addEventListener('mousemove', e => {
     // already wrote d.item.x/y/w/h via the snap.
     if (!multiApply) {
       d.item.w = w; d.item.h = h; d.item.x = x; d.item.y = y;
+      // v7.20.0: one call, one definition — the font follows the box.
+      if (d._textScale0) scaleBoardTextFontSize(d.item, d._textScale0.size, w / d.origW);
       if (d.item.el && d.item.el.classList.contains('todo-item')) d.item._resized = true;
       // Mark text-items as user-resized so autoGrowTextItem respects the width
       // and only grows height on input (prevents width jumping on type).
@@ -29523,10 +29577,6 @@ document.addEventListener('mouseup', e => {
           if (it._origX !== undefined) { it.x = it._origX; }
           if (it._origY !== undefined) { it.y = it._origY; }
         });
-        // v7.19.0: two-stage text — a micro-click lands here with the position
-        // already restored, so enter edit (click 1 selected, click 2 edits).
-        var _etx = state.dragging._textEditCandidate;
-        if (_etx && _etx.el && !_etx.el.classList.contains('editing')) _etx.el.focus({ preventScroll: true });
       }
       // Restore video after drag: restore poster, resume playback, show anno canvas
       var _movedItems = state.dragging._toMoveCache || new Set(getSelectedItems());

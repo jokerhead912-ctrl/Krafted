@@ -6,12 +6,15 @@
 //      lightweight (move-drag) and the full path of updateItemStyle. Before,
 //      only the full path synced, so the Move grip stayed at the drag-start
 //      spot for the whole drag (the resize paths carried their own copies).
-//   2. Two-stage body clicks (user-approved, Figma-style): click 1 selects;
-//      an already-selected card hands the gesture back (return false) so the
-//      canvas arms a move drag; a micro-click (3px cancel) enters edit on
-//      mouseup via _textEditCandidate. Editing cards and the text TOOL keep
-//      one-click caret behaviour, and the branch is decided BEFORE the other
-//      editor is blurred (its blur handler can flip the tool back to select).
+//   2. Body presses hand the gesture back to the canvas. v7.20.0 rewrote
+//      this: a text card that is NOT being edited now behaves like an IMAGE —
+//      select + arm a move drag in ONE press, with preventDefault so the
+//      contentEditable body can neither focus (which would add .editing) nor
+//      paint a native text selection. Editing is double-click only, and the
+//      v7.19.0 "_textEditCandidate micro-click" is deleted, not bypassed.
+//      Editing cards and the text TOOL keep one-click caret behaviour, and
+//      the branch is decided BEFORE the other editor is blurred (its blur
+//      handler can flip the tool back to select).
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -98,7 +101,7 @@ section('S1c: the FULL style path syncs through the same helper', () => {
   const item = { id: 9, el, x: 33, y: 44, w: 200, h: 60, z: 2, opacity: 1 };
   styleApi.updateItemStyle(item);
   eq(hCont.style.left, '33px', 'full path moves the grip box via the shared helper');
-  eq(styleApi._docClassCalls.length, 1, 'the full path still re-derives doc-card classes (v7.19.0 behaviour kept)');
+  eq(styleApi._docClassCalls.length, 1, 'the full path still re-derives doc-card classes (v7.20.0 behaviour kept)');
 });
 
 section('S1d: one definition — the old hand-written copies are gone', () => {
@@ -145,26 +148,27 @@ function txOf(id, classes, focusLog) {
     focus() { if (focusLog) focusLog.push(id); } } };
 }
 
-section('S2: click 1 on an unselected card selects only (no caret)', () => {
+section('S2: a NON-editing body press hands the gesture straight back', () => {
   const focusLog = [];
   const x = txOf(1, [], focusLog);
   const h = makeRtb({ texts: [x], selected: new Set() });
   const ev = rtbEvent(textTarget(x.el));
-  eq(h.api(ev), true, 'click 1 is consumed by the router');
-  eq(h.calls.selectOnly, [1], 'click 1 selects the card');
-  eq(focusLog, [], 'click 1 does NOT enter edit (two-stage)');
-  eq(ev.defaultPrevented, false, 'no preventDefault');
+  eq(h.api(ev), false, 'the press is handed back so the canvas selects AND arms a move drag');
+  eq(h.calls.selectOnly, [], 'selection is the canvas job, exactly as for an image card');
+  eq(focusLog, [], 'the press never focuses the card - no accidental edit on a drag');
+  eq(ev.defaultPrevented, true, 'preventDefault: without it the contentEditable body focuses + selects text');
 });
 
-section('S2b: click on an ALREADY-selected card hands the gesture back', () => {
+section('S2b: selected or not, a non-editing card behaves identically', () => {
+  // v7.20.0 deleted the two-stage rule: there is no "click 1 selects, click 2
+  // acts" any more, so both states must land in exactly the same place.
   const focusLog = [];
   const x = txOf(1, [], focusLog);
   const h = makeRtb({ texts: [x], selected: new Set([1]) });
   const ev = rtbEvent(textTarget(x.el));
-  eq(h.api(ev), false, 'the router returns false so the canvas can arm a move drag');
-  eq(h.calls.selectOnly, [], 'no re-selection churn');
-  eq(focusLog, [], 'no caret yet — edit happens on mouseup micro-click');
-  eq(ev.defaultPrevented, false, 'gesture not consumed');
+  eq(h.api(ev), false, 'already selected: same hand-back, no second stage');
+  eq(focusLog, [], 'still no caret - edit is double-click only');
+  eq(ev.defaultPrevented, true, 'same preventDefault');
 });
 
 section('S2c: an EDITING card keeps one-click caret behaviour', () => {
@@ -212,10 +216,15 @@ section('S2e: shift-click still toggles, locked cards stay uneditable', () => {
 section('S2f: grip and resize handles still hand back to the move/resize lifecycle', () => {
   const focusLog = [];
   const x = txOf(1, [], focusLog);
-  const h = makeRtb({ texts: [x], selected: new Set([1]) });
+  const other = txOf(2, ['editing'], null);
+  const blurLog = [];
+  other.el.blur = () => blurLog.push(2);
+  const h = makeRtb({ tool: 'text', texts: [x, other], selected: new Set([1]), editing: other });
   const ev = rtbEvent(gripTarget({ dataset: { id: '1' } }, x.el));
   eq(h.api(ev), false, 'grip mousedown is not consumed here');
   eq(focusLog, [], 'grip click does not enter edit');
+  eq(blurLog, [2], 'grabbing a handle commits the OTHER editor first');
+  eq(h.calls.setTool, ['select'], 'and forces the select tool (a handle drag is never an edit)');
 });
 
 // ── S3: structural pins on the canvas mousedown/mouseup wiring ─────────────
@@ -225,14 +234,12 @@ section('S3: the canvas drag lifecycle carries the two-stage wiring', () => {
     'only an EDITING card keeps native text gestures on body click');
   eq(c.split("itemEl.classList.contains('text-item');").length - 1, 0,
     'the old any-text-body skip is gone');
-  eq(c.split("_textEditCandidate: (!textGrip && itemEl.classList.contains('text-item')) ? item : null,").length - 1, 1,
-    'arming a move drag records the text edit candidate (grip drags never do)');
-  eq(c.split("var _etx = state.dragging._textEditCandidate;").length - 1, 1,
-    'the 3px micro-click cancel is where edit entry lives');
-  eq(c.split("if (_etx && _etx.el && !_etx.el.classList.contains('editing')) _etx.el.focus({ preventScroll: true });").length - 1, 1,
-    'the micro-click focuses the card (click 2 edits)');
-  eq(c.split('return false; // already selected: the canvas mousedown arms the move drag').length - 1, 1,
-    'the hand-back is pinned');
+  eq(c.split('_textEditCandidate').length - 1, 0,
+    'the micro-click edit candidate is GONE (v7.20.0: edit is double-click only)');
+  eq(c.split('var _etx =').length - 1, 0,
+    'the move-mouseup no longer enters edit');
+  eq(c.split("  e.preventDefault();\n  return false;").length - 1, 1,
+    'the hand-back also preventDefaults, so the contentEditable body cannot focus or select');
 });
 
 // ── S4: gates that must stay open (positive assertions, rule 12) ───────────
@@ -245,7 +252,7 @@ section('S4: the surrounding wiring still exists', () => {
 });
 
 // ── S5: v7.18.0 doc-card behaviour not disturbed ───────────────────────────
-section('S5: v7.19.0 anchors untouched', () => {
+section('S5: v7.20.0 anchors untouched', () => {
   const c = codeOnly(src);
   eq(c.split('if (isTextItem) syncDocCardClasses(item);').length - 1, 1, 'doc-card class re-derivation still runs once per style pass');
   eq(c.split("const _tz = 1;").length - 1 >= 1, true, 'the _tz convention still exists in the full path');
