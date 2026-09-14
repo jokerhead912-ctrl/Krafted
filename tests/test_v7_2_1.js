@@ -98,7 +98,7 @@ function before(first, second, label) {
   // to feed the gate, not to widen it. The 2-space indent makes the anchor
   // unique: the one-line form is a substring of the 12-space line just above.
   count('  item._sourceBlob = blob;\n  item._fileSize = blob.size;', 1,
-    'v7.18.0 knock-out sets _fileSize next to _sourceBlob');
+    'v7.19.0 knock-out sets _fileSize next to _sourceBlob');
 
   // The five sites must line up with the five _sourceBlob assignments that
   // hand an item a Blob: four load paths plus the v7.8.0 knock-out. If a sixth

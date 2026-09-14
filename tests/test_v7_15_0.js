@@ -142,7 +142,10 @@ const CORE = ['splitTags','getSelectedItems','selectOnly','clearSelection','togg
   'addText','autoGrowTextItem','growTextHeightToFit','applyTextProps','updateItemStyle','addTextHandles',
   // v7.18.0: updateItemStyle now re-derives the doc-card classes through this helper, so the
   // sandbox needs the real function (rule 6m). It touches no other global, so it is safe here.
-  'syncDocCardClasses'];
+  'syncDocCardClasses',
+  // v7.19.0: updateItemStyle delegates the .text-handles sync to this helper on BOTH the
+  // lightweight and the full path, so the sandbox needs the real one (rule 6m).
+  'syncTextHandleBox'];
 const sources = new Map();
 function sourceOf(name) { if (!sources.has(name)) sources.set(name, extract(name)); return sources.get(name); }
 function model(tx) { return plain(Object.fromEntries(Object.entries(tx).filter(([k]) => k !== 'el'))); }
@@ -310,7 +313,7 @@ section('metadata 规范化不得应用预设或变形',()=>{
   // read them from. That is an intentional widening, not a regression — pin the new shape here
   // so the widening stays visible (the semantics of each field live in test_v7_18_0.js).
   eq(model(x),{...before,name:'标题',note:'备注',tags:['a','b'],textPreset:'unknown-future',
-    docCard:false,mdMode:'',mdSrc:''},'仅更新 metadata，保留未来预设字符串（v7.18.0 起含 doc-card 三元组）');
+    docCard:false,mdMode:'',mdSrc:''},'仅更新 metadata，保留未来预设字符串（v7.19.0 起含 doc-card 三元组）');
   ok(x.tags!==data.tags,'metadata 标签独立'); data.tags[0]='changed'; eq(x.tags,['a','b'],'外部更改不回流');
   e.a.normalizeBoardTextMeta(x,{tags:' one, two, ',name:2,note:{},textPreset:4});
   eq([x.name,x.note,x.tags,x.textPreset],['','',['one','two'],''],'旧字符串标签与非法 metadata 默认值');
@@ -358,15 +361,34 @@ section('Library 正文搜索与类型边界',()=>{
   ok(!e.a.libMatches(image,'media body'),'媒体 DOM 不当作文本正文');
   eq(e.a.libraryItems().map(it=>it.id),[3,1,2],'Library 索引含媒体和文本');
 });
-section('正文鼠标保留原生光标且绝不启动移动',()=>{
+section('正文鼠标两段制：首击只选择（v7.19.0 新规格）',()=>{
+  // v7.19.0 rewrote the body-click spec (user-approved): click 1 selects,
+  // an ALREADY-selected card hands the gesture back so the canvas can arm a
+  // move drag (drag = move, micro-click = edit). The old one-click-to-edit
+  // assertions were the previous spec — pinned here in their inverted form.
   const e=boot(), x=e.make(1), y=e.make(2); e.a.attachTextListeners(x); e.select(y); const before=model(x);
   const child=e.document.createElement('span'); child.textContent='嵌套正文'; x.el.appendChild(child);
-  const ev=event('mousedown',{target:child}); eq(e.a.routeBoardTextMouse(ev),true,'正文路由已处理');
+  const ev=event('mousedown',{target:child}); eq(e.a.routeBoardTextMouse(ev),true,'首击正文路由已处理');
   eq([ev.defaultPrevented,ev.stopped],[false,false],'正文不 preventDefault/stopPropagation');
-  eq([...e.state.selected],[1],'正文单选当前文本'); ok(e.document.activeElement===x.el,'正文聚焦实际文本');
+  eq([...e.state.selected],[1],'首击单选当前文本');
+  ok(e.document.activeElement!==x.el,'首击只选择不进入编辑（两段制）');
   eq(model(x),before,'正文不修改坐标/宽高或样式'); eq(e.calls.undo.length,0,'正文点击没有移动 undo');
-  ok(!e.state.dragging && !e.state.dragStart && !e.state.resizing,'正文未启动移动/缩放状态');
-  const focus=x.el.focusCount; e.a.routeBoardTextMouse(event('mousedown',{target:child})); eq(x.el.focusCount,focus,'重复正文点击不重启编辑');
+  ok(!e.state.dragging && !e.state.dragStart && !e.state.resizing,'路由未启动移动/缩放状态');
+  const ev2=event('mousedown',{target:child}); eq(e.a.routeBoardTextMouse(ev2),false,'已选正文交还画布：拖=移动、微击=编辑');
+  eq([...e.state.selected],[1],'交还时选择保持'); eq(model(x),before,'交还本身不改模型');
+  ok(!e.state.dragging,'路由自身绝不启动拖拽（画布 mousedown 负责）');
+});
+section('编辑中正文与文字工具保持一键编辑（v7.19.0 保留面）',()=>{
+  const e=boot(), x=e.make(1); e.a.attachTextListeners(x); e.select(x);
+  x.el.focus(); // focus 監聽器加 .editing
+  ok(x.el.classList.contains('editing'),'前置：焦点即编辑状态');
+  const before=model(x), ev=event('mousedown',{target:x.el});
+  eq(e.a.routeBoardTextMouse(ev),true,'编辑中正文保持原生光标路由');
+  eq(ev.defaultPrevented,false,'编辑中不 preventDefault');
+  eq(model(x),before,'编辑路由不改模型'); ok(!e.state.dragging,'编辑点击不启动拖拽');
+  const t=e.make(2); e.state.tool='text'; const ev2=event('mousedown',{target:t.el});
+  eq(e.a.routeBoardTextMouse(ev2),true,'文字工具保持一键编辑');
+  ok(e.document.activeElement===t.el,'文字工具实际聚焦');
 });
 for (const modifier of ['shiftKey','metaKey','ctrlKey']) section('修饰键选择 '+modifier,()=>{
   const e=boot(), x=e.make(1), y=e.make(2); e.select(y); const ev=event('mousedown',{target:x.el,[modifier]:true});

@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.18.0</title>
+<title>Krafted v7.19.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4641,7 +4641,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.18.0';
+var KRAFTED_VERSION = '7.19.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -11933,10 +11933,29 @@ function routeBoardTextMouse(e) {
     else selectOnly(tx.id);
     return true;
   }
-  // Do not preventDefault: native caret placement and drag-to-select remain intact.
-  if (!state.selected.has(tx.id) || state.selected.size !== 1) selectOnly(tx.id);
-  tx.el.focus({preventScroll:true});
-  return true;
+  // v7.19.0: two-stage text interaction (Figma-style). Click 1 selects the
+  // card only. With the card ALREADY selected the router hands the gesture
+  // back (return false) so the canvas mousedown arms a move drag — dragging
+  // the body now MOVES the card, and a micro-click (cancelled by the 3px
+  // threshold in the move-mouseup handler) enters edit. A card that is
+  // already editing, or any body click with the text TOOL active, keeps
+  // one-click caret behaviour.
+  // Decide the branch BEFORE blurring the other editor: its blur handler can
+  // flip the tool back to 'select' (finishBoardTextEditing path), which would
+  // silently turn this one-click edit into a plain select.
+  const oneClickEdit = state.tool === 'text' || tx.el.classList.contains('editing');
+  const editingOther = getEditingText();
+  if (editingOther && editingOther !== tx) editingOther.el.blur();
+  if (oneClickEdit) {
+    // Do not preventDefault: native caret placement and drag-to-select remain intact.
+    tx.el.focus({preventScroll:true});
+    return true;
+  }
+  if (!state.selected.has(tx.id) || state.selected.size !== 1) {
+    selectOnly(tx.id);
+    return true; // click 1 selects; the NEXT click or drag on the body acts
+  }
+  return false; // already selected: the canvas mousedown arms the move drag
 }
 function attachTextListeners(tx) {
   const el = tx.el;
@@ -12396,6 +12415,23 @@ function growTextHeightToFit(tx) {
   updateAutoFitPaper();
   positionBoardTextUI();
 }
+// v7.19.0: ONE sync for the .text-handles sibling (the Move-grip box). This
+// used to be hand-written only in the full style path, so the lightweight
+// move-drag pass early-returned ABOVE it and the grip stayed at the drag-start
+// spot for the whole gesture. The two resize fast paths each carried their own
+// copy of the same writes — one definition, every path, ends that.
+function syncTextHandleBox(item) {
+  const el = item.el;
+  if (!el || !el.classList.contains('text-item')) return;
+  const hCont = el.parentElement ? el.parentElement.querySelector('.text-handles[data-owner="' + item.id + '"]') : null;
+  if (hCont) {
+    hCont.style.left = item.x + 'px';
+    hCont.style.top = item.y + 'px';
+    hCont.style.width = item.w + 'px';
+    hCont.style.height = item.h + 'px';
+    hCont.style.zIndex = item.z || 1;
+  }
+}
 function updateItemStyle(item, lightweight) {
   const el = item.el;
   // Skip style updates on the container during reframe — img is manually controlled
@@ -12411,6 +12447,10 @@ function updateItemStyle(item, lightweight) {
     if (item.locked) el.classList.add('locked'); else el.classList.remove('locked');
     // Keep audio card internals in sync even on lightweight passes used by drag/resize fast paths.
     if (item.isAudio) _applyAudioItemUiScale(item);
+    // v7.19.0: the Move grip must follow during a MOVE drag too — this early
+    // return sits above the full path's handle sync, which is exactly why the
+    // grip used to stay at the drag-start spot until mouseup.
+    if (el.classList.contains('text-item')) syncTextHandleBox(item);
     return;
   }
   // v6.8.26: text items now use WORLD coordinates like every other item
@@ -12458,17 +12498,9 @@ function updateItemStyle(item, lightweight) {
   // reload — before it, the transform was only ever written by exitReframe, so
   // every reframe silently vanished the moment you reopened the board.
   if (!item.isVideo && item.img) applyImageFraming(item);
-  // Sync text handle container position (sibling of text-item) — must run during drag too
-  if (isTextItem) {
-    const hCont = el.parentElement.querySelector('.text-handles[data-owner="' + item.id + '"]');
-    if (hCont) {
-      hCont.style.left = item.x + 'px';
-      hCont.style.top = item.y + 'px';
-      hCont.style.width = (item.w / _tz) + 'px';
-      hCont.style.height = (item.h / _tz) + 'px';
-      hCont.style.zIndex = item.z || 1;
-    }
-  }
+  // v7.19.0: text-handles sync is shared with the lightweight drag path via
+  // syncTextHandleBox() above — one definition, both paths.
+  if (isTextItem) syncTextHandleBox(item);
   // LIGHTWEIGHT PATH (drag): skip all GPU-expensive work that doesn't depend on position.
   // Filter strings, CGI overlays, mask layer updates all re-trigger GPU filter/canvas work.
   // transform/width/height/opacity/zIndex above are all we need for smooth dragging.
@@ -28549,7 +28581,9 @@ viewport.addEventListener('mousedown', e => {
   if (textGrip) e.preventDefault();
   const itemEl = gripText ? gripText.el : e.target.closest('.item, .text-item, .todo-item, .mindmap-item');
   if (itemEl) {
-    const isEditingText = !textGrip && itemEl.classList.contains('text-item');
+    // v7.19.0: only a card that is EDITING keeps native text behaviour; a
+  // merely selected card body now arms a move drag (two-stage interaction).
+  const isEditingText = !textGrip && itemEl.classList.contains('text-item') && itemEl.classList.contains('editing');
     // When clicking on an editing text-item, do NOT initiate a move drag.
     // Let the browser handle native text selection / caret positioning.
     // To move the box, the user clicks outside first (commits edit), then clicks the box to select, then drags.
@@ -28596,6 +28630,10 @@ viewport.addEventListener('mousedown', e => {
           // handler for the matching skip-when-moving guard.
           _lockedPanX: state.pan.x, _lockedPanY: state.pan.y,
           items: moveItems,
+          // v7.19.0: a body click on an already-selected text card becomes an
+          // edit on mouseup IF the gesture was a micro-click (see the 3px
+          // cancel in the move-mouseup handler). Grip drags never set this.
+          _textEditCandidate: (!textGrip && itemEl.classList.contains('text-item')) ? item : null,
           _allItems: allItemsNow,
           _toMoveCache: toMoveNow,
           _moveRafId: null,
@@ -29485,6 +29523,10 @@ document.addEventListener('mouseup', e => {
           if (it._origX !== undefined) { it.x = it._origX; }
           if (it._origY !== undefined) { it.y = it._origY; }
         });
+        // v7.19.0: two-stage text — a micro-click lands here with the position
+        // already restored, so enter edit (click 1 selected, click 2 edits).
+        var _etx = state.dragging._textEditCandidate;
+        if (_etx && _etx.el && !_etx.el.classList.contains('editing')) _etx.el.focus({ preventScroll: true });
       }
       // Restore video after drag: restore poster, resume playback, show anno canvas
       var _movedItems = state.dragging._toMoveCache || new Set(getSelectedItems());
