@@ -313,7 +313,7 @@ section('metadata 规范化不得应用预设或变形',()=>{
   // read them from. That is an intentional widening, not a regression — pin the new shape here
   // so the widening stays visible (the semantics of each field live in test_v7_18_0.js).
   eq(model(x),{...before,name:'标题',note:'备注',tags:['a','b'],textPreset:'unknown-future',
-    docCard:false,mdMode:'',mdSrc:''},'仅更新 metadata，保留未来预设字符串（v7.21.0 起含 doc-card 三元组）');
+    docCard:false,mdMode:'',mdSrc:''},'仅更新 metadata，保留未来预设字符串（v7.22.0 起含 doc-card 三元组）');
   ok(x.tags!==data.tags,'metadata 标签独立'); data.tags[0]='changed'; eq(x.tags,['a','b'],'外部更改不回流');
   e.a.normalizeBoardTextMeta(x,{tags:' one, two, ',name:2,note:{},textPreset:4});
   eq([x.name,x.note,x.tags,x.textPreset],['','',['one','two'],''],'旧字符串标签与非法 metadata 默认值');
@@ -361,7 +361,7 @@ section('Library 正文搜索与类型边界',()=>{
   ok(!e.a.libMatches(image,'media body'),'媒体 DOM 不当作文本正文');
   eq(e.a.libraryItems().map(it=>it.id),[3,1,2],'Library 索引含媒体和文本');
 });
-section('正文按下即交还画布（v7.21.0 新规格：同图片卡一样）',()=>{
+section('正文按下即交还画布（v7.22.0 新规格：同图片卡一样）',()=>{
   // v7.19.0 pinned "click 1 selects, an ALREADY-selected card hands back".
   // v7.20.0 DELETED that two-stage rule — a text card that is not being
   // edited is now byte-for-byte an image card: EVERY body press hands back to
@@ -385,7 +385,7 @@ section('正文按下即交还画布（v7.21.0 新规格：同图片卡一样）
   eq([...e.state.selected],[2],'路由自己始终唔郁选择'); eq(model(x),before,'交还本身不改模型');
   ok(!e.state.dragging,'路由自身绝不启动拖拽（画布 mousedown 负责）');
 });
-section('编辑中正文与文字工具保持一键编辑（v7.21.0 保留面）',()=>{
+section('编辑中正文与文字工具保持一键编辑（v7.22.0 保留面）',()=>{
   const e=boot(), x=e.make(1); e.a.attachTextListeners(x); e.select(x);
   x.el.focus(); // focus 監聽器加 .editing
   ok(x.el.classList.contains('editing'),'前置：焦点即编辑状态');

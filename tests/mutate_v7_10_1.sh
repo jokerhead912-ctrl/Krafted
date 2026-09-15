@@ -54,7 +54,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.21.0 suite (the duplicate export entry)"
+print "mutation check: v7.22.0 suite (the duplicate export entry)"
 
 # ── THE COMPLAINT: the same bytes offered twice ───────────────────────────
 

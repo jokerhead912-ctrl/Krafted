@@ -267,13 +267,22 @@ attempt('executable: the row cap and its footer', () => {
   // the REAL predicate into the sandbox rather than stubbing it, so this block
   // exercises the shipped matching rule instead of a stand-in.
   const realLibMatches = instantiate(fnFull('libMatches', SRC), '', { __ret: 'libMatches' });
+  // v7.22.0: renderLibraryPanel now calls libThumbGlyph / libThumbFor. Rule 6m:
+  // a new global reached from a function this suite compiles in isolation
+  // breaks the suite. Drive the REAL glyph helper (it has no dependencies);
+  // libThumbFor needs a real <img> and canvas, which this suite is not about,
+  // so it is stubbed to answer "no thumbnail" — exactly the no-image path.
+  const realLibThumbGlyph = instantiate(fnFull('libThumbGlyph', SRC), '', { __ret: 'libThumbGlyph' });
+  const thumbCalls = [];
   const render = instantiate(rlp, 'var LIB_ROW_CAP = 150; var _libActiveId = null;', {
     __ret: 'renderLibraryPanel',
     document: doc,
     state: { items: mkItems(200) },
     getSelectedItems: () => [],
     libThumbSrc: () => null,
-    libMatches: realLibMatches
+    libMatches: realLibMatches,
+    libThumbGlyph: realLibThumbGlyph,
+    libThumbFor: (it, cb) => { thumbCalls.push(it); if (cb) cb(null); }
   });
 
   render();
@@ -361,7 +370,7 @@ has("case 'library-toggle-panel':   toggleLibraryPanel(); return true;",
     'the shortcut still dispatches', SRC);
 
 // ═══ report ═══════════════════════════════════════════════════════════
-console.log(`test_v7052.js  (v7.21.0 Library keeps up with the board)`);
+console.log(`test_v7052.js  (v7.22.0 Library keeps up with the board)`);
 if (fails.length) {
   console.log(`  ${pass} passed, ${fails.length} FAILED`);
   fails.forEach(f => console.log('    FAIL  ' + f));

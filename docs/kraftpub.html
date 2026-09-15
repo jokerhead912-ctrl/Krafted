@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.21.0</title>
+<title>Krafted v7.22.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4641,7 +4641,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.21.0';
+var KRAFTED_VERSION = '7.22.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -8008,6 +8008,141 @@ function libThumbSrc(it) {
   return null;
 }
 
+// v7.22.0: LIBRARY THUMBNAILS MUST NOT DECODE THE ORIGINAL.
+// A lib-row thumb is 34 CSS px (68 device px at 2x). Pointing <img> at the
+// item's full-resolution source kept one decoded bitmap alive per row: a
+// 150-item board held ~618 MB of bitmaps (~7 GB of real footage) and the
+// renderer OOM'd. Worse, renderLibraryPanel() rebuilds every row on each
+// keystroke, so the decode storm repeated while you typed.
+// One pipeline: decode -> downscale to LIB_THUMB_MAX_SIDE -> cache on the
+// item. The full-size <img> is dropped immediately after the draw, so only
+// the 96px JPEG stays resident, and only LIB_THUMB_CONCURRENCY originals
+// are ever in flight.
+var LIB_THUMB_MAX_SIDE = 96;
+var LIB_THUMB_CONCURRENCY = 4;
+var LIB_THUMB_JPEG_Q = 0.72;
+var _libThumbCache = (typeof WeakMap === 'function') ? new WeakMap() : null;
+var _libThumbQueue = [];
+var _libThumbBusy = 0;
+
+// The sizing rule, kept pure so a test can execute it (rule 19): an anchor
+// proves the code exists, running it proves it is right.
+function libThumbFit(w, h, cap) {
+  w = Math.max(1, w | 0);
+  h = Math.max(1, h | 0);
+  cap = Math.max(1, cap | 0);
+  var m = Math.max(w, h);
+  if (m <= cap) return { w: w, h: h };
+  var k = cap / m;
+  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+}
+
+function libThumbGet(it) {
+  if (!_libThumbCache || !it) return undefined;
+  try { return _libThumbCache.get(it); } catch (e) { return undefined; }
+}
+
+function libThumbSet(it, v) {
+  if (!_libThumbCache || !it) return;
+  try { _libThumbCache.set(it, v); } catch (e) {}
+}
+
+// The letter / glyph shown when there is no image at all, in one place so
+// the fallback path and the failed-decode path cannot drift apart.
+function libThumbGlyph(it, isText) {
+  if (isText) return 'T';
+  var t = it && it.type;
+  if (t === 'video') return '\u25B6';
+  if (t === 'audio') return '\u266A';
+  if (t === 'link') return '\uD83D\uDD17';
+  return '\u25A2';
+}
+
+function _libThumbFinish(entry, url) {
+  entry.state = 'done';
+  entry.url = url || null;
+  var cbs = entry.cbs;
+  entry.cbs = [];
+  for (var i = 0; i < cbs.length; i++) {
+    try { cbs[i](entry.url); } catch (e) {}
+  }
+}
+
+function _libThumbDecode(job, done) {
+  var img = new Image();
+  var settled = false;
+  var finish = function (url) {
+    if (settled) return;
+    settled = true;
+    // v7.22.0: the decoded original is the thing we are trying to get rid
+    // of. Drop the handlers and the reference now, not when the function
+    // happens to return — otherwise the next decode starts while this
+    // bitmap is still reachable and the real peak is CAP + 1.
+    try { img.onload = null; img.onerror = null; } catch (e) {}
+    _libThumbFinish(job.entry, url);
+    done();
+    img = null;
+  };
+  img.onload = function () {
+    var iw = img.naturalWidth || img.width || 0;
+    var ih = img.naturalHeight || img.height || 0;
+    // No dimensions: nothing to downscale, hand the source straight back
+    // rather than re-encoding something we cannot measure.
+    if (!iw || !ih) { finish(job.src); return; }
+    var fit = libThumbFit(iw, ih, LIB_THUMB_MAX_SIDE);
+    if (fit.w >= iw && fit.h >= ih) { finish(job.src); return; }
+    var cv = document.createElement('canvas');
+    cv.width = fit.w;
+    cv.height = fit.h;
+    var cx = cv.getContext('2d');
+    if (!cx) { finish(job.src); return; }
+    cx.imageSmoothingEnabled = true;
+    if ('imageSmoothingQuality' in cx) cx.imageSmoothingQuality = 'high';
+    try { cx.drawImage(img, 0, 0, fit.w, fit.h); } catch (e) { finish(job.src); return; }
+    var out = '';
+    try { out = cv.toDataURL('image/jpeg', LIB_THUMB_JPEG_Q); } catch (e) { out = ''; }
+    finish(out || job.src);
+  };
+  img.onerror = function () { finish(null); };
+  try { img.src = job.src; } catch (e) { finish(null); }
+}
+
+function _libThumbPump() {
+  while (_libThumbBusy < LIB_THUMB_CONCURRENCY && _libThumbQueue.length) {
+    var job = _libThumbQueue.shift();
+    if (!job || job.entry.state === 'done') continue;
+    _libThumbBusy++;
+    _libThumbDecode(job, function () {
+      _libThumbBusy--;
+      // v7.22.0: pump on the next tick. Pumping synchronously from inside
+      // the finished decode's onload keeps that decode's <img> reachable
+      // for the whole of the next one, so the cap is off by one in the
+      // direction that matters (memory held, not throughput).
+      setTimeout(function () { _libThumbPump(); }, 0);
+    });
+  }
+}
+
+// Ask for a row thumbnail. Calls back with a small data URL, or null when
+// there is nothing to show (no source, or the decode failed). Cached per
+// item, so re-rendering the panel — which happens on every keystroke —
+// never decodes the same original twice.
+function libThumbFor(it, cb) {
+  var src = libThumbSrc(it);
+  if (!src) { try { cb(null); } catch (e) {} return null; }
+  var entry = libThumbGet(it);
+  if (entry && entry.src === src) {
+    if (entry.state === 'done') { try { cb(entry.url); } catch (e) {} return entry.url; }
+    entry.cbs.push(cb);
+    return null;
+  }
+  entry = { state: 'pending', src: src, url: null, cbs: [cb] };
+  libThumbSet(it, entry);
+  _libThumbQueue.push({ entry: entry, src: src });
+  _libThumbPump();
+  return null;
+}
+
 // P1-1: a searchable index of the whole board. 300 images are impossible to
 // find by panning, so this is the navigation entry point. Each row flies the
 // camera to the item (revealItem) and selects it. Search covers name, note and
@@ -8041,6 +8176,15 @@ function renderLibraryPanel() {
   try { requestMinimapRefresh(); } catch (e) {}
   var head = document.getElementById('library-head-text');
   if (head) head.textContent = items.length ? ('Library ' + items.length) : 'Library';
+  // v7.22.0: the render generation lives on the list, NOT on a global.
+  // A cached thumbnail is delivered SYNCHRONOUSLY, while the row is still
+  // being built and is not in the document yet — so `isConnected` is
+  // false and the thumbnail was dropped on every render after the first
+  // (found by the live smoke test: reopening the panel showed empty
+  // boxes). The generation, not DOM attachment, says "this row is
+  // current". Kept off `window` on purpose (rule 6m: a new global breaks
+  // every old suite that compiles this function in isolation).
+  listEl._libRenderToken = (listEl._libRenderToken | 0) + 1;
   listEl.innerHTML = '';
   if (!items.length) { listEl.innerHTML = '<div class="views-empty">No items match.</div>'; return; }
   var sel0 = (typeof getSelectedItems === 'function') ? getSelectedItems() : [];
@@ -8059,8 +8203,24 @@ function renderLibraryPanel() {
     thumb.className = 'lib-thumb';
     var isText = (state.texts || []).indexOf(it) !== -1;
     var src = libThumbSrc(it);
-    if (src) { var im = document.createElement('img'); im.src = src; im.draggable = false; thumb.appendChild(im); }
-    else { thumb.textContent = isText ? 'T' : it.type === 'video' ? '\u25B6' : it.type === 'audio' ? '\u266A' : it.type === 'link' ? '\uD83D\uDD17' : '\u25A2'; }
+    var showGlyph = function () { thumb.textContent = libThumbGlyph(it, isText); };
+    if (src) {
+      // v7.22.0: the <img> starts empty and is filled from the thumbnail
+      // cache. It is never assigned the full-resolution source.
+      var im = document.createElement('img');
+      im.draggable = false;
+      thumb.appendChild(im);
+      var token = listEl._libRenderToken;
+      libThumbFor(it, function (u) {
+        // A cached hit calls back synchronously, before this row reaches
+        // the document: isConnected would be false and the thumbnail
+        // would be dropped on every render but the first.
+        if (token !== listEl._libRenderToken) return;
+        if (u) { im.src = u; return; }
+        if (im.parentNode) im.parentNode.removeChild(im);
+        showGlyph();
+      });
+    } else { showGlyph(); }
     row.appendChild(thumb);
     var meta = document.createElement('div');
     meta.className = 'lib-meta';
