@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.23.0</title>
+<title>Krafted v7.24.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3972,7 +3972,7 @@ body.is-dragging #text-quick-bar { visibility:hidden !important; }
     <div class="section-header" onclick="togglePropSection(this)">Transform</div>
     <div class="prop-section">
       <div class="prop-row"><label>Opacity</label><input type="range" id="prop-opacity" min="0" max="100" value="100" oninput="setOpacity(this.value)"><span id="prop-opacity-val" style="font-size:10px;width:30px;">100%</span></div>
-      <div class="prop-row"><label>Rotate</label><input type="range" id="prop-rotate" min="-180" max="180" value="0" oninput="setRotation(this.value)"><span id="prop-rotate-val" style="font-size:10px;width:36px;">0°</span></div>
+      <div class="prop-row"><label>Rotate</label><input type="range" id="prop-rotate" min="-180" max="180" step="0.5" value="0" oninput="setRotation(this.value)"><input type="number" id="prop-rotate-num" step="0.5" value="0" title="Exact angle in degrees - type a value then press Enter" onchange="setRotation(this.value)"><button type="button" id="btn-reset-rot" onclick="resetRotation()" title="Reset rotation to 0 (undoable)" style="flex:0 0 auto;padding:5px 7px;">&#8634;</button></div>
       <div class="btn-group">
         <button onclick="flipH()" title="Flip Horizontal">Flip H</button>
         <button onclick="flipV()" title="Flip Vertical">Flip V</button>
@@ -4641,7 +4641,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.23.0';
+var KRAFTED_VERSION = '7.24.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -23314,8 +23314,7 @@ function updatePropsPanel() {
     document.getElementById('prop-opacity-val').textContent = Math.round(item.opacity * 100) + '%';
   }
   if (item.rot !== undefined) {
-    document.getElementById('prop-rotate').value = item.rot;
-    document.getElementById('prop-rotate-val').textContent = Math.round(item.rot) + '°';
+    syncRotationUI(item.rot);
   }
   if (item.brightness !== undefined) {
     document.getElementById('prop-brightness').value = item.brightness;
@@ -23415,10 +23414,41 @@ function setOpacity(v) {
   document.getElementById('prop-opacity-val').textContent = v + '%';
   scheduleAutoSave();
 }
+// v7.24.0 - the Rotate row grew a second control surface (a typed number
+// box) next to the slider. Both read and write through syncRotationUI so the
+// two cannot drift apart; two hand-rolled writers is exactly how the old
+// value label ended up disagreeing with the item it was describing.
+function syncRotationUI(deg) {
+  var s = document.getElementById('prop-rotate');
+  var n = document.getElementById('prop-rotate-num');
+  if (s) s.value = deg;
+  // Do not stomp on the box the user is typing in: `change` fires while the
+  // number input still has focus, and rewriting it mid-keystroke fights the
+  // caret (and swallows the value they just typed).
+  if (n && document.activeElement !== n) n.value = Math.round((+deg || 0) * 10) / 10;
+}
 function setRotation(v) {
   const sel = getSelectedItems();
-  sel.forEach(i => { i.rot = +v; updateItemStyle(i); });
-  document.getElementById('prop-rotate-val').textContent = Math.round(v) + '°';
+  var n = (typeof v === 'number') ? v : parseFloat(v);
+  if (!isFinite(n)) { syncRotationUI(sel.length ? sel[0].rot : 0); return; }
+  // v7.24.0: one undo step per gesture. The first change of a drag pushes and
+  // a 300 ms quiet period closes it - the same guard setPhotoFilter uses, so
+  // dragging the slider is one undo, not three hundred.
+  if (sel.length && !sel[0]._rotDragging) { pushUndo(); sel[0]._rotDragging = true; }
+  sel.forEach(i => { i.rot = n; updateItemStyle(i); });
+  syncRotationUI(n);
+  if (sel[0]) {
+    clearTimeout(sel[0]._rotTimer);
+    sel[0]._rotTimer = setTimeout(() => { sel[0]._rotDragging = false; }, 300);
+  }
+  scheduleAutoSave();
+}
+function resetRotation() {
+  const sel = getSelectedItems();
+  if (!sel.length) return;
+  pushUndo();
+  sel.forEach(i => { i.rot = 0; updateItemStyle(i); });
+  syncRotationUI(0);
   scheduleAutoSave();
 }
 function flipH() { pushUndo(); getSelectedItems().forEach(i => { i.flipH = !i.flipH; updateItemStyle(i); }); scheduleAutoSave(); }
@@ -30197,6 +30227,10 @@ document.addEventListener('mouseup', e => {
     // Sync filter/overlay/mask (skipped during lightweight drag) — one final full pass
     if (state.dragging.type === 'rotate' && state.dragging.item) {
       updateItemStyle(state.dragging.item);
+      // v7.24.0: the rotate handle writes item.rot directly and never told
+      // the properties panel, so the Rotate row kept showing the angle from
+      // before the drag. Sync both controls now that the drag is over.
+      syncRotationUI(state.dragging.item.rot);
     }
     document.body.classList.remove('is-dragging');
     state.dragging = null;

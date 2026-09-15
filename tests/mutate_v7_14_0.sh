@@ -46,7 +46,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.23.0 suite (collapsible toolbar)"
+print "mutation check: v7.24.0 suite (collapsible toolbar)"
 
 # ── the collapsed state ─────────────────────────────────────────────────
 

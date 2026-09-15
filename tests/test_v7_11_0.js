@@ -331,8 +331,8 @@ section(function () {
   const api = build(env, { x: 0, y: 0, w: 150, h: 75 });
   api.applyCrop();
   // v7.10.1 gave sw = round(150 * 600/300) = 300, sh = round(75 * 300/150) = 150.
-  near(env.item.natW, 300, 'plain crop: output width is the v7.23.0 number (unchanged)', 1);
-  near(env.item.natH, 150, 'plain crop: output height is the v7.23.0 number (unchanged)', 1);
+  near(env.item.natW, 300, 'plain crop: output width is the v7.24.0 number (unchanged)', 1);
+  near(env.item.natH, 150, 'plain crop: output height is the v7.24.0 number (unchanged)', 1);
   // Round trip: the four corners of the captured pixels are the four corners
   // of the box the user drew.
   const s0 = oracleSourceToScreen(c, 0, 0);

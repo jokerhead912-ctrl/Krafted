@@ -245,7 +245,7 @@ const THREE = function (sel) { return { items: [CLIP_A, CLIP_B, IMG], selected: 
 const selOf = function (sel) { const r = world({ state: THREE(sel) }).videoAnnoGetSelected(); return r ? r.id : undefined; };
 eq(selOf(['a']), 'a', 'one video selected -> that one');
 eq(selOf(['a', 'img']), 'a',
-  'a video + an image selected still resolves to the video (v7.23.0; used to fall through to null)');
+  'a video + an image selected still resolves to the video (v7.24.0; used to fall through to null)');
 eq(selOf(['a', 'b']), undefined, 'two videos selected is genuinely ambiguous -> null');
 eq(selOf([]), undefined, 'nothing selected and two clips on the board -> null');
 
@@ -270,7 +270,7 @@ const w4 = world({ state: { items: [CLIP_A], selected: new Set(['a']) } });
 eq(w4.videoAnnoCommentTime({ time: 4, frame: 9999 }, CLIP_A), 4,
   'a stored time wins even when the frame field is nonsense');
 eq(w4.videoAnnoCommentTime({ frame: 100 }, CLIP_A), 4,
-  'a pre-v7.23.0 .kpak carrying only frame back-fills time = frame / THIS clip fps');
+  'a pre-v7.24.0 .kpak carrying only frame back-fills time = frame / THIS clip fps');
 eq(w4.videoAnnoCommentFrame({ time: 4 }, CLIP_A), 100, 'frame is derived: time x fps');
 eq(w4.videoAnnoCommentFrame({ frame: 100 }, CLIP_A), 100, 'and round-trips through the back-fill');
 eq(w4.videoAnnoCommentTime({}, CLIP_A), 0, 'neither field -> 0, not NaN');
