@@ -94,7 +94,7 @@ mutate "fps goes back to a flat 30 for every clip" \
 "  if (el && el._kraftedFps && isFinite(el._kraftedFps) && el._kraftedFps > 0) return el._kraftedFps;" \
 "  if (el && el._kraftedFps && isFinite(el._kraftedFps) && el._kraftedFps > 0) return 30;"
 
-mutate "fps comes from the board selection again (the exact v7.22.0 bug)" \
+mutate "fps comes from the board selection again (the exact v7.23.0 bug)" \
 "  return videoAnnoFpsForEl(item && item.video);" \
 "  return videoAnnoFpsForEl((getSelectedImages()[0] || {}).video);"
 
@@ -227,7 +227,7 @@ mutate "the displayed frame stops being derived from time" \
 "  return Math.max(0, Math.round(videoAnnoCommentTime(c, item) * videoAnnoFpsFor(item)));" \
 "  return Math.max(0, Math.round(c.frame || 0));"
 
-mutate "jump reads c.time raw, breaking pre-v7.22.0 files" \
+mutate "jump reads c.time raw, breaking pre-v7.23.0 files" \
 "  v.currentTime = videoAnnoCommentTime(c, item);" \
 "  v.currentTime = c.time;"
 

@@ -355,13 +355,13 @@ section(function () {
 
 // ═══ 8. the version ══════════════════════════════════════════════════════
 section(function () {
-  has('<title>Krafted v7.22.0', 'the title carries the new version');
-  has("KRAFTED_VERSION = '7.22.0'", 'KRAFTED_VERSION carries the new version');
+  has('<title>Krafted v7.23.0', 'the title carries the new version');
+  has("KRAFTED_VERSION = '7.23.0'", 'KRAFTED_VERSION carries the new version');
   const swPath = process.env.KRAFTED_SW
     ? path.resolve(process.env.KRAFTED_SW)
     : path.join(ROOT, 'Krafted', 'docs', 'sw.js');
   const sw = fs.readFileSync(swPath, 'utf8');
-  ok(sw.indexOf('7.22.0') >= 0, 'the service worker carries the new version');
+  ok(sw.indexOf('7.23.0') >= 0, 'the service worker carries the new version');
 });
 
 // ═══ report ══════════════════════════════════════════════════════════════
