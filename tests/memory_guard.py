@@ -49,7 +49,7 @@ memory_guard.py — 睇住 .workbuddy/memory/ 嘅体积同索引完整性。
   python3 Krafted/tests/memory_guard.py             # 超预算 exit 1
   python3 Krafted/tests/memory_guard.py --strict    # 日誌债都当致命
   python3 Krafted/tests/memory_guard.py --snapshot  # 先备份去 backups/，再检查
-  python3 Krafted/tests/memory_guard.py --prune     # 人手轮替旧备份（会真删）
+  python3 Krafted/tests/memory_guard.py --prune     # 人手轮替旧备份（推落 ~/.Trash，可还原）
   python3 Krafted/tests/memory_guard.py --from=2026-08-31  # 用指针规则审旧日誌
 
 点解要 --snapshot
@@ -108,6 +108,9 @@ def snapshot(workspace):
     网报 NOT GREEN。而闸门係拦 process，try/except 捉唔到。
     所以：snapshot 只写、只 warn；真要删就人手跑 `--prune`（嗰阵你會喺度，
     可以自己 confirm）。
+
+    2026-09-15 补：即係「N snapshot(s) over the keep budget」係**常态噪音**，唔係
+    故障 —— 每跑一次 run_all 就 +1。唔使日日 prune，一轮 release 完先做一次。
     """
     backups = os.path.join(workspace, 'backups')
     os.makedirs(backups, exist_ok=True)
@@ -119,19 +122,44 @@ def snapshot(workspace):
     print('memory_guard: snapshot -> backups/%s' % os.path.basename(dest))
     if over:
         print('memory_guard: %d snapshot(s) over the keep budget (%d) - '
-              'run `python3 Krafted/tests/memory_guard.py --prune` to drop '
-              'the oldest (bulk delete, needs your confirmation)'
+              'run `python3 Krafted/tests/memory_guard.py --prune` to move '
+              'the oldest to ~/.Trash (reversible, no bulk delete)'
               % (over, SNAPSHOT_KEEP))
     return dest
 
 
+PRUNE_TRASH = os.path.expanduser('~/.Trash')
+
+
 def prune_snapshots(workspace):
-    """人手轮替：净留最近 SNAPSHOT_KEEP 份。会真删，所以要人手跑。"""
+    """人手轮替：净留最近 SNAPSHOT_KEEP 份。
+
+    2026-09-15：**唔再用 shutil.rmtree。** 删 4 份 = 74 个 file，过咗环境嗰条
+    bulk-delete 闸门（>50 file 要人手确认）→ 个 process 直接 hang 住、冇 output
+    （2026-09-15 实录：条命令跑咗一阵乜都冇印）。而 `mv` 唔算 delete，唔会触发个闸。
+    所以改推落 ~/.Trash/memory-snapshots-<时间戳>/ —— 可还原，亦合「清理一律 mv
+    去 Trash、唔准 rm -rf」嗰条。`~/.Trash` 唔存在（非 macOS）先 fallback 返 rmtree。
+    """
     backups = os.path.join(workspace, 'backups')
     old = _old_snapshots(backups)
-    for p in old[:max(0, len(old) - SNAPSHOT_KEEP)]:
-        shutil.rmtree(os.path.join(backups, p))
-        print('memory_guard: dropped backups/%s' % p)
+    doomed = old[:max(0, len(old) - SNAPSHOT_KEEP)]
+    if not doomed:
+        print('memory_guard: nothing to prune (%d <= keep %d)'
+              % (len(old), SNAPSHOT_KEEP))
+        return backups
+    if os.path.isdir(PRUNE_TRASH):
+        stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        dest = os.path.join(PRUNE_TRASH, 'memory-snapshots-' + stamp)
+        os.makedirs(dest, exist_ok=True)
+        for p in doomed:
+            shutil.move(os.path.join(backups, p), os.path.join(dest, p))
+            print('memory_guard: moved backups/%s -> ~/.Trash' % p)
+        print('memory_guard: %d snapshot(s) in %s (reversible)'
+              % (len(doomed), dest))
+    else:
+        for p in doomed:
+            shutil.rmtree(os.path.join(backups, p))
+            print('memory_guard: dropped backups/%s' % p)
     return backups
 
 
