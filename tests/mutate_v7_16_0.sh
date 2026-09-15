@@ -45,7 +45,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.20.0 suite (chip copy + recent tags)"
+print "mutation check: v7.21.0 suite (chip copy + recent tags)"
 
 # ── (1) single-click copy ────────────────────────────────────────────────
 

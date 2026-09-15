@@ -288,7 +288,7 @@ async function captureTests() {
     eq(count(trim, 'if (v._kraftedSuppressTrimLoop) return;'), 2,
        'both timeupdate and play honour the suppression flag');
 
-    const exp = slice('const v = item.video;', 'const EXPORT_SNAP_MAX_W = 1920;', 'export capture setup');
+    const exp = slice('async function videoAnnoExportComments() {', 'const EXPORT_SNAP_MAX_W = 1920;', 'export capture setup');
     ok(exp.indexOf('v._kraftedSuppressTrimLoop = true;') >= 0, 'the export suspends the trim loop');
     const after = slice('const results = [];', 'const rawFileName =', 'export capture loop');
     ok(after.indexOf('v._kraftedSuppressTrimLoop = false;') >= 0, 'the export restores the trim loop');
@@ -794,10 +794,10 @@ function versionTests() {
     ? path.resolve(process.env.KRAFTED_SW)
     : path.resolve(__dirname, '../docs/sw.js');
   const sw = fs.readFileSync(swPath, 'utf8');
-  ok(src.indexOf("var KRAFTED_VERSION = '7.20.0';") >= 0, 'KRAFTED_VERSION bumped');
-  ok(src.indexOf('<title>Krafted v7.20.0</title>') >= 0, 'title bumped');
-  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.20.0-'") >= 0, 'sw CACHE_NAME bumped');
-  ok(sw.indexOf("const APP_VERSION = '7.20.0';") >= 0, 'sw APP_VERSION bumped');
+  ok(src.indexOf("var KRAFTED_VERSION = '7.21.0';") >= 0, 'KRAFTED_VERSION bumped');
+  ok(src.indexOf('<title>Krafted v7.21.0</title>') >= 0, 'title bumped');
+  ok(sw.indexOf("const CACHE_NAME = 'krafted-v7.21.0-'") >= 0, 'sw CACHE_NAME bumped');
+  ok(sw.indexOf("const APP_VERSION = '7.21.0';") >= 0, 'sw APP_VERSION bumped');
 }
 
 (async function () {

@@ -101,7 +101,7 @@ section('S1c: the FULL style path syncs through the same helper', () => {
   const item = { id: 9, el, x: 33, y: 44, w: 200, h: 60, z: 2, opacity: 1 };
   styleApi.updateItemStyle(item);
   eq(hCont.style.left, '33px', 'full path moves the grip box via the shared helper');
-  eq(styleApi._docClassCalls.length, 1, 'the full path still re-derives doc-card classes (v7.20.0 behaviour kept)');
+  eq(styleApi._docClassCalls.length, 1, 'the full path still re-derives doc-card classes (v7.21.0 behaviour kept)');
 });
 
 section('S1d: one definition — the old hand-written copies are gone', () => {
@@ -235,7 +235,7 @@ section('S3: the canvas drag lifecycle carries the two-stage wiring', () => {
   eq(c.split("itemEl.classList.contains('text-item');").length - 1, 0,
     'the old any-text-body skip is gone');
   eq(c.split('_textEditCandidate').length - 1, 0,
-    'the micro-click edit candidate is GONE (v7.20.0: edit is double-click only)');
+    'the micro-click edit candidate is GONE (v7.21.0: edit is double-click only)');
   eq(c.split('var _etx =').length - 1, 0,
     'the move-mouseup no longer enters edit');
   eq(c.split("  e.preventDefault();\n  return false;").length - 1, 1,
@@ -252,7 +252,7 @@ section('S4: the surrounding wiring still exists', () => {
 });
 
 // ── S5: v7.18.0 doc-card behaviour not disturbed ───────────────────────────
-section('S5: v7.20.0 anchors untouched', () => {
+section('S5: v7.21.0 anchors untouched', () => {
   const c = codeOnly(src);
   eq(c.split('if (isTextItem) syncDocCardClasses(item);').length - 1, 1, 'doc-card class re-derivation still runs once per style pass');
   eq(c.split("const _tz = 1;").length - 1 >= 1, true, 'the _tz convention still exists in the full path');

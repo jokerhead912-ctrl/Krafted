@@ -328,8 +328,8 @@ eq(mod.notesExportableImages().map(i => i.id).join(','), 'left,right,below',
   // v7.13.0 changed the dialog: one textarea PER IMAGE, written back onto the
   // items. The old subtitle ("1 already carry a note") went with the old
   // one-textarea design; the new subtitle states the write-back instead.
-  hasIn(overlay.innerHTML, 'saved back onto each image', 'the dialog says typing is written back (v7.20.0)');
-  hasIn(overlay.innerHTML, 'notes-export-rows', 'there is a per-image rows host (v7.20.0)');
+  hasIn(overlay.innerHTML, 'saved back onto each image', 'the dialog says typing is written back (v7.21.0)');
+  hasIn(overlay.innerHTML, 'notes-export-rows', 'there is a per-image rows host (v7.21.0)');
   hasIn(overlay.innerHTML, 'notes-export-overall', 'it has a textarea to type in');
   hasIn(overlay.innerHTML, 'closeNotesExportDialog()', 'cancel is wired');
   hasIn(overlay.innerHTML, 'submitNotesExportDialog()', 'export is wired');

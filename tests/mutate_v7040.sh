@@ -77,7 +77,7 @@ mutate "rVFC trusted alone (no timer fallback)" \
           return;"
 
 mutate "a seek landing far away is accepted" \
-  "      if (Math.abs((v.currentTime || 0) - target) > 0.5) return;" \
+  "      if (Math.abs(actual - target) > drift) return;" \
   "      if (false) return;"
 
 mutate "export stops suspending the trim loop" \

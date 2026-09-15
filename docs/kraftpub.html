@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.20.0</title>
+<title>Krafted v7.21.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4641,7 +4641,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.20.0';
+var KRAFTED_VERSION = '7.21.0';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -13349,7 +13349,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     function _updateFrameIndicator() {
       const s = el._annoDrawState;
       if (!s) return;
-      const fps = (typeof getCurrentFps === 'function') ? getCurrentFps() : (mediaEl._kraftedFps || 30);
+      // v7.21.0: must agree with _currentFrame() — same video, same fps.
+      const fps = videoAnnoFpsForEl(mediaEl);
       const f = Math.max(0, Math.floor((mediaEl.currentTime || 0) * fps));
       fiValue.textContent = f.toString();
       // Show count of strokes on this frame
@@ -13969,7 +13970,10 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // Uses the global `getCurrentFps` (project-wide) and falls back to
     // `_kraftedFps` (set when the video is imported) or 30.
     function _currentFrame() {
-      const fps = (typeof getCurrentFps === 'function') ? getCurrentFps() : (mediaEl._kraftedFps || 30);
+      // v7.21.0: this player's video, not whatever is selected on the board.
+      // This number is the KEY strokes are filed under, so a wrong fps here
+      // scatters strokes drawn at one playhead position across several keys.
+      const fps = videoAnnoFpsForEl(mediaEl);
       return Math.max(0, Math.floor((mediaEl.currentTime || 0) * fps));
     }
     // Re-bind the flat `strokes` alias to the strokes for the current
@@ -14925,91 +14929,23 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   playerSnapBtn.addEventListener('mousedown', function(ev) { ev.stopPropagation(); ev.preventDefault(); });
   playerSnapBtn.addEventListener('click', async function(ev) {
     ev.stopPropagation(); ev.preventDefault();
+    // v7.21.0: ONE snap path. The inline loop that used to live here resolved
+    // fps from getCurrentFps() (the BOARD SELECTION, not this video) and
+    // stored `time: targetTime` while capturing whatever frame the seek
+    // actually reached — which is why the thumbnail, the jump target and the
+    // frame the user drew on could all three disagree.
     const itm = _getItem();
-    if (!itm || !itm.video) { toast('Video not ready'); return; }
-    const drawState = itm.el._annoDrawState;
-    const hasStrokes = drawState && drawState.strokesByFrame && Object.keys(drawState.strokesByFrame).some(function(f) { return (drawState.strokesByFrame[f] || []).length > 0; });
-    if (!hasStrokes) {
-      // No strokes → snap just the current frame
-      const fps = (typeof getCurrentFps === 'function') ? getCurrentFps() : (itm.video._kraftedFps || 30);
-      const frame = Math.max(0, Math.floor((itm.video.currentTime || 0) * fps));
-      var snapshot = '';
-      try { snapshot = videoAnnoCaptureSnapshot(itm.video, 0, [], itm); } catch(e) {}
-      const anno = videoAnnoEnsure(itm);
-      pushUndo();
-      anno.comments.push({
-        id: 'c-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-        frame: frame, time: itm.video.currentTime || 0, text: '',
-        translation: '', translationDir: '', createdAt: Date.now(),
-        snapshot: snapshot, annoStrokes: [],
-      });
-      anno.comments.sort(function(a,b) { return (a.frame || 0) - (b.frame || 0); });
-      scheduleAutoSave();
-      videoAnnoRefreshCommentList(itm);
-      try { toast('Snapped f ' + frame); } catch(e) {}
-      return;
-    }
-    // Has strokes → batch-capture all stroked frames (same as popover Snap)
-    const anno2 = videoAnnoEnsure(itm);
-    const fps2 = (typeof getCurrentFps === 'function') ? getCurrentFps() : (mediaEl._kraftedFps || 30);
-    const framesWithStrokes = Object.keys(drawState.strokesByFrame)
-      .map(Number)
-      .filter(function(f){ return (drawState.strokesByFrame[f] || []).length > 0; })
-      .sort(function(a,b){ return a - b; });
-    if (!framesWithStrokes.length) { toast('No strokes on any frame'); return; }
-    var existingFrames = new Set((anno2.comments || []).map(function(c){ return c.frame; }));
-    var newFrames = framesWithStrokes.filter(function(f){ return !existingFrames.has(f); });
-    if (!newFrames.length) {
-      toast('All ' + framesWithStrokes.length + ' stroked frames already have comments');
-      return;
-    }
     playerSnapBtn.style.opacity = '0.4';
-    var origTime = mediaEl.currentTime;
-    pushUndo();
-    var SNAP_W = 0, snapped = 0;   // 0 = the v7.0.34 default cap (1280)
-    for (var i = 0; i < newFrames.length; i++) {
-      var frame2 = newFrames[i];
-      var targetTime = Math.max(0, Math.min(mediaEl.duration || 0, frame2 / fps2));
-      mediaEl.currentTime = targetTime;
-      await new Promise(function(resolve){
-        function onSeeked(){
-          mediaEl.removeEventListener('seeked', onSeeked);
-          resolve();
-        }
-        mediaEl.addEventListener('seeked', onSeeked);
-        setTimeout(function(){ mediaEl.removeEventListener('seeked', onSeeked); resolve(); }, 3000);
-      });
-      var strokes2 = drawState.strokesByFrame[frame2] || [];
-      var snapshot2 = '';
-      try { snapshot2 = videoAnnoCaptureSnapshot(mediaEl, SNAP_W, strokes2, itm); } catch(e){}
-      anno2.comments.push({
-        id: 'c-' + Date.now() + '-' + Math.floor(Math.random() * 1000) + '-' + i,
-        frame: frame2, time: targetTime, text: '',
-        translation: '', translationDir: '', createdAt: Date.now(),
-        snapshot: snapshot2,
-        annoStrokes: strokes2.map(function(s){
-          return { type: s.type, color: s.color, size: s.size,
-            points: (s.points || []).map(function(p){ return [p[0], p[1]]; }),
-            text: s.text || '' };
-        }),
-      });
-      snapped++;
-      if (snapped % 5 === 0 || i === newFrames.length - 1) {
-        toast('Snapped ' + snapped + '/' + newFrames.length + ' frames…');
-      }
-    }
-    anno2.comments.sort(function(a,b){ return (a.frame || 0) - (b.frame || 0); });
-    scheduleAutoSave();
-    videoAnnoRefreshCommentList(itm);
-    mediaEl.currentTime = origTime;
+    try {
+      if (typeof videoAnnoSnapBatch === 'function') await videoAnnoSnapBatch(itm);
+      else toast('Snap unavailable');
+    } catch (e) { try { toast('Snap failed'); } catch (e2) {} }
     playerSnapBtn.style.opacity = '';
-    var skipped = framesWithStrokes.length - newFrames.length;
     // Auto-open the comment panel after player-bar Snap so the user can
-    // immediately see the new comments without clicking 💬 separately.
-    // The popover Snap button (snapBtn below) does NOT auto-open because
-    // the panel is already open when the user clicks it.
-    if (commentsFab) { commentsFab.click(); }
-    toast('Snapped ' + snapped + ' frame(s)' + (skipped ? ' (' + skipped + ' skipped)' : ''));
+    // immediately see the new comments without clicking the comments button
+    // separately. The popover Snap does NOT auto-open — the panel is already
+    // open when the user clicks it.
+    if (commentsFab) { try { commentsFab.click(); } catch (e) {} }
   });
   rightGroup.appendChild(playerSnapBtn);
   rightGroup.appendChild(mVolWrap);
@@ -15973,66 +15909,14 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
       toast('No strokes to snap — draw or type on the video first');
       return;
     }
+    // v7.21.0: ONE snap path — see the player-bar button above.
     const itm = _getItem();
-    if (!itm || !itm.video) { toast('Video not ready'); return; }
-    const anno = videoAnnoEnsure(itm);
-    const fps = (typeof getCurrentFps === 'function') ? getCurrentFps() : (mediaEl._kraftedFps || 30);
-    const framesWithStrokes = Object.keys(drawState.strokesByFrame)
-      .map(Number)
-      .filter(function(f){ return (drawState.strokesByFrame[f] || []).length > 0; })
-      .sort(function(a,b){ return a - b; });
-    if (!framesWithStrokes.length) { toast('No strokes on any frame'); return; }
-    var existingFrames = new Set((anno.comments || []).map(function(c){ return c.frame; }));
-    var newFrames = framesWithStrokes.filter(function(f){ return !existingFrames.has(f); });
-    if (!newFrames.length) {
-      toast('All ' + framesWithStrokes.length + ' stroked frames already have comments');
-      return;
-    }
     snapBtn.disabled = true;
-    var origTime = mediaEl.currentTime;
-    pushUndo();
-    var SNAP_W = 0, snapped = 0;   // 0 = the v7.0.34 default cap (1280)
-    for (var i = 0; i < newFrames.length; i++) {
-      var frame = newFrames[i];
-      var targetTime = Math.max(0, Math.min(mediaEl.duration || 0, frame / fps));
-      mediaEl.currentTime = targetTime;
-      await new Promise(function(resolve){
-        function onSeeked(){
-          mediaEl.removeEventListener('seeked', onSeeked);
-          resolve();
-        }
-        mediaEl.addEventListener('seeked', onSeeked);
-        setTimeout(function(){ mediaEl.removeEventListener('seeked', onSeeked); resolve(); }, 3000);
-      });
-      var strokes = drawState.strokesByFrame[frame] || [];
-      var snapshot = '';
-      try { snapshot = videoAnnoCaptureSnapshot(mediaEl, SNAP_W, strokes, itm); } catch(e){}
-      anno.comments.push({
-        id: 'c-' + Date.now() + '-' + Math.floor(Math.random() * 1000) + '-' + i,
-        frame: frame, time: targetTime, text: '',
-        translation: '', translationDir: '', createdAt: Date.now(),
-        snapshot: snapshot,
-        annoStrokes: strokes.map(function(s){
-          return { type: s.type, color: s.color, size: s.size,
-            points: (s.points || []).map(function(p){ return [p[0], p[1]]; }),
-            text: s.text || '' };
-        }),
-      });
-      snapped++;
-      if (snapped % 5 === 0 || i === newFrames.length - 1) {
-        toast('Snapped ' + snapped + '/' + newFrames.length + ' frames\u2026');
-      }
-    }
-    anno.comments.sort(function(a,b){ return (a.frame || 0) - (b.frame || 0); });
-    scheduleAutoSave();
-    videoAnnoRefreshCommentList(itm);
-    mediaEl.currentTime = origTime;
+    try {
+      if (typeof videoAnnoSnapBatch === 'function') await videoAnnoSnapBatch(itm);
+      else toast('Snap unavailable');
+    } catch (e) { try { toast('Snap failed'); } catch (e2) {} }
     snapBtn.disabled = false;
-    var skipped = framesWithStrokes.length - newFrames.length;
-    // The popover Snap does NOT auto-open the comment panel — it's
-    // already open (user clicked it from inside the popover). Only the
-    // player-bar Snap button (playerSnapBtn above) auto-opens.
-    toast('Snapped ' + snapped + ' frame(s)' + (skipped ? ' (' + skipped + ' already had comments, skipped)' : ''));
   });
   const addHint = document.createElement('span');
   addHint.className = 'add-hint';
@@ -16563,8 +16447,11 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     const anno = (_itm && _itm.anno) ? _itm.anno : null;
     const comments = (anno && Array.isArray(anno.comments)) ? anno.comments : [];
     listHeadCount.textContent = String(comments.length);
-    // Sort by frame ascending so the list reads in playback order
-    const sorted = comments.slice().sort((a, b) => (a.frame || 0) - (b.frame || 0));
+    // v7.21.0: order by TIME, the single truth — sorting by `frame` used to
+    // reorder the list whenever fps changed underneath the comments.
+    const sorted = comments.slice().sort(function (a, b) {
+      return videoAnnoCommentTime(a, _itm) - videoAnnoCommentTime(b, _itm);
+    });
     sorted.forEach((c) => {
       const card = _buildCommentCard(c);
       listBody.appendChild(card);
@@ -16632,7 +16519,8 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // Frame number badge overlaid on the thumbnail's bottom-left
     const thumbFrame = document.createElement('span');
     thumbFrame.className = 'thumb-frame';
-    thumbFrame.textContent = 'f ' + (c.frame || 0);
+    // v7.21.0: frame is display-only — derive it from the stored time.
+    thumbFrame.textContent = 'f ' + videoAnnoCommentFrame(c, el._item);
     thumb.appendChild(thumbFrame);
     thumb.title = 'Click to view full-size snapshot with annotations';
     // Click thumbnail → open the in-app lightbox so the user can see
@@ -16728,6 +16616,14 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     delBtn.title = 'Delete';
     delBtn.onclick = function(ev){ ev.stopPropagation(); try { if (typeof videoAnnoDeleteComment === 'function') videoAnnoDeleteComment(c.id); } catch(e){} };
     actions.appendChild(delBtn);
+    // Re-snap (v7.21.0): re-capture this comment's snapshot at its stored
+    // time. Lets the user repair one wrong frame without deleting it.
+    const resnapBtn = document.createElement('button');
+    resnapBtn.className = 'resnap';
+    resnapBtn.textContent = '↻';
+    resnapBtn.title = 'Re-snap this frame — re-capture the snapshot at this exact time';
+    resnapBtn.onclick = function(ev){ ev.stopPropagation(); try { if (typeof videoAnnoReSnapComment === 'function') videoAnnoReSnapComment(c.id); } catch(e){} };
+    actions.appendChild(resnapBtn);
     head.appendChild(actions);
     main.appendChild(head);
     // Body — show translation if available, otherwise original.
@@ -18432,17 +18328,83 @@ const videoAnno = {
 };
 
 function videoAnnoGetSelected() {
-  // Returns the currently selected video item (or null).
+  // Returns the video item the user is annotating (or null).
   // v6.7.1: if no video is selected but there's exactly one video on board,
   // auto-select it so the user doesn't have to click the player first.
+  // v7.21.0: also accept a multi-selection containing exactly one video.
+  // `sel.length === 1` used to be the only accepted shape, so "video + one
+  // image selected" fell through to the board-wide check below, which is
+  // null as soon as two or more videos live on the board. That silent null
+  // is why every comment-list button (delete / edit / jump) looked dead.
   const sel = getSelectedImages();
   if (sel.length === 1 && sel[0].isVideo) return sel[0];
+  if (sel.length > 1) {
+    const selVideos = sel.filter(function (i) { return i && i.isVideo; });
+    if (selVideos.length === 1) return selVideos[0];
+  }
   // No video selected — check if there's only one video on the board
   const allVideos = (state.items || []).filter(function(it) {
     return it.isVideo && it.video && it.el && it.el.isConnected;
   });
   if (allVideos.length === 1) return allVideos[0];
   return null;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  v7.21.0 — ONE definition each: fps / seek / snap / comment anchor
+// ══════════════════════════════════════════════════════════════════════
+//
+// The bug these replace: fps came from getCurrentFps(), which resolves
+// getSelectedImages()[0] — the BOARD SELECTION — and not the video being
+// annotated. `typeof getCurrentFps === 'function' ? getCurrentFps() : (…)`
+// therefore ALWAYS took the first branch, so the per-video fallback was dead
+// code. With two or more videos on the board, drawing and snapping could use
+// two different fps values: strokes were filed under frame = t*fpsA, Snap
+// then seeked to frame/fpsB. The further into the clip, the bigger the gap —
+// and because which video is selected changes between the two moments, the
+// error looked erratic ("時近時遠") rather than systematic.
+//
+// Time is now the single source of truth for a comment's anchor. `frame` is
+// display-only, derived from `time`. Old .kpak files that only carry `frame`
+// are back-filled on read, so nothing moves when the user later re-detects
+// or hand-cycles fps.
+
+// fps of THIS element. Never the selection.
+function videoAnnoFpsForEl(el) {
+  if (el && el._kraftedFps && isFinite(el._kraftedFps) && el._kraftedFps > 0) return el._kraftedFps;
+  return 30;
+}
+// fps of THIS item's video.
+function videoAnnoFpsFor(item) {
+  return videoAnnoFpsForEl(item && item.video);
+}
+
+// Reverse-lookup: which item owns this comment id? Needs no selection at all,
+// which is what makes the delete / edit / jump buttons work regardless of
+// what is selected on the board.
+function videoAnnoFindCommentOwner(id) {
+  const items = (typeof state !== 'undefined' && state.items) ? state.items : [];
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const cs = (it && it.anno && it.anno.comments) || null;
+    if (!cs || !cs.length) continue;
+    for (let j = 0; j < cs.length; j++) {
+      if (cs[j] && cs[j].id === id) return it;
+    }
+  }
+  return null;
+}
+
+// The anchor. time wins; frame is only used to back-fill pre-v7.21.0 files.
+function videoAnnoCommentTime(c, item) {
+  if (c && typeof c.time === 'number' && isFinite(c.time)) return c.time;
+  const fps = videoAnnoFpsFor(item);
+  if (c && typeof c.frame === 'number' && isFinite(c.frame)) return c.frame / fps;
+  return 0;
+}
+// Display-only frame number, always derived from the stored time.
+function videoAnnoCommentFrame(c, item) {
+  return Math.max(0, Math.round(videoAnnoCommentTime(c, item) * videoAnnoFpsFor(item)));
 }
 
 function videoAnnoEnsure(item) {
@@ -18477,7 +18439,8 @@ function videoAnnoGetCurrentFrame() {
   const item = videoAnnoGetSelected();
   if (!item || !item.video) return 0;
   const v = item.video;
-  const fps = (typeof getCurrentFps === 'function') ? getCurrentFps() : (v._kraftedFps || 30);
+  // v7.21.0: this video's fps, not the board selection's.
+  const fps = videoAnnoFpsFor(item);
   return Math.max(0, Math.floor((v.currentTime || 0) * fps));
 }
 
@@ -18495,7 +18458,8 @@ function videoAnnoAddComment(text, targetItem) {
     try { item.el._commitTextEditor(true); } catch(e) {}
   }
   const anno = videoAnnoEnsure(item);
-  const fps = (typeof getCurrentFps === 'function') ? getCurrentFps() : (item.video._kraftedFps || 30);
+  // v7.21.0: this video's fps, not the board selection's.
+  const fps = videoAnnoFpsFor(item);
   const frame = Math.max(0, Math.floor((item.video.currentTime || 0) * fps));
   // ── Capture a snapshot of the current video frame ──
   // The user wants each comment to travel with a small image of the
@@ -18891,25 +18855,33 @@ function _renderStrokesToCtx(ctx, strokes, cw, ch) {
 // completed AND a frame is actually available. Everything below waits for that
 // event; the timeout is a safety net for a seek that never lands.
 var VIDEO_ANNO_SEEK_TIMEOUT = 8000;
-function videoAnnoSeekAndCapture(v, c, maxW) {
+// v7.21.0: the ONE verified seek. Returns { ok, actual } where `actual` is
+// where the playhead really ended up — not where we asked it to go. Both Snap
+// implementations used to hand-roll `currentTime = t` + a bare `seeked`
+// listener, which (a) can fire before the new frame is presented, so
+// drawImage grabs the previous frame, and (b) recorded the REQUESTED time as
+// the comment's anchor while capturing the frame that was ACTUALLY reached.
+// That split is the whole "thumbnail ≠ frame" report. Now one definition:
+// race requestVideoFrameCallback against a timer (rVFC is not guaranteed on a
+// paused element), fall back to a double rAF, and refuse to settle until the
+// playhead is within `maxDrift` of the target.
+function videoAnnoSeekTo(v, target, maxDrift) {
+  const drift = (typeof maxDrift === 'number' && isFinite(maxDrift)) ? maxDrift : 0.5;
   return new Promise(function (resolve) {
-    const target = (typeof c.time === 'number' && isFinite(c.time)) ? c.time : 0;
+    if (!v) { resolve({ ok: false, actual: 0 }); return; }
     let settled = false, timer = null, rvf = null;
-    const finish = function (val) {
+    const done = function (actual, ok) {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
       try { v.removeEventListener('seeked', onSeeked); } catch (e) {}
       try { if (rvf && v.cancelVideoFrameCallback) v.cancelVideoFrameCallback(rvf); } catch (e) {}
-      resolve(val || c.snapshot || '');
+      resolve({ ok: !!ok, actual: (typeof actual === 'number' && isFinite(actual)) ? actual : (v.currentTime || 0) });
     };
-    // Run fn after the element has actually presented the post-seek frame.
-    // requestVideoFrameCallback is exact when it works, but it is not
-    // guaranteed to fire on a paused element, so it is always raced against a
-    // timer rather than trusted alone.
+    // Run fn only after the element has actually PRESENTED the post-seek frame.
     const afterFrame = function (fn) {
-      let done = false;
-      const run = function () { if (done) return; done = true; fn(); };
+      let ran = false;
+      const run = function () { if (ran) return; ran = true; fn(); };
       if (typeof v.requestVideoFrameCallback === 'function') {
         try {
           rvf = v.requestVideoFrameCallback(run);
@@ -18921,27 +18893,230 @@ function videoAnnoSeekAndCapture(v, c, maxW) {
     };
     const onSeeked = function () {
       if (settled || v.readyState < 2) return;
-      // Some codecs land a frame or two away from the requested time. Accept
-      // that — a still 40ms off is indistinguishable — but reject a seek that
-      // clearly went somewhere else, so we don't bake in the wrong frame.
-      if (Math.abs((v.currentTime || 0) - target) > 0.5) return;
-      afterFrame(function () {
-        try {
-          // Pass the comment's stored strokes so the fresh capture includes
-          // the same annotations the user drew.
-          finish(videoAnnoCaptureSnapshot(v, maxW, c.annoStrokes));
-        } catch (e) { finish(''); }
-      });
+      const actual = v.currentTime || 0;
+      // Reject a seek that has not arrived yet (or went somewhere else), so we
+      // never bake in a frame the user did not annotate.
+      if (Math.abs(actual - target) > drift) return;
+      afterFrame(function () { done(actual, true); });
     };
     try {
-      timer = setTimeout(function () { finish(''); }, VIDEO_ANNO_SEEK_TIMEOUT);
+      timer = setTimeout(function () {
+        done((typeof v.currentTime === 'number') ? v.currentTime : 0, false);
+      }, (typeof VIDEO_ANNO_SEEK_TIMEOUT === 'number') ? VIDEO_ANNO_SEEK_TIMEOUT : 8000);
       v.addEventListener('seeked', onSeeked);
       if (v.readyState >= 2 && !v.seeking && Math.abs((v.currentTime || 0) - target) < 0.02) {
         onSeeked();              // already sitting on that frame — no seek needed
       } else {
         v.currentTime = target;
       }
-    } catch (e) { finish(''); }
+    } catch (e) { done(0, false); }
+  });
+}
+
+function videoAnnoSeekAndCapture(v, c, maxW) {
+  // v7.21.0: the seek itself now lives in videoAnnoSeekTo — one definition,
+  // shared with Snap. Behaviour here is unchanged: fall back to the stored
+  // snapshot if the seek cannot be trusted.
+  const target = (typeof c.time === 'number' && isFinite(c.time)) ? c.time : 0;
+  return videoAnnoSeekTo(v, target, 0.5).then(function (r) {
+    if (!(r && r.ok)) return c.snapshot || '';
+    try {
+      // Pass the comment's stored strokes so the fresh capture includes
+      // the same annotations the user drew.
+      return videoAnnoCaptureSnapshot(v, maxW, c.annoStrokes) || c.snapshot || '';
+    } catch (e) { return c.snapshot || ''; }
+  }).catch(function () { return c.snapshot || ''; });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+//  v7.21.0 — the ONE batch Snap
+// ══════════════════════════════════════════════════════════════════════
+// Both the player-bar Snap and the popover Snap used to contain their own
+// copy of this loop, and both copies shared two defects:
+//   • fps came from the board selection (see videoAnnoFpsForEl above);
+//   • they stored `time: targetTime` — what they ASKED for — while the
+//     snapshot held whatever frame the seek actually reached, so the
+//     thumbnail, the jump target and the frame the user drew on could all
+//     three disagree.
+// One definition now. It captures at the time the video ACTUALLY reached and
+// stores that, and it reports how far the seek drifted so a bad capture is
+// visible instead of silent.
+function videoAnnoSnapBatch(item, opts) {
+  opts = opts || {};
+  const maxW = (typeof opts.maxW === 'number') ? opts.maxW : 0;
+  const nothing = { snapped: 0, skipped: 0, drift: 0, offTarget: 0 };
+  if (!item || !item.video) {
+    try { toast('Video not ready'); } catch (e) {}
+    return Promise.resolve(nothing);
+  }
+  // Commit any open text editor BEFORE we read strokesByFrame — otherwise a
+  // note typed with T is still living in the DOM editor and never gets filed
+  // under a frame key, so it never reaches the snapshot.
+  if (item.el && item.el._commitTextEditor && item.el._textEditorEl) {
+    try { item.el._commitTextEditor(true); } catch (e) {}
+  }
+  const v = item.video;
+  const fps = videoAnnoFpsFor(item);
+  const anno = videoAnnoEnsure(item);
+  const drawState = (item.el && item.el._annoDrawState) || null;
+  const strokesByFrame = (drawState && drawState.strokesByFrame) || {};
+  const framesWithStrokes = Object.keys(strokesByFrame)
+    .map(Number)
+    .filter(function (f) { return isFinite(f) && (strokesByFrame[f] || []).length > 0; })
+    .sort(function (a, b) { return a - b; });
+
+  const restore = function () {
+    v._kraftedSuppressTrimLoop = prevSuppress;
+    try { v.currentTime = origTime; } catch (e) {}
+    if (!wasPaused) { try { resumeMediaEl(v); } catch (e) {} }
+  };
+  const publish = function (msg) {
+    // v7.21.0: sort by TIME, the single truth. Sorting by `frame` used to
+    // reorder comments whenever fps changed underneath them.
+    anno.comments.sort(function (a, b) {
+      return videoAnnoCommentTime(a, item) - videoAnnoCommentTime(b, item);
+    });
+    try { scheduleAutoSave(); } catch (e) {}
+    try { videoAnnoRefreshCommentList(item); } catch (e) {}
+    if (item.el) {
+      try { if (item.el._refreshListBody) item.el._refreshListBody(); } catch (e) {}
+      try { if (item.el._refreshAnnoBadges) item.el._refreshAnnoBadges(); } catch (e) {}
+      try { if (item.el._refreshSeekMarkers) item.el._refreshSeekMarkers(); } catch (e) {}
+    }
+    try { toast(msg); } catch (e) {}
+  };
+
+  if (!framesWithStrokes.length) {
+    // Nothing drawn anywhere → snap just the frame we are parked on.
+    const t0 = (typeof v.currentTime === 'number' && isFinite(v.currentTime)) ? v.currentTime : 0;
+    try { pushUndo(); } catch (e) {}
+    videoAnnoSnapPush(anno, v, item, fps, Math.max(0, Math.floor(t0 * fps)), t0, t0, []);
+    publish('Snapped 1 frame (no strokes found)');
+    return Promise.resolve({ snapped: 1, skipped: 0, drift: 0, offTarget: 0 });
+  }
+
+  // Dedupe against comments already anchored at (approximately) that frame.
+  const existing = {};
+  (anno.comments || []).forEach(function (c) {
+    existing[videoAnnoCommentFrame(c, item)] = true;
+  });
+  const newFrames = framesWithStrokes.filter(function (f) { return !existing[f]; });
+  if (!newFrames.length) {
+    try {
+      toast('All ' + framesWithStrokes.length + ' stroked frames already have comments');
+    } catch (e) {}
+    return Promise.resolve({ snapped: 0, skipped: framesWithStrokes.length, drift: 0, offTarget: 0 });
+  }
+
+  const origTime = v.currentTime;
+  const wasPaused = v.paused;
+  const prevSuppress = v._kraftedSuppressTrimLoop;
+  // v7.0.40: a trimmed clip's timeupdate loop yanks the playhead home before
+  // `seeked` can fire, so the capture never matches its target.
+  v._kraftedSuppressTrimLoop = true;
+  try { v.pause(); } catch (e) {}
+  try { pushUndo(); } catch (e) {}
+
+  const dur = (typeof v.duration === 'number' && isFinite(v.duration) && v.duration > 0) ? v.duration : 0;
+  return (async function () {
+    let snapped = 0, maxDrift = 0, offTarget = 0;
+    for (let i = 0; i < newFrames.length; i++) {
+      const frame = newFrames[i];
+      let targetTime = frame / fps;
+      if (targetTime < 0) targetTime = 0;
+      if (dur && targetTime > dur) targetTime = dur;
+      const r = await videoAnnoSeekTo(v, targetTime, 0.5);
+      const actual = (r && typeof r.actual === 'number') ? r.actual : (v.currentTime || 0);
+      const drift = actual - targetTime;
+      if (Math.abs(drift) > maxDrift) maxDrift = Math.abs(drift);
+      if (!(r && r.ok)) offTarget++;
+      videoAnnoSnapPush(anno, v, item, fps, frame, actual, targetTime, strokesByFrame[frame] || []);
+      snapped++;
+      if (snapped % 5 === 0 || i === newFrames.length - 1) {
+        try { toast('Snapped ' + snapped + '/' + newFrames.length + ' frames…'); } catch (e) {}
+      }
+    }
+    const skipped = framesWithStrokes.length - newFrames.length;
+    let msg = 'Snapped ' + snapped + ' frame(s)' +
+      (skipped ? ' (' + skipped + ' already had comments, skipped)' : '');
+    // Report target-vs-actual instead of letting a bad capture pass silently.
+    if (offTarget) {
+      msg += ' — ' + offTarget + ' seek(s) missed by up to ' + maxDrift.toFixed(2) + 's; use ↻ to re-snap';
+    }
+    restore();
+    publish(msg);
+    return { snapped: snapped, skipped: skipped, drift: maxDrift, offTarget: offTarget };
+  })();
+}
+
+// One place that builds a snapped comment, so the no-stroke path and the
+// batch path cannot drift apart.
+function videoAnnoSnapPush(anno, v, item, fps, frame, actual, targetTime, strokes) {
+  let snapshot = '';
+  try { snapshot = videoAnnoCaptureSnapshot(v, 0, strokes, item); } catch (e) {}
+  anno.comments.push({
+    id: 'c-' + Date.now() + '-' + Math.floor(Math.random() * 1000) + '-' + (anno.comments.length || 0),
+    // time is the truth. frame is derived from it, purely for display.
+    time: actual,
+    frame: Math.max(0, Math.round(actual * fps)),
+    targetTime: targetTime,
+    snapDrift: actual - targetTime,
+    text: '',
+    translation: '', translationDir: '', createdAt: Date.now(),
+    snapshot: snapshot,
+    annoStrokes: (strokes || []).map(function (s) {
+      return { type: s.type, color: s.color, size: s.size,
+        points: (s.points || []).map(function (p) { return [p[0], p[1]]; }),
+        text: s.text || '' };
+    }),
+  });
+}
+
+// v7.21.0: re-capture ONE comment's snapshot without deleting it. Previously a
+// wrong capture could only be fixed by deleting the comment — and delete was
+// itself broken whenever two videos sat on the board.
+function videoAnnoReSnapComment(id) {
+  const item = videoAnnoFindCommentOwner(id) || videoAnnoGetSelected();
+  if (!item || !item.video) {
+    try { toast('Video not ready — open the clip this comment belongs to'); } catch (e) {}
+    return Promise.resolve(false);
+  }
+  const anno = videoAnnoEnsure(item);
+  const c = (anno.comments || []).filter(function (x) { return x && x.id === id; })[0];
+  if (!c) { try { toast('Comment not found'); } catch (e) {} return Promise.resolve(false); }
+  const v = item.video;
+  const fps = videoAnnoFpsFor(item);
+  const target = videoAnnoCommentTime(c, item);
+  const origTime = v.currentTime;
+  const wasPaused = v.paused;
+  const prevSuppress = v._kraftedSuppressTrimLoop;
+  v._kraftedSuppressTrimLoop = true;
+  try { v.pause(); } catch (e) {}
+  try { pushUndo(); } catch (e) {}
+  return videoAnnoSeekTo(v, target, 0.5).then(function (r) {
+    const actual = (r && typeof r.actual === 'number') ? r.actual : (v.currentTime || 0);
+    let snap = '';
+    try { snap = videoAnnoCaptureSnapshot(v, 0, c.annoStrokes, item); } catch (e) {}
+    if (snap) c.snapshot = snap;
+    c.time = actual;
+    c.targetTime = actual;
+    c.snapDrift = 0;
+    c.frame = Math.max(0, Math.round(actual * fps));
+    v._kraftedSuppressTrimLoop = prevSuppress;
+    try { v.currentTime = origTime; } catch (e) {}
+    if (!wasPaused) { try { resumeMediaEl(v); } catch (e) {} }
+    try { scheduleAutoSave(); } catch (e) {}
+    try { videoAnnoRefreshCommentList(item); } catch (e) {}
+    if (item.el) {
+      try { if (item.el._refreshListBody) item.el._refreshListBody(); } catch (e) {}
+      try { if (item.el._refreshAnnoBadges) item.el._refreshAnnoBadges(); } catch (e) {}
+    }
+    try {
+      toast((r && r.ok) ? ('Re-snapped f ' + c.frame)
+                        : ('Re-snap missed target by ' + Math.abs(actual - target).toFixed(2) + 's'));
+    } catch (e) {}
+    return !!(r && r.ok);
   });
 }
 
@@ -18950,7 +19125,11 @@ async function videoAnnoExportComments() {
   if (!item) { toast('Select a video first'); return; }
   if (!item.video) { toast('Video not ready yet'); return; }
   const anno = videoAnnoEnsure(item);
-  const comments = (anno.comments || []).slice().sort((a, b) => (a.frame || 0) - (b.frame || 0));
+  // v7.21.0: order by TIME, the single truth — sorting by `frame` used to
+  // reorder comments whenever fps changed underneath them.
+  const comments = (anno.comments || []).slice().sort(function (a, b) {
+    return videoAnnoCommentTime(a, item) - videoAnnoCommentTime(b, item);
+  });
   if (comments.length === 0) {
     toast('No comments to export — add at least one frame comment first');
     return;
@@ -18969,7 +19148,10 @@ async function videoAnnoExportComments() {
   // and continue. If the seek fails (video no longer loaded), we fall
   // back to the per-comment stored snapshot.
   const v = item.video;
-  const fps = (typeof getCurrentFps === 'function') ? getCurrentFps() : (v._kraftedFps || 30);
+  // v7.21.0: was getCurrentFps(), which resolves from the BOARD SELECTION —
+  // with two clips on the board the exported frame numbers came from the
+  // wrong clip. One definition: the clip's own fps.
+  const fps = videoAnnoFpsFor(item);
   const prevTime = v.currentTime;
   const wasPaused = v.paused;
   try { v.pause(); } catch (e) {}
@@ -20123,11 +20305,15 @@ function openNotesExportDialog() {
 }
 
 function videoAnnoDeleteComment(id) {
-  const item = videoAnnoGetSelected();
-  if (!item) return;
+  // v7.21.0: resolve the owning item FROM THE COMMENT ID. This used to ask
+  // videoAnnoGetSelected(), which is null whenever two or more videos sit on
+  // the board — so the button did nothing at all: no toast, no error. That
+  // silence is exactly why it read as a dead button instead of a bug.
+  const item = videoAnnoFindCommentOwner(id) || videoAnnoGetSelected();
+  if (!item) { toast('Cannot delete — select the video this comment belongs to'); return; }
   const anno = videoAnnoEnsure(item);
   const idx = anno.comments.findIndex(c => c.id === id);
-  if (idx === -1) return;
+  if (idx === -1) { toast('Comment not found on this video'); return; }
   pushUndo();
   anno.comments.splice(idx, 1);
   scheduleAutoSave();
@@ -20146,11 +20332,12 @@ function videoAnnoDeleteComment(id) {
 
 // Stage A: update an existing comment's text (used by inline edit).
 function videoAnnoUpdateComment(id, newText) {
-  const item = videoAnnoGetSelected();
-  if (!item) return;
+  // v7.21.0: same fix as delete — the comment id knows its owner.
+  const item = videoAnnoFindCommentOwner(id) || videoAnnoGetSelected();
+  if (!item) { toast('Cannot edit — select the video this comment belongs to'); return; }
   const anno = videoAnnoEnsure(item);
   const c = anno.comments.find(x => x.id === id);
-  if (!c) return;
+  if (!c) { toast('Comment not found on this video'); return; }
   const t = (newText || '').trim();
   if (!t) { toast('Comment cannot be empty'); return; }
   if (t === (c.text || '')) return;
@@ -20304,7 +20491,11 @@ async function videoAnnoSendToBoard() {
   if (!item) { toast('Select a video first'); return; }
   if (!item.video) { toast('Video not ready yet'); return; }
   const anno = videoAnnoEnsure(item);
-  const comments = (anno.comments || []).slice().sort((a, b) => (a.frame || 0) - (b.frame || 0));
+  // v7.21.0: order by TIME, the single truth — sorting by `frame` used to
+  // reorder comments whenever fps changed underneath them.
+  const comments = (anno.comments || []).slice().sort(function (a, b) {
+    return videoAnnoCommentTime(a, item) - videoAnnoCommentTime(b, item);
+  });
   if (comments.length === 0) {
     toast('No comments to send — add at least one frame comment first');
     return;
@@ -20751,16 +20942,20 @@ async function videoAnnoSendToBoard() {
 }
 
 function videoAnnoJumpToComment(id) {
-  const item = videoAnnoGetSelected();
-  if (!item || !item.video) return;
+  // v7.21.0: same fix as delete — the comment id knows its owner, so "jump"
+  // no longer depends on the board selection matching the commented clip.
+  const item = videoAnnoFindCommentOwner(id) || videoAnnoGetSelected();
+  if (!item || !item.video) { toast('Cannot jump — open the video this comment belongs to'); return; }
   const anno = videoAnnoEnsure(item);
   const c = anno.comments.find(x => x.id === id);
-  if (!c) return;
+  if (!c) { toast('Comment not found on this video'); return; }
   const v = item.video;
   // Pause + seek. Use the stored time for accuracy (frame*fps can drift due
-  // to keyframe intervals on some codecs).
+  // to keyframe intervals on some codecs). v7.21.0: read it through
+  // videoAnnoCommentTime so pre-7.21.0 files that only store `frame` still
+  // land on the right frame instead of frame 0.
   try { v.pause(); } catch (err) {}
-  v.currentTime = c.time;
+  v.currentTime = videoAnnoCommentTime(c, item);
   // Pause the playback toggle button label so it reads "▶ Play"
   const playBtn = document.getElementById('btn-video-anno-play');
   if (playBtn) playBtn.textContent = '▶ Play';
@@ -20774,7 +20969,8 @@ function videoAnnoJumpToComment(id) {
   // hover via the "↺" button. The user said "keep the chinese and remove the
   // english" — so the translation is the primary line.
   const dispText = c.translation || c.text;
-  toast('Jumped to frame ' + c.frame + ' — comment: ' + dispText);
+  // v7.21.0: frame is display-only now — derive it from the stored time.
+  toast('Jumped to frame ' + videoAnnoCommentFrame(c, item) + ' — comment: ' + dispText);
 }
 
 // ── Review Mode: J/K to jump between comments ──
@@ -20789,8 +20985,12 @@ function videoAnnoGetSortedComments(item) {
   const anno = videoAnnoEnsure(item);
   const comments = (anno && Array.isArray(anno.comments)) ? anno.comments : [];
   if (!comments.length) return null;
-  // Sort by frame ascending so J/K navigation is predictable
-  return comments.slice().sort(function(a, b) { return (a.frame || 0) - (b.frame || 0); });
+  // Sort by TIME ascending so J/K navigation is predictable — v7.21.0:
+  // `frame` is derived from time, so ordering on it re-sorts whenever fps
+  // changes underneath the comments.
+  return comments.slice().sort(function (a, b) {
+    return videoAnnoCommentTime(a, item) - videoAnnoCommentTime(b, item);
+  });
 }
 
 function videoAnnoJumpToNextComment(item) {
@@ -21639,15 +21839,20 @@ function videoAnnoRefreshCommentList(item, highlightId) {
     const badgeEl = item.el._annoCommentsHead.querySelector('.badge');
     if (badgeEl) badgeEl.textContent = String(anno.comments.length);
   }
-  // Sort: by frame (already sorted, but defensive)
-  const comments = anno.comments.slice().sort((a, b) => a.frame - b.frame);
+  // v7.21.0: sort by TIME — the single truth. Sorting by `frame` used to
+  // reorder comments whenever the clip's fps changed underneath them.
+  const comments = anno.comments.slice().sort((a, b) =>
+    videoAnnoCommentTime(a, item) - videoAnnoCommentTime(b, item));
   list.innerHTML = '';
   comments.forEach(c => {
+    // v7.21.0: frame is display-only — always derived from the stored time,
+    // so a comment never shifts when fps is re-detected or hand-cycled.
+    const _cf = videoAnnoCommentFrame(c, item);
     const wrap = document.createElement('div');
     wrap.className = 'media-anno-comment' + (highlightId && c.id === highlightId ? ' active' : '');
     wrap.setAttribute('data-anno-comment-id', c.id);
     wrap.setAttribute('data-cid', c.id);
-    wrap.setAttribute('data-cframe', String(c.frame || 0));
+    wrap.setAttribute('data-cframe', String(_cf));
     const fps = (item.video && item.video._kraftedFps) || 30;
     const tt = c.time || 0;
     const m = Math.floor(tt / 60), s = Math.floor(tt % 60);
@@ -21665,14 +21870,14 @@ function videoAnnoRefreshCommentList(item, highlightId) {
     if (c.snapshot) {
       var thumbImg = document.createElement('img');
       thumbImg.src = c.snapshot;
-      thumbImg.alt = 'Frame ' + (c.frame || 0);
+      thumbImg.alt = 'Frame ' + _cf;
       thumb.appendChild(thumbImg);
     } else {
       thumb.textContent = '—';
     }
     const thumbFrame = document.createElement('span');
     thumbFrame.className = 'thumb-frame';
-    thumbFrame.textContent = 'f ' + (c.frame || 0);
+    thumbFrame.textContent = 'f ' + _cf;
     thumb.appendChild(thumbFrame);
     thumb.title = 'Click to view full-size snapshot with annotations';
     thumb.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
@@ -21693,11 +21898,12 @@ function videoAnnoRefreshCommentList(item, highlightId) {
     const head = document.createElement('div');
     head.className = 'media-anno-comment-head';
     head.innerHTML =
-      '<span class="frame-no" title="Jump to this frame">f ' + c.frame + '</span>' +
+      '<span class="frame-no" title="Jump to this frame">f ' + _cf + '</span>' +
       '<span class="time-no" title="' + timeStr + '">' + timeStr + '</span>' +
       '<div class="actions">' +
-        '<button class="goto" title="Jump to this frame (' + c.frame + ')">▶</button>' +
+        '<button class="goto" title="Jump to this frame (' + _cf + ')">▶</button>' +
         '<button class="tr-btn" title="' + (hasTranslation ? 'Re-translate' : (/[\u4e00-\u9fff]/.test(c.text || '') ? 'Translate to English' : '翻译成中文')) + '">🌐</button>' +
+        '<button class="resnap" title="Re-snap this frame (↻) — re-capture the snapshot at this exact time">↻</button>' +
         '<button class="del" title="Delete comment">×</button>' +
       '</div>';
     head.querySelector('.frame-no').onclick = (e) => { e.stopPropagation(); videoAnnoJumpToComment(c.id); };
@@ -21705,6 +21911,12 @@ function videoAnnoRefreshCommentList(item, highlightId) {
     head.querySelector('.goto').onclick = (e) => { e.stopPropagation(); try { videoAnnoJumpToComment(c.id); } catch(e){} };
     head.querySelector('.tr-btn').onclick = (e) => { e.stopPropagation(); snapSingleTranslate(c.id); };
     head.querySelector('.del').onclick = (e) => { e.stopPropagation(); videoAnnoDeleteComment(c.id); };
+    // v7.21.0: re-capture just this comment. A bad capture used to be
+    // fixable only by deleting the comment and re-snapping the whole batch.
+    head.querySelector('.resnap').onclick = (e) => {
+      e.stopPropagation();
+      try { if (typeof videoAnnoReSnapComment === 'function') videoAnnoReSnapComment(c.id); } catch(e){}
+    };
     main.appendChild(head);
 
     const txt = document.createElement('div');
