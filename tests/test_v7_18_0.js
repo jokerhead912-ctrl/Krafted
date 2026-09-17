@@ -442,12 +442,12 @@ function makeSer() {
 
 // S13. structural pins
 {
-  ok(src.indexOf('// v7.24.0:') > 0, 'v7.24.0 provenance comments are present');
+  ok(src.indexOf('// v7.25.0:') > 0, 'v7.25.0 provenance comments are present');
   const c = codeOnly(src);
   eq(c.split("el.classList.contains('doc-card') !== wantDoc").length - 1, 1, 'syncDocCardClasses derives doc-card');
   eq(c.split('if (isTextItem) syncDocCardClasses(item);').length - 1, 1,
     'updateItemStyle re-derives the doc-card classes on every style pass');
-  eq(c.split('const _docCard = wheelDocCardTarget(e);').length - 1, 1, 'the v7.24.0 wheel gate is still there');
+  eq(c.split('const _docCard = wheelDocCardTarget(e);').length - 1, 1, 'the v7.25.0 wheel gate is still there');
   ok(src.indexOf('toggleDocCardSource(${sel[0].id})') > 0, 'the context menu offers the source toggle');
   ok(src.indexOf('Show markdown source') > 0, 'the toggle is labelled');
   eq(src.split('.text-item.doc-card.md-rendered table').length - 1, 1, 'exactly one rendered-table CSS rule');

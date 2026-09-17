@@ -378,7 +378,7 @@ function fileWith(name, text, size) {
     'the drop path creates the cards');
   // Provenance pin (ride-along with test_v7_8_0): the shipped version must
   // appear in a source comment, and version_scan rewrites this string on bump.
-  ok(src.indexOf('// v7.24.0:') > 0, 'the shipped version has provenance comments');
+  ok(src.indexOf('// v7.25.0:') > 0, 'the shipped version has provenance comments');
 }
 
 // S8. the drop path is EXECUTED, not just present. The expressions that decide
