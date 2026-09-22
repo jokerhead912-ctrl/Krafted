@@ -1,0 +1,17 @@
+{
+  "alert": 0,
+  "bytes": 2143893,
+  "console_log": 125,
+  "debugger": 0,
+  "empty_catch": 530,
+  "eval": 0,
+  "inner_html": 151,
+  "lines": 42567,
+  "loose_eq": 46,
+  "magic_timeout": 83,
+  "new_function": 0,
+  "page_node_id": 0,
+  "todo_marker": 1,
+  "var_decl": 1539,
+  "vendored_lines": 86
+}

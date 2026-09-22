@@ -223,6 +223,26 @@ if [ "$ONLY" = "all" ] || [ "$ONLY" = "--suites" ]; then
   print ""
 fi
 
+# ── mechanical review gate (ratchet) ─────────────────────────────────────
+# WHY A RATCHET AND NOT A LINT
+#   The app already carries 559 empty `catch {}` blocks, 1,539 `var`
+#   declarations and 46 loose `==`. A lint that failed on those would be red
+#   forever — and a permanently-red gate is ignored inside a week, which makes
+#   it worse than no gate (病根③ runs both ways). So: freeze the numbers in
+#   review_baseline.json and fail only when one of them goes UP. Cleaning an
+#   existing smell lowers the number; `review_lint.py --update-baseline` then
+#   locks the win in permanently.
+#   Hard rules are different: debugger / eval / new Function /
+#   data-page-node-id / alert are always zero and never need a baseline.
+#   The gate was proven to go red before it was wired in (2026-09-22): a copy
+#   with 3 var + 2 empty catch + debugger + eval injected returned exit 1.
+if [ "$ONLY" = "all" ] || [ "$ONLY" = "--suites" ]; then
+  print "── REVIEW GATE (RATCHET) ──────────────────────────────"
+  $PY Krafted/tests/review_lint.py
+  RLC=$?
+  print ""
+fi
+
 # ── memory budgets ────────────────────────────────────────────────────────
 # WHY: MEMORY.md 係唯一会自动注入嘅记忆档。佢一胀大，注入嘅就会变成一份旧快照
 # （或者被截断）—— 无论边个，结果都係**当下嘅规则冇入到 context**，而且系静默嘅：
@@ -248,7 +268,7 @@ print "mutations   $MUT_OK clean, $MUT_BAD with problems"
 print "            $TOTAL_SKIPS skipped anchor(s), $TOTAL_NOTCAUGHT not caught"
 
 if [ "$FAIL" -eq 0 ] && [ "$MUT_BAD" -eq 0 ] && [ "${VRC:-0}" -eq 0 ] \
-   && [ "${MRC:-0}" -eq 0 ]; then
+   && [ "${MRC:-0}" -eq 0 ] && [ "${RLC:-0}" -eq 0 ]; then
   print ""
   # A skipped smoke test must not read as an unqualified ALL GREEN. It is
   # the only check that follows a drop through a real browser, so "green"
