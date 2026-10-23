@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.25.2</title>
+<title>Krafted v7.25.3</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3872,6 +3872,41 @@ body.screen-share-mode #ss-fps {
 .bt-select-edge.s { bottom:-3px; }
 body.is-dragging #text-quick-bar { visibility:hidden !important; }
 
+/* ── v7.25.3: drop every backdrop-filter while a video is decoding ──
+   HONEST LEDGER -- the first version of this comment quoted a number that did
+   not survive a second run, so here is what is actually established:
+     * Isolated (tests/diag_backdrop_cost_v7_25_3.js): a 900x600
+       blur(20px) saturate(180%) panel over a canvas that repaints every
+       frame, 3 reps in both orders -> -0.1% fps. Inside the noise floor.
+     * With 4-10 videos decoding (tests/diag_video_budget_v7_25_3.js):
+       -0.0% / 2.8% / 0.8% fps over three runs, and dropped-frame counts with
+       no signal. Also noise.
+   So this is NOT a measured win, and anyone reading "8.5%" in an older note
+   should treat it as retracted. It is kept because the mechanism is documented
+   by the people who own the compositor -- WebKit and web.dev both describe
+   backdrop-filter as an extra rendering pass whose cost rises with area, blur
+   radius, and a backdrop that keeps changing -- and because headless Chrome on
+   this box rasterises through SwiftShader with no GPU, which is exactly the
+   configuration where a compositor-side cost would fail to appear.
+   What it buys: a full-viewport blur (the save overlay / save alarm) no longer
+   sits on top of a board that is decoding video. What it costs: glass panels
+   go flat while something plays. Reverting is deleting this one rule.
+   DRIFT GATE: tests/test_v7_25_3.js asserts every backdrop-filter selector in
+   this file is listed here. Add one, add it here too. */
+body.media-playing .media-anno-toolbar,
+body.media-playing .video-anno-lightbox,
+body.media-playing .video-anno-lightbox .lb-zoom-bar,
+body.media-playing .item.has-media .media-frame-display,
+body.media-playing #mobile-toolbar-left,
+body.media-playing #mobile-toolbar-right,
+body.media-playing #ss-banner,
+body.media-playing #ss-watermark,
+body.media-playing .krafted-save-overlay,
+body.media-playing .krafted-save-alarm {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 </style>
 
 
@@ -4641,7 +4676,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.25.2';
+var KRAFTED_VERSION = '7.25.3';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -22435,6 +22470,30 @@ if (typeof ResizeObserver !== 'undefined') {
 //   * Anything the budget pauses MUST clear it._wasPlaying, or the
 //     viewport-culling pass resurrects it on the next pan — the
 //     "press Pause All, then pan, and everything starts again" bug.
+// v7.25.3: one class on <body> means "a video is decoding right now".
+// The CSS rule at the end of <style> uses it to drop every backdrop-filter.
+// Media events do not bubble, but the CAPTURE phase still delivers them to
+// document, so this single listener catches every play/pause in the app. That
+// matters because there are five places that pause a video (user pause, the
+// LRU budget, viewport culling, Pause All, tab hide) and a per-element hook
+// would be a sixth copy of the same truth to keep in sync.
+function mediaPlayingCount() {
+  const vids = document.querySelectorAll('video');
+  let n = 0;
+  for (let i = 0; i < vids.length; i++) {
+    const v = vids[i];
+    if (!v.paused && !v.ended) n++;
+  }
+  return n;
+}
+function syncMediaPlayingClass() {
+  document.body.classList.toggle('media-playing', mediaPlayingCount() > 0);
+}
+// 'emptied' covers card deletion, 'ended' covers a clip running out.
+['play', 'playing', 'pause', 'ended', 'emptied'].forEach(function (ev) {
+  document.addEventListener(ev, syncMediaPlayingClass, true);
+});
+
 var MAX_CONCURRENT_VIDEOS = 4;
 var _mediaPlaySeq = 0;
 var _mediaPlayOrder = Object.create(null);

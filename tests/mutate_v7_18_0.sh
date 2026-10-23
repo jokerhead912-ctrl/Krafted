@@ -52,7 +52,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.25.2 suite (.md renders as markdown)"
+print "mutation check: v7.25.3 suite (.md renders as markdown)"
 
 # ── (1) which files render ────────────────────────────────────────────────
 
