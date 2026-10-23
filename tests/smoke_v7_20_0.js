@@ -63,6 +63,27 @@ function near(actual, expected, tol, label) {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Condition-based waiting instead of sleep(). See skill
+// `condition-based-waiting`. Does NOT throw: a throw aborts the run and the
+// mutation harness would read a crashed suite as FRAGILE instead of a clean
+// failure (house rule #22). Reuses the single failure writer `ok()`.
+const waitFor = async (page, fn, label, arg, timeout) => {
+  const ms = timeout || 5000;
+  try {
+    await page.waitForFunction(fn, { timeout: ms, polling: 'raf' }, arg);
+    return true;
+  } catch (e) {
+    ok(false, 'waitFor: ' + label +
+              '  (timed out after ' + ms + 'ms — the state never became true)');
+    return false;
+  }
+};
+// The one sleep that keeps its number: a drag is dispatched as three synthetic
+// mouse moves and the app applies it on the next frame, and there is no state
+// flag to wait on. That is a settle, not a guess about app logic — and it is
+// named so it cannot be mistaken for one.
+const DRAG_SETTLE_MS = 80;
+
 function serve() {
   const PY = '/Users/kincheung/.workbuddy/binaries/python/versions/3.13.12/bin/python3';
   return spawn(PY, ['-m', 'http.server', String(PORT), '--bind', '127.0.0.1', '--directory', ROOT],
@@ -119,7 +140,10 @@ async function makeCard(page) {
   await page.evaluate(() => {
     addText(300, 200, 'Organise me', { noFocus: true });
   });
-  await sleep(120);
+  // Was `await sleep(120)`. The condition: the text item exists.
+  await waitFor(page, () => typeof state !== 'undefined' && state.texts &&
+                            state.texts.length > 0,
+                'the new text card exists');
   return page.evaluate(() => {
     const tx = state.texts[state.texts.length - 1];
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
@@ -150,7 +174,7 @@ async function drag(page, fromX, fromY, toX, toY) {
   await page.mouse.move((fromX + toX) / 2, (fromY + toY) / 2);
   await page.mouse.move(toX, toY);
   await page.mouse.up();
-  await sleep(80);
+  await sleep(DRAG_SETTLE_MS);
 }
 
 async function main() {
@@ -189,7 +213,10 @@ async function main() {
     let page = await newPage(browser);
     let c0 = await makeCard(page);
     await page.mouse.click(c0.cx, c0.cy);
-    await sleep(80);
+    // Was `await sleep(80)`. The condition: the card got selected.
+    await waitFor(page, (id) => typeof state !== 'undefined' &&
+                                 state.selected && state.selected.has(id),
+                  'the single press selected the card', c0.id);
     let s = await snap(page, c0.id);
     ok(s.selected, 'a single press selects the card');
     ok(!s.editing, 'a single press does NOT put the card into edit mode');
@@ -209,10 +236,16 @@ async function main() {
     console.log('— double-click: the way into edit mode —');
     s = await snap(page, c0.id);
     await page.mouse.click(s.cx, s.cy);
-    await sleep(40);
+    // Was `await sleep(40)` then `await sleep(120)`. Both waited on real
+    // state: the re-select landing, and edit mode turning on.
+    await waitFor(page, (id) => state.selected && state.selected.has(id),
+                  'the re-select landed before the double-click', c0.id);
     await page.mouse.down({ clickCount: 2 });
     await page.mouse.up({ clickCount: 2 });
-    await sleep(120);
+    await waitFor(page, (id) => {
+      const tx = state.texts.find(t => t.id === id);
+      return !!(tx && tx.el && tx.el.classList.contains('editing'));
+    }, 'double-click put the card into edit mode', c0.id);
     s = await snap(page, c0.id);
     ok(s.editing, 'double-click puts the card into edit mode');
     ok(s.focused, 'and the body really has focus (a caret you can type at)');
@@ -237,7 +270,9 @@ async function main() {
       // the .text-handles box.
       selectOnly(tx.id);
     });
-    await sleep(120);
+    // Was `await sleep(120)`. The condition: the handles box was rebuilt.
+    await waitFor(page, (id) => !!document.querySelector('.text-handles[data-owner="' + id + '"]'),
+                  'the .text-handles box exists for the re-selected card', c0.id);
     const pre = await snap(page, c0.id);
     const corner = await page.evaluate((id) => {
       const box = document.querySelector('.text-handles[data-owner="' + id + '"]');

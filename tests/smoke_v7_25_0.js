@@ -81,6 +81,33 @@ function waitForServer(retries) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+// The ONE legitimate use of sleep() left in this file: Chrome synthesises a
+// dblclick when two clicks land within ~500ms, and .media-wrap's dblclick
+// handler requests fullscreen — a different feature that would make the
+// "second click resumes" assertion meaningless. That is a real constraint,
+// not a guess about how long the app takes, and it is NAMED so it cannot be
+// mistaken for one later. Everything else waits on a CONDITION.
+// See skill `condition-based-waiting`.
+const DBLCLICK_GUARD_MS = 900;
+
+// Condition-based waiting instead of sleep(): poll the state we actually
+// care about, and fail with a diagnostic if it never arrives.
+// Deliberately does NOT throw: a throw aborts the whole run and the mutation
+// harness reads a crashed suite as FRAGILE instead of a clean failure
+// (house rule #22 — a suite must fail cleanly). It also reuses the single
+// failure writer `ok()`, rather than hand-rolling a second one (病根①).
+const waitFor = async (page, fn, label, arg, timeout) => {
+  const ms = timeout || 5000;
+  try {
+    await page.waitForFunction(fn, { timeout: ms, polling: 'raf' }, arg);
+    return true;
+  } catch (e) {
+    ok(false, 'waitFor: ' + label +
+              '  (timed out after ' + ms + 'ms — the state never became true)');
+    return false;
+  }
+};
+
 async function main() {
   const candidates = [
     'puppeteer-core',
@@ -193,10 +220,26 @@ async function main() {
       await page.evaluate((pt) => {
         window.__card._spawnTextEditorDirect({ clientX: pt.x, clientY: pt.y, pointerId: 1 });
       }, pt);
-      await sleep(180);                       // the focus() is inside a setTimeout
+      // Was `await sleep(180)` ("the focus() is inside a setTimeout"). The
+      // condition is what we actually need: an editor exists AND owns focus —
+      // typing before that lands nowhere, and a sleep cannot say whether it
+      // happened.
+      await waitFor(page, () => {
+        const ed = document.querySelector('.media-anno-text-editor');
+        return !!(ed && document.activeElement && ed.contains(document.activeElement));
+      }, 'editor #' + i + ' exists and has focus (otherwise typing goes nowhere)');
       await page.keyboard.type('comment ' + i, { delay: 12 });
       await page.keyboard.press('Enter');
-      await sleep(200);
+      // Was `await sleep(200)`. The condition: this comment is committed, i.e.
+      // exactly i text strokes are stored.
+      await waitFor(page, (n) => {
+        const c = window.__card;
+        let t = 0;
+        Object.keys(c._annoDrawState.strokesByFrame || {}).forEach(f => {
+          (c._annoDrawState.strokesByFrame[f] || []).forEach(s => { if (s.type === 'text') t++; });
+        });
+        return t === n;
+      }, 'comment #' + i + ' committed (' + i + ' text strokes stored)', i);
       const st = await page.evaluate(() => {
         const card = window.__card;
         let texts = 0;
@@ -217,7 +260,11 @@ async function main() {
       const card = window.__card;
       const v = card._item.video;
       try { await v.play(); } catch (e) {}
-      await new Promise(r => setTimeout(r, 350));
+      // Was `await new Promise(r => setTimeout(r, 350))`. Wait for the state
+      // we care about (it is actually playing) instead of for the clock.
+      for (let k = 0; k < 60 && v.paused; k++) {
+        await new Promise(r => setTimeout(r, 25));
+      }
       const r = v.getBoundingClientRect();
       const top = document.elementFromPoint(Math.round(r.left + r.width / 2),
                                             Math.round(r.top + r.height / 2));
@@ -248,7 +295,12 @@ async function main() {
     const c1 = await centreOf();
     ok(c1.onCard, 'the point we are about to click is really on the card', c1.rect);
     await page.mouse.click(c1.x, c1.y);
-    await sleep(400);
+    // Was `await sleep(400)`. The condition IS the assertion: the click
+    // reached the clip and paused it. If the click is eaten, this times out
+    // and says so — a sleep would have left `paused` true for the wrong
+    // reason (the clip ending on its own, which is why `loop` is on).
+    await waitFor(page, () => window.__card._item.video.paused,
+                  'the click paused the clip (i.e. it really reached the video)');
     const afterClick = await page.evaluate(() => ({
       paused: window.__card._item.video.paused,
       ended: window.__card._item.video.ended,
@@ -280,11 +332,13 @@ async function main() {
     // synthesise a dblclick (the wrap's dblclick handler requests
     // fullscreen — a different feature, and it would make this assertion
     // meaningless). The point is measured fresh either way.
-    await sleep(900);
+    await sleep(DBLCLICK_GUARD_MS);   // NOT a "wait for the app" — see the constant
     const c3 = await centreOf();
     ok(c3.onCard, 'the second click is also on the card', c3.rect);
     await page.mouse.click(c3.x, c3.y);
-    await sleep(400);
+    // Was `await sleep(400)`. Wait for the resume, not for the clock.
+    await waitFor(page, () => !window.__card._item.video.paused,
+                  'the second click resumed the clip');
     const afterClick2 = await page.evaluate(() => ({
       paused: window.__card._item.video.paused,
       editors: document.querySelectorAll('.media-anno-text-editor').length,
@@ -315,9 +369,13 @@ async function main() {
                top: top ? (top.tagName + '.' + String(top.className || '').split(' ')[0]) : null,
                canvasPE: top ? getComputedStyle(top).pointerEvents : null };
     });
-    await sleep(150);
+    // Was `await sleep(150)` then `await sleep(300)`. Both waited for
+    // something real: draw-mode being on, and the editor having spawned.
+    await waitFor(page, () => window.__card.classList.contains('draw-mode'),
+                  'the card is in draw-mode before the control click');
     await page.mouse.click(negPre.x, negPre.y);
-    await sleep(300);
+    await waitFor(page, () => document.querySelectorAll('.media-anno-text-editor').length === 1,
+                  'the control click spawned an editor (so the "0 editors" above is real)');
     const neg = await page.evaluate(() => ({
       editors: document.querySelectorAll('.media-anno-text-editor').length,
       mode: window.__card._annoDrawState.mode,
@@ -328,7 +386,11 @@ async function main() {
     ok(neg.editors === 1, 'in text mode the same click DOES spawn an editor (so the check above is real)', neg.editors);
     eq(neg.mode, 'text', 'and the card really is back in text mode');
 
-    console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILURES') + ' — ' + pass + ' passed, ' + fail + ' failed');
+    // Two lines on purpose: run_all.sh greps for `[0-9]+ (passed|assertions)`
+    // to print a count, and for `ALL PASS` to decide pass/fail. The count line
+    // is printed unconditionally so it can never become a false ALL PASS.
+    console.log('\nsmoke_v7_25_0: ' + pass + ' passed, ' + fail + ' failed');
+    console.log((fail === 0 ? 'ALL PASS' : 'FAILURES') + ' — ' + pass + ' passed, ' + fail + ' failed');
     return fail === 0 ? 0 : 1;
   } finally {
     if (browser) await browser.close();
