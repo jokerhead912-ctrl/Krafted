@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.25.1</title>
+<title>Krafted v7.25.2</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4641,7 +4641,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.25.1';
+var KRAFTED_VERSION = '7.25.2';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -13890,6 +13890,20 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
     // via requestAnimationFrame while the toolbar is visible.
     let _tbRafId = 0;
     function _tbFollowLoop() {
+      // v7.25.2: this loop used to re-register itself unconditionally, so
+      // every media card ever built kept a 60 Hz callback alive for the life
+      // of the page. Measured with 12 video cards in real Chrome: 719 rAF
+      // registrations/sec while the cards were alive, and still 360/sec AFTER
+      // all 12 were deleted. The callback closes over this whole
+      // buildMediaControls scope, so the <video> and its blob could never be
+      // released. The toolbar is appended to the item
+      // (el.appendChild(annoToolbar)), so once the item leaves the DOM there
+      // is nothing left to follow: stop instead of re-registering.
+      // One rule here, rather than a cancelAnimationFrame wired into each of
+      // the three teardown paths (deleteSelected / cleanupAllItems /
+      // restoreSnapshot) — a stop that has to be added at every call site is
+      // a stop the next call site misses.
+      if (!annoToolbar || !annoToolbar.isConnected) { _tbRafId = 0; return; }
       try {
         // v5.5.9: always track position when toolbar exists, don't
         // gate on toolbar-hidden class (sandbox webview may not
