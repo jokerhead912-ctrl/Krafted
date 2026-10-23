@@ -250,6 +250,14 @@ const CORE = slice('var GEO_PROBE_UNIT = 100;', 'async function extractPolyFromI
 const FRAMING = slice('function itemHasFraming(item) {', 'function rfGuideFractions(kind) {');
 const RFSET = slice('function rfSetFrameFields(it, f) {', 'function enterReframe(');
 const CROP = slice('function applyCrop() {', '// ==== export.js ====');
+// v7.25.1: applyCrop now calls two helpers, and NEITHER is inside the slice
+// above — cropEncodeMime sits just before `function applyCrop() {` and
+// dataUrlByteLength lives thousands of lines earlier. A slice that starts at
+// the signature cannot see what is above it, so applyCrop threw
+// ReferenceError in here and every geometry assertion below silently tested
+// nothing (the item kept its pre-crop src and natW). Lift both explicitly.
+const MIMEFN = slice('function cropEncodeMime(item) {', 'function applyCrop() {');
+const LENFN = slice('function dataUrlByteLength(dataUrl) {', '// The original bytes, whatever shape');
 
 const NAMES = ['itemLocalToScreen', 'renderItemRegion', 'applyCrop', 'clearFramingStyles'];
 
@@ -279,7 +287,7 @@ function build(env, cropBox, o) {
     function () { return null; },
     function () { return false; }
   ];
-  const body = CORE + '\n' + FRAMING + '\n' + RFSET + '\n' + CROP + '\nreturn {'
+  const body = CORE + '\n' + FRAMING + '\n' + RFSET + '\n' + MIMEFN + '\n' + LENFN + '\n' + CROP + '\nreturn {'
     + NAMES.map(function (n) { return n + ': typeof ' + n + ' === "function" ? ' + n + ' : null'; }).join(', ')
     + ', _state: state, _calls: null };';
   const fn = new Function(args, body).apply(null, vals);
@@ -331,8 +339,8 @@ section(function () {
   const api = build(env, { x: 0, y: 0, w: 150, h: 75 });
   api.applyCrop();
   // v7.10.1 gave sw = round(150 * 600/300) = 300, sh = round(75 * 300/150) = 150.
-  near(env.item.natW, 300, 'plain crop: output width is the v7.25.0 number (unchanged)', 1);
-  near(env.item.natH, 150, 'plain crop: output height is the v7.25.0 number (unchanged)', 1);
+  near(env.item.natW, 300, 'plain crop: output width is the v7.25.1 number (unchanged)', 1);
+  near(env.item.natH, 150, 'plain crop: output height is the v7.25.1 number (unchanged)', 1);
   // Round trip: the four corners of the captured pixels are the four corners
   // of the box the user drew.
   const s0 = oracleSourceToScreen(c, 0, 0);

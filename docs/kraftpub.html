@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.25.0</title>
+<title>Krafted v7.25.1</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4641,7 +4641,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.25.0';
+var KRAFTED_VERSION = '7.25.1';
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -36698,6 +36698,29 @@ function exitCrop(restoreOriginal) {
   }
 }
 
+// Which format should a re-encode be written back as? A canvas can only emit
+// png / jpeg / webp, so anything else (gif, svg, avif...) has to become PNG.
+// v7.25.1: this replaces `item.src.match(/^data:([^;,]+)/)`, which could only
+// ever match an ALREADY-inlined data: URL. A file dropped from Finder carries
+// a blob: URL, so that match was always null and every crop came back as PNG
+// — a JPEG board quietly grew 5-10x and the .kpak grew with it.
+// Truth order: the imported Blob (authoritative) -> a data: URL we already
+// carry -> the file's own extension -> PNG.
+function cropEncodeMime(item) {
+  function writable(m) {
+    m = String(m || '').split(';')[0].trim().toLowerCase();
+    return (m === 'image/jpeg' || m === 'image/webp') ? m : 'image/png';
+  }
+  const sb = item && item._sourceBlob;
+  if (sb instanceof Blob && sb.type) return writable(sb.type);
+  const inline = (((item && item.src) || '').match(/^data:([^;,]+)/) || [])[1];
+  if (inline) return writable(inline);
+  const ext = String(((item && (item.filename || item.name)) || '')).split('.').pop().toLowerCase();
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'webp') return 'image/webp';
+  return 'image/png';
+}
+
 function applyCrop() {
   if (!state.cropping) return;
   const c = state.cropping;
@@ -36731,9 +36754,7 @@ function applyCrop() {
   let newSrc;
   try {
     // Preserve format where canvas can write it, otherwise fall back to PNG.
-    let mime = 'image/png';
-    const m = ((item.src || '').match(/^data:([^;,]+)/) || [])[1];
-    if (m && /^image\/(png|jpeg|webp)$/i.test(m)) mime = m;
+    const mime = cropEncodeMime(item);
     newSrc = r.canvas.toDataURL(mime, mime === 'image/jpeg' ? 0.92 : undefined);
   } catch (err) {
     console.error('Crop failed', err);
@@ -36759,6 +36780,17 @@ function applyCrop() {
   item.cropX = 0; item.cropY = 0;
   rfSetFrameFields(item, { on: false, z: 1, rot: 0, x: 0, y: 0 });
   if (item.img) item.img.src = newSrc;
+  // v7.25.1: the crop is baked, so the ORIGINAL bytes have to go with the old
+  // framing. saveBoardV6 prefers _sourceBlob over fetch(src), so leaving the
+  // pre-crop Blob here wrote the UNCROPPED picture into media/<id> — the board
+  // looked right until reload, then every crop came back.
+  item._sourceBlob = null;
+  // v7.2.1 invariant: every path that takes an item's bytes also records their
+  // size, or the save estimate falls back to 5MB per image (the "151 items ->
+  // 735MB" progress bar) and the autosave size guard goes blind. The counter
+  // is the existing dataUrlByteLength — this used to be a second hand-rolled
+  // copy of the same arithmetic.
+  item._fileSize = dataUrlByteLength(newSrc);
   // Tear down crop UI
   if (state.cropping) {
     const crop = state.cropping;
@@ -38513,9 +38545,16 @@ function buildManifest() {
       masks: (i.masks || []).map(m => ({ id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength })),
     };
     if (i.isAudio) console.log('[AUDIO SAVE] id=' + i.id + ' i.audioName="' + i.audioName + '" i.filename="' + i.filename + '" -> saved audioName="' + d.audioName + '" filename="' + d.filename + '"');
-    // For kpak: mediaRef points to the zip entry (e.g. "media/vid_123.mp4")
-    // src is kept as the current blob: URL for restoreBoard AFTER we remap it
-    d.src = i.src;
+    // For kpak the bytes live in a zip entry (media/<id>.<ext>) and the v6
+    // load pass rebuilds src from that entry BEFORE restoreBoard runs.
+    // v7.25.1: a data: URL used to be copied here as well — the SAME bytes the
+    // packer writes, carried a second time as base64 (+33%) inside
+    // manifest.json. That is how a 100MB board saved as 700MB. Every data:/
+    // blob: src is carried by the packer (blobItems filter in buildKpakV6), so
+    // this copy is dead weight; only remote / link images have no zip entry
+    // and must keep theirs. (There is no `mediaRef` field — the old comment
+    // named one that was never written.)
+    d.src = (typeof i.src === 'string' && i.src.startsWith('data:')) ? '' : i.src;
     if (i.anno) {
       d.anno = {
         comments: (i.anno.comments || []).map(c => ({
