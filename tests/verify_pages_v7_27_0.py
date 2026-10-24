@@ -48,11 +48,13 @@ BEHAVIOUR = [
     'newItem.isProxy = true;',
     "newItem.originalName = _pp.originalName || '';",
     "isProxy: n.isProxy || false, originalName: n.originalName || '', brightness:",
+]
 
 
 # 反面断言：退化形态唔可以出现。
 FORBIDDEN = [
     "const PROXY_SUFFIX = 'proxy';",   # false positives: every file looks like a proxy
+]
 
 
 
