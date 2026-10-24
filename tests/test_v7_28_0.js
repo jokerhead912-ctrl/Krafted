@@ -68,7 +68,13 @@ const CSS = slice('.item.has-media .media-info-bar .ib-type {',
 // ── sandbox: the machinery, with the few globals it touches stubbed ───────
 const api = new Function(`
   var TOASTS = [], RESUMED = [], SEL = [];
-  var URL = { createObjectURL: function (f) { return 'blob:' + (f && f.name ? f.name : '?'); } };
+  // v7.29.0: revokeObjectURL is now part of this machinery's contract
+  // (dropOriginalLink), so the stub has to offer it or the sandbox throws.
+  var REVOKED = [];
+  var URL = {
+    createObjectURL: function (f) { return 'blob:' + (f && f.name ? f.name : '?'); },
+    revokeObjectURL: function (u) { REVOKED.push(u); },
+  };
   function toast(m) { TOASTS.push(String(m)); }
   function boardTextLabel(a, b) { return a; }
   function getSelectedItems() { return SEL; }
@@ -115,6 +121,9 @@ function makeItem(id, opts) {
     isProxy: o.isProxy !== false,
     isVideo: true,
     originalName: o.originalName || '',
+    // v7.29.0: the import stamps this; a card without it is treated as "we
+    // cannot identify the original", so instant-linking must supply it.
+    originalSize: o.originalSize,
     src: 'blob:PROXY',
     el: { querySelector: () => bar },
     video: {
@@ -140,13 +149,15 @@ function makeItem(id, opts) {
     ok(head.indexOf('noteDroppedFiles(files);') < head.indexOf('imageFiles'),
        'and does it before any filtering — a paired-away original is still in `files`');
 
+    // v7.29.0: real Files carry a type; noteDroppedFiles is video-only now.
     api.noteDroppedFiles([
-      { name: 'shot01.mov' }, { name: 'shot01_proxy.mp4' },
+      { name: 'shot01.mov', type: 'video/quicktime', size: 4096 },
+      { name: 'shot01_proxy.mp4', type: 'video/mp4', size: 512 },
     ]);
   });
 
   await ablock('2. linking is instant when the original came in the same drag', async () => {
-    const it = makeItem('i2', { originalName: 'shot01.mov' });
+    const it = makeItem('i2', { originalName: 'shot01.mov', originalSize: 4096 });
     api.setPick(null);                       // no picker must be needed
     const okLink = await api.linkOriginalForItem(it);
     eq(okLink, true, 'the link resolves without a picker');
@@ -170,7 +181,7 @@ function makeItem(id, opts) {
   });
 
   await ablock('3. swap moves the live element and leaves item.src alone', async () => {
-    const it = makeItem('i5', { originalName: 'shot01.mov' });
+    const it = makeItem('i5', { originalName: 'shot01.mov', originalSize: 4096 });
     await api.linkOriginalForItem(it);
     const link = api.proxyOriginals.get('i5');
 

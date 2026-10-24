@@ -59,12 +59,13 @@ mutate "A1 the drop never records the files it was given" \
   "  ;"
 
 mutate "A2 files are filed under the wrong name" \
-  "if (f && f.name) _dropFiles.set(f.name, f);" \
-  "if (f && f.name) _dropFiles.set(f.name + '?', f);"
+  "    _dropFiles.set(f.name, f);" \
+  "    _dropFiles.set(f.name + '?', f);"
 
+# v7.29.0: the lookup now also insists the size agrees, so the anchor moved.
 mutate "A3 the same-drag lookup is gone (everyone gets a picker)" \
-  "const already = (name && _dropFiles.get(name)) || null;" \
-  "const already = null;"
+  "  const already = (remembered && want && remembered.size === want) ? remembered : null;" \
+  "  const already = null;"
 
 mutate "A4 the link has no usable URL" \
   "const url = URL.createObjectURL(file);" \

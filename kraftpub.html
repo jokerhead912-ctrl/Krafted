@@ -13128,17 +13128,44 @@ function syncProxyBadgeEl(infoBar, item) {
 // already hold its File. Remembering it by name means "Link original" is
 // instant instead of sending the user back to a file picker for a file they
 // literally just dragged in.
-const _dropFiles = new Map();          // file name -> File
+const _dropFiles = new Map();          // file name -> File (video only)
+const _DROP_FILES_MAX = 200;           // v7.29.0: FIFO cap, see noteDroppedFiles
 const proxyOriginals = new Map();      // item id   -> { name, url, file }
 
+// v7.29.0: video only, and bounded.
+// * video only -- the proxy workflow never has an image or a WAV standing in
+//   for anything, so remembering those would pin a whole PSD or a 300MB WAV
+//   in the renderer heap for the life of the session and buy nothing.
+// * bounded -- Map keeps insertion order, so evicting the oldest is a
+//   one-liner. Without a cap a day of dragging in takes grows this forever,
+//   and every entry is a handle to real bytes.
 function noteDroppedFiles(files) {
   (files || []).forEach(function (f) {
-    if (f && f.name) _dropFiles.set(f.name, f);
+    if (!f || !f.name) return;
+    if (!(f.type && f.type.indexOf('video/') === 0)) return;
+    if (_dropFiles.has(f.name)) _dropFiles.delete(f.name);  // re-drop: newest wins, and moves to the back
+    _dropFiles.set(f.name, f);
+    while (_dropFiles.size > _DROP_FILES_MAX) {
+      _dropFiles.delete(_dropFiles.keys().next().value);
+    }
   });
+}
+
+// v7.29.0: the only way out of proxyOriginals.
+// Deleting the Map entry on its own is NOT enough -- the entry owns a blob
+// URL, and an un-revoked object URL pins its Blob for the life of the
+// document. Returns true when there was something to drop.
+function dropOriginalLink(itemId) {
+  const link = proxyOriginals.get(itemId);
+  if (!link) return false;
+  proxyOriginals.delete(itemId);
+  if (link.url) URL.revokeObjectURL(link.url);
+  return true;
 }
 
 function applyOriginalLink(item, file) {
   if (!item || !file) return false;
+  dropOriginalLink(item.id);   // v7.29.0: linking twice must not leak the first URL
   const url = URL.createObjectURL(file);
   proxyOriginals.set(item.id, { name: file.name, url: url, file: file });
   if (item.el) syncProxyBadgeEl(item.el.querySelector('.media-info-bar'), item);
@@ -13147,10 +13174,19 @@ function applyOriginalLink(item, file) {
 
 // One definition of "get me the original for this card": use the file from the
 // same drop when we still have it, otherwise ask.
+//
+// v7.29.0: a name is not an identity. Two takes can both be called
+// "shot01.mov", and silently linking the wrong one is a conform that ships
+// the wrong footage -- far worse than one extra click. So the remembered
+// File also has to agree on size, and a card that never recorded a size
+// (restored from a save, or opened from a .kpak) goes to the picker instead
+// of guessing.
 function linkOriginalForItem(item) {
   if (!item || !item.isProxy) return Promise.resolve(false);
   const name = String(item.originalName || '').trim();
-  const already = (name && _dropFiles.get(name)) || null;
+  const remembered = name ? _dropFiles.get(name) : null;
+  const want = (typeof item.originalSize === 'number' && item.originalSize > 0) ? item.originalSize : 0;
+  const already = (remembered && want && remembered.size === want) ? remembered : null;
   if (already) {
     applyOriginalLink(item, already);
     return Promise.resolve(true);
@@ -27708,6 +27744,11 @@ function _handleFileDrop(e, files) {
     if (_pp && _pp.isProxy) {
       newItem.isProxy = true;
       newItem.originalName = _pp.originalName || '';
+      // v7.29.0: how big the original we just paired away was, so a later
+      // "Link original" can tell it apart from any other file with the same
+      // name. Absent is fine -- it just means we ask instead of guessing.
+      const _of = _pp.originalName ? _dropFiles.get(_pp.originalName) : null;
+      if (_of && typeof _of.size === 'number') newItem.originalSize = _of.size;
     }
     _maybeTidy(newItem.id);
     videoQueueIdx++;
@@ -33329,8 +33370,14 @@ function _resolveSnapshotMedia(src) {
 
 // Clean up video resources for a single item (pause, revoke blob URL)
 function cleanupVideoItem(item, revokeBlob) {
-  if (!item.video) return;
   if (revokeBlob === undefined) revokeBlob = true;
+  // v7.29.0: a linked original is a second blob URL this item owns, and it
+  // follows the same rule as item.src below -- released only on a real
+  // discard. cleanupAllItems() passes false in the middle of a snapshot
+  // restore, and the snapshot coming back still points at the same URL;
+  // dropping it there is what turned Delete -> Ctrl+Z into a black card.
+  if (revokeBlob && item) dropOriginalLink(item.id);
+  if (!item.video) return;
   item.video.pause();
   const vsrc = item.video.src;
   item.video.removeAttribute('src');
