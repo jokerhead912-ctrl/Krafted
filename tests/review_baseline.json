@@ -1,17 +1,17 @@
 {
   "alert": 0,
-  "bytes": 2150345,
+  "bytes": 2153751,
   "console_log": 125,
   "debugger": 0,
-  "empty_catch": 530,
+  "empty_catch": 533,
   "eval": 0,
   "inner_html": 151,
-  "lines": 42679,
+  "lines": 42741,
   "loose_eq": 46,
   "magic_timeout": 83,
   "new_function": 0,
   "page_node_id": 0,
   "todo_marker": 1,
-  "var_decl": 1539,
+  "var_decl": 1538,
   "vendored_lines": 86
 }

@@ -50,8 +50,11 @@ function slice(a, b, label) {
   if (s.length > 4000) throw new Error('slice suspiciously wide: ' + label);
   return s;
 }
+// v7.26.0 replaced `var MAX_CONCURRENT_VIDEOS = 4;` with the
+// maxConcurrentVideos() accessor, so the end anchor is the next declaration
+// after the listener block. Rule 20 holds: no version string in either anchor.
 const CODE = slice('function mediaPlayingCount() {',
-                   'var MAX_CONCURRENT_VIDEOS = 4;',
+                   'function maxConcurrentVideos() {',
                    'mediaPlayingCount + syncMediaPlayingClass + listeners');
 
 // ── 1. the drift gate: every blurred selector is covered ──────────────────

@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.25.3</title>
+<title>Krafted v7.26.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4616,6 +4616,9 @@ body.media-playing .krafted-save-alarm {
   <label id="natural-scroll-label" title="Natural scroll: flip wheel-zoom direction (Mac default). Does not affect pinch-zoom.">
     <input id="natural-scroll-checkbox" type="checkbox" checked /> 🔄 Natural scroll
   </label>
+  <label id="max-videos-label" title="How many videos may decode at the same time. Hardware decoders usually cope with 4-8; raising it past what your machine can do will stutter or crash the tab. Applies from the next play -- it does not start anything by itself.">
+    🎞 Max <input id="max-videos-input" type="number" min="1" max="12" step="1" value="6" /> playing
+  </label>
 </div>
 </div>
 
@@ -4676,7 +4679,15 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.25.3';
+var KRAFTED_VERSION = '7.26.0';
+// v7.26.0: how many videos may decode at once. This used to be a hard-coded
+// 4, but the number that works is a property of the machine (hardware
+// decoders, GPU), so it is a setting. Declared up here so both the state
+// default and maxConcurrentVideos() read the SAME number -- two copies of a
+// default is how settings drift apart.
+const DEFAULT_MAX_CONCURRENT_VIDEOS = 6;
+const MAX_CONCURRENT_VIDEOS_MIN = 1;
+const MAX_CONCURRENT_VIDEOS_MAX = 12;
 
 // ============================================================
 // FIX-v6.0.1: Defensive Wrappers — zero behavior change.
@@ -5881,6 +5892,18 @@ const state = {
   // mental model from photo editors).
   // Range: 1.01 (1% per tick, very gentle) to 1.15 (15% per tick, practical
   // cap). Default 1.10 — same magnitude as the old ±10% step.
+  // v7.26.0: cap on simultaneously decoding videos. Persisted the same way
+  // as the other settings (KraftedStorage with a localStorage mirror).
+  // Out-of-range or garbage values are clamped by maxConcurrentVideos(), so a
+  // hand-edited storage entry cannot wedge playback.
+  maxConcurrentVideos: (function() {
+    try {
+      const raw = (window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_max_videos')) || localStorage.getItem('krafted_max_videos');
+      const n = parseInt(raw, 10);
+      if (isFinite(n) && n >= MAX_CONCURRENT_VIDEOS_MIN && n <= MAX_CONCURRENT_VIDEOS_MAX) return n;
+    } catch (e) {}
+    return DEFAULT_MAX_CONCURRENT_VIDEOS;
+  })(),
   zoomStep: (function() {
     try {
       const saved = parseFloat((window.KraftedStorage && window.KraftedStorage.getItemSync('krafted_zoom_step')) || localStorage.getItem('krafted_zoom_step'));
@@ -22494,7 +22517,15 @@ function syncMediaPlayingClass() {
   document.addEventListener(ev, syncMediaPlayingClass, true);
 });
 
-var MAX_CONCURRENT_VIDEOS = 4;
+// v7.26.0: no longer a constant -- the single reader of the setting. Every
+// play/pause path asks this function instead, so there is exactly one place
+// that decides the number and one place that clamps it.
+function maxConcurrentVideos() {
+  const n = parseInt(state && state.maxConcurrentVideos, 10);
+  if (!isFinite(n)) return DEFAULT_MAX_CONCURRENT_VIDEOS;
+  return Math.max(MAX_CONCURRENT_VIDEOS_MIN,
+                  Math.min(MAX_CONCURRENT_VIDEOS_MAX, n));
+}
 var _mediaPlaySeq = 0;
 var _mediaPlayOrder = Object.create(null);
 
@@ -22523,8 +22554,8 @@ function _toastVideoBudget(n) {
   _budgetToastAt = now;
   try {
     toast(_isZhUI()
-      ? ('\u5df2\u6682\u505c ' + n + ' \u500b\u5176\u5b83\u8996\u983b\uff08\u540c\u6642\u6700\u591a ' + MAX_CONCURRENT_VIDEOS + ' \u500b\uff09')
-      : ('Paused ' + n + ' other video' + (n > 1 ? 's' : '') + ' \u2014 ' + MAX_CONCURRENT_VIDEOS + ' at a time'));
+      ? ('\u5df2\u6682\u505c ' + n + ' \u500b\u5176\u5b83\u8996\u983b\uff08\u540c\u6642\u6700\u591a ' + maxConcurrentVideos() + ' \u500b\uff09')
+      : ('Paused ' + n + ' other video' + (n > 1 ? 's' : '') + ' \u2014 ' + maxConcurrentVideos() + ' at a time'));
   } catch (e) {}
 }
 
@@ -22535,12 +22566,12 @@ function _enforceVideoBudget(keepItem) {
     var it = state.items[i];
     if (_mediaIsPlaying(it.video)) playing.push(it);
   }
-  if (playing.length <= MAX_CONCURRENT_VIDEOS) return 0;
+  if (playing.length <= maxConcurrentVideos()) return 0;
   // LRU first: lowest sequence number = started longest ago.
   playing.sort(function (a, b) {
     return (_mediaPlayOrder[a.id] || 0) - (_mediaPlayOrder[b.id] || 0);
   });
-  var need = playing.length - MAX_CONCURRENT_VIDEOS;
+  var need = playing.length - maxConcurrentVideos();
   var evicted = 0;
   for (var j = 0; j < playing.length && evicted < need; j++) {
     var victim = playing[j];
@@ -22590,7 +22621,7 @@ function playAllMedia() {
   // Limit concurrent video playback to avoid crashes with many videos.
   // Hardware decoders typically handle 4-8 concurrent, but with CSS filter applied drops to 2-3.
   // (v7.0.33: the cap used to be a local `3` here and nothing else in the
-  // app honoured it. It now lives in MAX_CONCURRENT_VIDEOS and every play
+  // app honoured it. It now lives in maxConcurrentVideos() and every play
   // path routes through playMediaEl(), so the limit is real.)
   // Pick the most-visible videos first (selected, or nearest to viewport center).
   // This way the user always sees something playing, even if they have 50 videos on the board.
@@ -22610,7 +22641,7 @@ function playAllMedia() {
   });
   let videoCount = 0;
   videos.forEach(item => {
-    if (videoCount < MAX_CONCURRENT_VIDEOS) {
+    if (videoCount < maxConcurrentVideos()) {
       playMediaEl(item.video);
       if (_mediaIsPlaying(item.video)) videoCount++;
     } else {
@@ -26294,6 +26325,37 @@ viewport.addEventListener('wheel', e => {
 // reload needed. The slider's value is initialised from the same saved
 // value (or the default 10% if nothing was saved) so the UI matches the
 // running state.
+// v7.26.0: wire the max-concurrent-videos input to state.maxConcurrentVideos.
+// Changes apply on the next play -- _enforceVideoBudget() asks
+// maxConcurrentVideos() at call time, so there is nothing to restart.
+(function _initMaxVideosWidget(){
+  {
+    const input = document.getElementById('max-videos-input');
+    if (!input) return;
+    input.value = String(state.maxConcurrentVideos);
+    input.addEventListener('change', function(ev){
+      const n = parseInt(ev.target.value, 10);
+      if (!isFinite(n)) { input.value = String(state.maxConcurrentVideos); return; }
+      const clamped = Math.max(MAX_CONCURRENT_VIDEOS_MIN,
+                               Math.min(MAX_CONCURRENT_VIDEOS_MAX, n));
+      state.maxConcurrentVideos = clamped;
+      input.value = String(clamped);
+      // One guard, not three: nothing here is worth recovering from
+      // individually, and a swallowed error per statement is how a widget
+      // ends up half-applied without saying so.
+      try {
+        localStorage.setItem('krafted_max_videos', String(clamped));
+        if (window.KraftedStorage) {
+          window.KraftedStorage.setItem('krafted_max_videos', String(clamped)).catch(function(){});
+        }
+        toast(_isZhUI()
+          ? ('\u540c\u6642\u64ad\u653e\u4e0a\u9650\u5df2\u8a2d\u70ba ' + clamped + ' \u500b')
+          : ('Up to ' + clamped + ' video' + (clamped > 1 ? 's' : '') + ' at a time'));
+      } catch (e) {}
+    });
+  }
+})();
+
 (function _initZoomStepWidget(){
   try {
     const slider = document.getElementById('zoom-step-slider');

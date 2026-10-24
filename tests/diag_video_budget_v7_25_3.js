@@ -223,6 +223,37 @@ function fmt(n, d = 2) { return Number(n).toFixed(d); }
   console.log('  resumed  -> class=' + e2e.resumeClassOn);
   console.log('  E2E ' + (e2eOk ? 'PASS' : 'FAIL'));
 
+  // ── 5. does the setting actually take effect in a real browser? ─────────
+  // test_v7_26_0.js proves the accessor clamps. This proves the number is
+  // HONOURED: drop the cap and videos must actually stop.
+  //
+  // It MUST drive playMediaEl(), not raw v.play(). The budget lives in the
+  // user-initiated play path by design (one decision, one place), so a raw
+  // v.play() loop sails straight past it -- a first version of this section
+  // did exactly that and reported 10/10 playing at every cap, which was the
+  // probe being wrong, not the app.
+  console.log('\nSETTING — maxConcurrentVideos() is honoured end to end');
+  async function capTest(n) {
+    const r = await page.evaluate(async (cap) => {
+      window.state.maxConcurrentVideos = cap;
+      const vids = [...document.querySelectorAll('video')];
+      vids.forEach(v => { v.pause(); v.muted = true; v.loop = true; });
+      await new Promise(res => setTimeout(res, 120));
+      vids.forEach(v => { if (typeof window.playMediaEl === 'function') window.playMediaEl(v); });
+      await new Promise(res => setTimeout(res, 600));
+      const playing = vids.filter(v => !v.paused && !v.ended).length;
+      return { playing: playing, total: vids.length,
+               accessor: (typeof window.maxConcurrentVideos === 'function') ? window.maxConcurrentVideos() : null };
+    }, n);
+    const expect = Math.min(n, r.total);
+    console.log('  cap=' + String(n).padStart(2) + ' -> accessor=' + r.accessor +
+                '  playing=' + r.playing + '/' + r.total +
+                '  ' + (r.playing === expect ? 'OK' : 'MISMATCH (expected ' + expect + ')'));
+    return r.playing === expect;
+  }
+  const capOk = (await capTest(3)) && (await capTest(12)) && (await capTest(6));
+  console.log('  SETTING ' + (capOk ? 'PASS' : 'FAIL'));
+
   console.log('');
   console.log('blur cost   (B vs C): ' + fmt((C.fps - B.fps) / (C.fps || 1) * 100, 1) + '% fps');
   console.log('video count (A, playing=' + A.playing + ') at ' + fmt(A.fps, 1) + ' fps');

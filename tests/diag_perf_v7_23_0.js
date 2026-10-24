@@ -230,7 +230,7 @@ function pctBar(ms, max, width = 28) {
       count: vids.length,
       playing: vids.filter(v => !v.paused && !v.ended).length,
       preload: vids.map(v => v.preload),
-      maxConcurrent: (typeof window.MAX_CONCURRENT_VIDEOS === 'number') ? window.MAX_CONCURRENT_VIDEOS : null,
+      maxConcurrent: (typeof window.maxConcurrentVideos === 'function') ? window.maxConcurrentVideos() : null,
     };
   });
   console.log('\n— video —');

@@ -184,7 +184,7 @@ has("case 'library-toggle-panel':   toggleLibraryPanel(); return true;",
     'the Library toggle is dispatched through the registry');
 
 // ═══ report ═══════════════════════════════════════════════════════
-console.log(`\ntest_v7051.js — Reference metadata + Library (v7.25.3)`);
+console.log(`\ntest_v7051.js — Reference metadata + Library (v7.26.0)`);
 console.log(`${'-'.repeat(46)}`);
 if (fails.length) {
   fails.forEach(f => console.log(`  FAIL  ${f}`));

@@ -85,7 +85,7 @@ ANCHORFAIL=0
 CAUGHT=0
 FRAGILE=0
 EQUIV=0
-print "mutation check: v7.25.3 suite (the tape waits for you)"
+print "mutation check: v7.26.0 suite (the tape waits for you)"
 
 # ── THE DEFAULT ────────────────────────────────────────────────────────
 # These four are the feature. If any survives, the tape runs away again.
@@ -352,16 +352,16 @@ mutate "an empty tape no longer says why it would not start" \
 # ── VERSION ────────────────────────────────────────────────────────────
 
 mutate "the app version does not move" \
-  "var KRAFTED_VERSION = '7.25.3';" \
-  "var KRAFTED_VERSION = '7.25.2';"
+  "var KRAFTED_VERSION = '7.26.0';" \
+  "var KRAFTED_VERSION = '7.25.3';"
 
 mutate "the title does not move" \
-  "<title>Krafted v7.25.3</title>" \
-  "<title>Krafted v7.25.2</title>"
+  "<title>Krafted v7.26.0</title>" \
+  "<title>Krafted v7.25.3</title>"
 
 mutsw "the service worker cache is not bumped" \
-  "krafted-v7.25.3-" \
-  "krafted-v7.25.2-"
+  "krafted-v7.26.0-" \
+  "krafted-v7.25.3-"
 
 print ""
 print "────────────────────────────────────────────"
