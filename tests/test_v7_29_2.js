@@ -179,8 +179,15 @@ function menuFor(cards, linkedIds) {
     const linked = menuFor([{ id: 'a' }, { id: 'b' }, { id: 'c' }], ['a', 'b', 'c']);
     ok(/Swap to original \(3\)/.test(linked), 'all linked: swap all three, and say three', linked);
 
-    const back = menuFor([{ id: 'a', _showingOriginal: true }, { id: 'b' }], ['a', 'b']);
-    ok(/Back to proxy \(2\)/.test(back), 'once one is showing the original, the entry offers the way back', back);
+    // v7.29.1: "Back to proxy" is a promise about the WHOLE selection, so it
+    // may only appear when every card is actually on the original.
+    const back = menuFor([{ id: 'a', _showingOriginal: true }, { id: 'b', _showingOriginal: true }], ['a', 'b']);
+    ok(/Back to proxy \(2\)/.test(back), 'all on the original: the entry offers the way back', back);
+
+    const halfBack = menuFor([{ id: 'a', _showingOriginal: true }, { id: 'b' }], ['a', 'b']);
+    ok(/Swap to original \(2\)/.test(halfBack),
+       'a MIXED selection must NOT promise "back to proxy" — one card is already back', halfBack);
+    ok(!/Back to proxy/.test(halfBack), 'it promises the one direction every card can actually take');
 
     const mixed = menuFor([{ id: 'a' }, { id: 'b' }], ['a']);
     ok(/Link original… \(2\)/.test(mixed),
@@ -322,6 +329,84 @@ function menuFor(cards, linkedIds) {
     api.applyOriginalLink(manual, vid('a.mov'));
     api.swapProxyMedia(manual);
     eq(manual.video._kraftedFps, 25, 'a manually set frame rate survives the swap');
+  });
+
+  await ablock('10. one click, one target — a mixed selection ends up uniform', async () => {
+    // v7.29.1: this is the case the whole group landed on. One card already
+    // on the original plus two still on the proxy used to send TWO of them
+    // forwards under a label that said "Back to proxy (3)".
+    const a = makeItem('u1'), b = makeItem('u2'), c = makeItem('u3');
+    [a, b, c].forEach(function (it) { api.applyOriginalLink(it, vid('x.mov')); });
+    api.swapProxyMedia(a);                       // a is already on the original
+    eq(a._showingOriginal, true, 'a is on the original to start with');
+    api.setSel([a, b, c]);
+
+    const html = menuFor([a, b, c], [a, b, c].map(function (i) { return i.id; }));
+    ok(/Swap to original \(3\)/.test(html), 'the label promises ONE direction for all three', html);
+
+    api.toasts.length = 0;
+    api.swapProxySelected();
+    await flush();
+    const st = [a, b, c].map(function (i) { return !!i._showingOriginal; });
+    eq(st[0] && st[1] && st[2], true, 'all three end on the original — nobody goes backwards', st);
+    ok(api.toasts.some(function (t) { return /Now showing the original \(3\)/.test(t); }),
+       'and the toast counts the whole selection, same as the label', api.toasts);
+
+    api.swapProxySelected();
+    await flush();
+    const st2 = [a, b, c].map(function (i) { return !!i._showingOriginal; });
+    eq(st2[0] || st2[1] || st2[2], false, 'and one more click takes all three back', st2);
+  });
+
+  await ablock('11. one Esc stops the whole batch', async () => {
+    api.dropFiles.clear();
+    const a = makeItem('z1'), b = makeItem('z2'), c = makeItem('z3');
+    [a, b, c].forEach(function (it, i) { it.originalName = 'missing' + i + '.mov'; });
+    api.setSel([a, b, c]);
+    api.setQueue([]);                            // every dialog gets cancelled
+    api.log.length = 0;
+    api.toasts.length = 0;
+
+    api.linkOriginalSelected();
+    await flush();
+
+    const calls = api.log.filter(function (x) { return x.indexOf('call') === 0; }).length;
+    eq(calls, 1, 'cancelling the first dialog does not open a second', api.log);
+    ok(api.toasts.some(function (t) { return /Picking original 1 of 3/.test(t); }),
+       'and the user was told which one they were on', api.toasts);
+    ok(!api.toasts.some(function (t) { return /Linked/.test(t); }),
+       'nothing is claimed as linked', api.toasts);
+  });
+
+  await ablock('12. progress stays quiet when there is nothing to sit through', async () => {
+    api.dropFiles.clear();
+    api.noteDroppedFiles([vid('a.mov', 11), vid('b.mov', 22)]);
+    const a = makeItem('w1', { originalName: 'a.mov', originalSize: 11 });
+    const b = makeItem('w2', { originalName: 'b.mov', originalSize: 22 });
+    api.setSel([a, b]);
+    api.toasts.length = 0;
+    api.linkOriginalSelected();
+    await flush();
+    ok(!api.toasts.some(function (t) { return /Picking/.test(t); }),
+       'two instant links must not flash a progress line', api.toasts);
+    ok(api.toasts.some(function (t) { return /Linked 2 originals/.test(t); }),
+       'just the result', api.toasts);
+
+    // One dialog is not a wait either — a "1 of 1" line that appears and is
+    // replaced in the same tick is a flash, not information.
+    // The stub picker hands out QUEUE[n] where n is how many dialogs it has
+    // opened in this suite, so the log has to start clean for a one-card case.
+    api.log.length = 0;
+    api.setQueue([vid('solo.mov', 33)]);
+    const s = makeItem('w9', { originalName: 'solo.mov', originalSize: 33 });
+    api.setSel([s]);
+    api.toasts.length = 0;
+    api.linkOriginalSelected();
+    await flush();
+    ok(!api.toasts.some(function (t) { return /Picking/.test(t); }),
+       'one dialog is not worth a progress line either', api.toasts);
+    ok(api.toasts.some(function (t) { return /Linked the original/.test(t); }),
+       'but its result is still reported', api.toasts);
   });
 
   block('9. one call site for the refit, in the swap', () => {

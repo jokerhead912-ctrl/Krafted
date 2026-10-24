@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.29.0</title>
+<title>Krafted v7.29.1</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4697,7 +4697,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.29.0';
+var KRAFTED_VERSION = '7.29.1';
 // v7.26.0: how many videos may decode at once. This used to be a hard-coded
 // 4, but the number that works is a property of the machine (hardware
 // decoders, GPU), so it is a setting. Declared up here so both the state
@@ -13129,7 +13129,7 @@ function syncProxyBadgeEl(infoBar, item) {
 // instant instead of sending the user back to a file picker for a file they
 // literally just dragged in.
 const _dropFiles = new Map();          // file name -> File (video only)
-const _DROP_FILES_MAX = 200;           // v7.29.0: FIFO cap, see noteDroppedFiles
+const _DROP_FILES_MAX = 600;           // v7.29.1: FIFO cap, see noteDroppedFiles
 const proxyOriginals = new Map();      // item id   -> { name, url, file }
 
 // v7.29.0: video only, and bounded.
@@ -13137,8 +13137,14 @@ const proxyOriginals = new Map();      // item id   -> { name, url, file }
 //   for anything, so remembering those would pin a whole PSD or a 300MB WAV
 //   in the renderer heap for the life of the session and buy nothing.
 // * bounded -- Map keeps insertion order, so evicting the oldest is a
-//   one-liner. Without a cap a day of dragging in takes grows this forever,
-//   and every entry is a handle to real bytes.
+//   one-liner. v7.29.1: 600, not 200. A board holds ~300 items, so 300
+//   proxies plus their 300 originals is one ordinary drag, and at 200 the
+//   first-dropped originals were evicted before their own cards could read
+//   their size -- the user had dragged the file in and was still sent to a
+//   picker for it. The cap is generous because holding a File is cheap: a
+//   File is a REFERENCE to a file on disk, not its bytes. The memory that
+//   matters is the object URL, and this pool never creates one --
+//   applyOriginalLink does, and only when a card is actually linked.
 function noteDroppedFiles(files) {
   (files || []).forEach(function (f) {
     if (!f || !f.name) return;
@@ -13165,7 +13171,7 @@ function dropOriginalLink(itemId) {
 
 function applyOriginalLink(item, file) {
   if (!item || !file) return false;
-  dropOriginalLink(item.id);   // v7.29.0: linking twice must not leak the first URL
+  dropOriginalLink(item.id);   // v7.29.1: linking twice must not leak the first URL
   const url = URL.createObjectURL(file);
   proxyOriginals.set(item.id, { name: file.name, url: url, file: file });
   if (item.el) syncProxyBadgeEl(item.el.querySelector('.media-info-bar'), item);
@@ -13181,12 +13187,22 @@ function applyOriginalLink(item, file) {
 // File also has to agree on size, and a card that never recorded a size
 // (restored from a save, or opened from a .kpak) goes to the picker instead
 // of guessing.
-function linkOriginalForItem(item) {
-  if (!item || !item.isProxy) return Promise.resolve(false);
+// v7.29.1: one definition of "do we already hold this card's original?".
+// The batch action needs it up front to PLAN (how many of these will open a
+// dialog decides both the progress line and whether a cancel stops the batch)
+// and the single-card action needs it to link. A second copy of this test is
+// exactly how a card ends up with the wrong file.
+function rememberedOriginalFor(item) {
+  if (!item) return null;
   const name = String(item.originalName || '').trim();
   const remembered = name ? _dropFiles.get(name) : null;
   const want = (typeof item.originalSize === 'number' && item.originalSize > 0) ? item.originalSize : 0;
-  const already = (remembered && want && remembered.size === want) ? remembered : null;
+  return (remembered && want && remembered.size === want) ? remembered : null;
+}
+
+function linkOriginalForItem(item) {
+  if (!item || !item.isProxy) return Promise.resolve(false);
+  const already = rememberedOriginalFor(item);
   if (already) {
     applyOriginalLink(item, already);
     return Promise.resolve(true);
@@ -13336,18 +13352,37 @@ function proxyCardsInSelection() {
 function linkOriginalSelected() {
   const cards = proxyCardsInSelection();
   if (!cards.length) return;
+  // v7.29.1: plan before acting. Which of these will need a dialog decides
+  // both the progress line and whether a cancel should stop the batch.
+  const needPick = cards.filter(function (it) { return !rememberedOriginalFor(it); });
+  const showProgress = needPick.length > 1;
   // Sequentially, not Promise.all: there is exactly ONE file picker, and
   // three dialogs opened at once would each overwrite the same <input>.
-  let done = 0;
+  let done = 0, stopped = false;
   let chain = Promise.resolve();
   cards.forEach(function (item) {
     chain = chain.then(function () {
-      return linkOriginalForItem(item).then(function (ok) { if (ok) done++; });
+      if (stopped) return;
+      const slot = needPick.indexOf(item);
+      // `toast()` rewrites one element, so calling it again IS an in-place
+      // update — no separate progress API needed. Only worth it when there is
+      // more than one dialog to sit through.
+      if (showProgress && slot >= 0) {
+        toast(boardTextLabel('Picking original ' + (slot + 1) + ' of ' + needPick.length + ' — Esc to stop',
+                             '揀緊第 ' + (slot + 1) + ' / ' + needPick.length + ' 個原檔 — Esc 停'));
+      }
+      return linkOriginalForItem(item).then(function (ok) {
+        if (ok) { done++; return; }
+        // v7.29.1: a cancelled dialog means STOP ASKING, not "skip this one
+        // and open the next". Halting a batch of ten used to take ten Escs.
+        if (slot >= 0) stopped = true;
+      });
     });
   });
   chain.then(function () {
-    if (!done) return;   // every picker was cancelled: nothing happened, so say nothing
+    if (!done) return;   // nothing linked: every dialog was cancelled, so say nothing
     const all = (done === cards.length);
+    const stopNote = (!all && stopped) ? boardTextLabel(' — stopped', ' — 停咗') : '';
     // No try/catch: this runs from a click, long after init, so `toast`
     // cannot be missing — and a swallowed failure here is exactly the
     // "quietly did nothing" the whole feature is trying to avoid.
@@ -13360,7 +13395,7 @@ function linkOriginalSelected() {
       all ? (cards.length > 1
               ? ('已連上 ' + done + ' 個原檔 — 再右鍵可以切換過去')
               : '已連上原檔 — 再右鍵可以切換過去')
-          : ('已連上 ' + done + ' / ' + cards.length + ' 個 — 其餘要人手揀檔')));
+          : ('已連上 ' + done + ' / ' + cards.length + ' 個 — 其餘要人手揀檔')) + stopNote);
   });
 }
 
@@ -13372,11 +13407,22 @@ function swapProxySelected() {
   // is exactly how a conform ships with a proxy still sitting in it. Link
   // what can be linked and report the count.
   if (missing.length) { linkOriginalSelected(); return; }
+  // v7.29.1: ONE target for the whole selection, not a toggle per card. The
+  // menu shows a single label ("Back to proxy (3)"), so every card has to end
+  // up in the same state. A per-card toggle made that label true for one card
+  // and a lie for the rest: pick one card already on the original plus two
+  // still on the proxy and "Back to proxy" sent two of them to the original.
+  const toOrig = !cards.every(function (it) { return it._showingOriginal; });
   let moved = 0;
-  cards.forEach(function (it) { if (swapProxyMedia(it)) moved++; });
+  cards.forEach(function (it) {
+    if (!!it._showingOriginal === toOrig) return;   // already at the target
+    if (swapProxyMedia(it)) moved++;
+  });
   if (!moved) return;
-  const toOrig = !!cards[0]._showingOriginal;
-  const many = (cards.length > 1) ? (' (' + moved + ')') : '';
+  // The count is the whole selection, not how many moved: after a directional
+  // swap every card IS at the target, and the number has to match the label
+  // the user just clicked ("Back to proxy (3)" -> three cards are back).
+  const many = (cards.length > 1) ? (' (' + cards.length + ')') : '';
   toast(boardTextLabel((toOrig ? 'Now showing the original' : 'Back to the proxy') + many,
                        (toOrig ? '而家播原檔' : '返去播代理檔') + many));
 }
@@ -25098,10 +25144,13 @@ function showCtx(x, y) {
       // boardTextLabel on purpose.
       const _count = _proxyCards.length > 1 ? (' (' + _proxyCards.length + ')') : '';
       const _linked = _proxyCards.every(function (it) { return proxyOriginals.has(it.id); });
-      const _anyOrig = _proxyCards.some(function (it) { return it._showingOriginal; });
+      // v7.29.1: `every`, not `some`. "Back to proxy" is a promise about the
+      // whole selection; with one card on the original and two still on the
+      // proxy, `some` offered a way back that actually sent two forwards.
+      const _allOrig = _proxyCards.every(function (it) { return it._showingOriginal; });
       if (!_linked) {
         html += `<div class="ctx-item" onclick="linkOriginalSelected();hideCtx()" title="Pick the full-quality file this clip stands for. If it came in the same drag, this is instant.">🔗 Link original…${_count}</div>`;
-      } else if (_anyOrig) {
+      } else if (_allOrig) {
         html += `<div class="ctx-item" onclick="swapProxySelected();hideCtx()" title="Go back to the light proxy — faster to scrub, lighter on the machine.">⇄ Back to proxy${_count}</div>`;
       } else {
         html += `<div class="ctx-item" onclick="swapProxySelected();hideCtx()" title="Play and export the full-quality original instead. Trim and playhead are kept.">⇄ Swap to original${_count}</div>`;

@@ -221,23 +221,45 @@ function vid(name, size) { return { name: name, type: 'video/mp4', size: size ||
   });
 
   block('5. _dropFiles is bounded, and a re-drop moves to the back', () => {
+    // v7.29.1: read the cap off the source instead of hardcoding it. The
+    // number is a judgement call (raised to fit one board in a single drag),
+    // and a literal 200 would go red the day that judgement changes.
+    const CAP = parseInt((stripComments(HTML).match(/const _DROP_FILES_MAX = (\d+);/) || [])[1], 10);
+    ok(CAP >= 600, 'the cap fits a whole board in one drag (300 proxies + 300 originals)', CAP);
+
     api.dropFiles.clear();
     const many = [];
-    for (let i = 0; i < 210; i++) many.push(vid('v' + i + '.mov', 1000 + i));
+    const N = CAP + 10;
+    for (let i = 0; i < N; i++) many.push(vid('v' + i + '.mov', 1000 + i));
     api.noteDroppedFiles(many);
-    eq(api.dropFiles.size, 200, 'the registry cannot grow without limit', api.dropFiles.size);
+    eq(api.dropFiles.size, CAP, 'the registry cannot grow without limit', api.dropFiles.size);
     eq(api.dropFiles.has('v0.mov'), false, 'the oldest is evicted first (FIFO)');
-    eq(api.dropFiles.has('v209.mov'), true, 'the newest survives');
+    eq(api.dropFiles.has('v' + (N - 1) + '.mov'), true, 'the newest survives');
 
-    // After the 210-file flood the queue holds v10..v209, so v10 is the
-    // oldest. Re-dropping IT must refresh its place, or a file the user just
-    // dragged in would be the very first thing evicted.
+    // After the flood the queue holds v10..v(N-1), so v10 is the oldest.
+    // Re-dropping IT must refresh its place, or a file the user just dragged
+    // in would be the very first thing evicted.
     eq(api.dropFiles.has('v10.mov'), true, 'v10 is the oldest entry right now');
     api.noteDroppedFiles([vid('v10.mov', 1010)]);   // re-drop the oldest
     api.noteDroppedFiles([vid('vnew.mov', 7)]);     // and push one over the cap
-    eq(api.dropFiles.size, 200, 'still bounded');
+    eq(api.dropFiles.size, CAP, 'still bounded');
     eq(api.dropFiles.has('v10.mov'), true, 'a re-dropped file moves to the back of the queue');
     eq(api.dropFiles.has('v11.mov'), false, 'so the eviction takes the entry that was next in line');
+  });
+
+  block('5b. one board in one drag: 300 proxies + 300 originals all survive', () => {
+    // v7.29.1: at a cap of 200 the first-dropped originals were evicted
+    // BEFORE their own cards could read their size, so a file the user had
+    // literally just dragged in still sent them to a picker.
+    api.dropFiles.clear();
+    const many = [];
+    for (let i = 0; i < 300; i++) {
+      many.push(vid('shot' + i + '.mov', 1000 + i), vid('shot' + i + '_proxy.mp4', 10 + i));
+    }
+    api.noteDroppedFiles(many);
+    eq(api.dropFiles.size, 600, '600 files in one drag are all remembered', api.dropFiles.size);
+    eq(api.dropFiles.has('shot0.mov'), true, 'the FIRST original of the drag is still known');
+    eq(api.dropFiles.has('shot299.mov'), true, 'and so is the last');
   });
 
   await ablock('6. a remembered file must agree on size, or we ask', async () => {
@@ -292,6 +314,26 @@ function vid(name, size) { return { name: name, type: 'video/mp4', size: size ||
                     countIn(/proxyOriginals\.(set|delete|clear)\(/g, stripComments(LINK));
     eq(outside, 0, 'no other file writes or erases a link', outside);
     ok(/proxyOriginals\.get\(/.test(all), 'readers are fine, and still exist');
+  });
+
+  block('9. the "do we already hold this original?" test has one home', () => {
+    const all = stripComments(HTML);
+    // v7.29.1: the batch action needs this up front to PLAN (how many dialogs,
+    // whether a cancel stops the batch) and the single-card action needs it to
+    // link. Two copies of the same test is how a card links the wrong take.
+    eq(countIn(/function rememberedOriginalFor\(/g, all), 1,
+       'one definition', countIn(/function rememberedOriginalFor\(/g, all));
+    eq(countIn(/remembered\.size === want/g, all), 1,
+       'and the size agreement is decided in exactly one place',
+       countIn(/remembered\.size === want/g, all));
+    eq(countIn(/rememberedOriginalFor\(item\)/g, all), 2,
+       'the definition plus exactly one linker call', countIn(/rememberedOriginalFor\(item\)/g, all));
+    eq(countIn(/rememberedOriginalFor\(it\)/g, all), 1,
+       'the planner calls the same helper', countIn(/rememberedOriginalFor\(it\)/g, all));
+    // A bare pool read is only allowed where a size is STAMPED at import time
+    // (no comparison there), never where a link is made.
+    eq(countIn(/_dropFiles\.get\(/g, all), 2,
+       'the helper plus the import stamp — no third reader', countIn(/_dropFiles\.get\(/g, all));
   });
 
   console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILURES') + '  (' + pass + ' passed' +

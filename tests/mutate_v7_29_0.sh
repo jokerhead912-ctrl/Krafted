@@ -96,12 +96,25 @@ mutate "C3 a re-drop does not refresh the entry (the newest is evicted first)" \
 
 # ── group D: identity ─────────────────────────────────────────────────────
 mutate "D1 the size is ignored — any file with the same name will do" \
-  "  const already = (remembered && want && remembered.size === want) ? remembered : null;" \
-  "  const already = remembered || null;"
+  "  return (remembered && want && remembered.size === want) ? remembered : null;" \
+  "  return (remembered && want) ? remembered : null;"
 
 mutate "D2 the original's size is never recorded, so nothing can ever match" \
   "      if (_of && typeof _of.size === 'number') newItem.originalSize = _of.size;" \
   "      ;"
+
+# ── group E: v7.29.1 — one lookup, a pool big enough for one board ────────
+mutate "E1 the linker hand-rolls the lookup instead of calling the helper" \
+  "  const already = rememberedOriginalFor(item);" \
+  "  const already = _dropFiles.get(String(item.originalName || '').trim());"
+
+mutate "E2 the pool shrinks back to 200 (one board's worth does not fit)" \
+  "const _DROP_FILES_MAX = 600;" \
+  "const _DROP_FILES_MAX = 200;"
+
+mutate "E3 a re-drop keeps the OLD file (the one just dropped is ignored)" \
+  "    if (_dropFiles.has(f.name)) _dropFiles.delete(f.name);" \
+  "    if (_dropFiles.has(f.name)) return;"
 
 cp kraftpub-dev.html $TMP/mut.html
 print "MUTVERDICT $([ $NOTCAUGHT -eq 0 ] && [ $ANCHORFAIL -eq 0 ] && echo ok || echo BAD)  holes=$NOTCAUGHT skipped=$ANCHORFAIL caught=$CAUGHT fragile=$FRAGILE"

@@ -52,7 +52,7 @@ CAUGHT=0; NOTCAUGHT=0; FRAGILE=0; SKIP=0; ANCHORFAIL=0; EQUIV=0
 . Krafted/tests/mutlib.sh
 
 # ── group A: the selection ────────────────────────────────────────────────
-mutate "A1 back to first-card-only (the v7.29.0 bug)" \
+mutate "A1 back to first-card-only (the v7.29.1 bug)" \
   "    if (it && it.isProxy && it.isVideo) out.push(it);" \
   "    if (it && it.isProxy && it.isVideo && !out.length) out.push(it);"
 
@@ -70,15 +70,15 @@ mutate "B1 three dialogs opened at once against one reused picker" \
   "    chain = Promise.resolve().then(function () {"
 
 mutate "B2 the swap only moves the first card again" \
-  "  cards.forEach(function (it) { if (swapProxyMedia(it)) moved++; });" \
-  "  if (swapProxyMedia(cards[0])) moved++;"
+  "    if (swapProxyMedia(it)) moved++;" \
+  "    if (swapProxyMedia(cards[0])) moved++;"
 
 mutate "B3 an unlinked card in the selection is ignored instead of linked" \
   "  if (missing.length) { linkOriginalSelected(); return; }" \
   "  if (false) { linkOriginalSelected(); return; }"
 
 mutate "B4 the swap toast drops the count" \
-  "  const many = (cards.length > 1) ? (' (' + moved + ')') : '';" \
+  "  const many = (cards.length > 1) ? (' (' + cards.length + ')') : '';" \
   "  const many = '';"
 
 mutate "B5 a partial link claims every card was linked" \
@@ -101,6 +101,35 @@ mutate "C3 every trim is flattened to the full duration (an unset one filled in)
 mutate "C4 the stale auto-detected frame rate is kept" \
   "  if (!v._kraftedFpsManual) {" \
   "  if (false) {"
+
+# ── group D: v7.29.1 — one target, an honest label, a batch you can stop ──
+mutate "D1 the swap goes back to a per-card toggle (the v7.29.1 bug)" \
+  "    if (!!it._showingOriginal === toOrig) return;   // already at the target" \
+  "    if (false) return;"
+
+mutate "D2 the direction is picked from SOME card instead of every card" \
+  "  const toOrig = !cards.every(function (it) { return it._showingOriginal; });" \
+  "  const toOrig = !cards.some(function (it) { return it._showingOriginal; });"
+
+mutate "D3 the menu promises 'back to proxy' on a mixed selection" \
+  "      const _allOrig = _proxyCards.every(function (it) { return it._showingOriginal; });" \
+  "      const _allOrig = _proxyCards.some(function (it) { return it._showingOriginal; });"
+
+mutate "D4 the batch never says which dialog it is on" \
+  "  const showProgress = needPick.length > 1;" \
+  "  const showProgress = false;"
+
+mutate "D5 a progress line flashes for a single dialog" \
+  "  const showProgress = needPick.length > 1;" \
+  "  const showProgress = needPick.length > 0;"
+
+mutate "D6 cancelling one dialog does not stop the batch" \
+  "        if (slot >= 0) stopped = true;" \
+  "        if (false) stopped = true;"
+
+mutate "D7 the batch plans by a different rule than the linker uses" \
+  "  const needPick = cards.filter(function (it) { return !rememberedOriginalFor(it); });" \
+  "  const needPick = cards;"
 
 cp kraftpub-dev.html $TMP/mut.html
 print "MUTVERDICT $([ $NOTCAUGHT -eq 0 ] && [ $ANCHORFAIL -eq 0 ] && echo ok || echo BAD)  holes=$NOTCAUGHT skipped=$ANCHORFAIL caught=$CAUGHT fragile=$FRAGILE"
