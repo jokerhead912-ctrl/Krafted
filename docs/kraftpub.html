@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.27.0</title>
+<title>Krafted v7.27.1</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -173,6 +173,17 @@ body.is-dragging .item-handle, body.is-dragging .item-rot { display:none !import
   background: rgba(124,140,240,0.35); padding: 1px 5px; border-radius: 3px;
   line-height: 14px;
 }
+/* v7.27.1: PROXY chip — the card face is the only place the user can see a
+   clip is a stand-in. Hidden by default; syncProxyBadgeEl() puts `.has-proxy`
+   on the bar. Listed under body.capturing so it cannot bleed into a capture. */
+.item.has-media .media-info-bar .ib-proxy {
+  display: none;
+  flex-shrink: 0;
+  color: #1a1200; font-weight: 700; font-size: 9px;
+  background: #ffb020; padding: 1px 5px; border-radius: 3px;
+  line-height: 14px; margin-left: 2px;
+}
+.item.has-media .media-info-bar.has-proxy .ib-proxy { display: inline-flex; }
 .item.has-media .media-info-bar .ib-name {
   color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   min-width: 0; max-width: 180px;
@@ -3068,7 +3079,8 @@ body.presenting #minimap-panel { display:none; }
 /* Hide ALL media UI during capture — the toolbar should never bleed into the captured image */
 body.capturing #media-bar,
 body.capturing .item.has-media .media-controls,
-body.capturing .item.has-media .media-type-badge.audio-badge { display: none !important; }
+body.capturing .item.has-media .media-type-badge.audio-badge,
+body.capturing .item.has-media .media-info-bar .ib-proxy { display: none !important; }
 #media-bar .media-bar-title { font-size:11px; color:var(--text-dim); margin-right:4px; white-space:nowrap; font-family:'Inter',sans-serif; font-weight:500; }
 #media-bar button { background:var(--input-bg); border:1px solid var(--border); color:var(--text-dim); padding:5px 13px; border-radius:6px; cursor:pointer; font-size:11.5px; font-family:'Inter',sans-serif; transition:all 0.2s ease; display:flex; align-items:center; gap:4px; white-space:nowrap; font-weight:400; }
 #media-bar button:hover { background:var(--btn-hover); color:var(--text); border-color:var(--border-light); }
@@ -4679,7 +4691,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.27.0';
+var KRAFTED_VERSION = '7.27.1';
 // v7.26.0: how many videos may decode at once. This used to be a hard-coded
 // 4, but the number that works is a property of the machine (hardware
 // decoders, GPU), so it is a setting. Declared up here so both the state
@@ -13076,6 +13088,24 @@ function makeVideoElement(src, opts) {
   return v;
 }
 
+// v7.27.1: the whole PROXY chip — one definition, no state of its own.
+// Anything that needs to know whether a card is a proxy reads it off the
+// info bar's `.has-proxy` class, so there is exactly one place that can
+// disagree with item.isProxy.
+function syncProxyBadgeEl(infoBar, item) {
+  if (!infoBar) return;
+  const on = !!(item && item.isProxy);
+  const chip = infoBar.querySelector('.ib-proxy');
+  if (chip) {
+    chip.textContent = 'PROXY';
+    const orig = (item && item.originalName) ? String(item.originalName).trim() : '';
+    // An unpaired proxy is still a proxy — say so instead of showing a blank
+    // tooltip, otherwise the chip looks broken.
+    chip.title = orig ? ('Proxy for ' + orig) : 'Proxy — no original recorded';
+  }
+  infoBar.classList.toggle('has-proxy', on);
+}
+
 function buildMediaControls(el, mediaEl, isVideo, isGif) {
   el.classList.add('has-media');
   // Helper for closures inside this top-level function. `buildMediaControls`
@@ -13140,6 +13170,7 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // (Time is still shown in the controls bar, not duplicated here.)
   infoBar.innerHTML =
     '<span class="ib-type">' + (isVideo ? 'MP4' : 'GIF') + '</span>' +
+    '<span class="ib-proxy"></span>' +
     '<span class="ib-sep">&middot;</span>' +
     '<span class="ib-name"></span>' +
     '<span class="ib-sep">&middot;</span>' +
@@ -13161,6 +13192,13 @@ function buildMediaControls(el, mediaEl, isVideo, isGif) {
   // after the filename is known.
   _setFilenameBadge('');
   el._setFilenameBadge = _setFilenameBadge;
+  // v7.27.1: refresh the PROXY chip one frame from now, from HERE ONLY. A
+  // card is born through addImage(), applySnapshot() (undo / redo) or
+  // restoreBoard() (kpak load) — all three call buildMediaControls BEFORE the
+  // caller stashes `el._item`, and the drop path stamps isProxy later still.
+  // Waiting a frame covers all three; making callers do it would be the same
+  // line three times (病根①).
+  requestAnimationFrame(function () { syncProxyBadgeEl(infoBar, _getItem()); });
   // ── Comments button (Round 51: moved from video overlay to controls bar)
   // Replaces the two control-bar buttons (💬 Add + 🗨 list) the user
   // asked to remove. Used to sit on top of the video as a pill, but the
