@@ -1,8 +1,8 @@
-// Krafted v7.27.1 Service Worker
+// Krafted v7.28.0 Service Worker
 // Standalone file for PWA caching on GitHub Pages.
 
-const CACHE_NAME = 'krafted-v7.27.1-' + Date.now();
-const APP_VERSION = '7.27.1';
+const CACHE_NAME = 'krafted-v7.28.0-' + Date.now();
+const APP_VERSION = '7.28.0';
 
 const PRE_CACHE = ['./'];
 

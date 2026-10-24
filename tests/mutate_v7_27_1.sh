@@ -63,12 +63,12 @@ mutate "A2 the chip latches on and can never come off" \
   "  infoBar.classList.toggle('has-proxy', on);" \
   "  if (on) infoBar.classList.add('has-proxy');"
 
-mutate "A3 the tooltip stops naming the original" \
-  "chip.title = orig ? ('Proxy for ' + orig) : 'Proxy" \
-  "chip.title = orig ? ('Proxy for ' + orig) : ''; //"
+mutate "A3 the tooltip stops admitting there is no original" \
+  "chip.title = named ? ('Proxy for ' + named) : 'Proxy — no original recorded';" \
+  "chip.title = named ? ('Proxy for ' + named) : '';"
 
 mutate "A4 the chip has no text" \
-  "    chip.textContent = 'PROXY';" \
+  "    chip.textContent = showing ? 'ORIG' : 'PROXY';" \
   "    chip.textContent = '';"
 
 mutate "A5 an unpaired proxy reads as a real clip" \

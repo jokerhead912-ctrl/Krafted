@@ -90,8 +90,13 @@ function fakeMenu() { return { innerHTML: '', style: {}, offsetWidth: 200, offse
 function ctxFor(sel, boardItems) {
   const menu = fakeMenu();
   const body = EXTNAME + '\n' + MENU + '\n' + CTX + '\nreturn { showCtx: showCtx };';
+  // v7.28.0: showCtx() grew a proxy branch, so it now needs two more
+  // collaborators. They are stubbed FAITHFULLY rather than as no-ops —
+  // returning null here would silently skip the branch and this suite would
+  // stop executing part of the menu it is supposed to be checking.
   const api = new Function('ctxMenu', 'getSelectedItems', 'getSelectedImages', 'Platform',
-    'state', 'wheelModeLabel', 'positionCtxMenu', 'abCanOpen', body)(
+    'state', 'wheelModeLabel', 'positionCtxMenu', 'abCanOpen',
+    'proxyCardInSelection', 'proxyOriginals', body)(
     menu,
     function () { return sel; },
     function () { return sel; },
@@ -99,7 +104,15 @@ function ctxFor(sel, boardItems) {
     { items: boardItems || [], altPanEnabled: false },
     function () { return 'Auto'; },
     function () {},
-    undefined);
+    undefined,
+    function () {
+      for (var i = 0; i < sel.length; i++) {
+        var it = sel[i];
+        if (it && it.isProxy && it.isVideo) return it;
+      }
+      return null;
+    },
+    new Map());
   api.showCtx(40, 40);
   return menu.innerHTML;
 }

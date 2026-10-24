@@ -149,12 +149,15 @@ block('4. it survives a card that has no chip element', () => {
   eq(threw2, false, 'a missing bar does not throw either');
 });
 
-block('5. one definition, one call site', () => {
+block('5. one definition, one scheduled call site', () => {
   const stripped = stripComments(HTML);
   eq(countIn(/function syncProxyBadgeEl\b/g, stripped), 1,
      'exactly one definition of the chip logic');
-  eq(countIn(/syncProxyBadgeEl\(/g, stripped), 2,
-     'and exactly two references — the definition and the one call site');
+  // v7.28.0 added two more CALLERS (a link and a swap change which file is on
+  // screen), but the definition is still one and the build-time schedule is
+  // still one. What must not happen is a fourth place quietly re-deriving it.
+  eq(countIn(/syncProxyBadgeEl\(/g, stripped), 4,
+     'one definition + build schedule + link + swap — and nothing else');
 
   const head = stripComments(BUILD_HEAD);
   ok(/requestAnimationFrame\(\s*function\s*\(\)\s*\{\s*syncProxyBadgeEl\(infoBar,\s*_getItem\(\)\);\s*\}\s*\);/
@@ -203,7 +206,7 @@ block('8. 導出 — the chip cannot be baked', () => {
      capRule);
 });
 
-block('9. the pairing still reaches the item (v7.27.1 did not regress)', () => {
+block('9. the pairing still reaches the item (v7.28.0 did not regress)', () => {
   const stripped = stripComments(HTML);
   ok(/newItem\.isProxy = true;/.test(stripped), 'the drop path still stamps the item');
   ok(/newItem\.originalName = _pp\.originalName/.test(stripped), 'and records the original');

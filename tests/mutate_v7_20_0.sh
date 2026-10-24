@@ -163,7 +163,7 @@ mutate "the dblclick listener is renamed away" \
 "viewport.addEventListener('dblclick2', e => {"
 
 # ── group F: the ratchet and the affordance ────────────────────────────────
-mutate "someone re-adds the v7.27.1 micro-click edit (ratchet)" \
+mutate "someone re-adds the v7.28.0 micro-click edit (ratchet)" \
 "  e.preventDefault();
   return false;
 }" \
