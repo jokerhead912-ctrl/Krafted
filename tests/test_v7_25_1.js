@@ -72,7 +72,7 @@ function slice(a, b, label) {
 // the original.
 const LENFN = slice('function dataUrlByteLength(dataUrl) {',
                     '// The original bytes, whatever shape', 'dataUrlByteLength');
-const HELPERS = slice('function cropEncodeMime(item) {', 'function applyCrop() {', 'v7.26.0 helpers');
+const HELPERS = slice('function cropEncodeMime(item) {', 'function applyCrop() {', 'v7.27.0 helpers');
 const CROP_FN = slice('function applyCrop() {', 'function startExportDrag() {', 'applyCrop');
 // Rule 21: the start anchor has to be specific to applyCrop. `  item.src =
 // newSrc;` alone also matches the GIF editor at 22928, which silently widened

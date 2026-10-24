@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.26.0</title>
+<title>Krafted v7.27.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4679,7 +4679,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.26.0';
+var KRAFTED_VERSION = '7.27.0';
 // v7.26.0: how many videos may decode at once. This used to be a hard-coded
 // 4, but the number that works is a property of the machine (hardware
 // decoders, GPU), so it is a setting. Declared up here so both the state
@@ -4980,7 +4980,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var items = state.items || [];
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
-      var node = { id: it.id || 'item_' + i, x: it.x, y: it.y, w: it.w, h: it.h, rot: it.rot || 0, natW: it.natW, natH: it.natH, cropX: it.cropX, cropY: it.cropY, cropW: it.cropW, cropH: it.cropH, frameOn: it.frameOn, frameZ: it.frameZ, frameRot: it.frameRot, frameX: it.frameX, frameY: it.frameY, name: it.name || '', note: it.note || '', tags: it.tags ? it.tags.slice() : [], opacity: it.opacity !== undefined ? it.opacity : 1, zIndex: it.z || 0, locked: it.locked || false, flipH: it.flipH || false, flipV: it.flipV || false, visible: true, filename: it.filename || '', trimStart: it.trimStart || 0, trimEnd: it.trimEnd || 0, playbackRate: it.playbackRate || 1, fps: (it.video && it.video._kraftedFps) ? it.video._kraftedFps : null, fpsManual: !!(it.video && it.video._kraftedFpsManual), isGif: it.isGif || false, adjustments: { brightness: it.brightness !== undefined ? it.brightness : 100, contrast: it.contrast !== undefined ? it.contrast : 100, saturate: it.saturate !== undefined ? it.saturate : 100, hueRotate: it.hueRotate || 0, blur: it.blur || 0, sepia: it.sepia || 0, grayscale: it.grayscale || 0, temp: it.temp || 0, vignette: it.vignette || 0, shadow: it.shadow || 0, highlight: it.highlight || 0, grain: it.grain || 0 } };
+      var node = { id: it.id || 'item_' + i, x: it.x, y: it.y, w: it.w, h: it.h, rot: it.rot || 0, natW: it.natW, natH: it.natH, cropX: it.cropX, cropY: it.cropY, cropW: it.cropW, cropH: it.cropH, frameOn: it.frameOn, frameZ: it.frameZ, frameRot: it.frameRot, frameX: it.frameX, frameY: it.frameY, name: it.name || '', note: it.note || '', tags: it.tags ? it.tags.slice() : [], opacity: it.opacity !== undefined ? it.opacity : 1, zIndex: it.z || 0, locked: it.locked || false, flipH: it.flipH || false, flipV: it.flipV || false, visible: true, filename: it.filename || '', trimStart: it.trimStart || 0, trimEnd: it.trimEnd || 0, playbackRate: it.playbackRate || 1, fps: (it.video && it.video._kraftedFps) ? it.video._kraftedFps : null, fpsManual: !!(it.video && it.video._kraftedFpsManual), isGif: it.isGif || false, isProxy: it.isProxy || false, originalName: it.originalName || '', adjustments: { brightness: it.brightness !== undefined ? it.brightness : 100, contrast: it.contrast !== undefined ? it.contrast : 100, saturate: it.saturate !== undefined ? it.saturate : 100, hueRotate: it.hueRotate || 0, blur: it.blur || 0, sepia: it.sepia || 0, grayscale: it.grayscale || 0, temp: it.temp || 0, vignette: it.vignette || 0, shadow: it.shadow || 0, highlight: it.highlight || 0, grain: it.grain || 0 } };
       if (it.masks && it.masks.length) { node.masks = it.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }); }
       if (it.anno) { node.anno = { comments: (it.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text, translation: c.translation, translationDir: c.translationDir, originalText: c.originalText, snapshot: c.snapshot, annoStrokes: c.annoStrokes }; }) }; }
       if (it.isVideo && it.el && it.el._annoDrawState) { var sbf = it.el._annoDrawState.strokesByFrame; if (sbf) { node._annoStrokesByFrame = {}; Object.keys(sbf).forEach(function(f) { if (sbf[f] && sbf[f].length) { node._annoStrokesByFrame[f] = sbf[f].map(function(s) { return { type: s.type, color: s.color, size: s.size, points: (s.points || []).map(function(p) { return [p[0], p[1]]; }), text: s.text || '' }; }); } }); } }
@@ -5042,7 +5042,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if (!resolvedSrc && n.mediaData) { try { var arr = n.mediaData.split(','); var mime = (arr[0].match(/:(.*?);/) || [])[1] || 'application/octet-stream'; var bin = atob(arr[1] || arr[0]); var bytes = new Uint8Array(bin.length); for (var k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k); resolvedSrc = URL.createObjectURL(new Blob([bytes], { type: mime })); } catch (e) {} }
       var savedW = n.w > 0 ? n.w : (n.natW || 100);
       var savedH = n.h > 0 ? n.h : (n.natH || 100);
-      var item = { id: n.id, x: n.x || 0, y: n.y || 0, w: savedW, h: savedH, natW: n.natW, natH: n.natH, cropX: n.cropX, cropY: n.cropY, cropW: n.cropW, cropH: n.cropH, frameOn: n.frameOn || false, frameZ: n.frameZ || 1, frameRot: n.frameRot || 0, frameX: n.frameX || 0, frameY: n.frameY || 0, name: n.name || '', note: n.note || '', tags: n.tags ? n.tags.slice() : [], rot: n.rot || 0, opacity: n.opacity !== undefined ? n.opacity : 1, z: n.zIndex || 0, locked: n.locked || false, flipH: n.flipH || false, flipV: n.flipV || false, trimStart: n.trimStart || 0, trimEnd: n.trimEnd || 0, playbackRate: n.playbackRate || 1, fps: n.fps || null, fpsManual: n.fpsManual || false, isGif: n.isGif || false, brightness: (n.adjustments || {}).brightness, contrast: (n.adjustments || {}).contrast, saturate: (n.adjustments || {}).saturate, hueRotate: (n.adjustments || {}).hueRotate, blur: (n.adjustments || {}).blur, sepia: (n.adjustments || {}).sepia, grayscale: (n.adjustments || {}).grayscale, temp: (n.adjustments || {}).temp, vignette: (n.adjustments || {}).vignette, shadow: (n.adjustments || {}).shadow, highlight: (n.adjustments || {}).highlight, grain: (n.adjustments || {}).grain, filename: n.filename || n.audioName || '', isVideo: n.type === 'video', isAudio: n.type === 'audio', audioName: n.audioName || n.filename || '', isLink: n.type === 'link', linkUrl: n.linkUrl || '', linkTitle: n.linkTitle || '', linkDesc: n.linkDesc || '', anno: n.anno ? { comments: (n.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text || '', translation: c.translation || '', translationDir: c.translationDir || '', originalText: c.originalText || '', snapshot: c.snapshot || '', annoStrokes: Array.isArray(c.annoStrokes) ? c.annoStrokes.filter(Boolean).map(function(s) { return { type: s.type, color: s.color, size: s.size, points: Array.isArray(s.points) ? s.points.map(function(p) { return [p[0], p[1]]; }) : [], text: s.text || '' }; }) : [] }; }) } : undefined, _annoStrokesByFrame: n._annoStrokesByFrame || undefined, masks: n.masks ? n.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }) : undefined, type: n.type === 'draw' ? 'draw' : undefined, strokeId: n.strokeId, drawMode: n.drawMode, drawColor: n.drawColor, drawSize: n.drawSize, drawOpacity: n.drawOpacity, drawArrowHead: n.drawArrowHead, src: resolvedSrc };
+      var item = { id: n.id, x: n.x || 0, y: n.y || 0, w: savedW, h: savedH, natW: n.natW, natH: n.natH, cropX: n.cropX, cropY: n.cropY, cropW: n.cropW, cropH: n.cropH, frameOn: n.frameOn || false, frameZ: n.frameZ || 1, frameRot: n.frameRot || 0, frameX: n.frameX || 0, frameY: n.frameY || 0, name: n.name || '', note: n.note || '', tags: n.tags ? n.tags.slice() : [], rot: n.rot || 0, opacity: n.opacity !== undefined ? n.opacity : 1, z: n.zIndex || 0, locked: n.locked || false, flipH: n.flipH || false, flipV: n.flipV || false, trimStart: n.trimStart || 0, trimEnd: n.trimEnd || 0, playbackRate: n.playbackRate || 1, fps: n.fps || null, fpsManual: n.fpsManual || false, isGif: n.isGif || false, isProxy: n.isProxy || false, originalName: n.originalName || '', brightness: (n.adjustments || {}).brightness, contrast: (n.adjustments || {}).contrast, saturate: (n.adjustments || {}).saturate, hueRotate: (n.adjustments || {}).hueRotate, blur: (n.adjustments || {}).blur, sepia: (n.adjustments || {}).sepia, grayscale: (n.adjustments || {}).grayscale, temp: (n.adjustments || {}).temp, vignette: (n.adjustments || {}).vignette, shadow: (n.adjustments || {}).shadow, highlight: (n.adjustments || {}).highlight, grain: (n.adjustments || {}).grain, filename: n.filename || n.audioName || '', isVideo: n.type === 'video', isAudio: n.type === 'audio', audioName: n.audioName || n.filename || '', isLink: n.type === 'link', linkUrl: n.linkUrl || '', linkTitle: n.linkTitle || '', linkDesc: n.linkDesc || '', anno: n.anno ? { comments: (n.anno.comments || []).map(function(c) { return { id: c.id, frame: c.frame, time: c.time, text: c.text || '', translation: c.translation || '', translationDir: c.translationDir || '', originalText: c.originalText || '', snapshot: c.snapshot || '', annoStrokes: Array.isArray(c.annoStrokes) ? c.annoStrokes.filter(Boolean).map(function(s) { return { type: s.type, color: s.color, size: s.size, points: Array.isArray(s.points) ? s.points.map(function(p) { return [p[0], p[1]]; }) : [], text: s.text || '' }; }) : [] }; }) } : undefined, _annoStrokesByFrame: n._annoStrokesByFrame || undefined, masks: n.masks ? n.masks.map(function(m) { return { id: m.id, name: m.name, enabled: m.enabled, type: m.type, color: m.color, tolerance: m.tolerance, feather: m.feather, brushData: m.brushData, brushSize: m.brushSize, brightness: m.brightness, contrast: m.contrast, saturate: m.saturate, temp: m.temp, shadow: m.shadow, highlight: m.highlight, hueRotate: m.hueRotate, sepia: m.sepia, tintColor: m.tintColor, tintStrength: m.tintStrength }; }) : undefined, type: n.type === 'draw' ? 'draw' : undefined, strokeId: n.strokeId, drawMode: n.drawMode, drawColor: n.drawColor, drawSize: n.drawSize, drawOpacity: n.drawOpacity, drawArrowHead: n.drawArrowHead, src: resolvedSrc };
       data.items.push(item);
     }
     var texts = manifest.texts || [];
@@ -9401,7 +9401,7 @@ function captureSnapshot() {
       drawMinY: (i.type === 'draw') ? i.drawMinY : null,
       drawW: (i.type === 'draw') ? i.drawW : null,
       drawH: (i.type === 'draw') ? i.drawH : null,
-      src: i.src, natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false,
+      src: i.src, natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, isProxy: i.isProxy || false, originalName: i.originalName || '',
       audioName: i.audioName || i.filename || '',
       filename: i.filename || i.audioName || '',
       // Round 58: persist the user's manual FPS override so undo/redo
@@ -27321,6 +27321,66 @@ function _maybeTidy(id) {
   }
 }
 
+// v7.27.0: proxy <-> original mapping.
+// A clip named "<base>_proxy.<ext>" stands in for "<base>.<ext>": the board
+// plays the proxy (that is the whole point -- a 1080p H.264 decodes in
+// hardware, a 4K ProRes master does not) and the card remembers which
+// original it stands for.
+// The suffix is NOT configurable. It was offered and turned down: a list of
+// patterns is a setting nobody can remember the contents of, and a file that
+// is not a proxy but matches would silently lose its own card.
+const PROXY_SUFFIX = '_proxy';
+
+// "shot01_proxy.mp4" -> "shot01"; anything else -> null.
+function proxyBaseName(filename) {
+  const s = String(filename || '');
+  const dot = s.lastIndexOf('.');
+  const base = dot > 0 ? s.slice(0, dot) : s;
+  if (base.length <= PROXY_SUFFIX.length) return null;
+  if (base.slice(-PROXY_SUFFIX.length).toLowerCase() !== PROXY_SUFFIX) return null;
+  // No `|| null` here: the length guard above already rejects a base that is
+  // exactly the suffix, so the slice can never come back empty.
+  return base.slice(0, -PROXY_SUFFIX.length);
+}
+
+// "shot01.mov" -> "shot01". The extension is what differs between a proxy
+// and its original, so matching has to happen on the name without it.
+function mediaBaseName(filename) {
+  const s = String(filename || '');
+  const dot = s.lastIndexOf('.');
+  return dot > 0 ? s.slice(0, dot) : s;
+}
+
+// Decide, for one import batch, which files become cards.
+//   * a proxy always becomes a card;
+//   * an original whose base has a proxy in the SAME batch does not -- that
+//     duplicate is exactly what the mapping exists to prevent;
+//   * everything else is untouched.
+// Pure: no DOM, no state. Returns name -> {isProxy, originalName, skip}.
+function planProxyPairs(names) {
+  const plan = Object.create(null);
+  const originalByBase = Object.create(null);
+  const proxies = [];
+  (names || []).forEach(function (n) {
+    if (!(typeof n === 'string') || !n) return;
+    const pb = proxyBaseName(n);
+    if (pb !== null) { proxies.push({ name: n, base: pb }); return; }
+    const b = mediaBaseName(n);
+    if (b && !(b in originalByBase)) originalByBase[b] = n;
+  });
+  const claimed = Object.create(null);
+  proxies.forEach(function (p) {
+    const orig = originalByBase[p.base] || null;
+    plan[p.name] = { isProxy: true, originalName: orig, skip: false };
+    if (orig) claimed[orig] = true;
+  });
+  Object.keys(originalByBase).forEach(function (b) {
+    const n = originalByBase[b];
+    if (claimed[n]) plan[n] = { isProxy: false, originalName: null, skip: true };
+  });
+  return plan;
+}
+
 function _handleFileDrop(e, files) {
   console.log('[FileDrop] _handleFileDrop called with', files.length, 'files');
   // v7.0.27: .kpak/.zip drop = OPEN the board package (was silently
@@ -27337,7 +27397,7 @@ function _handleFileDrop(e, files) {
   }
   // Separate images, videos, and audio files
   const imageFiles = [];
-  const videoFiles = [];
+  let videoFiles = [];          // v7.26.1: let — proxy pairing removes entries
   const audioFiles = [];
   // v7.17.0: .md / .txt are board text, not media.
   const _docTextFiles = files.filter(function (f) { return isDocTextFile(f); });
@@ -27421,6 +27481,26 @@ function _handleFileDrop(e, files) {
   // parse the moov atom; blocking on loadedmetadata makes the UI appear
   // frozen. Instead, add with estimated/default dimensions and let the
   // main video element resolve actual dimensions when metadata loads.
+  // v7.27.0: pair before anything becomes a card. Doing it after would mean
+  // creating the original's card and then deleting it, which flashes a card
+  // the user never asked for and leaves an undo step behind.
+  const _proxyPlan = planProxyPairs(videoFiles.map(function (v) { return v.file.name; }));
+  const _keepInBatch = function (v) {
+    return !(_proxyPlan[v.file.name] && _proxyPlan[v.file.name].skip);
+  };
+  const _proxySkipped = videoFiles.filter(function (v) { return !_keepInBatch(v); });
+  // Unconditional: filtering is a no-op when nothing paired up, and an
+  // assignment that always runs cannot be quietly switched off by a later
+  // edit to the `if` below (which only guards the message).
+  videoFiles = videoFiles.filter(_keepInBatch);
+  if (_proxySkipped.length > 0) {
+    // Silently dropping a file is never acceptable — say which ones and why.
+    try {
+      toast(boardTextLabel(
+        'Paired ' + _proxySkipped.length + ' proxy clip(s) with their original — the board plays the proxy, the original is only remembered',
+        '已配对 ' + _proxySkipped.length + ' 个代理档 — 板上播放代理档，原档只作记录'));
+    } catch (e) {}
+  }
   if (videoFiles.length > 0) pushUndo();
   let videoQueueIdx = 0;
   function processNextVideo() {
@@ -27434,6 +27514,12 @@ function _handleFileDrop(e, files) {
     const at = cascade(1280, 720);
     const newItem = addImage(blobUrl, 1280, 720, at.x, at.y, true, isLast, file.size, false, file);
     applyImportMeta(newItem, file);
+    // v7.27.0: record the pairing on the card that survived.
+    const _pp = _proxyPlan[file.name];
+    if (_pp && _pp.isProxy) {
+      newItem.isProxy = true;
+      newItem.originalName = _pp.originalName || '';
+    }
     _maybeTidy(newItem.id);
     videoQueueIdx++;
     setTimeout(processNextVideo, 50);
@@ -38666,7 +38752,7 @@ function buildManifest() {
       id: i.id,
       x: i.x, y: i.y, w: i.w, h: i.h, rot: i.rot, opacity: i.opacity,
       flipH: i.flipH, flipV: i.flipV, locked: i.locked, z: i.z,
-      natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false,
+      natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, isProxy: i.isProxy || false, originalName: i.originalName || '',
       audioName: i.audioName || i.filename || '',
       filename: i.filename || i.audioName || '',
       cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH, frameOn: i.frameOn || false, frameZ: i.frameZ || 1, frameRot: i.frameRot || 0, frameX: i.frameX || 0, frameY: i.frameY || 0, name: i.name || '', note: i.note || '', tags: i.tags ? i.tags.slice() : [],
@@ -40690,7 +40776,7 @@ function serializeBoard() {
         // and rehydrateAutosaveMedia() swaps it back for a fresh object URL.
         // A data: URL is already inline in this JSON — leave it alone.
         src: (i.src && i.src.indexOf('blob:') === 0) ? (AUTOSAVE_MEDIA_PREFIX + i.id) : (i.src || ''),
-        natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, audioName: i.audioName || '',
+        natW: i.natW, natH: i.natH, isVideo: i.isVideo || false, isGif: i.isGif || false, isAudio: i.isAudio || false, isProxy: i.isProxy || false, originalName: i.originalName || '', audioName: i.audioName || '',
         filename: i.filename || '',
         cropX: i.cropX, cropY: i.cropY, cropW: i.cropW, cropH: i.cropH, frameOn: i.frameOn || false, frameZ: i.frameZ || 1, frameRot: i.frameRot || 0, frameX: i.frameX || 0, frameY: i.frameY || 0, name: i.name || '', note: i.note || '', tags: i.tags ? i.tags.slice() : [],
         brightness: i.brightness, contrast: i.contrast, saturate: i.saturate,
