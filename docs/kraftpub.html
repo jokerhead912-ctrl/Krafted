@@ -13200,21 +13200,41 @@ function linkOriginalForItem(item) {
 // A bare <input type=file> on purpose: it works in every browser, and since
 // the link is session-only there is nothing for a FileSystemFileHandle to
 // buy us yet.
+//
+// v7.29.0: ONE input, reused. Building one per call leaked it every time the
+// user cancelled the dialog -- `change` never fires, so the `inp.remove()`
+// that lived inside it never ran either. Two consequences of reusing it:
+//   * `value` has to be cleared before every click. A file input does not
+//     fire `change` when the same file is chosen again, so without this the
+//     second "Link original" of the same file reads as a dead menu entry.
+//   * `cancel` has to resolve. Escaping the dialog used to leave the promise
+//     pending forever, which is the same silence under a different name.
+//     (`cancel` is Chrome 113+; where it is missing we are no worse off than
+//     before, which is why there is no fallback hugging a timer.)
+let _filePicker = null;
 function pickSingleFile(accept) {
   return new Promise(function (resolve) {
-    const inp = document.createElement('input');
-    inp.type = 'file';
+    if (!_filePicker) {
+      _filePicker = document.createElement('input');
+      _filePicker.type = 'file';
+      _filePicker.style.display = 'none';
+      document.body.appendChild(_filePicker);
+    }
+    const inp = _filePicker;
     inp.accept = accept || '';
-    inp.style.display = 'none';
+    inp.value = '';
     let settled = false;
-    inp.addEventListener('change', function () {
+    function done(f) {
       if (settled) return;
       settled = true;
-      const f = (inp.files && inp.files[0]) || null;
-      inp.remove();
+      inp.removeEventListener('change', onChange);
+      inp.removeEventListener('cancel', onCancel);
       resolve(f);
-    });
-    document.body.appendChild(inp);
+    }
+    function onChange() { done((inp.files && inp.files[0]) || null); }
+    function onCancel() { done(null); }
+    inp.addEventListener('change', onChange);
+    inp.addEventListener('cancel', onCancel);
     inp.click();
   });
 }
@@ -13230,8 +13250,13 @@ function swapProxyMedia(item) {
   v.src = item._showingOriginal ? item.src : link.url;
   item._showingOriginal = !item._showingOriginal;
   v.load();
-  v.addEventListener('loadedmetadata', function _afterSwap() {
+  // Declared as variables, not as named function expressions: the name of a
+  // function expression is only bound INSIDE itself, so one written inline
+  // cannot be un-registered by the other.
+  let _afterSwap = null, _swapFailed = null;
+  _afterSwap = function () {
     v.removeEventListener('loadedmetadata', _afterSwap);
+    v.removeEventListener('error', _swapFailed);
     try {
       const dur = (isFinite(v.duration) && v.duration > 0) ? v.duration : t;
       v.currentTime = Math.min(t, dur);
@@ -13239,7 +13264,23 @@ function swapProxyMedia(item) {
       v.currentTime = 0;
     }
     if (wasPlaying) resumeMediaEl(v);
-  });
+  };
+  // v7.29.0: an undecodable blob URL fails SILENTLY -- `error` fires, no
+  // exception is thrown, and the card sits on the proxy's last frame while
+  // the chip claims ORIG. A conform that lies is worse than no conform, so
+  // put the proxy back, reset the chip, and say what happened.
+  _swapFailed = function () {
+    v.removeEventListener('error', _swapFailed);
+    v.removeEventListener('loadedmetadata', _afterSwap);
+    v.src = item.src;
+    item._showingOriginal = false;
+    v.load();
+    if (item.el) syncProxyBadgeEl(item.el.querySelector('.media-info-bar'), item);
+    toast(boardTextLabel('Could not play the original — back on the proxy',
+                         '原檔播唔到 — 返返去代理檔'));
+  };
+  v.addEventListener('loadedmetadata', _afterSwap);
+  v.addEventListener('error', _swapFailed);
   if (item.el) syncProxyBadgeEl(item.el.querySelector('.media-info-bar'), item);
   return true;
 }

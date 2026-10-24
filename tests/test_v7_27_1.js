@@ -154,10 +154,11 @@ block('5. one definition, one scheduled call site', () => {
   eq(countIn(/function syncProxyBadgeEl\b/g, stripped), 1,
      'exactly one definition of the chip logic');
   // v7.28.0 added two more CALLERS (a link and a swap change which file is on
-  // screen), but the definition is still one and the build-time schedule is
-  // still one. What must not happen is a fourth place quietly re-deriving it.
-  eq(countIn(/syncProxyBadgeEl\(/g, stripped), 4,
-     'one definition + build schedule + link + swap — and nothing else');
+  // screen) and v7.29.0 a fifth (the failed-swap rollback puts the proxy
+  // back), but the definition is still one and the build-time schedule is
+  // still one. What must not happen is a sixth place quietly re-deriving it.
+  eq(countIn(/syncProxyBadgeEl\(/g, stripped), 5,
+     'one definition + build + link + swap + rollback — and nothing else');
 
   const head = stripComments(BUILD_HEAD);
   ok(/requestAnimationFrame\(\s*function\s*\(\)\s*\{\s*syncProxyBadgeEl\(infoBar,\s*_getItem\(\)\);\s*\}\s*\);/
