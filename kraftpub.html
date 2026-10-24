@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.29.1</title>
+<title>Krafted v7.30.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4697,7 +4697,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.29.1';
+var KRAFTED_VERSION = '7.30.0';
 // v7.26.0: how many videos may decode at once. This used to be a hard-coded
 // 4, but the number that works is a property of the machine (hardware
 // decoders, GPU), so it is a setting. Declared up here so both the state
@@ -13128,9 +13128,23 @@ function syncProxyBadgeEl(infoBar, item) {
 // already hold its File. Remembering it by name means "Link original" is
 // instant instead of sending the user back to a file picker for a file they
 // literally just dragged in.
-const _dropFiles = new Map();          // file name -> File (video only)
-const _DROP_FILES_MAX = 600;           // v7.29.1: FIFO cap, see noteDroppedFiles
+const _dropFiles = new Map();          // drop key  -> File (video only); see dropKeyOf
+const _DROP_FILES_MAX = 600;           // v7.30.0: FIFO cap, see noteDroppedFiles
 const proxyOriginals = new Map();      // item id   -> { name, url, file }
+
+// v7.30.0: one definition of "which entry does this file live under".
+// A bare NAME is not an identity either: A/shot01.mov and B/shot01.mov are
+// two different takes, and keying by name alone means the second one
+// overwrites the first, so the first card can no longer find its own
+// original and gets sent to a picker for a file it already dragged in.
+// Chrome fills `webkitRelativePath` when a folder is dragged in (or picked
+// through `webkitdirectory`); it is empty for a plain multi-select, and in
+// that case the name really is the best key we have.
+function dropKeyOf(f) {
+  if (!f) return '';
+  const rel = (typeof f.webkitRelativePath === 'string') ? f.webkitRelativePath.trim() : '';
+  return rel || String(f.name || '').trim();
+}
 
 // v7.29.0: video only, and bounded.
 // * video only -- the proxy workflow never has an image or a WAV standing in
@@ -13149,8 +13163,10 @@ function noteDroppedFiles(files) {
   (files || []).forEach(function (f) {
     if (!f || !f.name) return;
     if (!(f.type && f.type.indexOf('video/') === 0)) return;
-    if (_dropFiles.has(f.name)) _dropFiles.delete(f.name);  // re-drop: newest wins, and moves to the back
-    _dropFiles.set(f.name, f);
+    const key = dropKeyOf(f);
+    if (!key) return;
+    if (_dropFiles.has(key)) _dropFiles.delete(key);  // re-drop: newest wins, and moves to the back
+    _dropFiles.set(key, f);
     while (_dropFiles.size > _DROP_FILES_MAX) {
       _dropFiles.delete(_dropFiles.keys().next().value);
     }
@@ -13171,7 +13187,7 @@ function dropOriginalLink(itemId) {
 
 function applyOriginalLink(item, file) {
   if (!item || !file) return false;
-  dropOriginalLink(item.id);   // v7.29.1: linking twice must not leak the first URL
+  dropOriginalLink(item.id);   // v7.30.0: linking twice must not leak the first URL
   const url = URL.createObjectURL(file);
   proxyOriginals.set(item.id, { name: file.name, url: url, file: file });
   if (item.el) syncProxyBadgeEl(item.el.querySelector('.media-info-bar'), item);
@@ -13192,12 +13208,39 @@ function applyOriginalLink(item, file) {
 // dialog decides both the progress line and whether a cancel stops the batch)
 // and the single-card action needs it to link. A second copy of this test is
 // exactly how a card ends up with the wrong file.
-function rememberedOriginalFor(item) {
-  if (!item) return null;
-  const name = String(item.originalName || '').trim();
-  const remembered = name ? _dropFiles.get(name) : null;
+// v7.30.0: a card remembers WHERE its original came from, not just what it
+// is called -- that is what lets two takes with the same name both be found.
+// Session-only on purpose, like `originalSize`: the pool it unlocks dies with
+// the tab anyway, so writing it into a save would be a field that survives
+// reload and then proves nothing.
+function originalKeyFor(item) {
+  if (!item) return '';
+  const p = (typeof item.originalPath === 'string') ? item.originalPath.trim() : '';
+  return p || String(item.originalName || '').trim();
+}
+
+// One definition of "does this File stand for this card?", over any pool.
+// `needSize`: a size we recorded is a promise about WHICH take this is, so
+// when we know it, a file that disagrees is NOT this card's original. When we
+// do not know it there is nothing to disagree with -- and whether that is
+// acceptable depends on who handed us the file:
+//   * the drop pool says NO (v7.29.0: a guess is how a conform ships the
+//     wrong footage, and one extra dialog is cheap next to that);
+//   * files the user just picked themselves say YES -- they were pointing at
+//     these on purpose, and asking twice is worse than a name match.
+function originalFileFor(item, pool, needSize) {
+  if (!item || !pool) return null;
+  const key = originalKeyFor(item);
+  if (!key) return null;
+  const remembered = pool.get(key);
+  if (!remembered) return null;
   const want = (typeof item.originalSize === 'number' && item.originalSize > 0) ? item.originalSize : 0;
-  return (remembered && want && remembered.size === want) ? remembered : null;
+  if (!want) return needSize ? null : remembered;
+  return (remembered.size === want) ? remembered : null;
+}
+
+function rememberedOriginalFor(item) {
+  return originalFileFor(item, _dropFiles, true);
 }
 
 function linkOriginalForItem(item) {
@@ -13228,7 +13271,11 @@ function linkOriginalForItem(item) {
 //     (`cancel` is Chrome 113+; where it is missing we are no worse off than
 //     before, which is why there is no fallback hugging a timer.)
 let _filePicker = null;
-function pickSingleFile(accept) {
+// v7.30.0: ONE input serves both modes, and `multiple` is the only
+// difference. Everything else -- clear `value` before every click, resolve on
+// `cancel` -- is what keeps a REUSED input honest, and it has to hold in both
+// modes or the batch path inherits a bug the single path already fixed.
+function pickFiles(accept, multi) {
   return new Promise(function (resolve) {
     if (!_filePicker) {
       _filePicker = document.createElement('input');
@@ -13238,20 +13285,32 @@ function pickSingleFile(accept) {
     }
     const inp = _filePicker;
     inp.accept = accept || '';
+    inp.multiple = !!multi;
     inp.value = '';
     let settled = false;
-    function done(f) {
+    function done(files) {
       if (settled) return;
       settled = true;
       inp.removeEventListener('change', onChange);
       inp.removeEventListener('cancel', onCancel);
-      resolve(f);
+      resolve(files);
     }
-    function onChange() { done((inp.files && inp.files[0]) || null); }
+    function onChange() {
+      const list = inp.files;
+      const out = [];
+      for (let i = 0; i < (list ? list.length : 0); i++) out.push(list[i]);
+      done(out.length ? out : null);
+    }
     function onCancel() { done(null); }
     inp.addEventListener('change', onChange);
     inp.addEventListener('cancel', onCancel);
     inp.click();
+  });
+}
+
+function pickSingleFile(accept) {
+  return pickFiles(accept, false).then(function (picked) {
+    return (picked && picked[0]) || null;
   });
 }
 
@@ -13352,35 +13411,20 @@ function proxyCardsInSelection() {
 function linkOriginalSelected() {
   const cards = proxyCardsInSelection();
   if (!cards.length) return;
-  // v7.29.1: plan before acting. Which of these will need a dialog decides
-  // both the progress line and whether a cancel should stop the batch.
-  const needPick = cards.filter(function (it) { return !rememberedOriginalFor(it); });
-  const showProgress = needPick.length > 1;
-  // Sequentially, not Promise.all: there is exactly ONE file picker, and
-  // three dialogs opened at once would each overwrite the same <input>.
-  let done = 0, stopped = false;
-  let chain = Promise.resolve();
+  // v7.29.1: plan before acting. Which of these we already hold decides how
+  // many dialogs the user has to sit through -- and now it is one, not N.
+  // One pass, one call each: what we already hold is linked here, what we do
+  // not goes in `needPick`. Asking twice (once to plan, once to link) is how
+  // a second copy of the rule appears.
+  const needPick = [];
+  let done = 0;
   cards.forEach(function (item) {
-    chain = chain.then(function () {
-      if (stopped) return;
-      const slot = needPick.indexOf(item);
-      // `toast()` rewrites one element, so calling it again IS an in-place
-      // update — no separate progress API needed. Only worth it when there is
-      // more than one dialog to sit through.
-      if (showProgress && slot >= 0) {
-        toast(boardTextLabel('Picking original ' + (slot + 1) + ' of ' + needPick.length + ' — Esc to stop',
-                             '揀緊第 ' + (slot + 1) + ' / ' + needPick.length + ' 個原檔 — Esc 停'));
-      }
-      return linkOriginalForItem(item).then(function (ok) {
-        if (ok) { done++; return; }
-        // v7.29.1: a cancelled dialog means STOP ASKING, not "skip this one
-        // and open the next". Halting a batch of ten used to take ten Escs.
-        if (slot >= 0) stopped = true;
-      });
-    });
+    const already = rememberedOriginalFor(item);
+    if (already) { applyOriginalLink(item, already); done++; }
+    else needPick.push(item);
   });
-  chain.then(function () {
-    if (!done) return;   // nothing linked: every dialog was cancelled, so say nothing
+  const report = function (stopped) {
+    if (!done) return;   // nothing linked: the dialog was cancelled, so say nothing
     const all = (done === cards.length);
     const stopNote = (!all && stopped) ? boardTextLabel(' — stopped', ' — 停咗') : '';
     // No try/catch: this runs from a click, long after init, so `toast`
@@ -13396,6 +13440,35 @@ function linkOriginalSelected() {
               ? ('已連上 ' + done + ' 個原檔 — 再右鍵可以切換過去')
               : '已連上原檔 — 再右鍵可以切換過去')
           : ('已連上 ' + done + ' / ' + cards.length + ' 個 — 其餘要人手揀檔')) + stopNote);
+  };
+
+  if (!needPick.length) { report(false); return; }
+  if (needPick.length === 1) {
+    // One card, one dialog: the file the user points at IS the answer. There
+    // is nothing to match and nothing to guess.
+    pickSingleFile('video/*').then(function (f) {
+      if (f && applyOriginalLink(needPick[0], f)) done++;
+      report(!f);
+    });
+    return;
+  }
+  // v7.30.0: ONE dialog for the whole batch. `multiple` lets the user grab a
+  // folder of originals in one go, and the cards are then matched by the same
+  // identity rule the drop pool uses, so the order they were picked in does
+  // not matter. Ten cards used to mean ten dialogs -- and cancelling a batch
+  // of ten used to take ten Escs. Whatever does not match afterwards is
+  // reported, not chased: opening N more dialogs is the thing we just fixed.
+  toast(boardTextLabel('Picking originals for ' + needPick.length + ' clips — Esc to stop',
+                       '揀緊 ' + needPick.length + ' 個原檔 — Esc 停'));
+  pickFiles('video/*', true).then(function (picked) {
+    if (!picked) { report(true); return; }
+    const pool = new Map();
+    picked.forEach(function (f) { if (f) pool.set(dropKeyOf(f), f); });
+    needPick.forEach(function (item) {
+      const f = originalFileFor(item, pool, false);
+      if (f && applyOriginalLink(item, f)) done++;
+    });
+    report(false);
   });
 }
 
@@ -27738,8 +27811,12 @@ function mediaBaseName(filename) {
 //   * an original whose base has a proxy in the SAME batch does not -- that
 //     duplicate is exactly what the mapping exists to prevent;
 //   * everything else is untouched.
-// Pure: no DOM, no state. Returns name -> {isProxy, originalName, skip}.
-function planProxyPairs(names) {
+// Pure: no DOM, no state. Returns name -> {isProxy, originalName, originalPath, skip}.
+// `pathsByName` is optional: when a whole folder was dragged in, Chrome
+// knows each file's path, and carrying it through is what lets two takes
+// with the same name both be found later. Without it the behaviour is
+// exactly what it was before.
+function planProxyPairs(names, pathsByName) {
   const plan = Object.create(null);
   const originalByBase = Object.create(null);
   const proxies = [];
@@ -27753,7 +27830,7 @@ function planProxyPairs(names) {
   const claimed = Object.create(null);
   proxies.forEach(function (p) {
     const orig = originalByBase[p.base] || null;
-    plan[p.name] = { isProxy: true, originalName: orig, skip: false };
+    plan[p.name] = { isProxy: true, originalName: orig, originalPath: ((orig && pathsByName) ? (pathsByName[orig] || '') : ''), skip: false };
     if (orig) claimed[orig] = true;
   });
   Object.keys(originalByBase).forEach(function (b) {
@@ -27869,7 +27946,12 @@ function _handleFileDrop(e, files) {
   // v7.27.0: pair before anything becomes a card. Doing it after would mean
   // creating the original's card and then deleting it, which flashes a card
   // the user never asked for and leaves an undo step behind.
-  const _proxyPlan = planProxyPairs(videoFiles.map(function (v) { return v.file.name; }));
+  const _pathsByName = Object.create(null);
+  videoFiles.forEach(function (v) {
+    const k = dropKeyOf(v.file);
+    if (v.file && v.file.name && k && k !== v.file.name) _pathsByName[v.file.name] = k;
+  });
+  const _proxyPlan = planProxyPairs(videoFiles.map(function (v) { return v.file.name; }), _pathsByName);
   const _keepInBatch = function (v) {
     return !(_proxyPlan[v.file.name] && _proxyPlan[v.file.name].skip);
   };
@@ -27904,10 +27986,13 @@ function _handleFileDrop(e, files) {
     if (_pp && _pp.isProxy) {
       newItem.isProxy = true;
       newItem.originalName = _pp.originalName || '';
+      // v7.30.0: where it came from. Without this, A/shot01.mov and
+      // B/shot01.mov are the same card as far as the pool is concerned.
+      newItem.originalPath = _pp.originalPath || '';
       // v7.29.0: how big the original we just paired away was, so a later
       // "Link original" can tell it apart from any other file with the same
       // name. Absent is fine -- it just means we ask instead of guessing.
-      const _of = _pp.originalName ? _dropFiles.get(_pp.originalName) : null;
+      const _of = _dropFiles.get(newItem.originalPath || newItem.originalName);
       if (_of && typeof _of.size === 'number') newItem.originalSize = _of.size;
     }
     _maybeTidy(newItem.id);

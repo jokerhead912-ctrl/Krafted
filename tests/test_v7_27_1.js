@@ -207,7 +207,7 @@ block('8. 導出 — the chip cannot be baked', () => {
      capRule);
 });
 
-block('9. the pairing still reaches the item (v7.29.1 did not regress)', () => {
+block('9. the pairing still reaches the item (v7.30.0 did not regress)', () => {
   const stripped = stripComments(HTML);
   ok(/newItem\.isProxy = true;/.test(stripped), 'the drop path still stamps the item');
   ok(/newItem\.originalName = _pp\.originalName/.test(stripped), 'and records the original');

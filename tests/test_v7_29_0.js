@@ -63,7 +63,11 @@ const LINK = slice('function syncProxyBadgeEl(infoBar, item) {',
 const CLEANUP = slice('function cleanupVideoItem(item, revokeBlob) {',
                       'function cleanupImageItem(item, revokeBlob) {',
                       'cleanupVideoItem');
-const RECORD = slice('      const _of = _pp.originalName ? _dropFiles.get(_pp.originalName) : null;',
+// v7.30.0: starts at the name stamp, not the size lookup — the path stamp
+// sits between the two, and slicing past it made `originalName` undefined
+// inside the runner, so the lookup read '' and every size assertion went red
+// for a reason that had nothing to do with what they were testing.
+const RECORD = slice("      newItem.originalName = _pp.originalName || '';",
                      '    _maybeTidy(newItem.id);',
                      'originalSize record');
 
@@ -300,6 +304,17 @@ function vid(name, size) { return { name: name, type: 'video/mp4', size: size ||
     const got = run(plan, { name: 'shot01_proxy.mp4' }, {}, new Map([['shot01.mov', { size: 4242 }]]));
     eq(got.originalSize, 4242, 'a paired-away original leaves its size behind');
 
+    // v7.30.0: a folder drag gives the original a path, and the pool is keyed
+    // by that path — so the card has to remember it or it can never find the
+    // file again. Two takes called shot01.mov in different folders is exactly
+    // the case this exists for.
+    ok(/newItem\.originalPath = _pp\.originalPath \|\| '';/.test(rec),
+       'the card also remembers WHERE the original came from', rec);
+    const pathed = run({ 'shot01_proxy.mp4': { isProxy: true, originalName: 'shot01.mov', originalPath: 'A/shot01.mov' } },
+                       { name: 'shot01_proxy.mp4' }, {}, new Map([['A/shot01.mov', { size: 777 }]]));
+    eq(pathed.originalPath, 'A/shot01.mov', 'the path is stamped', pathed.originalPath);
+    eq(pathed.originalSize, 777, 'and the lookup uses it — a name-keyed miss would fail here');
+
     const miss = run(plan, { name: 'shot01_proxy.mp4' }, {}, new Map());
     ok(!('originalSize' in miss), 'no File in hand means no size, not a zero', miss);
 
@@ -323,17 +338,22 @@ function vid(name, size) { return { name: name, type: 'video/mp4', size: size ||
     // link. Two copies of the same test is how a card links the wrong take.
     eq(countIn(/function rememberedOriginalFor\(/g, all), 1,
        'one definition', countIn(/function rememberedOriginalFor\(/g, all));
+    eq(countIn(/function originalFileFor\(/g, all), 1,
+       'one rule underneath it', countIn(/function originalFileFor\(/g, all));
     eq(countIn(/remembered\.size === want/g, all), 1,
        'and the size agreement is decided in exactly one place',
        countIn(/remembered\.size === want/g, all));
-    eq(countIn(/rememberedOriginalFor\(item\)/g, all), 2,
-       'the definition plus exactly one linker call', countIn(/rememberedOriginalFor\(item\)/g, all));
-    eq(countIn(/rememberedOriginalFor\(it\)/g, all), 1,
-       'the planner calls the same helper', countIn(/rememberedOriginalFor\(it\)/g, all));
+    // v7.30.0: the batch planner used to ask once to plan and again to link,
+    // which is two chances to fork. Now one pass does both. Three hits is the
+    // definition plus exactly two callers — the single-card linker and the
+    // batch planner — and a fourth is a third copy smelling of a rename.
+    eq(countIn(/rememberedOriginalFor\(/g, all), 3,
+       'the definition plus exactly two callers', countIn(/rememberedOriginalFor\(/g, all));
     // A bare pool read is only allowed where a size is STAMPED at import time
-    // (no comparison there), never where a link is made.
-    eq(countIn(/_dropFiles\.get\(/g, all), 2,
-       'the helper plus the import stamp — no third reader', countIn(/_dropFiles\.get\(/g, all));
+    // (no comparison there), never where a link is made: every link goes
+    // through the helper, which takes the pool as an argument.
+    eq(countIn(/_dropFiles\.get\(/g, all), 1,
+       'only the import stamp reads the pool directly', countIn(/_dropFiles\.get\(/g, all));
   });
 
   console.log('\n' + (fail === 0 ? 'ALL PASS' : 'FAILURES') + '  (' + pass + ' passed' +

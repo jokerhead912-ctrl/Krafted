@@ -1,3 +1,5 @@
+# ⚠ SUPERSEDED —— 呢份只對 v1 生效，而家 Pages 出嘅係更新嘅版本，跑佢只會紅（斷言係「出緊 v1」）。
+# 現役嗰份係 **verify_pages_v7_30_0.py**（Git 有晒歷史）。
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """

@@ -90,31 +90,49 @@ mutate "C2 the registry is unbounded" \
   "    while (_dropFiles.size > _DROP_FILES_MAX) {" \
   "    while (false) {"
 
+# v7.30.0: the pool is keyed by dropKeyOf now, so the anchor says `key`.
 mutate "C3 a re-drop does not refresh the entry (the newest is evicted first)" \
-  "    if (_dropFiles.has(f.name)) _dropFiles.delete(f.name);" \
+  "    if (_dropFiles.has(key)) _dropFiles.delete(key);" \
   "    ;"
 
 # ── group D: identity ─────────────────────────────────────────────────────
+# v7.30.0: the rule moved into originalFileFor() and the `want &&` guard is
+# now a separate line, so the size test on its own is the anchor.
 mutate "D1 the size is ignored — any file with the same name will do" \
-  "  return (remembered && want && remembered.size === want) ? remembered : null;" \
-  "  return (remembered && want) ? remembered : null;"
+  "  return (remembered.size === want) ? remembered : null;" \
+  "  return remembered;"
 
 mutate "D2 the original's size is never recorded, so nothing can ever match" \
   "      if (_of && typeof _of.size === 'number') newItem.originalSize = _of.size;" \
   "      ;"
 
 # ── group E: v7.29.1 — one lookup, a pool big enough for one board ────────
+# v7.30.0: there are TWO `const already = rememberedOriginalFor(item);` lines
+# now (the batch planner and the single-card linker). Anchor the one inside
+# linkOriginalForItem by taking its function head with it, or the count is 2
+# and this silently becomes a SKIP -- which is a pass, not a catch.
 mutate "E1 the linker hand-rolls the lookup instead of calling the helper" \
-  "  const already = rememberedOriginalFor(item);" \
-  "  const already = _dropFiles.get(String(item.originalName || '').trim());"
+  "  if (!item || !item.isProxy) return Promise.resolve(false);
+  const already = rememberedOriginalFor(item);" \
+  "  if (!item || !item.isProxy) return Promise.resolve(false);
+  const already = _dropFiles.get(String(item.originalName || '').trim());"
 
 mutate "E2 the pool shrinks back to 200 (one board's worth does not fit)" \
   "const _DROP_FILES_MAX = 600;" \
   "const _DROP_FILES_MAX = 200;"
 
 mutate "E3 a re-drop keeps the OLD file (the one just dropped is ignored)" \
-  "    if (_dropFiles.has(f.name)) _dropFiles.delete(f.name);" \
-  "    if (_dropFiles.has(f.name)) return;"
+  "    if (_dropFiles.has(key)) _dropFiles.delete(key);" \
+  "    if (_dropFiles.has(key)) return;"
+
+# ── group F: v7.30.0 — the path travels with the card ─────────────────────
+mutate "F1 the card forgets where its original came from" \
+  "      newItem.originalPath = _pp.originalPath || '';" \
+  "      newItem.originalPath = '';"
+
+mutate "F2 the import looks the pool up by the bare name again" \
+  "      const _of = _dropFiles.get(newItem.originalPath || newItem.originalName);" \
+  "      const _of = _dropFiles.get(newItem.originalName);"
 
 cp kraftpub-dev.html $TMP/mut.html
 print "MUTVERDICT $([ $NOTCAUGHT -eq 0 ] && [ $ANCHORFAIL -eq 0 ] && echo ok || echo BAD)  holes=$NOTCAUGHT skipped=$ANCHORFAIL caught=$CAUGHT fragile=$FRAGILE"

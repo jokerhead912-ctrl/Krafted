@@ -74,13 +74,21 @@ const api = new Function(`
   ${LINK}
   // The picker logs its own call/resolve order so the test can tell
   // sequential from parallel.
-  pickSingleFile = function () {
+  // v7.30.0: the batch path asks for MANY files at once, so the stub has to
+  // cover both modes. One QUEUE entry per dialog; an entry that is an array
+  // is a multi-pick, a bare File is a single pick, and a hole is an Esc.
+  pickFiles = function (accept, multi) {
     var n = LOG.filter(function (x) { return x.indexOf('call') === 0; }).length;
     LOG.push('call' + n);
     return Promise.resolve().then(function () {
       LOG.push('resolve' + n);
-      return QUEUE[n] || null;
+      var q = QUEUE[n];
+      if (q === undefined || q === null) return null;
+      return Array.isArray(q) ? q : [q];
     });
+  };
+  pickSingleFile = function (accept) {
+    return pickFiles(accept, false).then(function (a) { return (a && a[0]) || null; });
   };
   return {
     fitTrimToDuration: fitTrimToDuration,
@@ -235,10 +243,11 @@ function menuFor(cards, linkedIds) {
     ok(api.toasts.some(function (t) { return /Linked 2 of 3/.test(t); }),
        'the toast says two of three, not "linked"', api.toasts);
 
-    // Sequential vs Promise.all: with all three queued in parallel the log
-    // would read call0,call1,resolve0,resolve1. It must read call,resolve,…
-    eq(api.log.join(','), 'call0,resolve0,call1,resolve1',
-       'each dialog closes before the next opens — one picker, reused', api.log);
+    // v7.30.0: two cards still missing used to mean two dialogs (and two
+    // Escs to get out). Now it is ONE dialog for both, matched afterwards --
+    // so the log must show a single call, not call,resolve,call,resolve.
+    eq(api.log.join(','), 'call0,resolve0',
+       'one dialog serves the whole batch', api.log);
   });
 
   await ablock('5. swap moves every selected card, and none of them alone', async () => {
@@ -372,8 +381,10 @@ function menuFor(cards, linkedIds) {
 
     const calls = api.log.filter(function (x) { return x.indexOf('call') === 0; }).length;
     eq(calls, 1, 'cancelling the first dialog does not open a second', api.log);
-    ok(api.toasts.some(function (t) { return /Picking original 1 of 3/.test(t); }),
-       'and the user was told which one they were on', api.toasts);
+    // v7.30.0: one dialog, one line — "1 of 3" was a promise about three
+    // dialogs that no longer exist.
+    ok(api.toasts.some(function (t) { return /Picking originals for 3 clips/.test(t); }),
+       'and the user was told how many clips they were picking for', api.toasts);
     ok(!api.toasts.some(function (t) { return /Linked/.test(t); }),
        'nothing is claimed as linked', api.toasts);
   });

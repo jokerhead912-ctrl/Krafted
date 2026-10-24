@@ -58,16 +58,17 @@ mutate "A1 the drop never records the files it was given" \
   "  noteDroppedFiles(files);" \
   "  ;"
 
+# v7.30.0: filed under the drop key (`key`), not the bare name.
 mutate "A2 files are filed under the wrong name" \
-  "    _dropFiles.set(f.name, f);" \
-  "    _dropFiles.set(f.name + '?', f);"
+  "    _dropFiles.set(key, f);" \
+  "    _dropFiles.set(key + '?', f);"
 
 # v7.29.0: the lookup now also insists the size agrees, so the anchor moved.
 # v7.29.1: and then it moved AGAIN — into rememberedOriginalFor(), because the
 # batch action needs it up front to plan. Anchor on the helper's own line or
 # this silently turns into a SKIP (which is a pass, not a catch).
 mutate "A3 the same-drag lookup is gone (everyone gets a picker)" \
-  "  return (remembered && want && remembered.size === want) ? remembered : null;" \
+  "  return (remembered.size === want) ? remembered : null;" \
   "  return null;"
 
 mutate "A4 the link has no usable URL" \

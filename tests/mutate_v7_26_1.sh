@@ -80,9 +80,11 @@ mutate "B1 the original is no longer claimed, so both become cards" \
   "    if (orig) claimed[orig] = true;" \
   "    ;"
 
+# v7.30.0: the plan entry grew an `originalPath`, so the anchor has to carry
+# it too. (An ANCHOR MISS here is a SKIP, and a SKIP is a pass, not a catch.)
 mutate "B2 the proxy is skipped too (the batch imports nothing)" \
-  "    plan[p.name] = { isProxy: true, originalName: orig, skip: false };" \
-  "    plan[p.name] = { isProxy: true, originalName: orig, skip: true };"
+  "    plan[p.name] = { isProxy: true, originalName: orig, originalPath: ((orig && pathsByName) ? (pathsByName[orig] || '') : ''), skip: false };" \
+  "    plan[p.name] = { isProxy: true, originalName: orig, originalPath: ((orig && pathsByName) ? (pathsByName[orig] || '') : ''), skip: true };"
 
 mutate "B3 the proxy forgets which original it stands for" \
   "    const orig = originalByBase[p.base] || null;" \

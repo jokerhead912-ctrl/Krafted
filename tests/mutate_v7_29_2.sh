@@ -52,7 +52,7 @@ CAUGHT=0; NOTCAUGHT=0; FRAGILE=0; SKIP=0; ANCHORFAIL=0; EQUIV=0
 . Krafted/tests/mutlib.sh
 
 # ── group A: the selection ────────────────────────────────────────────────
-mutate "A1 back to first-card-only (the v7.29.1 bug)" \
+mutate "A1 back to first-card-only (the v7.30.0 bug)" \
   "    if (it && it.isProxy && it.isVideo) out.push(it);" \
   "    if (it && it.isProxy && it.isVideo && !out.length) out.push(it);"
 
@@ -65,9 +65,11 @@ mutate "A3 a partly-linked selection offers the swap anyway (half a conform)" \
   "      const _linked = _proxyCards.some(function (it) { return proxyOriginals.has(it.id); });"
 
 # ── group B: acting on all of them ────────────────────────────────────────
-mutate "B1 three dialogs opened at once against one reused picker" \
-  "    chain = chain.then(function () {" \
-  "    chain = Promise.resolve().then(function () {"
+# v7.30.0 deleted: the sequential chain is gone, so "one dialog per card" is
+# no longer a thing that can be broken here. The property it protected --
+# three cards mean ONE dialog -- is now pinned by test_v7_30_0 block 4 and
+# mutate_v7_30_0 C1, which re-introduces the sequential version on purpose.
+# Deleting a mutation is allowed only after checking the replacement exists.
 
 mutate "B2 the swap only moves the first card again" \
   "    if (swapProxyMedia(it)) moved++;" \
@@ -103,7 +105,7 @@ mutate "C4 the stale auto-detected frame rate is kept" \
   "  if (false) {"
 
 # ── group D: v7.29.1 — one target, an honest label, a batch you can stop ──
-mutate "D1 the swap goes back to a per-card toggle (the v7.29.1 bug)" \
+mutate "D1 the swap goes back to a per-card toggle (the v7.30.0 bug)" \
   "    if (!!it._showingOriginal === toOrig) return;   // already at the target" \
   "    if (false) return;"
 
@@ -115,21 +117,24 @@ mutate "D3 the menu promises 'back to proxy' on a mixed selection" \
   "      const _allOrig = _proxyCards.every(function (it) { return it._showingOriginal; });" \
   "      const _allOrig = _proxyCards.some(function (it) { return it._showingOriginal; });"
 
-mutate "D4 the batch never says which dialog it is on" \
-  "  const showProgress = needPick.length > 1;" \
-  "  const showProgress = false;"
+# v7.30.0: `showProgress` and `stopped` are gone -- one dialog replaced the
+# loop that needed them. What they protected is still worth protecting, so the
+# anchors moved to the lines that carry it now.
+mutate "D4 the batch never says how big the job is" \
+  "  toast(boardTextLabel('Picking originals for ' + needPick.length + ' clips — Esc to stop'," \
+  "  if (false) toast(boardTextLabel('Picking originals for ' + needPick.length + ' clips — Esc to stop',"
 
-mutate "D5 a progress line flashes for a single dialog" \
-  "  const showProgress = needPick.length > 1;" \
-  "  const showProgress = needPick.length > 0;"
+mutate "D5 a dialog is opened even when every card is already in hand" \
+  "  if (!needPick.length) { report(false); return; }" \
+  "  if (false) { report(false); return; }"
 
-mutate "D6 cancelling one dialog does not stop the batch" \
-  "        if (slot >= 0) stopped = true;" \
-  "        if (false) stopped = true;"
+mutate "D6 a cancelled dialog still claims something was linked" \
+  "    if (!done) return;   // nothing linked: the dialog was cancelled, so say nothing" \
+  "    if (false) return;"
 
-mutate "D7 the batch plans by a different rule than the linker uses" \
-  "  const needPick = cards.filter(function (it) { return !rememberedOriginalFor(it); });" \
-  "  const needPick = cards;"
+mutate "D7 the planner misses a card, so it never gets a file" \
+  "    else needPick.push(item);" \
+  "    else if (false) needPick.push(item);"
 
 cp kraftpub-dev.html $TMP/mut.html
 print "MUTVERDICT $([ $NOTCAUGHT -eq 0 ] && [ $ANCHORFAIL -eq 0 ] && echo ok || echo BAD)  holes=$NOTCAUGHT skipped=$ANCHORFAIL caught=$CAUGHT fragile=$FRAGILE"
