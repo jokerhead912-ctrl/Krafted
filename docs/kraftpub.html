@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.28.0</title>
+<title>Krafted v7.29.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4697,7 +4697,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.28.0';
+var KRAFTED_VERSION = '7.29.0';
 // v7.26.0: how many videos may decode at once. This used to be a hard-coded
 // 4, but the number that works is a property of the machine (hardware
 // decoders, GPU), so it is a setting. Declared up here so both the state
@@ -13239,6 +13239,28 @@ function pickSingleFile(accept) {
   });
 }
 
+// v7.29.0: the trim was set against the PROXY's timeline, and a proxy and
+// its master are not always the same length -- a hand-off that is a couple
+// of frames short is a normal day. Left alone, a trimEnd past the new end
+// reads as "trimmed to nothing" and a trimStart the clip does not have
+// parks the playhead nowhere. Called from the one place a duration changes
+// underneath a card.
+function fitTrimToDuration(item, v) {
+  if (!item || !v) return false;
+  const dur = (isFinite(v.duration) && v.duration > 0) ? v.duration : 0;
+  if (!dur) return false;
+  let moved = false;
+  if (typeof item.trimEnd === 'number' && item.trimEnd > dur) {
+    item.trimEnd = dur;
+    moved = true;
+  }
+  if (typeof item.trimStart === 'number' && item.trimStart > 0 && item.trimStart >= dur) {
+    item.trimStart = 0;
+    moved = true;
+  }
+  return moved;
+}
+
 function swapProxyMedia(item) {
   const link = item ? proxyOriginals.get(item.id) : null;
   if (!link || !item || !item.video) return false;
@@ -13249,6 +13271,15 @@ function swapProxyMedia(item) {
   const wasPlaying = !v.paused;
   v.src = item._showingOriginal ? item.src : link.url;
   item._showingOriginal = !item._showingOriginal;
+  // v7.29.0: the frame rate belongs to the FILE, not to the card. A 25fps
+  // master behind a 24fps proxy is a normal day, and every number the card
+  // shows in frames reads `_kraftedFps` off this element. A rate the user
+  // typed by hand is a decision about the shot and has to survive; an
+  // auto-detected one is stale the moment the source changes, so drop it and
+  // let the existing metadata handler run detection again.
+  if (!v._kraftedFpsManual) {
+    try { delete v._kraftedFps; } catch (e) { v._kraftedFps = undefined; }
+  }
   v.load();
   // Declared as variables, not as named function expressions: the name of a
   // function expression is only bound INSIDE itself, so one written inline
@@ -13263,6 +13294,7 @@ function swapProxyMedia(item) {
     } catch (e) {
       v.currentTime = 0;
     }
+    fitTrimToDuration(item, v);
     if (wasPlaying) resumeMediaEl(v);
   };
   // v7.29.0: an undecodable blob URL fails SILENTLY -- `error` fires, no
@@ -13285,36 +13317,68 @@ function swapProxyMedia(item) {
   return true;
 }
 
-function proxyCardInSelection() {
+// v7.29.0: plural, and the singular version is gone rather than kept beside
+// it. The old helper returned the FIRST proxy in the selection, so
+// right-clicking three proxy cards and choosing "Link original" linked one,
+// toasted success, and left the other two as proxies -- indistinguishable
+// from linked ones, because they carry the same chip and the same menu.
+// Two helpers that differ by one character is how that bug comes back.
+function proxyCardsInSelection() {
   const sel = (typeof getSelectedItems === 'function') ? getSelectedItems() : [];
+  const out = [];
   for (let i = 0; i < sel.length; i++) {
     const it = sel[i];
-    if (it && it.isProxy && it.isVideo) return it;
+    if (it && it.isProxy && it.isVideo) out.push(it);
   }
-  return null;
+  return out;
 }
 
 function linkOriginalSelected() {
-  const item = proxyCardInSelection();
-  if (!item) return;
-  linkOriginalForItem(item).then(function (ok) {
-    if (!ok) return;
-    // No try/catch: both of these run from a click, long after init, so
-    // `toast` cannot be missing — and a swallowed failure here is exactly
-    // the "quietly did nothing" the whole feature is trying to avoid.
-    toast(boardTextLabel('Linked the original — right-click again to swap to it',
-                         '已連上原檔 — 再右鍵可以切換過去'));
+  const cards = proxyCardsInSelection();
+  if (!cards.length) return;
+  // Sequentially, not Promise.all: there is exactly ONE file picker, and
+  // three dialogs opened at once would each overwrite the same <input>.
+  let done = 0;
+  let chain = Promise.resolve();
+  cards.forEach(function (item) {
+    chain = chain.then(function () {
+      return linkOriginalForItem(item).then(function (ok) { if (ok) done++; });
+    });
+  });
+  chain.then(function () {
+    if (!done) return;   // every picker was cancelled: nothing happened, so say nothing
+    const all = (done === cards.length);
+    // No try/catch: this runs from a click, long after init, so `toast`
+    // cannot be missing — and a swallowed failure here is exactly the
+    // "quietly did nothing" the whole feature is trying to avoid.
+    toast(boardTextLabel(
+      all ? (cards.length > 1
+              ? ('Linked ' + done + ' originals — right-click again to swap to them')
+              : 'Linked the original — right-click again to swap to it')
+          : ('Linked ' + done + ' of ' + cards.length +
+             ' — the rest still need the file picked by hand'),
+      all ? (cards.length > 1
+              ? ('已連上 ' + done + ' 個原檔 — 再右鍵可以切換過去')
+              : '已連上原檔 — 再右鍵可以切換過去')
+          : ('已連上 ' + done + ' / ' + cards.length + ' 個 — 其餘要人手揀檔')));
   });
 }
 
 function swapProxySelected() {
-  const item = proxyCardInSelection();
-  if (!item) return;
-  if (!proxyOriginals.has(item.id)) { linkOriginalSelected(); return; }
-  if (!swapProxyMedia(item)) return;
-  toast(boardTextLabel(item._showingOriginal ? 'Now showing the original'
-                                             : 'Back to the proxy',
-                       item._showingOriginal ? '而家播原檔' : '返去播代理檔'));
+  const cards = proxyCardsInSelection();
+  if (!cards.length) return;
+  const missing = cards.filter(function (it) { return !proxyOriginals.has(it.id); });
+  // v7.29.0: not "swap the ones I can and stay quiet about the rest" — that
+  // is exactly how a conform ships with a proxy still sitting in it. Link
+  // what can be linked and report the count.
+  if (missing.length) { linkOriginalSelected(); return; }
+  let moved = 0;
+  cards.forEach(function (it) { if (swapProxyMedia(it)) moved++; });
+  if (!moved) return;
+  const toOrig = !!cards[0]._showingOriginal;
+  const many = (cards.length > 1) ? (' (' + moved + ')') : '';
+  toast(boardTextLabel((toOrig ? 'Now showing the original' : 'Back to the proxy') + many,
+                       (toOrig ? '而家播原檔' : '返去播代理檔') + many));
 }
 
 function buildMediaControls(el, mediaEl, isVideo, isGif) {
@@ -25026,15 +25090,21 @@ function showCtx(x, y) {
     // v7.28.0: proxy actions. One entry, three states — the menu tells the
     // user what the next click will do instead of offering two entries whose
     // difference only makes sense once you already know the model.
-    const _proxyCard = proxyCardInSelection();
-    if (_proxyCard) {
-      const _linked = proxyOriginals.has(_proxyCard.id);
+    const _proxyCards = proxyCardsInSelection();
+    if (_proxyCards.length) {
+      // v7.29.0: the count is on the label. A menu entry that acts on three
+      // cards has to say so, or the user learns the scope by getting it
+      // wrong. Numbers need no translation, so this stays out of
+      // boardTextLabel on purpose.
+      const _count = _proxyCards.length > 1 ? (' (' + _proxyCards.length + ')') : '';
+      const _linked = _proxyCards.every(function (it) { return proxyOriginals.has(it.id); });
+      const _anyOrig = _proxyCards.some(function (it) { return it._showingOriginal; });
       if (!_linked) {
-        html += `<div class="ctx-item" onclick="linkOriginalSelected();hideCtx()" title="Pick the full-quality file this clip stands for. If it came in the same drag, this is instant.">🔗 Link original…</div>`;
-      } else if (_proxyCard._showingOriginal) {
-        html += `<div class="ctx-item" onclick="swapProxySelected();hideCtx()" title="Go back to the light proxy — faster to scrub, lighter on the machine.">⇄ Back to proxy</div>`;
+        html += `<div class="ctx-item" onclick="linkOriginalSelected();hideCtx()" title="Pick the full-quality file this clip stands for. If it came in the same drag, this is instant.">🔗 Link original…${_count}</div>`;
+      } else if (_anyOrig) {
+        html += `<div class="ctx-item" onclick="swapProxySelected();hideCtx()" title="Go back to the light proxy — faster to scrub, lighter on the machine.">⇄ Back to proxy${_count}</div>`;
       } else {
-        html += `<div class="ctx-item" onclick="swapProxySelected();hideCtx()" title="Play and export the full-quality original instead. Trim and playhead are kept.">⇄ Swap to original</div>`;
+        html += `<div class="ctx-item" onclick="swapProxySelected();hideCtx()" title="Play and export the full-quality original instead. Trim and playhead are kept.">⇄ Swap to original${_count}</div>`;
       }
     }
     // v7.0.40: A/B compare. Only offered when exactly two comparable things

@@ -88,7 +88,7 @@ const api = new Function(`
     applyOriginalLink: applyOriginalLink,
     linkOriginalForItem: linkOriginalForItem,
     swapProxyMedia: swapProxyMedia,
-    proxyCardInSelection: proxyCardInSelection,
+    proxyCardsInSelection: proxyCardsInSelection,
     linkOriginalSelected: linkOriginalSelected,
     swapProxySelected: swapProxySelected,
     proxyOriginals: proxyOriginals,
@@ -250,14 +250,16 @@ function makeItem(id, opts) {
     ok(/linkOriginalSelected\(\);hideCtx\(\)/.test(ctx), 'an unlinked card offers Link original…', ctx.slice(0, 120));
     ok(/Swap to original/.test(ctx), 'a linked card offers Swap to original');
     ok(/Back to proxy/.test(ctx), 'and Back to proxy once it is showing the original');
-    ok(/proxyCardInSelection\(\)/.test(ctx), 'all three hang off one "which card" helper');
+    ok(/proxyCardsInSelection\(\)/.test(ctx), 'all three hang off one "which cards" helper');
     ok(/proxyOriginals\.has\(/.test(ctx), 'the state is the link registry, not a second flag');
 
     api.setSel([{ id: 'a', isVideo: true }, { id: 'b', isProxy: true, isVideo: true }]);
-    const found = api.proxyCardInSelection();
-    eq(found && found.id, 'b', 'the helper picks the proxy video out of a mixed selection');
+    const found = api.proxyCardsInSelection();
+    // v7.29.0: plural — one card is a length-1 list, not the card itself.
+    eq(found.length, 1, 'the helper picks the proxy video out of a mixed selection');
+    eq(found[0] && found[0].id, 'b', 'and it is the right one');
     api.setSel([{ id: 'a', isVideo: true }]);
-    eq(api.proxyCardInSelection(), null, 'and finds nothing when no proxy is selected');
+    eq(api.proxyCardsInSelection().length, 0, 'and finds nothing when no proxy is selected');
   });
 
   block('7. CSS — the ORIG state is the same chip, recoloured', () => {

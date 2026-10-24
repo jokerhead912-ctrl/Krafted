@@ -106,9 +106,10 @@ mutate "C2 the ORIG state latches on" \
   "  if (showing) infoBar.classList.add('has-orig');"
 
 # ── group D: the menu ─────────────────────────────────────────────────────
+# v7.29.0: the helper is plural now.
 mutate "D1 the helper never finds a proxy card (menu entry is dead)" \
-  "    if (it && it.isProxy && it.isVideo) return it;" \
-  "    if (false) return it;"
+  "    if (it && it.isProxy && it.isVideo) out.push(it);" \
+  "    if (false) out.push(it);"
 
 cp kraftpub-dev.html $TMP/mut.html
 print "MUTVERDICT $([ $NOTCAUGHT -eq 0 ] && [ $ANCHORFAIL -eq 0 ] && echo ok || echo BAD)  holes=$NOTCAUGHT skipped=$ANCHORFAIL caught=$CAUGHT fragile=$FRAGILE"

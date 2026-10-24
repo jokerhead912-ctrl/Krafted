@@ -96,7 +96,7 @@ function ctxFor(sel, boardItems) {
   // stop executing part of the menu it is supposed to be checking.
   const api = new Function('ctxMenu', 'getSelectedItems', 'getSelectedImages', 'Platform',
     'state', 'wheelModeLabel', 'positionCtxMenu', 'abCanOpen',
-    'proxyCardInSelection', 'proxyOriginals', body)(
+    'proxyCardsInSelection', 'proxyOriginals', body)(
     menu,
     function () { return sel; },
     function () { return sel; },
@@ -105,12 +105,15 @@ function ctxFor(sel, boardItems) {
     function () { return 'Auto'; },
     function () {},
     undefined,
+    // v7.29.0: plural now — the menu asks for every proxy card in the
+    // selection, not just the first one.
     function () {
+      var out = [];
       for (var i = 0; i < sel.length; i++) {
         var it = sel[i];
-        if (it && it.isProxy && it.isVideo) return it;
+        if (it && it.isProxy && it.isVideo) out.push(it);
       }
-      return null;
+      return out;
     },
     new Map());
   api.showCtx(40, 40);
