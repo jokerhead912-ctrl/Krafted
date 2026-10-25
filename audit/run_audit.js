@@ -489,7 +489,7 @@ async function main() {
     const first = samples[0] ? samples[0].jsHeapUsedMB : null;
     const last = samples[samples.length - 1] ? samples[samples.length - 1].jsHeapUsedMB : null;
     rec('C7_soak', {
-      minutes: CFG.soak, samples: samples.length,
+      minutes: CFG.soak, samples: samples.length, sampleSeries: samples,
       heapStartMB: first, heapEndMB: last, heapDeltaMB: (first != null && last != null) ? +(last - first).toFixed(1) : null,
       longTasks: lt.length, longTasksOver200ms: lt.filter(x => x > 200).length, longTaskMaxMs: lt.length ? Math.max.apply(null, lt) : 0,
       inPageErrors: errs.slice(0, 20),
