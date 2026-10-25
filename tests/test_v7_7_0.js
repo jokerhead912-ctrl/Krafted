@@ -67,8 +67,13 @@ section(function () {
 
 // ═══ 2. _maybeTidy, executed: fires once on the right selection ═════════
 section(function () {
+  // v7.30.1: the end anchor used to be _handleFileDrop, but the proxy-pairing
+  // rule now sits between it and the tidy block, and the slice grew past its
+  // bound -- so the end anchor is the next thing AFTER the tidy helpers, not
+  // the next big function. (A slice that swallows unrelated code is how a
+  // "bounded" assertion stops meaning anything.)
   const BLOCK = slice('var _folderTidy = { active: false, ids: [], expected: 0, attempts: 0 };',
-                      'function _handleFileDrop(e, files) {');
+                      "const PROXY_SUFFIX = '_proxy';");
   ok(BLOCK.length > 300 && BLOCK.length < 4000, 'the auto-tidy block is present and bounded');
 
   const st = { selected: new Set() };
@@ -83,7 +88,7 @@ section(function () {
   api._maybeTidy(11);
   api._maybeTidy(12);
   api._maybeTidy(13);
-  eq(tidyCalls, 1, 'v7.30.0: the tidy fires exactly once when the last item lands');
+  eq(tidyCalls, 1, 'v7.30.1: the tidy fires exactly once when the last item lands');
   eq(tidySel && tidySel.length, 3, 'the tidy runs over all three new items');
   ok(tidySel && tidySel.indexOf(11) >= 0 && tidySel.indexOf(12) >= 0 && tidySel.indexOf(13) >= 0,
     'every new item is in the tidy selection');
@@ -106,7 +111,7 @@ section(function () {
   // A lone item never triggers a tidy (would resize a single reference image).
   api._armFolderTidy(1);
   api._maybeTidy(99);
-  eq(tidyCalls, 3, 'v7.30.0: a single-item import does NOT auto-tidy');
+  eq(tidyCalls, 3, 'v7.30.1: a single-item import does NOT auto-tidy');
 
   // Without arming, reporting in is a no-op (plain drops / pastes).
   api._maybeTidy(123);
@@ -166,7 +171,7 @@ section(function () {
   var b = build();
   b.st.groups = [g1];
   b.api.deleteSelected();
-  eq(b.rec.disposed.length, 1, 'v7.30.0: deleting the last member dissolves the group');
+  eq(b.rec.disposed.length, 1, 'v7.30.1: deleting the last member dissolves the group');
   eq(b.rec.disposed[0], g1, 'the dissolved group is the one that lost its member');
   eq(b.st.groups.length, 0, 'the dissolved group leaves state.groups');
   eq(b.rec.borders, 1, 'surviving borders are repositioned (runs even with none left)');

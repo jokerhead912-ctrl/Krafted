@@ -51,9 +51,12 @@ CAUGHT=0; NOTCAUGHT=0; FRAGILE=0; SKIP=0; ANCHORFAIL=0; EQUIV=0
 . Krafted/tests/mutlib.sh
 
 # ── group A: the key ──────────────────────────────────────────────────────
+# v7.30.1: dropKeyOf now answers folder+name first, so this anchor moved to
+# the webkitRelativePath line that is left. (An anchor that points at code I
+# moved is the same as no anchor at all -- SKIP counts as "passed".)
 mutate "A1 the path is ignored — back to a bare name" \
-  "  return rel || String(f.name || '').trim();" \
-  "  return String(f.name || '').trim();"
+  "  return rel || name;" \
+  "  return name;"
 
 mutate "A2 the pool goes back to being keyed by name" \
   "    _dropFiles.set(key, f);" \
@@ -85,7 +88,7 @@ mutate "B3 a hand-picked file is refused on an unknown size" \
   "  if (!want) return null;"
 
 # ── group C: one dialog, matched by identity ──────────────────────────────
-mutate "C1 one dialog per card again (the v7.30.0 Esc farm)" \
+mutate "C1 one dialog per card again (the v7.30.1 Esc farm)" \
   "  pickFiles('video/*', true).then(function (picked) {
     if (!picked) { report(true); return; }
     const pool = new Map();
@@ -124,6 +127,35 @@ mutate "C4 the picker hard-codes multiple on" \
 mutate "C5 the picker ignores the multiple flag entirely" \
   "    inp.multiple = !!multi;" \
   "    ;"
+
+# v7.30.1 -- P2. The whole point: a real folder drop writes _kraftedPath and
+# leaves webkitRelativePath EMPTY, so a key that only reads the latter is the
+# bug I shipped in v7.30.0 and must not be allowed back.
+mutate "D1 the folder path is ignored again (the v7.30.1 bug)" \
+  "  const dir = (typeof f._kraftedPath === 'string') ? f._kraftedPath.trim().replace(/\/+$/, '') : '';" \
+  "  const dir = '';"
+
+mutate "D2 the folder alone is the key -- every file in one folder collides" \
+  "  if (dir) return dir + '/' + name;" \
+  "  if (dir) return dir;"
+
+mutate "D3 a trailing slash is kept, so the key grows a double slash" \
+  "  const dir = (typeof f._kraftedPath === 'string') ? f._kraftedPath.trim().replace(/\/+$/, '') : '';" \
+  "  const dir = (typeof f._kraftedPath === 'string') ? f._kraftedPath.trim() : '';"
+
+# v7.30.1 -- W2. The suffix was matched without case; the base was not.
+# (Anchor updated again after fuzz_identity.js I3 forced "exact case wins".)
+mutate "E1 the case-insensitive fallback is dropped" \
+  "    const orig = originalByBase[p.base] || originalByLower[p.base.toLowerCase()] || null;" \
+  "    const orig = originalByBase[p.base] || null;"
+
+mutate "E2 originals are never indexed case-insensitively" \
+  "    if (b && !(bk in originalByLower)) originalByLower[bk] = n;" \
+  "    ;"
+
+mutate "E3 the case-insensitive match outranks the exact one (order dependence)" \
+  "    const orig = originalByBase[p.base] || originalByLower[p.base.toLowerCase()] || null;" \
+  "    const orig = originalByLower[p.base.toLowerCase()] || originalByBase[p.base] || null;"
 
 cp kraftpub-dev.html $TMP/mut.html
 print "MUTVERDICT $([ $NOTCAUGHT -eq 0 ] && [ $ANCHORFAIL -eq 0 ] && echo ok || echo BAD)  holes=$NOTCAUGHT skipped=$ANCHORFAIL caught=$CAUGHT fragile=$FRAGILE"

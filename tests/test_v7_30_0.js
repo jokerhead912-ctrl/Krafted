@@ -59,6 +59,11 @@ const LINK = slice('function syncProxyBadgeEl(infoBar, item) {',
                    'function buildMediaControls(el, mediaEl, isVideo, isGif) {',
                    'chip + link machinery');
 
+// v7.30.1: the pairing rule lives apart from the linking machinery, and the
+// case bug (W2) is in there, so it has to be executed on its own.
+const PAIRING = slice('const PROXY_SUFFIX = ', 'function _handleFileDrop(e, files) {',
+                      'proxy/original pairing rule');
+
 // ── sandbox ──────────────────────────────────────────────────────────────
 const api = new Function(`
   var TOASTS = [], SEL = [], LOG = [], QUEUE = [], MODES = [];
@@ -71,6 +76,7 @@ const api = new Function(`
   function getSelectedItems() { return SEL; }
   function resumeMediaEl(v) {}
   ${LINK}
+  ${PAIRING}
   // One QUEUE entry per dialog: an array is a multi-pick, a bare File is a
   // single pick, a hole is an Esc. MODES records whether 'multiple' was set,
   // which is the only observable difference between the two paths.
@@ -90,6 +96,9 @@ const api = new Function(`
   };
   return {
     dropKeyOf: dropKeyOf,
+    planProxyPairs: planProxyPairs,
+    mediaBaseName: mediaBaseName,
+    proxyBaseName: proxyBaseName,
     originalKeyFor: originalKeyFor,
     originalFileFor: originalFileFor,
     rememberedOriginalFor: rememberedOriginalFor,
@@ -108,9 +117,14 @@ const api = new Function(`
 `)();
 
 const flush = () => new Promise(function (r) { setTimeout(r, 0); });
-function vid(name, size, rel) {
+// v7.30.1: `folder` sets _kraftedPath (what readEntry writes on a REAL folder
+// drop), `rel` sets webkitRelativePath (what a webkitdirectory input gives).
+// They are different fields and the audit proved only the first one is ever
+// populated on a drop -- so the two must be tested separately.
+function vid(name, size, rel, folder) {
   const f = { name: name, type: 'video/mp4', size: size };
   if (rel) f.webkitRelativePath = rel;
+  if (folder) f._kraftedPath = folder;
   return f;
 }
 function makeItem(id, opts) {
@@ -289,6 +303,68 @@ function makeItem(id, opts) {
 
     eq(api.proxyOriginals.get('f1').file.size, 111, 'A/shot01.mov got the A take');
     eq(api.proxyOriginals.get('f2').file.size, 222, 'B/shot01.mov got the B take');
+  });
+
+  block('10. a REAL folder drop keys on _kraftedPath -- webkitRelativePath is empty there', () => {
+    // The v7.30.0 bug: dropKeyOf only read webkitRelativePath, and Chrome
+    // leaves that EMPTY on a drop (it is a webkitdirectory-input field).
+    // Krafted's own reader writes the folder into _kraftedPath instead, so
+    // every folder drag fell through to the bare name and one take was lost.
+    api.dropFiles.clear();
+    const aFile = vid('shot01.mov', 1111, '', 'footage/takeA');
+    const bFile = vid('shot01.mov', 2222, '', 'footage/takeB');
+    eq(api.dropKeyOf(aFile), 'footage/takeA/shot01.mov',
+       '_kraftedPath is a FOLDER, so the name has to be appended', api.dropKeyOf(aFile));
+    eq(api.dropKeyOf(bFile), 'footage/takeB/shot01.mov', 'and the two takes are two keys');
+    api.noteDroppedFiles([aFile, bFile]);
+    eq(api.dropFiles.size, 2, 'two files in two folders are two entries',
+       Array.from(api.dropFiles.keys()));
+
+    const a = makeItem('a1', { originalName: 'shot01.mov', originalPath: 'footage/takeA/shot01.mov', originalSize: 1111 });
+    const b = makeItem('b1', { originalName: 'shot01.mov', originalPath: 'footage/takeB/shot01.mov', originalSize: 2222 });
+    eq(api.rememberedOriginalFor(a) === aFile, true, 'takeA finds takeA');
+    eq(api.rememberedOriginalFor(b) === bFile, true,
+       'takeB finds takeB -- a card can never conform to the other take');
+
+    eq(api.dropKeyOf(vid('x.mov', 1, '', 'footage/')), 'footage/x.mov',
+       'a trailing slash does not make a double one', api.dropKeyOf(vid('x.mov', 1, '', 'footage/')));
+    // The folder ALONE must never be the key -- every file in one folder
+    // would then share one entry, which is the same loss under a new name.
+    const all = stripComments(HTML);
+    ok(/dir \+ '\/' \+ name/.test(all), 'the key is folder + name, not the folder alone');
+    // Both fields are still accepted: the input path is a real code path too.
+    eq(api.dropKeyOf(vid('x.mov', 1, 'A/x.mov')), 'A/x.mov', 'webkitRelativePath still works for a picker');
+  });
+
+  block('11. the proxy suffix is case-insensitive, so the base name must be too', () => {
+    // W2: proxyBaseName lower-cases the SUFFIX already, mediaBaseName did
+    // not lower-case anything -- so SHOT01_proxy.mp4 could never find
+    // Shot01.mp4. Windows and macOS volumes are case-insensitive by default.
+    const plan = api.planProxyPairs(['Shot01.mp4', 'SHOT01_proxy.mp4']);
+    eq(plan['SHOT01_proxy.mp4'].isProxy, true, 'the proxy is recognised');
+    eq(plan['SHOT01_proxy.mp4'].originalName, 'Shot01.mp4',
+       'and it is paired with the differently-cased original', plan['SHOT01_proxy.mp4'].originalName);
+    eq(plan['Shot01.mp4'].skip, true, 'so the original does not also become a card');
+
+    // The reverse direction, and the already-working exact case, must hold.
+    const plan2 = api.planProxyPairs(['shot01.MOV', 'Shot01_Proxy.mp4']);
+    eq(plan2['Shot01_Proxy.mp4'].originalName, 'shot01.MOV', 'either way round');
+    const plan3 = api.planProxyPairs(['shot01.mov', 'shot01_proxy.mp4']);
+    eq(plan3['shot01_proxy.mp4'].originalName, 'shot01.mov', 'and the plain case still pairs');
+
+    // A pair that genuinely differs is still two different bases.
+    const plan4 = api.planProxyPairs(['shot01.mp4', 'shot02_proxy.mp4']);
+    eq(plan4['shot02_proxy.mp4'].originalName, null, 'a different name is still a different shot');
+
+    // …but when BOTH cases are present the EXACT one has to win. Otherwise
+    // which file a proxy pairs with depends on which the drop saw first, and
+    // that was found by fuzz_identity.js (I3), not by thinking about it.
+    const tie = api.planProxyPairs(['Shot01.mov', 'shot01.mov', 'Shot01_proxy.mov']);
+    eq(tie['Shot01_proxy.mov'].originalName, 'Shot01.mov',
+       'exact case beats the case-insensitive match', tie['Shot01_proxy.mov'].originalName);
+    const tie2 = api.planProxyPairs(['shot01.mov', 'Shot01.mov', 'Shot01_proxy.mov']);
+    eq(tie2['Shot01_proxy.mov'].originalName, 'Shot01.mov',
+       'and the answer does not depend on arrival order', tie2['Shot01_proxy.mov'].originalName);
   });
 
   block('8. the picker is still ONE reused input', () => {

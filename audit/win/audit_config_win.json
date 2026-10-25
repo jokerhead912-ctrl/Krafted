@@ -1,0 +1,10 @@
+{
+  "_readme": "EDIT ME before running run_audit_win.bat. Backslashes must be doubled. If you leave a path empty that case is reported as 'not configured', which is honest — do not point it at the macOS paths, they will not resolve here.",
+  "url": "https://jokerhead912-ctrl.github.io/Krafted/kraftpub.html",
+  "board": "",
+  "footage": "",
+  "platform": "win",
+  "soak": 120,
+  "_out": "leave empty to use the default (a results/ folder next to run_audit.js). Set an absolute path if you would rather it landed on your Desktop — remember doubled backslashes.",
+  "out": ""
+}

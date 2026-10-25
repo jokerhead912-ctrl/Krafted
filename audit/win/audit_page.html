@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Krafted audit — no-Node fallback (Windows / macOS)</title>
+<style>
+  body { background:#111; color:#ddd; font:14px/1.55 ui-monospace, Menlo, Consolas, monospace; padding:24px; max-width:900px; }
+  h1 { font-size:18px; color:#7fd1ff; }
+  button { background:#1c2b36; color:#cfe; border:1px solid #345; padding:10px 14px; margin:6px 0; cursor:pointer; font:inherit; }
+  button:hover { background:#24384a; }
+  pre { background:#0a0a0a; border:1px solid #333; padding:12px; overflow:auto; max-height:340px; }
+  .n { color:#888; }
+</style>
+</head>
+<body>
+<h1>Krafted 穩定性審查 — 免 Node 版</h1>
+<p class="n">呢版淨量「唔使控制瀏覽器都量到」嘅嘢：真實 MIME 對應、真實解碼、長任務。
+佢量唔到 heap snapshot、trace、cold start —— 嗰啲要 <code>run_audit.js</code> (Node)。</p>
+
+<p><b>事前準備（3 秒）</b>：揀一條你嘅片，複製三份，改名做
+<code>t.mxf</code> <code>t.mov</code> <code>t.mp4</code>。我想知 Windows Chrome 對每個副檔名報乜 MIME。</p>
+
+<p><button id="pick">1) 揀檔（可 multi-select）</button>
+   <button id="pickDir">2) 揀成個 folder（optional）</button></p>
+<p><button id="run">3) 開始量</button> <button id="dl">4) 下載結果 JSON</button></p>
+
+<pre id="out">…</pre>
+
+<script>
+var picked = [], pickedDir = [], RESULT = { schema:'krafted-audit-page/1', startedAt:new Date().toISOString(), cases:[] };
+var out = document.getElementById('out');
+function log(s){ out.textContent += '\n' + s; }
+function rec(name, data){ RESULT.cases.push({case:name, at:new Date().toISOString(), data:data}); log('[' + name + '] ' + JSON.stringify(data).slice(0,400)); }
+
+document.getElementById('pick').onclick = function(){ var i=document.createElement('input'); i.type='file'; i.multiple=true;
+  i.onchange=function(){ picked=Array.prototype.slice.call(i.files); log('picked ' + picked.length + ' file(s)'); }; i.click(); };
+document.getElementById('pickDir').onclick = function(){ var i=document.createElement('input'); i.type='file'; i.webkitdirectory=true;
+  i.onchange=function(){ pickedDir=Array.prototype.slice.call(i.files); log('folder: ' + pickedDir.length + ' file(s), first rel path = ' + (pickedDir[0] ? pickedDir[0].webkitRelativePath : '(none)')); }; i.click(); };
+
+document.getElementById('run').onclick = async function(){
+  out.textContent = '';
+  RESULT = { schema:'krafted-audit-page/1', startedAt:new Date().toISOString(),
+             env:{ ua:navigator.userAgent, platform:navigator.platform, cores:navigator.hardwareConcurrency,
+                   memGB: navigator.deviceMemory || null, lang:navigator.language }, cases:[] };
+
+  // C1 MIME: what does THIS Chrome say each file is?
+  var all = picked.concat(pickedDir);
+  rec('C4_mime_probe', { probes: all.map(function(f){
+    return { name:f.name, type:f.type, size:f.size, webkitRelativePath:f.webkitRelativePath || '' };
+  })});
+
+  // C2 decode: can it actually play, and what is on frame 1s?
+  for (var k = 0; k < Math.min(3, all.length); k++) {
+    var f = all[k];
+    var v = document.createElement('video');
+    v.muted = true; v.src = URL.createObjectURL(f);
+    var ok = await new Promise(function(res){ var to=setTimeout(function(){res(false);},20000);
+      v.onloadedmetadata=function(){clearTimeout(to);res(true);}; v.onerror=function(){clearTimeout(to);res(false);}; });
+    if (!ok) { rec('C5b_real_decode', { name:f.name, loaded:false, error: v.error ? v.error.code : null }); continue; }
+    await new Promise(function(res){ v.onseeked=res; v.currentTime=Math.min(1.0,(v.duration||2)/2); });
+    var c=document.createElement('canvas'); c.width=v.videoWidth; c.height=v.videoHeight;
+    c.getContext('2d').drawImage(v,0,0);
+    var d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
+    var h=0; for (var i=0;i<d.length;i+=997) h=(h*31+d[i])>>>0;
+    URL.revokeObjectURL(v.src);
+    rec('C5b_real_decode', { name:f.name, loaded:true, duration:+(v.duration||0).toFixed(3), w:v.videoWidth, h:v.videoHeight, frameHash:h.toString(16) });
+  }
+
+  // C3 long tasks while scrolling: needs a real board, so it samples the page
+  // itself. If you run this on the Krafted tab it is meaningless -- open it
+  // on a fresh tab and just watch the number.
+  var lt=[]; var po=null;
+  try { po=new PerformanceObserver(function(l){ for (var e of l.getEntries()) lt.push(Math.round(e.duration)); });
+        po.observe({entryTypes:['longtask']}); } catch(e){}
+  var t0=performance.now(); var busy=Date.now()+8000;
+  while(Date.now()<busy){ await new Promise(function(r){requestAnimationFrame(r);}); }
+  try{ po.disconnect(); }catch(e){}
+  rec('C3_idle_8s', { longTasks: lt.length, maxMs: lt.length?Math.max.apply(null,lt):0, wallMs: Math.round(performance.now()-t0) });
+
+  log('\nDONE. 撳「下載結果 JSON」');
+};
+
+document.getElementById('dl').onclick = function(){
+  RESULT.finishedAt = new Date().toISOString();
+  var b=new Blob([JSON.stringify(RESULT,null,1)],{type:'application/json'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(b);
+  a.download='result_' + (navigator.platform||'win').replace(/\s+/g,'_') + '.json';
+  a.click();
+};
+</script>
+</body>
+</html>

@@ -86,8 +86,10 @@ mutate "B2 the proxy is skipped too (the batch imports nothing)" \
   "    plan[p.name] = { isProxy: true, originalName: orig, originalPath: ((orig && pathsByName) ? (pathsByName[orig] || '') : ''), skip: false };" \
   "    plan[p.name] = { isProxy: true, originalName: orig, originalPath: ((orig && pathsByName) ? (pathsByName[orig] || '') : ''), skip: true };"
 
+# v7.30.1: the lookup is now case-insensitive, so the anchor carries
+# `.toLowerCase()`. Same behaviour under test; different text.
 mutate "B3 the proxy forgets which original it stands for" \
-  "    const orig = originalByBase[p.base] || null;" \
+  "    const orig = originalByBase[p.base] || originalByLower[p.base.toLowerCase()] || null;" \
   "    const orig = null;"
 
 # ── group C: the four writers and the reader ──────────────────────────────

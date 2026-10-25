@@ -1,0 +1,9 @@
+{
+  "_readme": "Paths for the audit. EDIT THE WINDOWS COPY to point at your Windows footage folder and your own .kpak -- do not reuse the macOS paths, they will not resolve.",
+  "url": "https://jokerhead912-ctrl.github.io/Krafted/kraftpub.html",
+  "board": "/Users/kincheung/WorkBuddy/2026-07-25-10-53-37/Krafted/audit/fixtures/board_concept_art_v551.kpak",
+  "footage": "/Users/kincheung/WorkBuddy/2026-07-25-10-53-37/Krafted/audit/fixtures/footage",
+  "platform": "mac",
+  "soak": 120,
+  "out": "/Users/kincheung/WorkBuddy/2026-07-25-10-53-37/Krafted/audit/results/result_mac.json"
+}

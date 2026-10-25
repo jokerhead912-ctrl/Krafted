@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.30.0</title>
+<title>Krafted v7.30.1</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4697,7 +4697,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.30.0';
+var KRAFTED_VERSION = '7.30.1';
 // v7.26.0: how many videos may decode at once. This used to be a hard-coded
 // 4, but the number that works is a property of the machine (hardware
 // decoders, GPU), so it is a setting. Declared up here so both the state
@@ -13129,7 +13129,7 @@ function syncProxyBadgeEl(infoBar, item) {
 // instant instead of sending the user back to a file picker for a file they
 // literally just dragged in.
 const _dropFiles = new Map();          // drop key  -> File (video only); see dropKeyOf
-const _DROP_FILES_MAX = 600;           // v7.30.0: FIFO cap, see noteDroppedFiles
+const _DROP_FILES_MAX = 600;           // v7.30.1: FIFO cap, see noteDroppedFiles
 const proxyOriginals = new Map();      // item id   -> { name, url, file }
 
 // v7.30.0: one definition of "which entry does this file live under".
@@ -13137,13 +13137,22 @@ const proxyOriginals = new Map();      // item id   -> { name, url, file }
 // two different takes, and keying by name alone means the second one
 // overwrites the first, so the first card can no longer find its own
 // original and gets sent to a picker for a file it already dragged in.
-// Chrome fills `webkitRelativePath` when a folder is dragged in (or picked
-// through `webkitdirectory`); it is empty for a plain multi-select, and in
-// that case the name really is the best key we have.
+// v7.30.1: on a DROP Chrome leaves `webkitRelativePath` EMPTY -- that field
+// is only ever filled for a `webkitdirectory` input. Krafted's own folder
+// reader writes `_kraftedPath` instead (see readEntry), so that is what has
+// to be read first, and `webkitRelativePath` is only a fallback. With no path
+// at all -- a plain multi-select -- the name is the best we have, and then
+// `originalFileFor` insists the size agrees before it will use it.
 function dropKeyOf(f) {
   if (!f) return '';
+  const name = String(f.name || '').trim();
+  // v7.30.1: `_kraftedPath` is the FOLDER, not the file -- readEntry stamps
+  // the containing directory. So the name has to be appended here, or every
+  // file in one folder collapses into a single pool entry.
+  const dir = (typeof f._kraftedPath === 'string') ? f._kraftedPath.trim().replace(/\/+$/, '') : '';
+  if (dir) return dir + '/' + name;
   const rel = (typeof f.webkitRelativePath === 'string') ? f.webkitRelativePath.trim() : '';
-  return rel || String(f.name || '').trim();
+  return rel || name;
 }
 
 // v7.29.0: video only, and bounded.
@@ -13187,7 +13196,7 @@ function dropOriginalLink(itemId) {
 
 function applyOriginalLink(item, file) {
   if (!item || !file) return false;
-  dropOriginalLink(item.id);   // v7.30.0: linking twice must not leak the first URL
+  dropOriginalLink(item.id);   // v7.30.1: linking twice must not leak the first URL
   const url = URL.createObjectURL(file);
   proxyOriginals.set(item.id, { name: file.name, url: url, file: file });
   if (item.el) syncProxyBadgeEl(item.el.querySelector('.media-info-bar'), item);
@@ -27818,18 +27827,27 @@ function mediaBaseName(filename) {
 // exactly what it was before.
 function planProxyPairs(names, pathsByName) {
   const plan = Object.create(null);
-  const originalByBase = Object.create(null);
+  const originalByBase = Object.create(null);   // exact case
+  const originalByLower = Object.create(null);  // v7.30.1: case-insensitive fallback
   const proxies = [];
   (names || []).forEach(function (n) {
     if (!(typeof n === 'string') || !n) return;
     const pb = proxyBaseName(n);
     if (pb !== null) { proxies.push({ name: n, base: pb }); return; }
+    // v7.30.1: Windows and macOS volumes are case-insensitive by default, and
+    // the proxy suffix was ALREADY matched without regard to case, so the two
+    // halves of the rule disagreed and `Shot01.mp4` could never find
+    // `SHOT01_proxy.mp4`. Exact case still wins: when a batch holds both
+    // `Shot01.mp4` and `shot01.mp4` the answer must not depend on which the
+    // drop happened to see first (found by fuzz_identity.js, I3).
     const b = mediaBaseName(n);
+    const bk = b.toLowerCase();
     if (b && !(b in originalByBase)) originalByBase[b] = n;
+    if (b && !(bk in originalByLower)) originalByLower[bk] = n;
   });
   const claimed = Object.create(null);
   proxies.forEach(function (p) {
-    const orig = originalByBase[p.base] || null;
+    const orig = originalByBase[p.base] || originalByLower[p.base.toLowerCase()] || null;
     plan[p.name] = { isProxy: true, originalName: orig, originalPath: ((orig && pathsByName) ? (pathsByName[orig] || '') : ''), skip: false };
     if (orig) claimed[orig] = true;
   });

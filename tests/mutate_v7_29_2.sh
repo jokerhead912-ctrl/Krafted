@@ -52,7 +52,7 @@ CAUGHT=0; NOTCAUGHT=0; FRAGILE=0; SKIP=0; ANCHORFAIL=0; EQUIV=0
 . Krafted/tests/mutlib.sh
 
 # ── group A: the selection ────────────────────────────────────────────────
-mutate "A1 back to first-card-only (the v7.30.0 bug)" \
+mutate "A1 back to first-card-only (the v7.30.1 bug)" \
   "    if (it && it.isProxy && it.isVideo) out.push(it);" \
   "    if (it && it.isProxy && it.isVideo && !out.length) out.push(it);"
 
@@ -105,7 +105,7 @@ mutate "C4 the stale auto-detected frame rate is kept" \
   "  if (false) {"
 
 # ── group D: v7.29.1 — one target, an honest label, a batch you can stop ──
-mutate "D1 the swap goes back to a per-card toggle (the v7.30.0 bug)" \
+mutate "D1 the swap goes back to a per-card toggle (the v7.30.1 bug)" \
   "    if (!!it._showingOriginal === toOrig) return;   // already at the target" \
   "    if (false) return;"
 

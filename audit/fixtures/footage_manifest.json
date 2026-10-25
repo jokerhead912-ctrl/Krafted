@@ -1,0 +1,83 @@
+{
+ "sourceRoot": "/Users/kincheung/Documents/deta_force/yang1/oil19",
+ "note": "Build the audit fixture tree from REAL footage bytes.",
+ "files": [
+  {
+   "target": "takeA/shot01.mp4",
+   "sourceRel": "05_video_edit/out_edit_v1.mp4",
+   "size": 14313976,
+   "sha256": "43dd86096361e3004038af28afd4d19a802488eb9c7c0721706e6d88b13eefda",
+   "why": "P2: same name as takeB/shot01.mp4, different folder, size 14313976 vs 18002861"
+  },
+  {
+   "target": "takeA/shot01_proxy.mp4",
+   "sourceRel": "07_run_3s/final/19_oil_3s_SMOOTH24_1080p.mp4",
+   "size": 12236171,
+   "sha256": "18656af8c9ccac11c22acf3de0fb5edf64c3cc88d9d0c5cfca2235af1d69a72e",
+   "why": "proxy for takeA/shot01 (PROXY_SUFFIX is _proxy, matched case-insensitively)"
+  },
+  {
+   "target": "takeB/shot01.mp4",
+   "sourceRel": "05_video_edit/out_omni_v1.mp4",
+   "size": 18002861,
+   "sha256": "97d5bf17117d8be26fd771bb912fd2740a714c49f3cc4ec668f9788ecfe3bdac",
+   "why": "P2: the take that gets lost if the key is the name alone"
+  },
+  {
+   "target": "takeB/shot01_proxy.mp4",
+   "sourceRel": "07_run_3s/final/19_oil_3s_FULL_1080p.mp4",
+   "size": 12458741,
+   "sha256": "7f4341995398625f31670f92cf11e2cf4982fc8f7b248cdbec0ad37bc6bf317f",
+   "why": "proxy for takeB/shot01"
+  },
+  {
+   "target": "CaseTest/Shot01.mp4",
+   "sourceRel": "05_video_edit/out_style_v1.mp4",
+   "size": 20056817,
+   "sha256": "82ec1d4d7d35e8cd61b3445b2229597ddfefd75dd3c0c1a517d813288ea9fe76",
+   "why": "W2: capital S -- the pair below is uppercase and must still match"
+  },
+  {
+   "target": "CaseTest/SHOT01_proxy.mp4",
+   "sourceRel": "07_run_3s/final/19_oil_3s_PICTURE_1920x818.mp4",
+   "size": 13298204,
+   "sha256": "44b2080b29dadd42b49bec8aaf9215bc8f3b33638aa8bca0ffee2eb6cbe0b487",
+   "why": "W2: proxy in a different case from its original"
+  },
+  {
+   "target": "twinsA/shot02.mp4",
+   "sourceRel": "09_run_full/final/19_oil_FULL_v2_1080p.mp4",
+   "size": 51553100,
+   "sha256": "d618711d0a02d0a3ebb1d86ebdb61cbea7a497cc3064e397cafe7f9514bb3a2a",
+   "why": "size collision: 51553100 bytes, sha256 d618711d..."
+  },
+  {
+   "target": "twinsB/shot02.mp4",
+   "sourceRel": "09_run_full/final/19_oil_FULL_v2plain_1080p.mp4",
+   "size": 51553100,
+   "sha256": "4554eca024dfcbe3d7dc70fd6509910a6ab93cf692f444104f247fb66fe0c577",
+   "why": "size collision: 51553100 bytes, sha256 4554eca0... (same size, different bytes)"
+  },
+  {
+   "target": "mimes/shot03.mxf",
+   "sourceRel": "_rejected_20261010/MOTE_MOTION_TEST_2x.mp4",
+   "size": 8081132,
+   "sha256": "0cfdeb3fa99c94ea7202e012d2e2e3d3fdb46a7cefcf6aff1b5e48e7f549ede8",
+   "why": "W1: unmapped extension -- does file.type come back empty?"
+  },
+  {
+   "target": "mimes/shot04.mov",
+   "sourceRel": "_rejected_20261010/MOTE_MOTION_TEST_2x.mp4",
+   "size": 8081132,
+   "sha256": "0cfdeb3fa99c94ea7202e012d2e2e3d3fdb46a7cefcf6aff1b5e48e7f549ede8",
+   "why": "W1: .mov is usually mapped to video/quicktime -- control for .mxf"
+  },
+  {
+   "target": "mimes/shot05.mp4",
+   "sourceRel": "_rejected_20261010/MOTE_MOTION_TEST_2x.mp4",
+   "size": 8081132,
+   "sha256": "0cfdeb3fa99c94ea7202e012d2e2e3d3fdb46a7cefcf6aff1b5e48e7f549ede8",
+   "why": "W1: control -- definitely mapped"
+  }
+ ]
+}
