@@ -64,8 +64,28 @@ def code_only(s):
     return ''.join(out)
 
 
+def fetch():
+    """urllib first; curl as a fallback.
+
+    Python's urllib has been seen to fail here with
+    `ssl.SSLError: [SSL] record layer failure` while curl fetches the very same
+    URL fine, so a fetch that cannot reach the network is not evidence about
+    the Pages build -- and a verifier that cannot run is a verifier that gets
+    skipped. Both paths are recorded so the report can never be mistaken for a
+    result.
+    """
+    try:
+        return urllib.request.urlopen(URL, timeout=120).read(), 'urllib'
+    except Exception as e:
+        print('  urllib failed (%s) -- falling back to curl' % e)
+        import subprocess
+        return subprocess.run(['curl', '-sS', '--max-time', '120', URL],
+                              stdout=subprocess.PIPE, check=True).stdout, 'curl'
+
+
 def main():
-    remote = urllib.request.urlopen(URL, timeout=120).read()
+    remote, how = fetch()
+    print('  fetched via: %s' % how)
     text = remote.decode('utf-8')
     code = code_only(text)
     print('PAGES: %s' % URL)
