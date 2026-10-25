@@ -1,0 +1,375 @@
+{
+ "schema": "krafted-stability-audit/1",
+ "startedAt": "2026-10-25T07:08:15.808Z",
+ "config": {
+  "url": "https://jokerhead912-ctrl.github.io/Krafted/kraftpub.html",
+  "board": "/Users/kincheung/WorkBuddy/2026-07-25-10-53-37/Krafted/audit/fixtures/board_concept_art_v551.kpak",
+  "footage": "/Users/kincheung/WorkBuddy/2026-07-25-10-53-37/Krafted/audit/fixtures/footage",
+  "platform": "mac",
+  "soak": 0,
+  "out": "/Users/kincheung/WorkBuddy/2026-07-25-10-53-37/Krafted/audit/results/result_mac_v7301.json",
+  "headless": true,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+ },
+ "environment": {
+  "platform": "mac",
+  "osRelease": "25.6.0",
+  "arch": "arm64",
+  "cpus": 14,
+  "cpuModel": "Apple M4 Pro",
+  "totalMemGB": 51.5,
+  "node": "v22.12.0",
+  "chromeVersion": "Chrome/155.0.8059.85",
+  "headless": true,
+  "appVersionUnderTest": "7.30.1",
+  "codecSupport": {
+   "h264": "probably",
+   "mp4": "maybe",
+   "webm": "probably",
+   "mov": ""
+  }
+ },
+ "cases": [
+  {
+   "case": "C1_load",
+   "at": "2026-10-25T07:08:20.236Z",
+   "coldMs": 1406,
+   "warmMs": 71,
+   "serviceWorker": {
+    "registered": true,
+    "scriptURL": "https://jokerhead912-ctrl.github.io/Krafted/sw.js"
+   },
+   "appVersion": "7.30.1",
+   "codecs": {
+    "h264": "probably",
+    "mp4": "maybe",
+    "webm": "probably",
+    "mov": ""
+   }
+  },
+  {
+   "case": "C2_board_load",
+   "at": "2026-10-25T07:08:23.310Z",
+   "ok": true,
+   "boardBytes": 234246100,
+   "boardSha": "f66ff90fe5788e4d",
+   "itemsLoaded": 79,
+   "msToItems": 208,
+   "msToSettled": 2949,
+   "domCards": {
+    "selector": ".item",
+    "n": 79
+   },
+   "longTasksDuringLoad": 0,
+   "longTaskMaxMs": 0,
+   "jsHeapUsedMB": 2.6
+  },
+  {
+   "case": "C3_pan_zoom",
+   "at": "2026-10-25T07:08:25.079Z",
+   "frames": {
+    "n": 99,
+    "p50": 16.600000143051147,
+    "p95": 18.299999952316284,
+    "max": 18.699999809265137,
+    "min": 14.599999904632568
+   },
+   "longTasks": 0,
+   "longTaskMaxMs": 0
+  },
+  {
+   "case": "C4_mime_probe",
+   "at": "2026-10-25T07:08:25.182Z",
+   "probes": [
+    {
+     "file": "shot03.mxf",
+     "type": "application/mxf",
+     "size": 8081132,
+     "webkitRelativePath": "",
+     "diskSha": "0cfdeb3fa99c94ea"
+    },
+    {
+     "file": "shot04.mov",
+     "type": "video/quicktime",
+     "size": 8081132,
+     "webkitRelativePath": "",
+     "diskSha": "0cfdeb3fa99c94ea"
+    },
+    {
+     "file": "shot05.mp4",
+     "type": "video/mp4",
+     "size": 8081132,
+     "webkitRelativePath": "",
+     "diskSha": "0cfdeb3fa99c94ea"
+    },
+    {
+     "file": "shot01.mp4",
+     "type": "video/mp4",
+     "size": 14313976,
+     "webkitRelativePath": "",
+     "diskSha": "43dd86096361e300"
+    },
+    {
+     "file": "shot01_proxy.mp4",
+     "type": "video/mp4",
+     "size": 12236171,
+     "webkitRelativePath": "",
+     "diskSha": "18656af8c9ccac11"
+    }
+   ]
+  },
+  {
+   "case": "C5_drop_blackbox",
+   "at": "2026-10-25T07:08:33.199Z",
+   "dropped": [
+    "shot01.mp4",
+    "shot01_proxy.mp4",
+    "shot01.mp4",
+    "shot01_proxy.mp4",
+    "SHOT01_proxy.mp4",
+    "Shot01.mp4",
+    "shot03.mxf",
+    "shot04.mov",
+    "shot05.mp4"
+   ],
+   "droppedNames": [
+    "shot01.mp4",
+    "shot01_proxy.mp4",
+    "shot01.mp4",
+    "shot01_proxy.mp4",
+    "SHOT01_proxy.mp4",
+    "Shot01.mp4",
+    "shot03.mxf",
+    "shot04.mov",
+    "shot05.mp4"
+   ],
+   "droppedTypes": [
+    "video/mp4",
+    "video/mp4",
+    "video/mp4",
+    "video/mp4",
+    "video/mp4",
+    "video/mp4",
+    "application/mxf",
+    "video/quicktime",
+    "video/mp4"
+   ],
+   "before": 79,
+   "after": 85,
+   "cards": [
+    {
+     "id": 163,
+     "name": "image.png",
+     "isVideo": false,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 720,
+     "h": 305.5078125
+    },
+    {
+     "id": 164,
+     "name": "image.png",
+     "isVideo": false,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 843.7757484334878,
+     "h": 354.3198943617185
+    },
+    {
+     "id": 168,
+     "name": "moodv007.mp4",
+     "isVideo": true,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 2100.26730090593,
+     "h": 1024.95524192265
+    },
+    {
+     "id": 169,
+     "name": "image.png",
+     "isVideo": false,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 720,
+     "h": 411.25925925925924
+    },
+    {
+     "id": 174,
+     "name": "局部截取_20260914_111642.png",
+     "isVideo": false,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 720,
+     "h": 303.3984375
+    },
+    {
+     "id": 178,
+     "name": "image.png",
+     "isVideo": false,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 720,
+     "h": 300.9896907216495
+    },
+    {
+     "id": 179,
+     "name": "image.png",
+     "isVideo": false,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 720,
+     "h": 300.9896907216495
+    },
+    {
+     "id": 181,
+     "name": "",
+     "isVideo": false,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 720,
+     "h": 291.7461568782026
+    },
+    {
+     "id": 186,
+     "name": "图片生成-1 (9).png",
+     "isVideo": false,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 720,
+     "h": 304.8046875
+    },
+    {
+     "id": 188,
+     "name": "image.png",
+     "isVideo": false,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 720,
+     "h": 406.7578125
+    },
+    {
+     "id": 189,
+     "name": "shot01_proxy.mp4",
+     "isVideo": true,
+     "originalName": "shot01.mp4",
+     "originalSize": 18002861,
+     "originalPath": null,
+     "w": 1100,
+     "h": 618.75
+    },
+    {
+     "id": 190,
+     "name": "shot01_proxy.mp4",
+     "isVideo": true,
+     "originalName": "shot01.mp4",
+     "originalSize": 18002861,
+     "originalPath": null,
+     "w": 1100,
+     "h": 618.75
+    },
+    {
+     "id": 191,
+     "name": "SHOT01_proxy.mp4",
+     "isVideo": true,
+     "originalName": "shot01.mp4",
+     "originalSize": 18002861,
+     "originalPath": null,
+     "w": 1100,
+     "h": 468.6458333333333
+    },
+    {
+     "id": 192,
+     "name": "Shot01.mp4",
+     "isVideo": true,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 1100,
+     "h": 468.44484629294755
+    },
+    {
+     "id": 193,
+     "name": "shot04.mov",
+     "isVideo": true,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 1100,
+     "h": 656.3333333333333
+    },
+    {
+     "id": 194,
+     "name": "shot05.mp4",
+     "isVideo": true,
+     "originalName": null,
+     "originalSize": null,
+     "originalPath": null,
+     "w": 1100,
+     "h": 656.3333333333333
+    }
+   ]
+  },
+  {
+   "case": "C5b_real_decode",
+   "at": "2026-10-25T07:08:33.251Z",
+   "diskSha": "0cfdeb3fa99c94ea",
+   "name": "shot05.mp4",
+   "loaded": true,
+   "duration": 8,
+   "w": 1200,
+   "h": 716,
+   "frameHash": "692cadd9"
+  },
+  {
+   "case": "C6_heap_3snapshots",
+   "at": "2026-10-25T07:08:36.017Z",
+   "snaps": [
+    {
+     "round": 0,
+     "jsHeapUsedMB": 3.3,
+     "heapBytes": 13044734,
+     "nodeCount": 151006
+    },
+    {
+     "round": 1,
+     "jsHeapUsedMB": 3.4,
+     "heapBytes": 13102322,
+     "nodeCount": 151248
+    },
+    {
+     "round": 2,
+     "jsHeapUsedMB": 3.4,
+     "heapBytes": 13098948,
+     "nodeCount": 151284
+    }
+   ],
+   "growthMB": 0.1,
+   "monotonicRise": true
+  },
+  {
+   "case": "C7_soak",
+   "at": "2026-10-25T07:08:36.017Z",
+   "skipped": true,
+   "why": "soak=0"
+  }
+ ],
+ "errors": [],
+ "consoleErrors": [],
+ "verdict": {
+  "uncaughtErrors": 0,
+  "consoleErrors": 0,
+  "completed": true
+ },
+ "finishedAt": "2026-10-25T07:08:36.112Z",
+ "auditError": null
+}

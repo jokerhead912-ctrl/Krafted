@@ -1,0 +1,40 @@
+{
+  "file": "/Users/kincheung/WorkBuddy/2026-07-25-10-53-37/kraftpub-dev.html",
+  "url": "file:///Users/kincheung/WorkBuddy/2026-07-25-10-53-37/kraftpub-dev.html",
+  "startedAt": "2026-10-25T12:42:39.808Z",
+  "errors": [],
+  "consoleErrors": [],
+  "measured": {
+    "outW": 352,
+    "outH": 252,
+    "strokeDefaultOpts": 0,
+    "strokeForcedBorder": 1204,
+    "e2eW": 352,
+    "e2eH": 252,
+    "strokeLassoExtract": 0
+  },
+  "checks": [
+    {
+      "label": "instrument can see a stroke (positive control)",
+      "ok": true,
+      "detail": "forced border: 1204 px"
+    },
+    {
+      "label": "renderer with default opts draws no stroke",
+      "ok": true,
+      "detail": "default opts: 0 px"
+    },
+    {
+      "label": "applyLassoExtract() end to end draws no stroke",
+      "ok": true,
+      "detail": "lasso extract: 0 px"
+    },
+    {
+      "label": "no page errors while doing it",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "verdict": "PASS",
+  "finishedAt": "2026-10-25T12:42:40.999Z"
+}

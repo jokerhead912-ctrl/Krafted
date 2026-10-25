@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.30.1</title>
+<title>Krafted v7.30.2</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -4436,7 +4436,8 @@ body.media-playing .krafted-save-alarm {
   <div class="lasso-sep"></div>
   <span class="lasso-label" id="lasso-hint">Click points on image to cut</span>
   <div class="lasso-sep"></div>
-  <label class="lasso-checkbox"><input type="checkbox" id="lasso-border-toggle" checked> Border</label>
+  <!-- v7.30.2: OFF by default — the stroke is baked into the PIXELS, so a lasso cut-out could never lose it. Cut never drew one. -->
+  <label class="lasso-checkbox"><input type="checkbox" id="lasso-border-toggle"> Border</label>
   <input type="color" class="lasso-border-color" id="lasso-border-color" value="#7c8cf0" title="Border color">
   <div class="lasso-sep"></div>
   <label class="lasso-checkbox" title="Drop the crop on the same pixels instead of beside the original"><input type="checkbox" id="lasso-inplace-toggle" checked> In place</label>
@@ -4697,7 +4698,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.30.1';
+var KRAFTED_VERSION = '7.30.2';
 // v7.26.0: how many videos may decode at once. This used to be a hard-coded
 // 4, but the number that works is a property of the machine (hardware
 // decoders, GPU), so it is a setting. Declared up here so both the state
@@ -13129,7 +13130,7 @@ function syncProxyBadgeEl(infoBar, item) {
 // instant instead of sending the user back to a file picker for a file they
 // literally just dragged in.
 const _dropFiles = new Map();          // drop key  -> File (video only); see dropKeyOf
-const _DROP_FILES_MAX = 600;           // v7.30.1: FIFO cap, see noteDroppedFiles
+const _DROP_FILES_MAX = 600;           // v7.30.2: FIFO cap, see noteDroppedFiles
 const proxyOriginals = new Map();      // item id   -> { name, url, file }
 
 // v7.30.0: one definition of "which entry does this file live under".
@@ -13196,7 +13197,7 @@ function dropOriginalLink(itemId) {
 
 function applyOriginalLink(item, file) {
   if (!item || !file) return false;
-  dropOriginalLink(item.id);   // v7.30.1: linking twice must not leak the first URL
+  dropOriginalLink(item.id);   // v7.30.2: linking twice must not leak the first URL
   const url = URL.createObjectURL(file);
   proxyOriginals.set(item.id, { name: file.name, url: url, file: file });
   if (item.el) syncProxyBadgeEl(item.el.querySelector('.media-info-bar'), item);
@@ -27828,7 +27829,7 @@ function mediaBaseName(filename) {
 function planProxyPairs(names, pathsByName) {
   const plan = Object.create(null);
   const originalByBase = Object.create(null);   // exact case
-  const originalByLower = Object.create(null);  // v7.30.1: case-insensitive fallback
+  const originalByLower = Object.create(null);  // v7.30.2: case-insensitive fallback
   const proxies = [];
   (names || []).forEach(function (n) {
     if (!(typeof n === 'string') || !n) return;
@@ -34884,7 +34885,7 @@ async function applyCutExtract(beside) {
 }
 
 // ============================================================
-//  LASSO — click points to define polygon, extract with border
+//  LASSO — click points to define polygon, extract (border optional, off)
 // ============================================================
 let lassoState = null; // { itemId, points: [{x,y}], closed }
 const lassoOverlay = document.getElementById('lasso-overlay');

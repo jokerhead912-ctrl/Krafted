@@ -88,7 +88,7 @@ mutate "B3 a hand-picked file is refused on an unknown size" \
   "  if (!want) return null;"
 
 # ── group C: one dialog, matched by identity ──────────────────────────────
-mutate "C1 one dialog per card again (the v7.30.1 Esc farm)" \
+mutate "C1 one dialog per card again (the v7.30.2 Esc farm)" \
   "  pickFiles('video/*', true).then(function (picked) {
     if (!picked) { report(true); return; }
     const pool = new Map();
@@ -131,7 +131,7 @@ mutate "C5 the picker ignores the multiple flag entirely" \
 # v7.30.1 -- P2. The whole point: a real folder drop writes _kraftedPath and
 # leaves webkitRelativePath EMPTY, so a key that only reads the latter is the
 # bug I shipped in v7.30.0 and must not be allowed back.
-mutate "D1 the folder path is ignored again (the v7.30.1 bug)" \
+mutate "D1 the folder path is ignored again (the v7.30.2 bug)" \
   "  const dir = (typeof f._kraftedPath === 'string') ? f._kraftedPath.trim().replace(/\/+$/, '') : '';" \
   "  const dir = '';"
 
