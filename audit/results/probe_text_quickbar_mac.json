@@ -1,0 +1,698 @@
+{
+  "html": "/Users/kincheung/WorkBuddy/2026-07-25-10-53-37/kraftpub-dev.html",
+  "startedAt": "2026-11-09T06:19:49.720Z",
+  "errors": [],
+  "step1_freshSelected": {
+    "barActive": true,
+    "selectedTextCount": 1,
+    "lockedFlags": [
+      false
+    ],
+    "font": {
+      "disabled": false,
+      "value": "Arial",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "size": {
+      "disabled": false,
+      "value": "24",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "bold": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "colorPicker": {
+      "disabled": false,
+      "value": "#ffffff",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "colorMixedLabelHidden": true,
+    "align": {
+      "disabled": false,
+      "value": "left",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "presetTitle": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "presetBody": {
+      "disabled": false,
+      "value": null,
+      "active": true,
+      "visible": true
+    },
+    "presetLabel": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "done": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "tagsInput": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "item": {
+      "id": 1,
+      "el": {
+        "_textListenersAttached": true
+      },
+      "x": 200,
+      "y": 200,
+      "w": 320,
+      "h": 36,
+      "z": 1,
+      "_autoGrowLocked": true,
+      "name": "",
+      "note": "",
+      "tags": [],
+      "textPreset": "body",
+      "font": "Arial",
+      "size": 24,
+      "bold": false,
+      "italic": false,
+      "underline": false,
+      "strike": false,
+      "highlight": false,
+      "shadow": false,
+      "bg": false,
+      "outline": false,
+      "uppercase": false,
+      "color": "#ffffff",
+      "highlightColor": "#ffff00",
+      "align": "left"
+    },
+    "itemStyle": {
+      "color": "rgb(255, 255, 255)",
+      "fontWeight": "400",
+      "fontSize": "24px",
+      "bg": false,
+      "textPreset": "body"
+    }
+  },
+  "step2_afterLabel": {
+    "barActive": true,
+    "selectedTextCount": 1,
+    "lockedFlags": [
+      false
+    ],
+    "font": {
+      "disabled": false,
+      "value": "Arial",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "size": {
+      "disabled": false,
+      "value": "18",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "bold": {
+      "disabled": false,
+      "value": null,
+      "active": true,
+      "visible": true
+    },
+    "colorPicker": {
+      "disabled": false,
+      "value": "#ffffff",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "colorMixedLabelHidden": true,
+    "align": {
+      "disabled": false,
+      "value": "left",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "presetTitle": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "presetBody": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "presetLabel": {
+      "disabled": false,
+      "value": null,
+      "active": true,
+      "visible": true
+    },
+    "done": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "tagsInput": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "item": {
+      "id": 1,
+      "el": {
+        "_textListenersAttached": true
+      },
+      "x": 200,
+      "y": 200,
+      "w": 111,
+      "h": 37,
+      "z": 1,
+      "_autoGrowLocked": true,
+      "name": "",
+      "note": "",
+      "tags": [],
+      "textPreset": "label",
+      "font": "Arial",
+      "size": 18,
+      "bold": true,
+      "italic": false,
+      "underline": false,
+      "strike": false,
+      "highlight": false,
+      "shadow": false,
+      "bg": true,
+      "outline": false,
+      "uppercase": false,
+      "color": "#ffffff",
+      "highlightColor": "#ffff00",
+      "align": "left"
+    },
+    "itemStyle": {
+      "color": "rgb(255, 255, 255)",
+      "fontWeight": "700",
+      "fontSize": "18px",
+      "bg": true,
+      "textPreset": "label"
+    }
+  },
+  "step2_setColor": {
+    "changed": 1,
+    "color": "#44ddff",
+    "computed": "rgb(68, 221, 255)"
+  },
+  "step2_afterSetColor": {
+    "barActive": true,
+    "selectedTextCount": 1,
+    "lockedFlags": [
+      false
+    ],
+    "font": {
+      "disabled": false,
+      "value": "Arial",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "size": {
+      "disabled": false,
+      "value": "18",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "bold": {
+      "disabled": false,
+      "value": null,
+      "active": true,
+      "visible": true
+    },
+    "colorPicker": {
+      "disabled": false,
+      "value": "#44ddff",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "colorMixedLabelHidden": true,
+    "align": {
+      "disabled": false,
+      "value": "left",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "presetTitle": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "presetBody": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "presetLabel": {
+      "disabled": false,
+      "value": null,
+      "active": true,
+      "visible": true
+    },
+    "done": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "tagsInput": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "item": {
+      "id": 1,
+      "el": {
+        "_textListenersAttached": true
+      },
+      "x": 200,
+      "y": 200,
+      "w": 111,
+      "h": 37,
+      "z": 1,
+      "_autoGrowLocked": true,
+      "name": "",
+      "note": "",
+      "tags": [],
+      "textPreset": "label",
+      "font": "Arial",
+      "size": 18,
+      "bold": true,
+      "italic": false,
+      "underline": false,
+      "strike": false,
+      "highlight": false,
+      "shadow": false,
+      "bg": true,
+      "outline": false,
+      "uppercase": false,
+      "color": "#44ddff",
+      "highlightColor": "#ffff00",
+      "align": "left"
+    },
+    "itemStyle": {
+      "color": "rgb(68, 221, 255)",
+      "fontWeight": "700",
+      "fontSize": "18px",
+      "bg": true,
+      "textPreset": "label"
+    }
+  },
+  "step2_pickerEvent": {
+    "color": "#ff8800",
+    "computed": "rgb(255, 136, 0)"
+  },
+  "step3_afterTitle": {
+    "barActive": true,
+    "selectedTextCount": 1,
+    "lockedFlags": [
+      false
+    ],
+    "font": {
+      "disabled": false,
+      "value": "Arial",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "size": {
+      "disabled": false,
+      "value": "36",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "bold": {
+      "disabled": false,
+      "value": null,
+      "active": true,
+      "visible": true
+    },
+    "colorPicker": {
+      "disabled": false,
+      "value": "#ff8800",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "colorMixedLabelHidden": true,
+    "align": {
+      "disabled": false,
+      "value": "left",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "presetTitle": {
+      "disabled": false,
+      "value": null,
+      "active": true,
+      "visible": true
+    },
+    "presetBody": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "presetLabel": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "done": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "tagsInput": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "item": {
+      "id": 1,
+      "el": {
+        "_textListenersAttached": true
+      },
+      "x": 200,
+      "y": 200,
+      "w": 111,
+      "h": 172,
+      "z": 1,
+      "_autoGrowLocked": true,
+      "name": "",
+      "note": "",
+      "tags": [],
+      "textPreset": "title",
+      "font": "Arial",
+      "size": 36,
+      "bold": true,
+      "italic": false,
+      "underline": false,
+      "strike": false,
+      "highlight": false,
+      "shadow": false,
+      "bg": false,
+      "outline": false,
+      "uppercase": false,
+      "color": "#ff8800",
+      "highlightColor": "#ffff00",
+      "align": "left"
+    },
+    "itemStyle": {
+      "color": "rgb(255, 136, 0)",
+      "fontWeight": "700",
+      "fontSize": "36px",
+      "bg": false,
+      "textPreset": "title"
+    }
+  },
+  "step3_afterBody": {
+    "barActive": true,
+    "selectedTextCount": 1,
+    "lockedFlags": [
+      false
+    ],
+    "font": {
+      "disabled": false,
+      "value": "Arial",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "size": {
+      "disabled": false,
+      "value": "24",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "bold": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "colorPicker": {
+      "disabled": false,
+      "value": "#ff8800",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "colorMixedLabelHidden": true,
+    "align": {
+      "disabled": false,
+      "value": "left",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "presetTitle": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "presetBody": {
+      "disabled": false,
+      "value": null,
+      "active": true,
+      "visible": true
+    },
+    "presetLabel": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "done": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "tagsInput": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "item": {
+      "id": 1,
+      "el": {
+        "_textListenersAttached": true
+      },
+      "x": 200,
+      "y": 200,
+      "w": 111,
+      "h": 82,
+      "z": 1,
+      "_autoGrowLocked": true,
+      "name": "",
+      "note": "",
+      "tags": [],
+      "textPreset": "body",
+      "font": "Arial",
+      "size": 24,
+      "bold": false,
+      "italic": false,
+      "underline": false,
+      "strike": false,
+      "highlight": false,
+      "shadow": false,
+      "bg": false,
+      "outline": false,
+      "uppercase": false,
+      "color": "#ff8800",
+      "highlightColor": "#ffff00",
+      "align": "left"
+    },
+    "itemStyle": {
+      "color": "rgb(255, 136, 0)",
+      "fontWeight": "400",
+      "fontSize": "24px",
+      "bg": false,
+      "textPreset": "body"
+    }
+  },
+  "step4_roundtrips": {
+    "size": {
+      "applied": 40
+    },
+    "font": {
+      "tried": "Arial",
+      "applied": "Arial"
+    },
+    "bold": {
+      "before": false,
+      "after": true
+    },
+    "align": {
+      "applied": "center"
+    },
+    "tags": {
+      "tags": [
+        "qc-probe"
+      ]
+    }
+  },
+  "step5_locked": {
+    "barActive": true,
+    "selectedTextCount": 1,
+    "lockedFlags": [
+      true
+    ],
+    "font": {
+      "disabled": true,
+      "value": "Arial",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "size": {
+      "disabled": true,
+      "value": "40",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "bold": {
+      "disabled": true,
+      "value": null,
+      "active": true,
+      "visible": true
+    },
+    "colorPicker": {
+      "disabled": true,
+      "value": "#ff8800",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "colorMixedLabelHidden": true,
+    "align": {
+      "disabled": true,
+      "value": "center",
+      "mixed": "false",
+      "active": false,
+      "visible": true
+    },
+    "presetTitle": {
+      "disabled": true,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "presetBody": {
+      "disabled": true,
+      "value": null,
+      "active": true,
+      "visible": true
+    },
+    "presetLabel": {
+      "disabled": true,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "done": {
+      "disabled": false,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "tagsInput": {
+      "disabled": true,
+      "value": null,
+      "active": false,
+      "visible": true
+    },
+    "item": {
+      "id": 1,
+      "el": {
+        "_textListenersAttached": true
+      },
+      "x": 200,
+      "y": 200,
+      "w": 111,
+      "h": 190,
+      "z": 1,
+      "_autoGrowLocked": true,
+      "name": "",
+      "note": "",
+      "tags": [
+        "qc-probe"
+      ],
+      "textPreset": "body",
+      "font": "Arial",
+      "size": 40,
+      "bold": true,
+      "italic": false,
+      "underline": false,
+      "strike": false,
+      "highlight": false,
+      "shadow": false,
+      "bg": false,
+      "outline": false,
+      "uppercase": false,
+      "color": "#ff8800",
+      "highlightColor": "#ffff00",
+      "align": "center",
+      "locked": true
+    },
+    "itemStyle": {
+      "color": "rgb(255, 136, 0)",
+      "fontWeight": "700",
+      "fontSize": "40px",
+      "bg": false,
+      "textPreset": "body"
+    }
+  },
+  "verdict": {
+    "shouldDisable": false,
+    "visibleButDisabled": []
+  },
+  "ok": true,
+  "finishedAt": "2026-11-09T06:19:52.660Z"
+}

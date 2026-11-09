@@ -1,0 +1,159 @@
+{
+  "html": "/Users/kincheung/WorkBuddy/2026-07-25-10-53-37/kraftpub-dev.html",
+  "fixture": "/Users/kincheung/WorkBuddy/2026-07-25-10-53-37/Krafted/audit/fixtures/footage/takeA/shot01_proxy.mp4",
+  "startedAt": "2026-10-26T02:55:34.040Z",
+  "errors": [],
+  "dropped": {
+    "items": 1,
+    "videos": 1
+  },
+  "before": {
+    "wrapRect": {
+      "x": 700,
+      "y": 424,
+      "w": 1100,
+      "h": 599.8
+    },
+    "itemRect": {
+      "x": 700,
+      "y": 400,
+      "w": 1100,
+      "h": 672.8
+    },
+    "videoRect": {
+      "x": 700,
+      "y": 424,
+      "w": 1100,
+      "h": 599.8
+    },
+    "videoTransform": "",
+    "tbPresent": true,
+    "tbDisplay": "flex",
+    "tbOffset": {
+      "w": 150,
+      "h": 600
+    },
+    "tbInline": {
+      "left": "-154px",
+      "top": "36.375px",
+      "height": "599.75px"
+    },
+    "tbRect": {
+      "x": 546,
+      "y": 436.4,
+      "w": 150.5,
+      "h": 599.8
+    },
+    "tbVarScale": "1.14",
+    "toolbarPos": null,
+    "pan": {
+      "x": 0,
+      "y": 0
+    },
+    "zoom": null
+  },
+  "dragAt": {
+    "x": 1250,
+    "y": 723.875
+  },
+  "during": {
+    "wrapRect": {
+      "x": 700,
+      "y": 424,
+      "w": 1100,
+      "h": 599.8
+    },
+    "itemRect": {
+      "x": 700,
+      "y": 400,
+      "w": 1100,
+      "h": 672.8
+    },
+    "videoRect": {
+      "x": 796,
+      "y": 472,
+      "w": 1100,
+      "h": 599.8
+    },
+    "videoTransform": "scale(1) translate(96px, 48px)",
+    "tbPresent": true,
+    "tbDisplay": "flex",
+    "tbOffset": {
+      "w": 150,
+      "h": 600
+    },
+    "tbInline": {
+      "left": "-154px",
+      "top": "36.375px",
+      "height": "599.75px"
+    },
+    "tbRect": {
+      "x": 546,
+      "y": 436.4,
+      "w": 150.5,
+      "h": 599.8
+    },
+    "tbVarScale": "1.14",
+    "toolbarPos": null,
+    "pan": {
+      "x": 96,
+      "y": 48
+    },
+    "zoom": 1
+  },
+  "after": {
+    "wrapRect": {
+      "x": 700,
+      "y": 424,
+      "w": 1100,
+      "h": 599.8
+    },
+    "itemRect": {
+      "x": 700,
+      "y": 400,
+      "w": 1100,
+      "h": 672.8
+    },
+    "videoRect": {
+      "x": 796,
+      "y": 472,
+      "w": 1100,
+      "h": 599.8
+    },
+    "videoTransform": "scale(1) translate(96px, 48px)",
+    "tbPresent": true,
+    "tbDisplay": "flex",
+    "tbOffset": {
+      "w": 150,
+      "h": 600
+    },
+    "tbInline": {
+      "left": "-154px",
+      "top": "36.375px",
+      "height": "599.75px"
+    },
+    "tbRect": {
+      "x": 546,
+      "y": 436.4,
+      "w": 150.5,
+      "h": 599.8
+    },
+    "tbVarScale": "1.14",
+    "toolbarPos": null,
+    "pan": {
+      "x": 96,
+      "y": 48
+    },
+    "zoom": 1
+  },
+  "delta": {
+    "tbX": 0,
+    "tbY": 0,
+    "tbW": 0,
+    "tbH": 0
+  },
+  "moved": false,
+  "panActuallyChanged": true,
+  "verdict": "DID NOT MOVE",
+  "finishedAt": "2026-10-26T02:55:45.005Z"
+}

@@ -340,8 +340,8 @@ async function main() {
         ver: (typeof KRAFTED_VERSION === 'string') ? KRAFTED_VERSION : null,
         title: document.title
       }));
-      eq(v.ver, '7.30.2', 'the served page reports KRAFTED_VERSION 7.30.2');
-      ok(/v7\.30\.2/.test(v.title), 'the document title says v7.30.2 (' + v.title + ')');
+      eq(v.ver, '7.30.3', 'the served page reports KRAFTED_VERSION 7.30.3');
+      ok(/v7\.30\.3/.test(v.title), 'the document title says v7.30.3 (' + v.title + ')');
       await page.close();
     }
 

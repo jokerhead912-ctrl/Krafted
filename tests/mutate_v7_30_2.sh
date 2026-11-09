@@ -56,7 +56,7 @@ CAUGHT=0; NOTCAUGHT=0; FRAGILE=0; SKIP=0; ANCHORFAIL=0; EQUIV=0
 
 # ── group A: the default ─────────────────────────────────────────────────
 # This is the shipped bug. If it survives, nothing here has any value.
-mutate "A1 Border ships checked again (the v7.30.2 bug)" \
+mutate "A1 Border ships checked again (the v7.30.3 bug)" \
   'id="lasso-border-toggle"' \
   'id="lasso-border-toggle" checked'
 

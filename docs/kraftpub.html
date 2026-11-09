@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Krafted v7.30.2</title>
+<title>Krafted v7.30.3</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='black'/%3E%3Ctext x='50' y='55' font-family='sans-serif' font-size='50' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EK%3C/text%3E%3C/svg%3E">
 <!-- PWA Meta -->
 <meta name="theme-color" content="#1a1a1a">
@@ -3861,10 +3861,13 @@ body.screen-share-mode #ss-fps {
 #tqb-size-input { width:68px; }
 #tqb-align { width:68px; }
 #text-quick-bar .tqb-color-wrap { position:relative; width:48px; height:26px; display:inline-flex; }
-#text-quick-bar #tqb-custom-color { width:48px; height:26px; margin:0; padding:1px; }
-#text-quick-bar .mixed-color #tqb-custom-color { opacity:0; }
-#tqb-color-mixed { position:absolute; inset:0; pointer-events:none; display:grid; place-items:center; font-size:10px; border:1px dashed var(--border); border-radius:5px; }
-#tqb-color-mixed[hidden] { display:none; }
+#text-quick-bar #tqb-custom-color, #text-quick-bar #tqb-hl-color { width:48px; height:26px; margin:0; padding:1px; }
+#text-quick-bar .mixed-color input[type="color"] { opacity:0; }
+#tqb-color-mixed, #tqb-hl-mixed { position:absolute; inset:0; pointer-events:none; display:grid; place-items:center; font-size:10px; border:1px dashed var(--border); border-radius:5px; }
+#tqb-color-mixed[hidden], #tqb-hl-mixed[hidden] { display:none; }
+#tqb-lock-note { display:flex; align-items:center; gap:8px; padding:4px 6px 1px; font:11px 'Inter',sans-serif; color:var(--text-dim); }
+#tqb-lock-note[hidden] { display:none; }
+#tqb-unlock { min-height:22px; padding:2px 10px; }
 .board-tag-controls { display:flex; flex-direction:column; gap:5px; min-width:0; }
 .board-tag-entry { display:flex; align-items:center; flex-wrap:wrap; gap:4px; }
 .board-tag-entry > label { font-size:10px; color:var(--text-dim); }
@@ -4478,6 +4481,10 @@ body.media-playing .krafted-save-alarm {
       <input type="color" id="tqb-custom-color" data-text-style-control onchange="setTextProp('color',this.value)" data-btc-en="Text color" data-btc-zh="文字颜色" data-btc-attr="title">
       <span id="tqb-color-mixed" data-btc-en="Mixed" data-btc-zh="混合">Mixed</span>
     </label>
+    <label class="tqb-color-wrap">
+      <input type="color" id="tqb-hl-color" data-text-style-control onchange="setTextProp('highlightColor',this.value)" data-btc-en="Label / highlight background color" data-btc-zh="标签/高亮背景颜色" data-btc-attr="title">
+      <span id="tqb-hl-mixed" data-btc-en="BG" data-btc-zh="背景">BG</span>
+    </label>
     <select id="tqb-align" data-text-style-control onchange="setTextAlign(this.value)" data-btc-en="Alignment" data-btc-zh="对齐" data-btc-attr="title">
       <option value="" data-btc-en="Mixed" data-btc-zh="混合">Mixed</option>
       <option value="left" data-btc-en="Left" data-btc-zh="左对齐">Left</option>
@@ -4499,6 +4506,10 @@ body.media-playing .krafted-save-alarm {
     <button type="button" data-tag-mode="replace" data-btc-en="Replace…" data-btc-zh="替换…">Replace…</button>
   </div>
   <div data-tag-chips></div>
+</div>
+<div id="tqb-lock-note" hidden>
+  <span id="tqb-lock-text" data-btc-en="Card locked" data-btc-zh="卡片已锁定">Card locked</span>
+  <button type="button" id="tqb-unlock" onclick="unlockSelectedBoardTexts()" data-btc-en="Unlock" data-btc-zh="解锁">Unlock</button>
 </div>
 </div>
 <datalist id="board-tag-suggestions"></datalist>
@@ -4698,7 +4709,7 @@ function showWelcome() {
 // so console.log calls referencing it at startup don't print "undefined".
 // Update this when bumping the version.
 // ============================================================
-var KRAFTED_VERSION = '7.30.2';
+var KRAFTED_VERSION = '7.30.3';
 // v7.26.0: how many videos may decode at once. This used to be a hard-coded
 // 4, but the number that works is a property of the machine (hardware
 // decoders, GPU), so it is a setting. Declared up here so both the state
@@ -24367,6 +24378,20 @@ function applyBoardTextPreset(kind) {
     outline:false, uppercase:false, align:'left', textPreset:kind});
 }
 
+// v7.30.3: the quick bar shows this Unlock button when every selected text
+// card is locked (until then the bar just went dead with no explanation).
+function unlockSelectedBoardTexts() {
+  var texts = selectedBoardTexts();
+  if (!texts.length) return 0;
+  pushUndo();
+  texts.forEach(function (tx) { tx.locked = false; updateItemStyle(tx); });
+  refreshSelection();
+  updatePropsPanel();
+  scheduleAutoSave();
+  syncBoardTextUI();
+  return texts.length;
+}
+
 function stepTextSize(dir) {
   dir = dir < 0 ? -1 : 1;
   var texts = selectedBoardTexts();
@@ -24473,6 +24498,32 @@ function refreshBoardTextLabels(root) {
   });
 }
 
+// v7.30.3: one shared sync for both color pickers (text color + label/highlight
+// background). A native color input cannot represent "mixed", so on mixed the
+// swatch hides and the label shows.
+function syncBoardColorControl(picker, labelId, value) {
+  if (!picker) return;
+  var mixed = value === null;
+  picker.parentElement.classList.toggle('mixed-color', mixed);
+  picker.dataset.mixed = String(mixed);
+  if (!mixed && picker.dataset.sourceColor !== value && document.activeElement !== picker) {
+    var hex = value;
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) {
+      var context = document.createElement('canvas').getContext('2d');
+      if (context) {
+        context.fillStyle = hex;
+        context.fillRect(0, 0, 1, 1);
+        var rgb = context.getImageData(0, 0, 1, 1).data;
+        hex = '#' + Array.from(rgb).slice(0, 3).map(function (v) { return v.toString(16).padStart(2, '0'); }).join('');
+      }
+    }
+    setBoardControlValue(picker, hex);
+    picker.dataset.sourceColor = value;
+  }
+  var label = document.getElementById(labelId);
+  if (label) label.hidden = !mixed;
+}
+
 function updateTextQuickBarActive() {
   ensureBoardTextControls();
   var bar = document.getElementById('text-quick-bar');
@@ -24494,25 +24545,13 @@ function updateTextQuickBarActive() {
   bold.classList.toggle('mixed', texts.length > 0 && boldValue === null);
   bold.setAttribute('aria-pressed', boldValue === null && texts.length ? 'mixed' : String(boldValue === true));
   var color = commonBoardValue(texts, 'color'), picker = document.getElementById('tqb-custom-color');
-  var mixedColor = color === null;
-  picker.parentElement.classList.toggle('mixed-color', mixedColor);
-  picker.dataset.mixed = String(mixedColor);
-  // 原生 color input 不能表示空值；混合时隐藏其色块而显示明确的“混合”。
-  if (!mixedColor && picker.dataset.sourceColor !== color && document.activeElement !== picker) {
-    var hex = color;
-    if (!/^#[0-9a-f]{6}$/i.test(hex)) {
-      var context = document.createElement('canvas').getContext('2d');
-      if (context) {
-        context.fillStyle = color;
-        context.fillRect(0, 0, 1, 1);
-        var rgb = context.getImageData(0, 0, 1, 1).data;
-        hex = '#' + Array.from(rgb).slice(0, 3).map(function (v) { return v.toString(16).padStart(2, '0'); }).join('');
-      }
-    }
-    setBoardControlValue(picker, hex);
-    picker.dataset.sourceColor = color;
-  }
-  document.getElementById('tqb-color-mixed').hidden = !mixedColor;
+  syncBoardColorControl(picker, 'tqb-color-mixed', color);
+  var hlColor = commonBoardValue(texts, 'highlightColor');
+  syncBoardColorControl(document.getElementById('tqb-hl-color'), 'tqb-hl-mixed', hlColor);
+  // v7.30.3: a locked card used to disable the whole bar SILENTLY -- the user
+  // saw dead controls with no reason. Say so, and hand them the way out.
+  var lockNote = document.getElementById('tqb-lock-note');
+  if (lockNote) lockNote.hidden = !(disabled && texts.length > 0);
   bar.querySelectorAll('[data-text-style-control]').forEach(function (el) { el.disabled = disabled; });
   var preset = commonBoardValue(texts, 'textPreset');
   bar.querySelectorAll('[data-text-preset]').forEach(function (el) {
