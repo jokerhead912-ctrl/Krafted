@@ -22,7 +22,7 @@ BEHAVIOUR = [
     'lockNote.hidden = !(disabled && texts.length > 0);',
     'onclick="unlockSelectedBoardTexts()"',
     'function unlockSelectedBoardTexts() {',
-    '    texts.forEach(function (tx) { tx.locked = false; updateItemStyle(tx); });',
+    '  texts.forEach(function (tx) { tx.locked = false; updateItemStyle(tx); });',
     # ...and the BG colour picker is wired to highlightColor
     'onchange="setTextProp(\'highlightColor\',this.value)"',
     'function syncBoardColorControl(picker, labelId, value) {',
